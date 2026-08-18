@@ -18,6 +18,7 @@ await build({ configFile: "vite.client.ts" })
 
 await writeFile("dist/package.json", JSON.stringify({
     type: "module",
+    engines: packageConfig.engines,
     scripts: {
         start: "node server/main.js"
     },

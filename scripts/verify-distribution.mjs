@@ -56,6 +56,7 @@ try {
   const installedManifest = JSON.parse(readFileSync(join(installation, "package.json"), "utf8"))
 
   assert.deepEqual(installedManifest.scripts, { start: "node server/main.js" })
+  assert.deepEqual(installedManifest.engines, { node: ">=24.15.0" })
   assert.deepEqual(
     installedManifest.dependencies,
     Object.fromEntries(["cfonts", "sharp"].map(name => [name, manifest.dependencies[name]]))
