@@ -1,0 +1,71 @@
+{
+  "name": "phreshos",
+  "displayName": "PhreshOS",
+  "version": "0.1.0",
+  "description": "The PhreshOS server, desktop, and authoritative system runtime.",
+  "type": "module",
+  "private": true,
+  "author": "Zohayr SLILEH",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PhreshOS/system.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PhreshOS/system/issues"
+  },
+  "homepage": "https://github.com/PhreshOS/system#readme",
+  "keywords": [
+    "phreshos",
+    "operating-system",
+    "web-desktop"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "check": "tsc --noEmit",
+    "dev": "node --import tsx source/dev.ts",
+    "build": "node --import tsx source/build.ts",
+    "start": "node --run build && node dist/server/main.js",
+    "pack": "node --run build && node --import tsx source/pack.ts",
+    "verify:distribution": "node scripts/verify-distribution.mjs",
+    "verify": "node --run check && node --run verify:distribution"
+  },
+  "dependencies": {
+    "@fontsource/roboto": "^5.3.0",
+    "@hono/node-server": "^2.1.1",
+    "cfonts": "^3.3.1",
+    "get-port": "^7.2.0",
+    "gsap": "^3.15.0",
+    "hono": "^4.13.2",
+    "keyv": "^5.6.0",
+    "lz-string": "^1.5.0",
+    "node-rsa": "^2.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.3",
+    "superjson": "^2.2.6",
+    "uuid": "^14.0.1",
+    "ws": "^8.21.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/plugin-proposal-decorators": "^7.29.7",
+    "@phreshos/core": "^0.1.1",
+    "@phreshos/react-ui": "^0.1.0",
+    "@rolldown/plugin-babel": "^0.2.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/adm-zip": "^0.5.8",
+    "@types/node": "^25.9.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.0.5",
+    "adm-zip": "^0.6.0",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
+    "vite": "^8.2.1"
+  }
+}

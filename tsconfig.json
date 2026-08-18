@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "moduleResolution": "bundler",
+        "noUnusedParameters": true,
+        "noUnusedLocals": true,
+        "skipLibCheck": true,
+        "module": "ESNext",
+        "target": "ESNext",
+        "jsx": "react-jsx",
+        "strict": true,
+        "noEmit": true,
+        "paths": {
+            "@/*": [
+                "./*"
+            ],
+            "@libs/*": [
+                "./source/libs/*"
+            ],
+            "@server/*": [
+                "./source/server/*"
+            ],
+            "@client/*": [
+                "./source/client/*"
+            ]
+        }
+    }
+}

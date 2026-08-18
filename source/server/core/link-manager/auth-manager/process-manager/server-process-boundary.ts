@@ -1,0 +1,459 @@
+import ProcessLink from "@libs/the-link/plugins/process-link/process-link"
+import ProcessTree from "@libs/process-tree"
+import { type ChildProcess } from "node:child_process"
+import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
+import HostTraffic from "./host-traffic"
+import EndpointEvents from "./endpoint-events"
+import Tunnel from "@libs/the-link/tunnel"
+
+/**
+ * The boundary around one server execution endpoint.
+ *
+ * The child speaks only here. Application events cross only when its SDK has
+ * registered an interest. Readiness travels out of the endpoint; the boundary
+ * never injects startup state into it.
+ */
+export default class ServerProcessBoundary extends ProcessLink {
+
+    public ready = false
+
+    private readonly clientDeclared: boolean
+
+    private readonly subscriptions = new Map<string, EndpointSubscription>()
+
+    private readonly expected = new Set<string>()
+
+    private readonly waiting = new Map<string, WaitingQuestion[]>()
+
+    // Every question addressed to this incarnation, including those already
+    // delivered into its SDK. Teardown completes each one with an error so a
+    // caller never waits for an endpoint that no longer exists.
+    private readonly incoming = new Map<string, unknown[]>()
+
+    private readonly requests = new Map<string, () => void>()
+
+    private readonly observations = new Map<string, () => void>()
+
+    private readonly endpointSubscriptions = new Map<string, () => void>()
+
+    private readonly hostSubscriptions = new Map<string, () => void>()
+
+    private readonly themeSubscriptions = new Set<string>()
+
+    private stopTheme: (() => void) | null = null
+
+    private readonly child: ChildProcess
+
+    private readonly tree: ProcessTree
+
+    private readonly hostTraffic: HostTraffic
+
+    private readonly theme: Tunnel
+
+    private readonly unanswered: (values: unknown[], reason: string) => void
+
+    public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
+
+    public constructor(child: ChildProcess, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, theme: Tunnel) {
+
+        super(child)
+
+        this.clientDeclared = clientDeclared
+
+        this.child = child
+
+        let finish!: (ending: { code: number | null, signal: NodeJS.Signals | null }) => void
+
+        this.finished = new Promise(resolve => { finish = resolve })
+
+        this.tree = new ProcessTree(child, async (code, signal) => {
+
+            try { await ended(code, signal) }
+
+            finally { finish({ code, signal }) }
+        })
+
+        this.hostTraffic = hostTraffic
+
+        this.theme = theme
+
+        this.unanswered = unanswered
+
+        child.on("error", () => undefined)
+
+        this.$inbound.subscribe("boundary", (...values) => this.control(values))
+    }
+
+    /** Deliver one routed envelope only when this endpoint requested it. */
+    public async deliver(route: string, ...values: unknown[]) {
+
+        if (values[0] === "answer" && typeof values[1] === "string") {
+
+            if (!this.expected.has(values[1])) return
+
+            this.requests.delete(values[1])
+
+            await this.$outbound.publish(route, ...values)
+
+            return
+        }
+
+        const question = values[0] === "wait" && typeof values[1] === "string" ? values[1] : null
+
+        if (question && route === "end-end") this.incoming.set(question, values)
+
+        const eventIndex = question && route === "end-end" ? 3 : 2
+
+        const event = String(question ? values[eventIndex] : values[0])
+
+        const payload = question ? values.slice(eventIndex + 1) : values.slice(1)
+
+        const kind: TrafficKind = question ? "ask" : "publish"
+
+        if (this.accepts(kind, route, event, payload)) {
+
+            await this.$outbound.publish(route, ...values)
+
+            return
+        }
+
+        if (!question) return
+
+        const key = `${route}:${event}`
+
+        const waiting = this.waiting.get(key) ?? []
+
+        waiting.push({ route, values, question })
+
+        this.waiting.set(key, waiting)
+    }
+
+    public retain(question: string, stop: () => void) {
+
+        this.requests.get(question)?.()
+
+        this.requests.set(question, stop)
+    }
+
+    /** Observe another Process through a subscription owned by this boundary. */
+    public observe(traffic: ProcessTraffic, subscription: string, target: string, half: Half, kind: TrafficKind, event: string | null, reportImpossible: boolean) {
+
+        this.unobserve(subscription)
+
+        const stop = traffic.observe(target, half, kind, event, (word, ...payload) => {
+
+            const values = event === null ? [word, ...payload] : payload
+
+            this.deliver("observed", subscription, ...values).catch(() => undefined)
+        }, reportImpossible ? reason => this.impossible(subscription, reason) : undefined)
+
+        this.observations.set(subscription, stop)
+    }
+
+    /** Terminate one asynchronous observation without affecting silent ones. */
+    public impossible(subscription: string, reason: string) {
+
+        this.unobserve(subscription)
+
+        this.$outbound.publish("boundary", "impossible", subscription, reason).catch(() => undefined)
+    }
+
+    public unobserve(subscription: string) {
+
+        this.observations.get(subscription)?.()
+
+        this.observations.delete(subscription)
+    }
+
+    /** Follow destinationless events emitted by another Endpoint. */
+    public follow(events: EndpointEvents, subscription: string, target: string, half: Half, event: string | null, reportImpossible: boolean) {
+
+        this.unfollow(subscription)
+
+        const stop = events.follow(target, half, event, (word, payload) => {
+
+            const values = event === null ? [word, payload] : [payload]
+
+            this.deliver("emitted", subscription, ...values).catch(() => undefined)
+        }, reportImpossible ? reason => this.impossibleFollow(subscription, reason) : undefined)
+
+        this.endpointSubscriptions.set(subscription, stop)
+    }
+
+    private impossibleFollow(subscription: string, reason: string) {
+
+        this.$outbound.publish("boundary", "impossible", subscription, reason).catch(() => undefined)
+    }
+
+    public unfollow(subscription: string) {
+
+        this.endpointSubscriptions.get(subscription)?.()
+
+        this.endpointSubscriptions.delete(subscription)
+    }
+
+    /** Remove a question whether it is waiting here or inside the SDK. */
+    public forget(question: string) {
+
+        this.forgetWaiting(question)
+
+        this.incoming.delete(question)
+
+        this.$outbound.publish("boundary", "forget", question).catch(() => undefined)
+    }
+
+    public answered(question: string) {
+
+        this.incoming.delete(question)
+    }
+
+    /** End every forwarding interest owned by this Process endpoint. */
+    public release(reason = "The server endpoint stopped before answering") {
+
+        for (const stop of this.requests.values()) stop()
+
+        for (const stop of this.observations.values()) stop()
+
+        for (const stop of this.endpointSubscriptions.values()) stop()
+
+        for (const stop of this.hostSubscriptions.values()) stop()
+
+        this.requests.clear()
+
+        this.observations.clear()
+
+        this.endpointSubscriptions.clear()
+
+        this.hostSubscriptions.clear()
+
+        this.themeSubscriptions.clear()
+
+        this.stopTheme?.()
+
+        this.stopTheme = null
+
+        this.subscriptions.clear()
+
+        this.expected.clear()
+
+        this.waiting.clear()
+
+        const incoming = [...this.incoming.values()]
+
+        this.incoming.clear()
+
+        for (const values of incoming) this.unanswered(values, reason)
+    }
+
+    public stop() {
+
+        this.tree.stop()
+    }
+
+    public onOutput(listener: (stream: Stream, text: string) => void) {
+
+        this.child.stdout?.on("data", chunk => listener("out", String(chunk)))
+
+        this.child.stderr?.on("data", chunk => listener("err", String(chunk)))
+    }
+
+    private control(values: unknown[]) {
+
+        const [operation, ...args] = values
+
+        if (operation === "ready") {
+
+            if (this.ready) return
+
+            this.ready = true
+
+            this.$inbound.publish("boundary-ready", true).catch(() => undefined)
+
+            return
+        }
+
+        if (operation === "subscribe") {
+
+            const [subscription, kind, route, event, subject, reportImpossible] = args
+
+            if (typeof subscription !== "string" || !isTrafficKind(kind) || typeof route !== "string") return
+
+            if (event !== null && typeof event !== "string") return
+
+            if (subject !== null && typeof subject !== "string") return
+
+            if (reportImpossible === true && route === "end-end" && !this.clientDeclared) {
+
+                this.impossible(subscription, "This program declared no client half")
+
+                return
+            }
+
+            this.removeSubscription(subscription)
+
+            const description = { kind, route, event, subject }
+
+            this.subscriptions.set(subscription, description)
+
+            if (themeSubscription(description)) {
+
+                this.themeSubscriptions.add(subscription)
+
+                if (!this.stopTheme) this.stopTheme = this.theme.subscribe("change", theme => {
+
+                    this.deliver("host-theme", "change", theme).catch(() => undefined)
+                })
+
+            }
+
+            if (route === "host-events" || route === "host-end" || route === "process-host") {
+
+                this.hostSubscriptions.get(subscription)?.()
+
+                this.hostSubscriptions.set(subscription, this.hostTraffic.observe(event, subject, (_delivery, word, ...values) => {
+
+                    this.deliver(route, word, ...values).catch(() => undefined)
+                }))
+            }
+
+            if (kind === "ask") this.releaseWaiting(route, event)
+
+            return
+        }
+
+        if (operation === "unsubscribe") {
+
+            if (typeof args[0] === "string") {
+
+                this.removeSubscription(args[0])
+            }
+
+            return
+        }
+
+        if (operation === "expect") {
+
+            if (typeof args[0] === "string") this.expected.add(args[0])
+
+            return
+        }
+
+        if (operation === "forget") {
+
+            if (typeof args[0] !== "string") return
+
+            this.expected.delete(args[0])
+
+            this.requests.get(args[0])?.()
+
+            this.requests.delete(args[0])
+
+            this.forgetWaiting(args[0])
+        }
+    }
+
+    private accepts(kind: TrafficKind, route: string, event: string, payload: unknown[]) {
+
+        for (const subscription of this.subscriptions.values()) {
+
+            if (subscription.kind !== kind || subscription.route !== route) continue
+
+            if (subscription.event !== null && subscription.event !== event) continue
+
+            if (subscription.subject !== null && payload[0] !== subscription.subject) continue
+
+            return true
+        }
+
+        return false
+    }
+
+    private removeSubscription(subscription: string) {
+
+        this.subscriptions.delete(subscription)
+
+        this.hostSubscriptions.get(subscription)?.()
+
+        this.hostSubscriptions.delete(subscription)
+
+        if (this.themeSubscriptions.delete(subscription) && this.themeSubscriptions.size === 0) {
+
+            this.stopTheme?.()
+
+            this.stopTheme = null
+        }
+    }
+
+    private releaseWaiting(route: string, event: string | null) {
+
+        for (const [key, waiting] of this.waiting) {
+
+            if (!key.startsWith(`${route}:`)) continue
+
+            const remaining: WaitingQuestion[] = []
+
+            for (const held of waiting) {
+
+                const eventIndex = held.route === "end-end" ? 3 : 2
+
+                const word = String(held.values[eventIndex])
+
+                const payload = held.values.slice(eventIndex + 1)
+
+                if ((event === null || event === word) && this.accepts("ask", route, word, payload)) this.$outbound.publish(held.route, ...held.values).catch(() => undefined)
+
+                else remaining.push(held)
+            }
+
+            if (remaining.length) this.waiting.set(key, remaining)
+
+            else this.waiting.delete(key)
+        }
+    }
+
+    private forgetWaiting(question: string) {
+
+        for (const [key, waiting] of this.waiting) {
+
+            const remaining = waiting.filter(held => held.question !== question)
+
+            if (remaining.length) this.waiting.set(key, remaining)
+
+            else this.waiting.delete(key)
+        }
+    }
+}
+
+interface EndpointSubscription {
+
+    kind: TrafficKind
+
+    route: string
+
+    event: string | null
+
+    subject: string | null
+}
+
+function themeSubscription(subscription: EndpointSubscription) {
+
+    return subscription.kind === "publish" && subscription.route === "host-theme" && (subscription.event === null || subscription.event === "change")
+}
+
+function isTrafficKind(value: unknown): value is TrafficKind {
+
+    return value === "publish" || value === "ask" || value === "answer"
+}
+
+interface WaitingQuestion {
+
+    route: string
+
+    values: unknown[]
+
+    question: string
+}
+
+export type Stream = "out" | "err"
+
+export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void

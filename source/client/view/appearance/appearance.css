@@ -1,0 +1,43 @@
+
+@import "tailwindcss";
+
+@import "@fontsource/roboto";
+
+@theme {
+
+    --font-roboto: "Roboto", sans-serif;
+
+    --text-window-title: 0.8125rem;
+
+    --text-taskbar-label: 0.6875rem;
+
+    --text-taskbar-status: 0.625rem;
+
+    --spacing-taskbar: 3.125rem;
+
+    --shadow-taskbar: 0 20px 40px -16px rgba(12, 30, 60, 0.45);
+
+    --shadow-taskbar-control: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+    --shadow-taskbar-item: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+    --shadow-taskbar-item-active: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 5px 12px -5px rgba(12, 46, 88, 0.5);
+
+    --shadow-taskbar-indicator: 0 0 7px rgba(14, 165, 233, 0.9);
+
+    --shadow-taskbar-separator: 1px 0 0 rgba(30, 64, 100, 0.12);
+
+    --shadow-launcher-icon: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 14px -8px rgba(12, 46, 88, 0.55);
+
+    --shadow-window-active: 0 24px 48px rgba(12, 30, 60, 0.4), 0 8px 20px -8px rgba(56, 189, 248, 0.35);
+
+    --shadow-window-inactive: 0 14px 28px rgba(12, 30, 60, 0.28), 0 8px 20px -8px rgba(56, 189, 248, 0);
+
+    --shadow-window-controls: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(12, 46, 88, 0.15);
+
+    --shadow-window-content: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+
+    --shadow-snap-preview: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+
+    --text-shadow-chrome: 0 1px 0 rgba(255, 255, 255, 0.8);
+}
