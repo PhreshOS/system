@@ -108,13 +108,18 @@ function WallpaperLayer({ source, visible, onLoad }: { source: WallpaperSource, 
 }
 
 /** A complete surface whose content sits above one file-backed wallpaper. */
-export function WallpaperStage({ file, children }: { file: string | null, children: ReactNode }) {
+export function WallpaperStage({ file, children, onReady }: WallpaperStageProps) {
 
     const [ready, setReady] = useState(false)
 
     return <div className="relative isolate grid min-h-0">
 
-        <WallpaperBackground file={file} onReady={() => setReady(true)} />
+        <WallpaperBackground file={file} onReady={() => {
+
+            setReady(true)
+
+            onReady?.()
+        }} />
 
         <div className="relative z-1 grid min-h-0">
 
@@ -125,6 +130,15 @@ export function WallpaperStage({ file, children }: { file: string | null, childr
         {!ready && <Loading />}
 
     </div>
+}
+
+interface WallpaperStageProps {
+
+    file: string | null
+
+    children: ReactNode
+
+    onReady?: () => void
 }
 
 interface WallpaperBackgroundProps {

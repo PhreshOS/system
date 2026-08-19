@@ -18,12 +18,15 @@ import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { WallpaperBackground } from "../components/wallpaper"
 import ProgramFrame from "./program-frame"
 import Loading from "../components/loading"
+import { useReadiness } from "@libs/readiness/main"
 
 export default function Workspace() {
 
     const application = ApplicationContext.useValue()
 
     const authManager = AuthManagerContext.useValue()
+
+    const { ready } = useReadiness()
 
     const desktopWallpaper = useProperty(authManager.linkManager.desktopWallpaper)
 
@@ -58,11 +61,18 @@ export default function Workspace() {
             frameLoaded(wallpaper.identity, event.currentTarget)
 
             setReadyWallpaper(wallpaper.identity)
+
+            ready("wallpaper")
         }
 
-    }, [frameLoaded, windows.wallpaper])
+    }, [frameLoaded, ready, windows.wallpaper])
 
-    const fileWallpaperLoaded = useCallback(() => setFileWallpaperReady(true), [])
+    const fileWallpaperLoaded = useCallback(() => {
+
+        setFileWallpaperReady(true)
+
+        ready("wallpaper")
+    }, [ready])
 
     const focus = useDesktopFocus(desktop, windows)
 
