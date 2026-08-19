@@ -17,7 +17,8 @@ import HostTraffic from "./host-traffic"
 import { failed, succeeded, type Outcome } from "@server/core/outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
-import { isPermissionName, type PermissionName, type WindowLayer } from "@phreshos/core"
+import EndpointServices from "./endpoint-services"
+import { isPermissionName, isServiceKey, type PermissionName, type WindowLayer } from "@phreshos/core"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
@@ -44,6 +45,10 @@ export default class ProcessManager extends TheLink {
     // Destinationless events remain separate from directed traffic. A source
     // Endpoint speaks once; only boundaries following that Endpoint join.
     private readonly endpointEvents = new EndpointEvents()
+
+    // Public services retain only exact runtime bindings and exact interests.
+    // They neither enumerate service topology nor expose their backing Process.
+    private readonly services = new EndpointServices()
 
     // Host facts use their own the-link routes. A server boundary joins only
     // the event and subject routes its endpoint explicitly requested.
@@ -621,6 +626,8 @@ export default class ProcessManager extends TheLink {
 
             if (!process.serverStopped(boundary, code, signal)) return
 
+            await this.services.release(process, "server")
+
             boundary.release()
 
             await this.$outbound.publish("/server-stop", process.identity, process.hosted(), code, signal)
@@ -750,6 +757,13 @@ export default class ProcessManager extends TheLink {
         const layer = process.client?.window.layer ?? null
 
         const front = layer && this.front(layer)
+
+        await Promise.all([
+
+            this.services.release(process, "server"),
+
+            this.services.release(process, "client")
+        ])
 
         if (!this.processes.delete(identity)) return
 
@@ -907,6 +921,8 @@ export default class ProcessManager extends TheLink {
 
         const before = layer ? this.front(layer) : null
 
+        await this.services.release(process, "client")
+
         process.stopClient()
 
         for (const [key, boundary] of this.clientForwarders) {
@@ -989,9 +1005,72 @@ export default class ProcessManager extends TheLink {
     @Connect("/emit")
     public async emitClient(source: string, event: string, payload: unknown) {
 
-        if (!this.find(source).client) return
+        const process = this.find(source)
 
-        await this.endpointEvents.emit(this.find(source).reference, "client", event, payload)
+        if (!process.client) return
+
+        await Promise.all([
+
+            this.endpointEvents.emit(process.reference, "client", event, payload),
+
+            this.services.emit(process, "client", event, payload)
+        ])
+    }
+
+    @Connect("/service/enable")
+    protected async enableClientService(source: string, name: unknown) {
+
+        const process = this.find(source)
+
+        if (!process.client) throw new Error("The providing client endpoint is not running")
+
+        return await this.services.enable(process, "client", name)
+    }
+
+    @Connect("/service/disable")
+    protected async disableClientService(source: string) {
+
+        const process = this.find(source)
+
+        if (!process.client) throw new Error("The providing client endpoint is not running")
+
+        await this.services.disable(process, "client")
+    }
+
+    @Connect("/service/current")
+    protected async clientEndpointService(source: string, target: unknown, endpoint: unknown) {
+
+        const process = this.find(source)
+
+        if (!process.client) throw new Error("The providing client endpoint is not running")
+
+        if (endpoint !== "server" && endpoint !== "client") throw new Error("A service Endpoint must be server or client")
+
+        const held = this.heldProcess(target)
+
+        if (held.program !== process.program) throw new Error("The desktop does not know this process")
+
+        return this.services.service(held, endpoint)
+    }
+
+    @Connect("/service/disabled")
+    protected async serviceDisabled(key: unknown) {
+
+        return this.services.disabled(key)
+    }
+
+    @Subscribe("/service/send")
+    protected async sendClientService(source: string, key: unknown, event: unknown, payload: unknown) {
+
+        if (!isServiceKey(key) || key.endpoint !== "server" || typeof event !== "string") return
+
+        const process = this.find(source)
+
+        if (!process.client) return
+
+        const binding = this.services.binding(key, "server")
+
+        if (binding) await this.publish(process.identity, "client", binding.process.identity, "server", [event, payload])
     }
 
     @Subscribe("/frame/own")
@@ -1048,6 +1127,28 @@ export default class ProcessManager extends TheLink {
     protected unfollowClientFrame(connection: string, pane: string, owner: string, subscription: string) {
 
         this.removeClientFollow(connection, pane, owner, subscription)
+    }
+
+    @Subscribe("/frame/service/follow")
+    protected followClientService(connection: string, pane: string, owner: string, subscription: unknown, key: unknown, scope: unknown, event: unknown) {
+
+        const boundary = this.clientForwarders.get(this.clientOwnerKey(connection, pane))
+
+        if (boundary?.owner !== owner || typeof subscription !== "string" || !isServiceKey(key)) return
+
+        if (scope !== "lifecycle" && scope !== "channel") return
+
+        if (event !== null && typeof event !== "string") return
+
+        boundary.followService(this.services, subscription, key, scope, event)
+    }
+
+    @Subscribe("/frame/service/unfollow")
+    protected unfollowClientService(connection: string, pane: string, owner: string, subscription: unknown) {
+
+        const boundary = this.clientForwarders.get(this.clientOwnerKey(connection, pane))
+
+        if (boundary?.owner === owner && typeof subscription === "string") boundary.unfollowService(subscription)
     }
 
     @Subscribe("/frame/log")
@@ -1413,6 +1514,89 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.stopServer(process.identity)]
 
+        if (word === "enable-service") {
+
+            return [await this.services.enable(process, "server", rest[0])]
+        }
+
+        if (word === "disable-service") {
+
+            return [await this.services.disable(process, "server")]
+        }
+
+        if (word === "endpoint-service") {
+
+            if (rest[1] !== "server" && rest[1] !== "client") throw new Error("A service Endpoint must be server or client")
+
+            const endpoint = this.heldProcess(rest[0], process)
+
+            return [this.services.service(endpoint, rest[1])]
+        }
+
+        if (word === "service-disabled") return [this.services.disabled(rest[0])]
+
+        if (word === "service-follow") {
+
+            const [subscription, key, scope, event] = rest
+
+            if (typeof subscription !== "string" || !isServiceKey(key)) return []
+
+            if (scope !== "lifecycle" && scope !== "channel") return []
+
+            if (event !== null && typeof event !== "string") return []
+
+            process.server?.followService(this.services, subscription, key, scope, event)
+
+            return []
+        }
+
+        if (word === "service-unfollow") {
+
+            process.server?.unfollowService(String(rest[0]))
+
+            return []
+        }
+
+        if (word === "service-send") {
+
+            const [key, event, payload] = rest
+
+            if (!isServiceKey(key) || key.endpoint !== "server" || typeof event !== "string") return []
+
+            const binding = this.services.binding(key, "server")
+
+            if (binding) await this.publish(process.identity, "server", binding.process.identity, "server", [event, payload])
+
+            return []
+        }
+
+        if (word === "service-ask") {
+
+            const [key, question, publicQuestion, event, payload] = rest
+
+            if (!isServiceKey(key) || key.endpoint !== "server" || typeof question !== "string" || typeof publicQuestion !== "string" || typeof event !== "string") {
+
+                if (typeof question === "string") this.rejectQuestion(["wait", question, publicQuestion, event, payload], "A Server service question is invalid")
+
+                return []
+            }
+
+            const binding = this.services.binding(key, "server")
+
+            if (!binding?.process.server) {
+
+                this.rejectQuestion(["wait", question, publicQuestion, event, payload], "The service is disabled")
+
+                return []
+            }
+
+            process.server?.retain(question, () => binding.process.server?.forget(question))
+
+            this.asked(process.identity, "server", binding.process.identity, [question, publicQuestion, event, payload])
+
+            return []
+        }
+
         // The one word here that answers about a process the host does
         // not know, because that absence is its whole subject. Every
         // other refuses it: for those there is nothing to answer about,
@@ -1587,7 +1771,12 @@ export default class ProcessManager extends TheLink {
 
             if (typeof rest[0] !== "string") return []
 
-            await this.endpointEvents.emit(process.reference, "server", rest[0], rest[1])
+            await Promise.all([
+
+                this.endpointEvents.emit(process.reference, "server", rest[0], rest[1]),
+
+                this.services.emit(process, "server", rest[0], rest[1])
+            ])
 
             return []
         }
@@ -1820,6 +2009,28 @@ export default class ProcessManager extends TheLink {
         }
 
         this.asked(source, "client", identity, values)
+    }
+
+    @Subscribe("/frame/service/ask")
+    protected askClientService(connection: string, source: string, key: unknown, values: unknown[]) {
+
+        if (!isServiceKey(key) || key.endpoint !== "server" || typeof values[0] !== "string" || typeof values[1] !== "string" || typeof values[2] !== "string") {
+
+            this.rejectClientQuestion(connection, source, ["wait", ...values], "A Server service question is invalid")
+
+            return
+        }
+
+        const binding = this.services.binding(key, "server")
+
+        if (!binding || !this.retainClientQuestion(connection, source, values[0], binding.process.identity)) {
+
+            this.rejectClientQuestion(connection, source, ["wait", ...values], "The service is disabled")
+
+            return
+        }
+
+        this.asked(source, "client", binding.process.identity, values)
     }
 
     @Subscribe("/frame/cancel")

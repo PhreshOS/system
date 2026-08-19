@@ -6,7 +6,7 @@ import { type ClientBody, type ProxiedResponse, type ServedValue } from "@client
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, type ProgramIconSize } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -29,11 +29,12 @@ export interface Space {
  * that frames it.
  *
  * A client half has the capabilities a server half has, narrowed to a
- * world containing exactly one program — its own. That is the boundary
- * between programs: there is no word here that could name another one.
- * It is not a claim of network confinement — `fetch` deliberately reaches
- * arbitrary URLs, but carries neither a Program subject nor the desktop's
- * authorization.
+ * world containing exactly one program — its own. Public services are the
+ * deliberate exception: a complete service key may name another Program, but
+ * it reveals no topology and resolves only through the authoritative service
+ * registry. It is not a claim of network confinement — `fetch` deliberately
+ * reaches arbitrary URLs, but carries neither a Program subject nor the
+ * desktop's authorization.
  *
  * Program operations take no subject at all: the frame a message arrived
  * in decides which program is meant, and what was asked is discarded.
@@ -213,6 +214,82 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
         if (word === "stop-current") {
 
             await processManager.stopEndpoint(process().identity, "client")
+
+            return []
+        }
+
+        if (word === "enable-service") {
+
+            if (typeof args[0] !== "string" || args[0].length === 0) throw new Error("A service name must be a non-empty string")
+
+            await processManager.enableService(pane, args[0])
+
+            return []
+        }
+
+        if (word === "disable-service") {
+
+            await processManager.disableService(pane)
+
+            return []
+        }
+
+        if (word === "endpoint-service") {
+
+            const target = args[0] === null ? process() : sibling(args[0])
+
+            if (args[1] !== "server" && args[1] !== "client") throw new Error("A service Endpoint must be server or client")
+
+            return [await processManager.endpointService(pane, address(target), args[1])]
+        }
+
+        if (word === "service-disabled") {
+
+            if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
+
+            return [await processManager.serviceDisabled(args[0])]
+        }
+
+        if (word === "service-follow") {
+
+            const [subscription, key, scope, event] = args
+
+            if (typeof subscription !== "string" || !isServiceKey(key)) return []
+
+            if (scope !== "lifecycle" && scope !== "channel") return []
+
+            if (event !== null && typeof event !== "string") return []
+
+            const owner = frameOwner()
+
+            if (owner) await processManager.followService(pane, owner, subscription, key, scope, event)
+
+            return []
+        }
+
+        if (word === "service-unfollow") {
+
+            const owner = frameOwner()
+
+            if (owner) await processManager.unfollowService(pane, owner, String(args[0]))
+
+            return []
+        }
+
+        if (word === "service-send") {
+
+            if (!isServiceKey(args[0]) || args[0].endpoint !== "server" || typeof args[1] !== "string") return []
+
+            await processManager.sendService(pane, args[0], args[1], args[2])
+
+            return []
+        }
+
+        if (word === "service-ask") {
+
+            if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
+
+            await processManager.askService(pane, args[0], args.slice(1))
 
             return []
         }

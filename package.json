@@ -30,7 +30,7 @@
     "build": "node --import tsx source/build.ts",
     "start": "node --run build && node dist/server/main.js",
     "pack": "node --run build && node --import tsx source/pack.ts",
-    "verify:contracts": "node --import tsx scripts/verify-client-launch.mjs && node --import tsx scripts/verify-readiness.mjs",
+    "verify:contracts": "node --import tsx scripts/verify-client-launch.mjs && node --import tsx scripts/verify-readiness.mjs && node --import tsx scripts/verify-endpoint-services.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },

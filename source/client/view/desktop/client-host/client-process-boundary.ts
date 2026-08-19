@@ -186,6 +186,16 @@ export default class ClientProcessBoundary extends TheLink {
             })
         }
 
+        if (values[0] === "service-ask" && typeof values[2] === "string") {
+
+            const question = values[2]
+
+            this.requests.set(question, () => {
+
+                this.authManager.processManager.cancel(this.pane, question).catch(() => undefined)
+            })
+        }
+
         if (values[0] === "pointerSample") {
 
             this.samplePointer(values[1], values[2])
@@ -722,6 +732,8 @@ export default class ClientProcessBoundary extends TheLink {
             if ((route === "end-end" || route === "end-host") && operation === "wait") return message[2] !== question
 
             if (route === "end-host" && operation === "ask") return message[4] !== question
+
+            if (route === "end-host" && operation === "service-ask") return message[3] !== question
 
             return true
         })

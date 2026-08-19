@@ -1,6 +1,8 @@
 import AuthManager from "../auth-manager"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import EndpointEvents from "./endpoint-events"
+import EndpointServices, { type ServiceScope } from "./endpoint-services"
+import type { ServiceKey } from "@phreshos/core"
 
 /**
  * Server-host counterpart of one client Process boundary lease.
@@ -26,6 +28,8 @@ export default class ClientProcessForwarder {
     private readonly observations = new Map<string, () => void>()
 
     private readonly endpointSubscriptions = new Map<string, () => void>()
+
+    private readonly serviceSubscriptions = new Map<string, () => void>()
 
     private readonly requests = new Map<string, () => void>()
 
@@ -137,6 +141,27 @@ export default class ClientProcessForwarder {
         this.endpointSubscriptions.delete(subscription)
     }
 
+    public followService(services: EndpointServices, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+
+        this.unfollowService(subscription)
+
+        const stop = services.follow(key, scope, event, (word, payload) => {
+
+            const values = event === null ? [word, payload] : [payload]
+
+            return this.authManager.publishToConnection(this.connection, "/process/service-event", this.pane, this.owner, subscription, JSON.stringify(values)).catch(() => undefined)
+        })
+
+        this.serviceSubscriptions.set(subscription, stop)
+    }
+
+    public unfollowService(subscription: string) {
+
+        this.serviceSubscriptions.get(subscription)?.()
+
+        this.serviceSubscriptions.delete(subscription)
+    }
+
     public retain(question: string, stop: () => void) {
 
         this.requests.get(question)?.()
@@ -157,11 +182,15 @@ export default class ClientProcessForwarder {
 
         for (const stop of this.endpointSubscriptions.values()) stop()
 
+        for (const stop of this.serviceSubscriptions.values()) stop()
+
         for (const stop of this.requests.values()) stop()
 
         this.observations.clear()
 
         this.endpointSubscriptions.clear()
+
+        this.serviceSubscriptions.clear()
 
         this.requests.clear()
 

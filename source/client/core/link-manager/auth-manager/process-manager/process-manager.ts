@@ -7,7 +7,8 @@ import AuthManager from "../auth-manager"
 import Process from "./process"
 import { type LaunchClient } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName } from "@phreshos/core"
+import { isPermissionName, type ServiceKey } from "@phreshos/core"
+import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
 
 /**
  * The peer of the core's processes: born holding them from the
@@ -52,6 +53,50 @@ export default class ProcessManager extends TheLink {
     public async emit(source: string, event: string, payload: unknown) {
 
         await this.$outbound.publish("/emit", source, event, payload)
+    }
+
+    /** Changes the service exposed by the structurally identified Client Channel. */
+    public async enableService(source: string, name: string) {
+
+        await this.$outbound.publishFirst("/service/enable", source, name)
+    }
+
+    public async disableService(source: string) {
+
+        await this.$outbound.publishFirst("/service/disable", source)
+    }
+
+    public async endpointService(source: string, target: HandleAddress, endpoint: "server" | "client") {
+
+        return await this.$outbound.publishFirst("/service/current", source, target, endpoint) as ServiceKey | null
+    }
+
+    /** Explicit snapshot for one exact service key. */
+    public async serviceDisabled(key: ServiceKey) {
+
+        return await this.$outbound.publishFirst("/service/disabled", key) as boolean
+    }
+
+    /** Registers one exact service interest for this frame lease. */
+    public async followService(pane: string, owner: string, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+
+        await this.$outbound.publish("/frame/service/follow", pane, owner, subscription, key, scope, event)
+    }
+
+    public async unfollowService(pane: string, owner: string, subscription: string) {
+
+        await this.$outbound.publish("/frame/service/unfollow", pane, owner, subscription)
+    }
+
+    /** Sends to the live Server Endpoint behind one exact service key. */
+    public async sendService(source: string, key: ServiceKey, event: string, payload: unknown) {
+
+        await this.$outbound.publish("/service/send", source, key, event, payload)
+    }
+
+    public async askService(source: string, key: ServiceKey, values: unknown[]) {
+
+        await this.$outbound.publish("/frame/service/ask", source, key, values)
     }
 
     // Handed on, not awaited. Whoever asked is holding the question by

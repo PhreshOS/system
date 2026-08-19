@@ -4,6 +4,8 @@ import { type ChildProcess } from "node:child_process"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import HostTraffic from "./host-traffic"
 import EndpointEvents from "./endpoint-events"
+import EndpointServices, { type ServiceScope } from "./endpoint-services"
+import type { ServiceKey } from "@phreshos/core"
 import Tunnel from "@libs/the-link/tunnel"
 
 /**
@@ -35,6 +37,8 @@ export default class ServerProcessBoundary extends ProcessLink {
     private readonly observations = new Map<string, () => void>()
 
     private readonly endpointSubscriptions = new Map<string, () => void>()
+
+    private readonly serviceSubscriptions = new Map<string, () => void>()
 
     private readonly hostSubscriptions = new Map<string, () => void>()
 
@@ -192,6 +196,28 @@ export default class ServerProcessBoundary extends ProcessLink {
         this.endpointSubscriptions.delete(subscription)
     }
 
+    /** Follow one exact service route for this boundary's lifetime. */
+    public followService(services: EndpointServices, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+
+        this.unfollowService(subscription)
+
+        const stop = services.follow(key, scope, event, (word, payload) => {
+
+            const values = event === null ? [word, payload] : [payload]
+
+            return this.deliver("service-event", subscription, ...values).catch(() => undefined)
+        })
+
+        this.serviceSubscriptions.set(subscription, stop)
+    }
+
+    public unfollowService(subscription: string) {
+
+        this.serviceSubscriptions.get(subscription)?.()
+
+        this.serviceSubscriptions.delete(subscription)
+    }
+
     /** Remove a question whether it is waiting here or inside the SDK. */
     public forget(question: string) {
 
@@ -216,6 +242,8 @@ export default class ServerProcessBoundary extends ProcessLink {
 
         for (const stop of this.endpointSubscriptions.values()) stop()
 
+        for (const stop of this.serviceSubscriptions.values()) stop()
+
         for (const stop of this.hostSubscriptions.values()) stop()
 
         this.requests.clear()
@@ -223,6 +251,8 @@ export default class ServerProcessBoundary extends ProcessLink {
         this.observations.clear()
 
         this.endpointSubscriptions.clear()
+
+        this.serviceSubscriptions.clear()
 
         this.hostSubscriptions.clear()
 

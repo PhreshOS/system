@@ -165,6 +165,20 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     }, [sources, traffic]))
 
+    // Exact service lifecycle and channel events use their own route. They
+    // reach only the frame lease that registered the opaque subscription.
+    inbound.useSubscribe("/service-event", useCallback((...results: unknown[]) => {
+
+        const [observer, owner, subscription, json] = results
+
+        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || typeof json !== "string") return
+
+        if (frameOwners.current.get(observer) !== owner) return
+
+        traffic.emit(observer, "service-event", subscription, ...JSON.parse(json) as unknown[]).catch(() => undefined)
+
+    }, [sources, traffic]))
+
     inbound.useSubscribe("/impossible", useCallback((...results: unknown[]) => {
 
         const [observer, owner, subscription, reason] = results
