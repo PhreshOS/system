@@ -1,12 +1,11 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
-import { type WindowLayer } from "@phreshos/core"
 import TheLink from "@libs/the-link/the-link"
-import host, { type Space, TransferredAnswer } from "./host"
+import host, { TransferredAnswer } from "./host"
 import { type PointerHost } from "./pointer"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName, type PermissionName } from "@phreshos/core"
+import { isPermissionName, type PermissionName, type Size } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 
 /** The desktop boundary around one iframe execution endpoint. */
@@ -18,7 +17,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly authManager: AuthManager
 
-    private readonly space: (layer: WindowLayer) => Space
+    private readonly desktop: () => Size
 
     private readonly pointer: PointerHost
 
@@ -59,7 +58,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private document: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, space: (layer: WindowLayer) => Space, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => Size, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
         super()
 
@@ -69,7 +68,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.authManager = authManager
 
-        this.space = space
+        this.desktop = desktop
 
         this.pointer = pointer
 
@@ -210,7 +209,7 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        host(this.authManager, this.pane, this.space, () => this.owner, this.pointer, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
+        host(this.authManager, this.pane, this.desktop, () => this.owner, this.pointer, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -449,7 +448,7 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.space, () => this.owner, this.pointer, this.localWindow)(args[0], ...args.slice(1)))
+        this.answerRequest(question, host(this.authManager, this.pane, this.desktop, () => this.owner, this.pointer, this.localWindow)(args[0], ...args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {

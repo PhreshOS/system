@@ -117,6 +117,7 @@ const authManager = {
 }
 const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, localWindow)
 
+assert.deepEqual(await request("desktop"), [{ width: 1, height: 1 }])
 await request("localWindowSurfaceSet", settings, transaction)
 await request("localWindowSurfaceRemove")
 

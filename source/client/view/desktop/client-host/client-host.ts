@@ -1,18 +1,16 @@
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
-import { type WindowLayer } from "@phreshos/core"
+import { isPermissionName, type Size } from "@phreshos/core"
 import useAnnouncements from "./announcements"
-import { type Space } from "./host"
 import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { AuthManagerContext } from "../../contexts"
-import { isPermissionName } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 
 /**
  * The browser boundary between a program pane and the desktop that hosts it.
- * It owns frame messages and the measured surfaces those frames inhabit;
+ * It owns frame messages and the measured desktop containing those frames;
  * neither fact participates in rendering.
  */
 export default function useClientHost(desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, localWindow: LocalWindowHost) {
@@ -33,42 +31,40 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
 
-    // Read by the gate at the moment a pane asks, so the answer is
-    // never a render behind.
-    const latest = useRef<Record<WindowLayer, Space>>({
+    const latestDesktopSize = useRef<Size>({ width: 0, height: 0 })
 
-        under: { width: 0, height: 0 },
+    const desktopSize = useCallback(function (): Size {
 
-        window: { width: 0, height: 0 },
+        const bounds = desktop.current?.getBoundingClientRect()
 
-        over: { width: 0, height: 0 },
+        return bounds
+            ? { width: Math.round(bounds.width), height: Math.round(bounds.height) }
+            : latestDesktopSize.current
 
-        wallpaper: { width: 0, height: 0 }
-    })
+    }, [desktop])
 
     useLayoutEffect(function () {
 
         if (!desktop.current || !windowSurfaceRef.current) return
 
-        function measure(entry: ResizeObserverEntry): Space {
+        function measure(bounds: { width: number, height: number }): Size {
 
-            return { width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) }
+            return { width: Math.round(bounds.width), height: Math.round(bounds.height) }
         }
 
-        function announce(layer: WindowLayer, now: Space) {
+        function announceDesktop(now: Size) {
 
-            latest.current[layer] = now
+            if (latestDesktopSize.current.width === now.width && latestDesktopSize.current.height === now.height) return
 
-            // Announcements leave directly from the measurement. The
-            // ordinary surface also participates in rendering because its
-            // windows resolve which painted edges touch its boundaries.
+            latestDesktopSize.current = now
+
+            // Announcements leave directly from the full desktop measurement.
+            // Traffic carries them only to boundaries with a live interest.
             if (!now.width) return
 
             for (const identity of sources.keys()) {
 
-                if (authManager.processManager.processes.get(identity)?.client?.window.layer !== layer) continue
-
-                traffic.emit(identity, "host-surface", "resize", now).catch(() => undefined)
+                traffic.emit(identity, "host-desktop", "resize", now).catch(() => undefined)
             }
         }
 
@@ -77,35 +73,32 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
             setWindowSurfaceSize(current => current.width === width && current.height === height ? current : { width, height })
         }
 
-        const initial = windowSurfaceRef.current.getBoundingClientRect()
+        const initialDesktop = measure(desktop.current.getBoundingClientRect())
 
-        rememberWindowSurfaceSize(initial)
+        latestDesktopSize.current = initialDesktop
 
-        const viewportObserver = new ResizeObserver(function ([entry]) {
+        const initialWindowSurface = windowSurfaceRef.current.getBoundingClientRect()
 
-            const now = measure(entry)
+        rememberWindowSurfaceSize(initialWindowSurface)
 
-            announce("under", now)
+        const desktopObserver = new ResizeObserver(function ([entry]) {
 
-            announce("over", now)
-
-            announce("wallpaper", now)
+            announceDesktop(measure(entry.contentRect))
         })
 
         const windowObserver = new ResizeObserver(function ([entry]) {
 
             rememberWindowSurfaceSize(entry.contentRect)
 
-            announce("window", measure(entry))
         })
 
-        viewportObserver.observe(desktop.current)
+        desktopObserver.observe(desktop.current)
 
         windowObserver.observe(windowSurfaceRef.current)
 
         return function () {
 
-            viewportObserver.disconnect()
+            desktopObserver.disconnect()
 
             windowObserver.disconnect()
         }
@@ -224,7 +217,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, layer => latest.current[layer], pointer, traffic, localWindow))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopSize, pointer, traffic, localWindow))
 
             return
         }
@@ -239,7 +232,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, localWindow, pointer, sources, traffic])
+    }, [authManager, desktopSize, localWindow, pointer, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 

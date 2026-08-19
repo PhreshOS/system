@@ -1,4 +1,3 @@
-import { type WindowLayer } from "@phreshos/core"
 import { type Launch } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
@@ -6,7 +5,7 @@ import { type ClientBody, type ProxiedResponse, type ServedValue } from "@client
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type ProgramIconSize, type Size, type WindowLayer } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -20,16 +19,6 @@ import {
 export class TransferredAnswer {
 
     public constructor(public readonly result: unknown[], public readonly transfer: Transferable[]) { }
-}
-
-// The space windows are laid out in, as this desktop has it. Pixels,
-// because a program asking has already decided that shares will not
-// answer what it needs.
-export interface Space {
-
-    width: number
-
-    height: number
 }
 
 /**
@@ -56,7 +45,7 @@ export interface Space {
  * no prototypes and refuses functions — so every word answers with plain
  * values built here, never with an instance the desktop holds.
  */
-export default function host(authManager: AuthManager, pane: string, space: (layer: WindowLayer) => Space, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
+export default function host(authManager: AuthManager, pane: string, desktop: () => Size, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 
@@ -809,26 +798,10 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             return [await programManager.database(process().program, String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
         }
 
-        // How large this pane's own layer workspace is. The Window chooses
-        // the layer structurally; client code cannot inspect another layer.
-        // Ordinary windows use the desktop workspace, while bare layers use
-        // the browser viewport.
-        //
-        // The desktop's own answer, never the machine's: the same
-        // program may be shown in three sessions on three screens, so
-        // there is no one size to give a server half — which is why this
-        // word is only on this side and why the core does not hold it.
-        //
-        // The desktop gutter is private layout state. It never crosses into
-        // a Program endpoint as part of the surface value.
-        if (word === "surface") {
-
-            const shown = process().client?.window
-
-            if (!shown) throw new Error("This process has no live client endpoint")
-
-            return [space(shown.layer)]
-        }
+        // One desktop can frame many Client layers, but its complete area is
+        // one host fact. It is this desktop's answer rather than a machine
+        // fact, and the gutter remains private desktop layout state.
+        if (word === "desktop") return [desktop()]
 
         // Coordinates use the same desktop display core as window geometry.
         // Before this session has observed a pointer movement there is no
