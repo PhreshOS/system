@@ -1,10 +1,9 @@
-import { createHash } from "node:crypto"
 import { readFileSync, readdirSync, writeFileSync } from "node:fs"
+import { name, version } from "@/package.json"
+import { createHash } from "node:crypto"
 import { resolve } from "node:path"
-import packageConfig from "../package.json" with { type: "json" }
 import AdmZip from "adm-zip"
 
-const { name, version } = packageConfig
 const archive = `${name}@${version}.zip`
 const zip = new AdmZip()
 
