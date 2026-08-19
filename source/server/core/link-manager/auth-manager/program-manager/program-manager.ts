@@ -603,6 +603,14 @@ export default class ProgramManager extends TheLink {
         return { entry: await this.install(program), replaced }
     }
 
+    /** Run a durable Program independently of the local intake connection. */
+    public async runInstalled(program: Program, launch: Launch = {}) {
+
+        if (!this.installed(program)) throw new Error("Only an installed program can run independently")
+
+        return await this.start(program, launch)
+    }
+
     public async install(source: Program, asker: string | null = null) {
 
         return await this.change(source.identity, async () => {

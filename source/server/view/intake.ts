@@ -217,21 +217,40 @@ async function answer(application: Application, attached: Set<string>, say: (eve
 
     // Laid out: a description, and only ever a description.
     //
-    // The system does not know what an archive is, and this is where it
-    // stopped needing to. A package is a way of *carrying* a program to
-    // another machine, so opening one belongs with whatever brought it —
-    // and installing programs at all is work for a program, not for the
-    // core. The core is a foundation; what a person installs from, and
-    // how, is the business of something built on it.
+    // The system does not know what an archive is. A package carries a
+    // Program to this machine, so the CLI that acquired it verifies and opens
+    // it. Intake receives the same concrete description whether its source
+    // was an official package or the local project beside the caller. From
+    // here onward the System alone validates, lays out, and launches it.
     if (asked.word === "install") {
 
         if (!asked.program) throw new Error("Installing needs a program description")
+
+        if (asked.run !== undefined && typeof asked.run !== "boolean") throw new Error("Running after installation must be true or false")
+
+        if (asked.startup !== undefined && typeof asked.startup !== "boolean") throw new Error("Enabling startup during installation must be true or false")
 
         const { entry, replaced } = await programManager.installSource(asked.program)
 
         // Whether it replaced one. Installation has already ended every
         // process that could have retained one of the previous paths.
         say({ event: "installed", replaced, program: { identity: entry.identity, name: entry.program.name, version: entry.program.config.version ?? null } })
+
+        const launch = {}
+
+        if (asked.startup) {
+
+            await programManager.startup(entry.program, "enable", launch)
+
+            say({ event: "startupEnabled" })
+        }
+
+        if (asked.run) {
+
+            const process = await programManager.runInstalled(entry.program, launch)
+
+            say({ event: "running", process })
+        }
 
         return done()
     }
@@ -287,6 +306,10 @@ interface Asked {
     identity?: string
 
     everything?: boolean
+
+    run?: boolean
+
+    startup?: boolean
 
     program?: Parameters<Application["linkManager"]["authManager"]["programManager"]["launchAttached"]>[0]
 
