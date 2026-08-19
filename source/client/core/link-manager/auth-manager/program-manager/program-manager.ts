@@ -87,13 +87,6 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/database", identity, sql, values)
     }
 
-    // Requested on demand rather than carried in the desktop's incomplete
-    // Program record. The server remains authoritative for the document.
-    public async apiDocs(identity: string) {
-
-        return await this.$outbound.publishFirst("/api-docs", identity) as string | null
-    }
-
     /** Request one rendered icon from the authoritative server Program. */
     public async icon(identity: string, size: ProgramIconSize) {
 

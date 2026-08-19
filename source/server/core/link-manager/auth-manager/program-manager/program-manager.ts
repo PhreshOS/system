@@ -217,7 +217,7 @@ export default class ProgramManager extends TheLink {
         // is not holding on disk.
         if (typeof source.storage !== "string") throw new Error("A created program names its storage")
 
-        for (const [what, place] of [["storage", source.storage], ["apiDocs", source.apiDocs], ["icon", source.icon], ["server", source.server?.location]] as const) {
+        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["server", source.server?.location]] as const) {
 
             if (place === undefined) continue
 
@@ -375,15 +375,6 @@ export default class ProgramManager extends TheLink {
     public async database(identity: string, sql: string, values: unknown[]) {
 
         return this.databaseOf(this.reachOrRefuse(identity)).query(sql, values)
-    }
-
-    // The official API entry point is requested, never synchronized. This is
-    // the one authoritative read used by both SDK roads; the desktop derives
-    // the identity from its frame before asking through this connection.
-    @Connect("/api-docs")
-    public async apiDocs(identity: string) {
-
-        return this.reachOrRefuse(identity).apiDocs()
     }
 
     /** One authoritative icon operation shared by SDKs and HTTP hosting. */
@@ -1280,18 +1271,6 @@ function copy(program: Program, into: string) {
 
     else delete config.icon
 
-    // Unlike a half or icon source this is one file. Installed Programs
-    // nevertheless give it the same canonical shape regardless of where the
-    // author kept it, and the persisted description names that canonical file.
-    if (program.apiDocsPath) {
-
-        cpSync(program.apiDocsPath, join(into, "api-docs.md"))
-
-        config.apiDocs = "api-docs.md"
-    }
-
-    else delete config.apiDocs
-
     // The description names the places the system chose. Presence is
     // part of a half's declaration, so its location is never omitted.
     delete config.storage
@@ -1299,7 +1278,7 @@ function copy(program: Program, into: string) {
     writeFileSync(join(into, "program.json"), JSON.stringify(strip(config), null, 4))
 }
 
-const installedParts = ["server", "client", "icon.png", "api-docs.md", "program.json"] as const
+const installedParts = ["server", "client", "icon.png", "program.json"] as const
 
 // JSON has no `undefined`, and a key whose value is one would be written
 // as nothing at all — so they are removed rather than left to vanish.

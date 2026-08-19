@@ -1018,13 +1018,13 @@ export default class ProcessManager extends TheLink {
     }
 
     @Connect("/service/enable")
-    protected async enableClientService(source: string, name: unknown) {
+    protected async enableClientService(source: string, definition: unknown) {
 
         const process = this.find(source)
 
         if (!process.client) throw new Error("The providing client endpoint is not running")
 
-        return await this.services.enable(process, "client", name)
+        return await this.services.enable(process, "client", definition)
     }
 
     @Connect("/service/disable")
@@ -1057,6 +1057,12 @@ export default class ProcessManager extends TheLink {
     protected async serviceDisabled(key: unknown) {
 
         return this.services.disabled(key)
+    }
+
+    @Connect("/service/docs")
+    protected async serviceDocs(key: unknown) {
+
+        return this.services.docs(key)
     }
 
     @Subscribe("/service/send")
@@ -1272,11 +1278,6 @@ export default class ProcessManager extends TheLink {
             const identity = typeof rest[0] === "string" ? rest[0] : process.program.identity
 
             return [programManager.find(identity)]
-        }
-
-        if (word === "api-docs") {
-
-            return [this.heldProgram(rest[0], process.program).apiDocs()]
         }
 
         if (word === "icon") {
@@ -1534,6 +1535,8 @@ export default class ProcessManager extends TheLink {
         }
 
         if (word === "service-disabled") return [this.services.disabled(rest[0])]
+
+        if (word === "service-docs") return [this.services.docs(rest[0])]
 
         if (word === "service-follow") {
 

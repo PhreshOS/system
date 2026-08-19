@@ -32,11 +32,6 @@ interface Described {
 
     description?: string
 
-    // The official Markdown entry point to this Program's API. It is a path
-    // here, but paths never cross into an SDK; Program.apiDocs() returns only
-    // its contents. Installed descriptions name the canonical api-docs.md.
-    apiDocs?: string
-
     // One PNG source from which hosting derives every standard size. How a
     // Program is shown belongs to the Program rather than its client half — a
     // headless Program is shown too.

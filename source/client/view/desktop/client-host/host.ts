@@ -220,8 +220,6 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
 
         if (word === "enable-service") {
 
-            if (typeof args[0] !== "string" || args[0].length === 0) throw new Error("A service name must be a non-empty string")
-
             await processManager.enableService(pane, args[0])
 
             return []
@@ -248,6 +246,13 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
 
             return [await processManager.serviceDisabled(args[0])]
+        }
+
+        if (word === "service-docs") {
+
+            if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("A Server service key is required")
+
+            return [await processManager.serviceDocs(args[0])]
         }
 
         if (word === "service-follow") {
@@ -531,11 +536,6 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             // how large another instance of itself would open.
             return [sdkProgram(program)]
         }
-
-        // Requested content, not synchronized metadata. The frame supplies no
-        // Program identity: its owning Process is the structural authority,
-        // and the desktop asks the server for that Program's canonical text.
-        if (word === "api-docs") return [await programManager.apiDocs(process().program)]
 
         // Icon bytes are requested only when this frame asks. The frame cannot
         // provide an identity; its owning Process determines the Program.

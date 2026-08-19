@@ -16,9 +16,11 @@ export default class EndpointServices extends TheLink {
 
     private readonly owners = new Map<string, string>()
 
-    public async enable(process: Process, endpoint: Half, name: unknown) {
+    public async enable(process: Process, endpoint: Half, value: unknown) {
 
-        if (typeof name !== "string" || name.length === 0) throw new Error("A service name must be a non-empty string")
+        const definition = this.definition(value, endpoint)
+
+        const { name } = definition
 
         if (!this.live(process, endpoint)) throw new Error(`The ${endpoint} endpoint is not running`)
 
@@ -32,7 +34,7 @@ export default class EndpointServices extends TheLink {
 
         if (this.bindings.has(identity)) throw new Error(`The "${name}" ${endpoint} service is already enabled for this Program`)
 
-        this.bindings.set(identity, { key, process, endpoint })
+        this.bindings.set(identity, { key, process, endpoint, docs: definition.docs })
 
         this.owners.set(owner, identity)
 
@@ -82,6 +84,19 @@ export default class EndpointServices extends TheLink {
         return !this.bindings.has(this.identity(this.key(key)))
     }
 
+    public docs(key: unknown) {
+
+        const resolved = this.key(key)
+
+        if (resolved.endpoint !== "server") throw new Error("Only a Server service can provide API documentation")
+
+        const binding = this.binding(resolved, "server")
+
+        if (!binding) throw new Error("The service is disabled")
+
+        return binding.docs
+    }
+
     public binding(key: unknown, endpoint?: Half) {
 
         const binding = this.bindings.get(this.identity(this.key(key))) ?? null
@@ -124,6 +139,21 @@ export default class EndpointServices extends TheLink {
         return value
     }
 
+    private definition(value: unknown, endpoint: Half) {
+
+        if (typeof value !== "object" || value === null) throw new Error("A service definition is required")
+
+        const candidate = value as { name?: unknown, docs?: unknown }
+
+        if (typeof candidate.name !== "string" || candidate.name.length === 0) throw new Error("A service name must be a non-empty string")
+
+        if (candidate.docs !== undefined && typeof candidate.docs !== "string") throw new Error("Service documentation must be a string")
+
+        if (endpoint === "client" && candidate.docs !== undefined) throw new Error("A Client service cannot provide API documentation")
+
+        return { name: candidate.name, docs: endpoint === "server" ? candidate.docs ?? null : null }
+    }
+
     private live(process: Process, endpoint: Half) {
 
         return endpoint === "server" ? process.server !== null : process.client !== null
@@ -163,6 +193,8 @@ type Binding = Readonly<{
     process: Process
 
     endpoint: Half
+
+    docs: string | null
 }>
 
 type Subscriber = (event: string, payload: unknown) => unknown

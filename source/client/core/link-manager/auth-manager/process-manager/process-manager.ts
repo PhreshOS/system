@@ -56,9 +56,9 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Changes the service exposed by the structurally identified Client Channel. */
-    public async enableService(source: string, name: string) {
+    public async enableService(source: string, definition: unknown) {
 
-        await this.$outbound.publishFirst("/service/enable", source, name)
+        await this.$outbound.publishFirst("/service/enable", source, definition)
     }
 
     public async disableService(source: string) {
@@ -75,6 +75,11 @@ export default class ProcessManager extends TheLink {
     public async serviceDisabled(key: ServiceKey) {
 
         return await this.$outbound.publishFirst("/service/disabled", key) as boolean
+    }
+
+    public async serviceDocs(key: ServiceKey) {
+
+        return await this.$outbound.publishFirst("/service/docs", key) as string | null
     }
 
     /** Registers one exact service interest for this frame lease. */

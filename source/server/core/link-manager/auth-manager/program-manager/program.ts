@@ -1,5 +1,5 @@
 import { ClientConfig, isValue, kebab, layers, Position, ProgramConfig, ServerConfig, Size } from "./config"
-import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { dirname, isAbsolute, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
@@ -161,21 +161,6 @@ export default class Program {
         return this.place(this.config.storage, "./storage")
     }
 
-    public get apiDocsPath() {
-
-        return this.config.apiDocs ? this.place(this.config.apiDocs) : null
-    }
-
-    // Contents, never the path. Reading on demand keeps an attached
-    // development Program's documentation current while installed Programs
-    // naturally read their immutable canonical copy.
-    public apiDocs() {
-
-        const path = this.apiDocsPath
-
-        return path ? readFileSync(path, "utf-8") : null
-    }
-
     // One authored source, or none. Hosting owns every derived size and the
     // system-owned default, so neither becomes part of the Program contract.
     public get iconPath() {
@@ -248,9 +233,6 @@ export default class Program {
 
         if (this.iconPath) await validateIcon(this.iconPath)
 
-        const apiDocs = this.apiDocsPath
-
-        if (apiDocs && !file(apiDocs)) throw new Error(`The API documentation file is not there: ${apiDocs}`)
     }
 
     // Preparing a server half, when it says it needs preparing. Run
@@ -292,8 +274,6 @@ function coherent(config: ProgramConfig) {
 
         if (config[field] !== undefined && typeof config[field] !== "string") throw new Error(`A program's ${field} must be text`)
     }
-
-    if (config.apiDocs !== undefined && (typeof config.apiDocs !== "string" || config.apiDocs.trim().length === 0)) throw new Error("A program's apiDocs must be a non-empty path")
 
     for (const half of ["server", "client"] as const) {
 
@@ -351,19 +331,6 @@ function directory(path: string) {
     return existsSync(path) && statSync(path).isDirectory()
 }
 
-function file(path: string) {
-
-    try {
-
-        if (!statSync(path).isFile()) return false
-
-        accessSync(path, constants.R_OK)
-
-        return true
-    }
-
-    catch { return false }
-}
 
 function execute(command: string, cwd: string) {
 
