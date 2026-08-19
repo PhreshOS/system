@@ -663,7 +663,7 @@ export default class ProcessManager extends TheLink {
 
     private window(program: Program, shape: Shape) {
 
-        const shown = { title: program.title, url: program.clientRoot, layer: shape.layer, location: shape.location }
+        const shown = { title: shape.title, url: program.clientRoot, layer: shape.layer, location: shape.location }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
@@ -1459,9 +1459,7 @@ export default class ProcessManager extends TheLink {
                 // which layer it is the front of.
                 layer: window.layer,
 
-                location: window.location,
-
-                surface: window.surface
+                location: window.location
             }]
         }
 
@@ -1967,8 +1965,6 @@ export default class ProcessManager extends TheLink {
 
         if (!changed) return null
 
-        this.said(identity, "surface", window.surface)
-
         return { identity, window }
     }
 
@@ -2131,6 +2127,8 @@ function isHandleAddress(value: unknown): value is HandleAddress {
 // starting the process, so there are not two places deciding what a
 // window opens as.
 interface ShapeBase {
+
+    title: string
 
     position: Position
 

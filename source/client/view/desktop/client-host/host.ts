@@ -523,9 +523,7 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
                 // cannot read either off its own description.
                 layer: shown.layer,
 
-                location: shown.location,
-
-                surface: shown.surface
+                location: shown.location
             }]
         }
 

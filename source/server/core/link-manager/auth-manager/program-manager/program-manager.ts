@@ -1102,6 +1102,8 @@ export default class ProgramManager extends TheLink {
 
         if (typeof asked !== "object" || asked === null || Array.isArray(asked)) throw new Error("A client launch must be a named shape")
 
+        if (asked.title !== undefined && typeof asked.title !== "string") throw new Error("A launch client's title must be text")
+
         for (const [what, value] of [["size", asked.size], ["position", asked.position]] as const) {
 
             if (value === undefined) continue
@@ -1122,6 +1124,8 @@ export default class ProgramManager extends TheLink {
         const shift = this.authManager.processManager.processes.size % 8 * 32
 
         return {
+
+            title: asked.title ?? program.title,
 
             position: asked.position ?? client.position ?? { x: 120 + shift, y: 80 + shift },
 
@@ -1214,6 +1218,8 @@ export interface Launch {
 // opens on. And not `icon`, which is the program's identity rather
 // than a fact about a launch.
 export interface LaunchClient {
+
+    title?: string
 
     size?: Size
 

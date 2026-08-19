@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -30,8 +30,9 @@
     "build": "node --import tsx source/build.ts",
     "start": "node --run build && node dist/server/main.js",
     "pack": "node --run build && node --import tsx source/pack.ts",
+    "verify:contracts": "node --import tsx scripts/verify-client-launch.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
-    "verify": "node --run check && node --run verify:distribution"
+    "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },
   "dependencies": {
     "@fontsource/roboto": "^5.3.0",
@@ -54,7 +55,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/plugin-proposal-decorators": "^7.29.7",
-    "@phreshos/core": "^0.1.1",
+    "@phreshos/core": "^0.1.2",
     "@phreshos/react-ui": "^0.1.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.3",
