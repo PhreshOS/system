@@ -26,11 +26,11 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "check": "tsc --noEmit",
-    "dev": "node --import tsx source/dev.ts",
-    "build": "node --import tsx source/build.ts",
+    "dev": "vite-node --config vite.server.ts source/dev.ts",
+    "build": "node source/build.mjs",
     "start": "node --run build && node dist/server/main.js",
-    "pack": "node --run build && node --import tsx source/pack.ts",
-    "verify:contracts": "node --import tsx scripts/verify-client-launch.mjs && node --import tsx scripts/verify-readiness.mjs && node --import tsx scripts/verify-endpoint-services.mjs",
+    "pack": "node --run build && node source/pack.mjs",
+    "verify:contracts": "vite-node --config vite.server.ts scripts/verify-client-launch.mjs && vite-node --config vite.server.ts scripts/verify-readiness.mjs && vite-node --config vite.server.ts scripts/verify-endpoint-services.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },
@@ -68,8 +68,8 @@
     "adm-zip": "^0.6.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.12",
     "typescript": "^6.0.3",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "vite-node": "^6.0.0"
   }
 }

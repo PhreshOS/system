@@ -9,6 +9,10 @@
         "jsx": "react-jsx",
         "strict": true,
         "noEmit": true,
+        "types": [
+            "@types/node",
+            "vite/client"
+        ],
         "paths": {
             "@/*": [
                 "./*"
