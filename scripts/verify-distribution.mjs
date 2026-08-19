@@ -14,7 +14,11 @@ const temporary = mkdtempSync(join(tmpdir(), "system-distribution-"))
 const archive = join(repository, `${manifest.name}@${manifest.version}.zip`)
 const checksum = `${archive}.sha256`
 const installation = join(temporary, "installation")
-const npm = process.platform === "win32" ? "npm.cmd" : "npm"
+const npm = process.platform === "win32"
+
+  ? { command: process.execPath, prefix: [join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")] }
+
+  : { command: "npm", prefix: [] }
 const portVariable = `${manifest.name.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase()}_PORT`
 
 let runtime
@@ -63,8 +67,8 @@ try {
   )
 
   execFileSync(
-    npm,
-    ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"],
+    npm.command,
+    [...npm.prefix, "install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"],
     { cwd: installation, stdio: "inherit" }
   )
 
