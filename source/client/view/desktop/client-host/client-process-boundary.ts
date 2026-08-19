@@ -7,6 +7,7 @@ import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isPermissionName, type PermissionName } from "@phreshos/core"
+import { type ClientSurfaceHost } from "./client-surface"
 
 /** The desktop boundary around one iframe execution endpoint. */
 export default class ClientProcessBoundary extends TheLink {
@@ -22,6 +23,8 @@ export default class ClientProcessBoundary extends TheLink {
     private readonly pointer: PointerHost
 
     private readonly traffic: ClientTraffic
+
+    private readonly clientSurface: ClientSurfaceHost
 
     private readonly subscriptions = new Map<string, EndpointSubscription>()
 
@@ -56,7 +59,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private document: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, space: (layer: WindowLayer) => Space, pointer: PointerHost, traffic: ClientTraffic) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, space: (layer: WindowLayer) => Space, pointer: PointerHost, traffic: ClientTraffic, clientSurface: ClientSurfaceHost) {
 
         super()
 
@@ -71,6 +74,8 @@ export default class ClientProcessBoundary extends TheLink {
         this.pointer = pointer
 
         this.traffic = traffic
+
+        this.clientSurface = clientSurface
 
         this.$outbound.forwardTo((route, ...values) => {
 
@@ -97,6 +102,8 @@ export default class ClientProcessBoundary extends TheLink {
     }
 
     public async release() {
+
+        this.clientSurface.remove(this.pane)
 
         const owner = this.leased
 
@@ -203,7 +210,7 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        host(this.authManager, this.pane, this.space, () => this.owner, this.pointer)(values[0], ...values.slice(1)).catch((error: Error) => {
+        host(this.authManager, this.pane, this.space, () => this.owner, this.pointer, this.clientSurface)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -281,6 +288,11 @@ export default class ClientProcessBoundary extends TheLink {
         if (operation === "document") {
 
             if (typeof args[0] !== "string" || args[0] === this.document) return
+
+            // The first document establishes this already-mounted iframe
+            // representation. A later document replaces it and therefore
+            // destroys the previous representation's local Surface.
+            if (this.document !== null) this.clientSurface.remove(this.pane)
 
             this.document = args[0]
 
@@ -437,7 +449,7 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.space, () => this.owner, this.pointer)(args[0], ...args.slice(1)))
+        this.answerRequest(question, host(this.authManager, this.pane, this.space, () => this.owner, this.pointer, this.clientSurface)(args[0], ...args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {

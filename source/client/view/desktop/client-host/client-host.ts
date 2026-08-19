@@ -5,9 +5,10 @@ import { type Space } from "./host"
 import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { AuthManagerContext } from "../../contexts"
 import { isPermissionName } from "@phreshos/core"
+import { removeClientSurface, setClientSurface, type ClientSurfaceHost, type ClientSurfaceState } from "./client-surface"
 
 /**
  * The browser boundary between a program pane and the desktop that hosts it.
@@ -31,6 +32,22 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
     const [traffic] = useState(() => new ClientTraffic())
 
     const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
+
+    const [clientSurfaces, setClientSurfaces] = useState<ReadonlyMap<string, ClientSurfaceState>>(() => new Map())
+
+    const clientSurface = useMemo<ClientSurfaceHost>(() => ({
+
+        set(identity, settings) {
+
+            setClientSurfaces(current => setClientSurface(current, identity, settings))
+        },
+
+        remove(identity) {
+
+            setClientSurfaces(current => removeClientSurface(current, identity))
+        }
+
+    }), [])
 
     // Read by the gate at the moment a pane asks, so the answer is
     // never a render behind.
@@ -223,7 +240,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, layer => latest.current[layer], pointer, traffic))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, layer => latest.current[layer], pointer, traffic, clientSurface))
 
             return
         }
@@ -238,7 +255,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, pointer, sources, traffic])
+    }, [authManager, clientSurface, pointer, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
@@ -309,7 +326,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     }, [authManager, pointer, sources])
 
-    return { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded }
+    return { windowSurfaceRef, windowSurfaceSize, clientSurfaces, frame, frameLoaded }
 }
 
 export interface SurfaceSize {

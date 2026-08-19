@@ -1,4 +1,4 @@
-import { isRelativeValue, isScaleLevel, type Position, type ScaleLevel, type Size, type Value, type WindowLayer, type WindowSurfaceEasing, type WindowSurfaceSettings, type WindowSurfaceTransaction } from "@phreshos/core"
+import { isRelativeValue, type Position, type Size, type Value, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import { Transmitted } from "@libs/superjson"
 
 /**
@@ -71,10 +71,6 @@ export default class Window {
     // state at birth rather than an act afterwards: hidden from the
     // first frame is not the same as shown once and then hidden.
     public minimized: boolean
-
-    // Optional host material is Window state like geometry: born absent,
-    // changed only here, and echoed whole to every desktop counterpart.
-    public surface: WindowSurfaceSettings | null = null
 
     // What a person reads on it. Born from the program, the window's
     // own afterwards.
@@ -152,6 +148,22 @@ export default class Window {
         this.size = size
     }
 
+    /** Validates and commits a complete geometry without an intermediate state. */
+    public setGeometry(geometry: WindowGeometry) {
+
+        validate(geometry.position.x, "x")
+
+        validate(geometry.position.y, "y")
+
+        validate(geometry.size.width, "width")
+
+        validate(geometry.size.height, "height")
+
+        this.position = geometry.position
+
+        this.size = geometry.size
+    }
+
     public changeTitle(title: string) {
 
         const said = String(title ?? "").trim()
@@ -159,26 +171,6 @@ export default class Window {
         if (!said) throw new Error("A window's title is something a person can read")
 
         this.title = said
-    }
-
-    public setSurface(value: unknown) {
-
-        const surface = validateSurface(value)
-
-        if (sameSurface(this.surface, surface)) return false
-
-        this.surface = surface
-
-        return true
-    }
-
-    public removeSurface() {
-
-        if (this.surface === null) return false
-
-        this.surface = null
-
-        return true
     }
 
     public toJSON() {
@@ -199,97 +191,9 @@ export default class Window {
 
             depth: this.depth,
 
-            minimized: this.minimized,
-
-            surface: this.surface
+            minimized: this.minimized
         }
     }
-}
-
-function validateSurface(value: unknown): WindowSurfaceSettings {
-
-    if (value === undefined) return Object.freeze({})
-
-    const record = plain(value, "Surface settings")
-
-    fields(record, ["opacity", "radius", "transaction"], "Surface settings")
-
-    const surface: { opacity?: number, radius?: ScaleLevel | number | "full", transaction?: WindowSurfaceTransaction } = {}
-
-    if ("opacity" in record) {
-
-        if (!finite(record.opacity) || record.opacity < 0 || record.opacity > 1) throw new Error("Surface opacity must be a finite number from 0 to 1")
-
-        surface.opacity = record.opacity
-    }
-
-    if ("radius" in record) {
-
-        if (record.radius !== "full" && !isScaleLevel(record.radius) && (!finite(record.radius) || record.radius < 0)) throw new Error('Surface radius must be a ScaleLevel, a finite nonnegative pixel number, or "full"')
-
-        surface.radius = record.radius
-    }
-
-    if ("transaction" in record) surface.transaction = validateTransaction(record.transaction)
-
-    return Object.freeze(surface)
-}
-
-function validateTransaction(value: unknown): WindowSurfaceTransaction {
-
-    const record = plain(value, "Surface transaction")
-
-    fields(record, ["duration", "easing"], "Surface transaction")
-
-    const transaction: { duration?: number, easing?: WindowSurfaceEasing } = {}
-
-    if ("duration" in record) {
-
-        if (!finite(record.duration) || record.duration < 0 || record.duration > 60_000) throw new Error("Surface transaction duration must be finite milliseconds from 0 to 60000")
-
-        transaction.duration = record.duration
-    }
-
-    if ("easing" in record) transaction.easing = validateEasing(record.easing)
-
-    return Object.freeze(transaction)
-}
-
-function validateEasing(value: unknown): WindowSurfaceEasing {
-
-    if (value === "linear" || value === "ease" || value === "ease-in" || value === "ease-out" || value === "ease-in-out") return value
-
-    if (!Array.isArray(value) || value.length !== 4 || !value.every(finite) || value[0] < 0 || value[0] > 1 || value[2] < 0 || value[2] > 1) throw new Error("Surface transaction easing must be a standard easing name or four cubic Bézier numbers with x values from 0 to 1")
-
-    return Object.freeze([...value]) as [number, number, number, number]
-}
-
-function plain(value: unknown, name: string): Record<string, unknown> {
-
-    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${name} must be an object`)
-
-    const prototype = Object.getPrototypeOf(value)
-
-    if (prototype !== Object.prototype && prototype !== null) throw new Error(`${name} must be an object`)
-
-    return value as Record<string, unknown>
-}
-
-function fields(record: Record<string, unknown>, allowed: string[], name: string) {
-
-    const unknown = Object.keys(record).find(field => !allowed.includes(field))
-
-    if (unknown) throw new Error(`${name} has no "${unknown}" field`)
-}
-
-function finite(value: unknown): value is number {
-
-    return typeof value === "number" && Number.isFinite(value)
-}
-
-function sameSurface(left: WindowSurfaceSettings | null, right: WindowSurfaceSettings) {
-
-    return JSON.stringify(left) === JSON.stringify(right)
 }
 
 // A value is pixels or one linear relative expression; anything else is

@@ -1,5 +1,5 @@
 import { useReducedMotion } from "@libs/react-motion"
-import { isScaleLevel, scale, type WindowSurfaceEasing, type WindowSurfaceSettings } from "@phreshos/core"
+import { isScaleLevel, scale, type ClientSurfaceEasing, type ClientSurfaceSettings } from "@phreshos/core"
 import { GlassSurface, useTheme } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
 
@@ -7,7 +7,7 @@ const systemDuration = 240
 
 const systemEasing = "ease-out"
 
-/** Projects one authoritative target and animates only live replacements. */
+/** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ revision, settings }: WindowSurfaceProps) {
 
     const element = useRef<HTMLDivElement>(null)
@@ -104,7 +104,7 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
     />
 }
 
-function values(settings: WindowSurfaceSettings, themeRadius: number) {
+function values(settings: ClientSurfaceSettings, themeRadius: number) {
 
     const radius = settings.radius
 
@@ -116,7 +116,7 @@ function values(settings: WindowSurfaceSettings, themeRadius: number) {
     }
 }
 
-function easing(value: WindowSurfaceEasing | undefined) {
+function easing(value: ClientSurfaceEasing | undefined) {
 
     if (typeof value === "string") return value
 
@@ -125,8 +125,8 @@ function easing(value: WindowSurfaceEasing | undefined) {
 
 interface WindowSurfaceProps {
 
-    settings: WindowSurfaceSettings
+    settings: ClientSurfaceSettings
 
-    /** Zero is an initial snapshot; positive revisions are live changes. */
+    /** Every positive revision came from an explicit live Client command. */
     revision: number
 }

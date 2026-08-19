@@ -1,6 +1,7 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type WindowSurfaceSize } from "./window-geometry"
+import { type ClientSurfaceState } from "../client-host/client-surface"
 import { type ProgramAccess } from "../program-access"
 import { type Position, type Size } from "@phreshos/core"
 import Loading from "../../components/loading"
@@ -17,7 +18,7 @@ const loadingExitDuration = 200
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, windowSurface, windowSurfaceRevision, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, clientSurface, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -95,9 +96,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         size={size}
 
-        windowSurface={windowSurface}
-
-        windowSurfaceRevision={windowSurfaceRevision}
+        clientSurface={clientSurface}
 
         paintSurfaceSize={paintSurfaceSize}
 
@@ -174,9 +173,7 @@ interface ProcessWindowProps {
 
     size: Size
 
-    windowSurface: ClientState["window"]["surface"]
-
-    windowSurfaceRevision: number
+    clientSurface?: ClientSurfaceState
 
     paintSurfaceSize?: WindowSurfaceSize
 

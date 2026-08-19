@@ -3,9 +3,10 @@ import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { GlassSurface, useTheme } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "./window-geometry"
-import { numericScale, type Position, type Size, type WindowSurfaceSettings } from "@phreshos/core"
+import { numericScale, type Position, type Size } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
+import { type ClientSurfaceState } from "../client-host/client-surface"
 import gsap from "gsap"
 
 /**
@@ -48,7 +49,7 @@ const settle = ["left", "top", "width", "height", "transform"].map(property => `
 
 const morphing = ["left", "top", "width", "height"].map(property => `${property} 0.22s cubic-bezier(0.33, 1, 0.68, 1)`).join(", ")
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, windowSurface = null, windowSurfaceRevision = 0, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, clientSurface, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
     const frame = useRef<HTMLDivElement>(null)
 
@@ -562,7 +563,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 {/* A bare Client cannot refract the desktop through its iframe.
                     Its host surface is therefore a sibling behind the frame,
                     with its own radius and no clipping parent. */}
-                {bare && windowSurface && <WindowSurface settings={windowSurface} revision={windowSurfaceRevision} />}
+                {bare && clientSurface && <WindowSurface settings={clientSurface.settings} revision={clientSurface.revision} />}
 
                 {/* LAYER 1 — the shared Theme-driven glass material. */}
                 {!bare && <GlassSurface aria-hidden="true" radius="inherit" className="pointer-events-none absolute inset-0" />}
@@ -680,11 +681,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
 
     size?: Size
 
-    /** Authoritative host Surface target behind a bare iframe. */
-    windowSurface?: WindowSurfaceSettings | null
-
-    /** Desktop delivery revision used to distinguish live changes from snapshots. */
-    windowSurfaceRevision?: number
+    /** Surface target owned by this live iframe representation. */
+    clientSurface?: ClientSurfaceState
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize

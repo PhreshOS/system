@@ -47,7 +47,7 @@ export default function Workspace() {
     // lets the desktop announce the surface that actually contains it.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(desktop, sources.current)
+    const { windowSurfaceRef, windowSurfaceSize, clientSurfaces, frame, frameLoaded } = useClientHost(desktop, sources.current)
 
     const wallpaperLoaded = useCallback((event: SyntheticEvent<HTMLIFrameElement>) => {
 
@@ -98,9 +98,7 @@ export default function Workspace() {
 
             size={client.window.size}
 
-            windowSurface={client.window.surface}
-
-            windowSurfaceRevision={client.window.surfaceRevision}
+            clientSurface={clientSurfaces.get(record.identity)}
 
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.

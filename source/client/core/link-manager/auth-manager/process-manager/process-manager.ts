@@ -198,11 +198,11 @@ export default class ProcessManager extends TheLink {
 
     // Any window change arrives in one shape: the process it belongs to,
     // and the window whole.
-    private followed(payload: { identity: string, window: TransmittedWindow } | null, surfaceChanged = false) {
+    private followed(payload: { identity: string, window: TransmittedWindow } | null) {
 
         if (!payload) return
 
-        this.processes.get(payload.identity)?.client?.window.follow(payload.window, surfaceChanged)
+        this.processes.get(payload.identity)?.client?.window.follow(payload.window)
 
         return this.list()
     }
@@ -305,6 +305,13 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
+    @Subscribe("/geometry")
+    @Publish("/processes", "inbound")
+    protected async geometryHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+
+        return this.followed(payload)
+    }
+
     @Subscribe("/raise")
     @Publish("/processes", "inbound")
     protected async raiseHandle(payload: { identity: string, window: TransmittedWindow } | null) {
@@ -324,13 +331,6 @@ export default class ProcessManager extends TheLink {
     protected async minimizeHandle(payload: { identity: string, window: TransmittedWindow } | null) {
 
         return this.followed(payload)
-    }
-
-    @Subscribe("/surface")
-    @Publish("/processes", "inbound")
-    protected async surfaceHandle(payload: { identity: string, window: TransmittedWindow } | null) {
-
-        return this.followed(payload, true)
     }
 
     @Subscribe("/end-end")

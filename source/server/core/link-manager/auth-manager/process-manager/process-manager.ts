@@ -18,7 +18,7 @@ import { failed, succeeded, type Outcome } from "@server/core/outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
-import { isPermissionName, isServiceKey, type PermissionName, type WindowLayer } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type PermissionName, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
@@ -153,17 +153,6 @@ export default class ProcessManager extends TheLink {
         const window = this.windowOf(identity)
 
         if (window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
-        return window
-    }
-
-    private surfaceWindowOf(identity: string) {
-
-        const window = this.windowOf(identity)
-
-        if (window.layer === "window") throw new Error("A window-layer Window cannot own a Surface")
-
-        if (window.layer === "wallpaper") throw new Error("A wallpaper-layer Window cannot own a Surface")
 
         return window
     }
@@ -1668,20 +1657,11 @@ export default class ProcessManager extends TheLink {
             return [target]
         }
 
-        if (word === "surfaceSet") {
+        if (word === "setGeometry") {
 
             const target = this.heldWindow(rest[0], process).process.identity
 
-            await this.surface(target, rest[1] === undefined ? {} : rest[1])
-
-            return [target]
-        }
-
-        if (word === "surfaceRemove") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.surface(target, null)
+            await this.setGeometry(target, rest[1] as WindowGeometry)
 
             return [target]
         }
@@ -2158,6 +2138,22 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
+    @Connect("/geometry")
+    public async setGeometry(identity: string, geometry: WindowGeometry) {
+
+        const window = this.mutableWindowOf(identity)
+
+        window.setGeometry(geometry)
+
+        this.said(identity, "geometry", { position: window.position, size: window.size })
+
+        this.said(identity, "move", window.position)
+
+        this.said(identity, "resize", window.size)
+
+        return { identity, window }
+    }
+
     @Connect("/change-title")
     public async changeTitle(identity: string, title: string) {
 
@@ -2166,18 +2162,6 @@ export default class ProcessManager extends TheLink {
         window.changeTitle(title)
 
         this.said(identity, "changeTitle", window.title)
-
-        return { identity, window }
-    }
-
-    @Connect("/surface")
-    public async surface(identity: string, settings: unknown) {
-
-        const window = this.surfaceWindowOf(identity)
-
-        const changed = settings === null ? window.removeSurface() : window.setSurface(settings)
-
-        if (!changed) return null
 
         return { identity, window }
     }

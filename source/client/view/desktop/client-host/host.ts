@@ -7,6 +7,7 @@ import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
 import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
+import { clientSurfaceSettings, type ClientSurfaceHost } from "./client-surface"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -48,7 +49,7 @@ export interface Space {
  * no prototypes and refuses functions — so every word answers with plain
  * values built here, never with an instance the desktop holds.
  */
-export default function host(authManager: AuthManager, pane: string, space: (layer: WindowLayer) => Space, frameOwner: () => string | null, pointer: PointerHost) {
+export default function host(authManager: AuthManager, pane: string, space: (layer: WindowLayer) => Space, frameOwner: () => string | null, pointer: PointerHost, clientSurface: ClientSurfaceHost) {
 
     const { processManager, programManager } = authManager
 
@@ -105,6 +106,17 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
         const found = window(named)
 
         if (found.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
+
+        return found
+    }
+
+    function surfaceWindow(named: unknown) {
+
+        const found = window(named)
+
+        if (found.layer === "window") throw new Error("A window-layer Window cannot own a Surface")
+
+        if (found.layer === "wallpaper") throw new Error("A wallpaper-layer Window cannot own a Surface")
 
         return found
     }
@@ -627,6 +639,13 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             return [pane]
         }
 
+        if (word === "setGeometry") {
+
+            await mutableWindow(args[0]).setGeometry(args[1] as never)
+
+            return [pane]
+        }
+
         if (word === "localResize") {
 
             mutableWindow(args[0]).localResize(args[1] as never)
@@ -638,14 +657,18 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
 
         if (word === "surfaceSet") {
 
-            await window(args[0]).setSurface(args[1] === undefined ? {} : args[1] as never)
+            const target = surfaceWindow(args[0])
+
+            clientSurface.set(target.process, clientSurfaceSettings(args[1] === undefined ? {} : args[1]))
 
             return [pane]
         }
 
         if (word === "surfaceRemove") {
 
-            await window(args[0]).removeSurface()
+            const target = surfaceWindow(args[0])
+
+            clientSurface.remove(target.process)
 
             return [pane]
         }

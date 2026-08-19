@@ -258,18 +258,20 @@ export default function useWindows() {
 
         if (!window) return
 
-        window.localResize({ width, height })
-
         if (!position) {
+
+            window.localResize({ width, height })
 
             commit(window.resize({ width, height }))
 
             return
         }
 
-        window.localMove(position)
+        const geometry = { position, size: { width, height } }
 
-        commit(window.move(position).then(() => window.resize({ width, height })))
+        window.localSetGeometry(geometry)
+
+        commit(window.setGeometry(geometry))
 
     }, [commit])
 
@@ -279,11 +281,11 @@ export default function useWindows() {
 
         if (!window) return
 
-        window.localMove(position)
+        const geometry = { position, size }
 
-        window.localResize(size)
+        window.localSetGeometry(geometry)
 
-        commit(window.move(position).then(() => window.resize(size)))
+        commit(window.setGeometry(geometry))
 
     }, [commit])
 
@@ -301,9 +303,7 @@ export default function useWindows() {
 
             filled.current.delete(process.identity)
 
-            move(process, was.position.x, was.position.y)
-
-            resize(process, was.size.width, was.size.height, null)
+            snap(process, was.position, was.size)
 
             return
         }
@@ -312,7 +312,7 @@ export default function useWindows() {
 
         snap(process, { x: "0/1", y: "0/1" }, { width: "1/1", height: "1/1" })
 
-    }, [move, resize, snap])
+    }, [snap])
 
     // Every window on the desktop, in one list and one order.
     //

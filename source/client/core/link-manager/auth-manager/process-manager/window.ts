@@ -1,5 +1,5 @@
 import { type TransmittedWindow, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { isRelativeValue, type WindowLayer, type WindowSurfaceSettings } from "@phreshos/core"
+import { isRelativeValue, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
 /**
@@ -24,13 +24,6 @@ export default class Window {
     public depth: number
 
     public minimized: boolean
-
-    // Authoritative host material echoed from the server. The revision is
-    // desktop-local delivery knowledge: zero marks an initial snapshot, while
-    // later values let rendering animate only live changes.
-    public surface: WindowSurfaceSettings | null
-
-    public surfaceRevision = 0
 
     // What is shown on it, born from its program when the window was
     // made. Not looked up again: how a thing is shown is not a fact
@@ -68,11 +61,10 @@ export default class Window {
 
         this.minimized = payload.minimized
 
-        this.surface = payload.surface
     }
 
     // What the echo carries, applied whole: one shape for any change.
-    public follow(payload: TransmittedWindow, surfaceChanged = false) {
+    public follow(payload: TransmittedWindow) {
 
         this.title = payload.title
 
@@ -90,12 +82,6 @@ export default class Window {
 
         this.minimized = payload.minimized
 
-        if (surfaceChanged) {
-
-            this.surface = payload.surface
-
-            this.surfaceRevision += 1
-        }
     }
 
     // A local geometry change is a draft held by this desktop. It redraws
@@ -119,14 +105,20 @@ export default class Window {
         this.size = size
     }
 
-    public async setSurface(settings: WindowSurfaceSettings) {
+    /** Applies a complete desktop-local draft in one notification cycle. */
+    public localSetGeometry(geometry: WindowGeometry) {
 
-        await this.processManager.$outbound.publish("/surface", this.process, settings)
-    }
+        validate(geometry.position.x, "x")
 
-    public async removeSurface() {
+        validate(geometry.position.y, "y")
 
-        await this.processManager.$outbound.publish("/surface", this.process, null)
+        validate(geometry.size.width, "width")
+
+        validate(geometry.size.height, "height")
+
+        this.position = geometry.position
+
+        this.size = geometry.size
     }
 
     public async move(position: Position) {
@@ -137,6 +129,11 @@ export default class Window {
     public async resize(size: Size) {
 
         await this.processManager.$outbound.publish("/resize", this.process, size)
+    }
+
+    public async setGeometry(geometry: WindowGeometry) {
+
+        await this.processManager.$outbound.publish("/geometry", this.process, geometry)
     }
 
     public async changeTitle(title: string) {
