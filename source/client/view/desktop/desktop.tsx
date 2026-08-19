@@ -9,7 +9,7 @@ import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
 import Session from "./session/session"
 import { useCallback, useState } from "react"
-import Readiness, { useReadiness } from "@libs/readiness/main"
+import Readiness, { useReady } from "@libs/readiness/main"
 import { standardTheme } from "@phreshos/core"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
@@ -22,7 +22,15 @@ export default function () {
 
         <Readiness.Pending>
 
-            <Loading style={{ backgroundColor: standardTheme.background, backdropFilter: "none" }} />
+            {pending => <Loading
+
+                aria-hidden={pending.length === 0}
+
+                className={`transition-opacity duration-200 ease-out ${pending.length ? "" : "pointer-events-none opacity-0"}`}
+
+                style={{ backgroundColor: standardTheme.background, backdropFilter: "none" }}
+
+            />}
 
         </Readiness.Pending>
 
@@ -35,8 +43,6 @@ function Desktop() {
 
     const [linkManager, setLinkManager] = useState<LinkManager | null>(null)
 
-    const { ready } = useReadiness()
-
     const internal = ReactTunnel.useFactory(application.clientLink.$internal)
 
     internal.useSubscribe("subscribe", useCallback(function (socketLink: SocketLink<[TransmittedLinkManager, string]>) {
@@ -46,9 +52,7 @@ function Desktop() {
         const [payload, connectionIdentity] = socketLink.payload
 
         setLinkManager(new LinkManager(application, socketLink, payload, connectionIdentity))
-
-        ready("connection")
-    }, [application, ready]))
+    }, [application]))
 
     usePromise(async () => application.clientLink.subscribe(), [])
 
@@ -58,6 +62,8 @@ function Desktop() {
 }
 
 function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
+
+    useReady("connection")
 
     const theme = useProperty(linkManager.theme)
 

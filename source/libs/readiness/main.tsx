@@ -1,5 +1,5 @@
 import ReadinessState from "./state"
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 const ReadinessContext = createContext<ReadinessValue | null>(null)
 
@@ -48,10 +48,12 @@ export default function Readiness({ requirements, children }: ReadinessProps) {
     return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
 }
 
-/** Renders one stable pending representation until every requirement is ready. */
-function Pending({ children }: { children: ReactNode }) {
+/** Observe pending work or render one representation only while work remains. */
+function Pending({ children }: PendingProps) {
 
     const { pending } = useReadiness()
+
+    if (typeof children === "function") return children(pending)
 
     return pending.length ? children : null
 }
@@ -68,6 +70,34 @@ export function useReadiness() {
     return readiness
 }
 
+/** Register pending work owned by this component and return its completion. */
+export function useRequirement(requirement: string) {
+
+    const { ready, require } = useReadiness()
+
+    useLayoutEffect(function () {
+
+        require(requirement)
+
+        return () => ready(requirement)
+    }, [ready, require, requirement])
+
+    return useCallback(() => ready(requirement), [ready, requirement])
+}
+
+/** Treat this component's mounted presence as proof of readiness. */
+export function useReady(requirement: string) {
+
+    const { ready, require } = useReadiness()
+
+    useLayoutEffect(function () {
+
+        ready(requirement)
+
+        return () => require(requirement)
+    }, [ready, require, requirement])
+}
+
 function sameRequirements(left: readonly string[], right: readonly string[]) {
 
     return left.length === right.length && left.every((requirement, index) => requirement === right[index])
@@ -78,6 +108,11 @@ interface ReadinessProps {
     requirements: readonly string[]
 
     children: ReactNode
+}
+
+interface PendingProps {
+
+    children: ReactNode | ((pending: readonly string[]) => ReactNode)
 }
 
 export interface ReadinessValue {

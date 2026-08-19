@@ -2,6 +2,7 @@ import bundledWallpaper from "@/assets/bundled/wallpaper.jpg"
 import { ApplicationContext } from "../contexts"
 import { useMemo, useState, type ReactNode } from "react"
 import Loading from "./loading"
+import { useReady } from "@libs/readiness/main"
 
 type WallpaperSource = Readonly<{
     key: string
@@ -108,17 +109,17 @@ function WallpaperLayer({ source, visible, onLoad }: { source: WallpaperSource, 
 }
 
 /** A complete surface whose content sits above one file-backed wallpaper. */
-export function WallpaperStage({ file, children, onReady }: WallpaperStageProps) {
+export function WallpaperStage({ file, children }: WallpaperStageProps) {
 
-    const [ready, setReady] = useState(false)
+    const [readyFile, setReadyFile] = useState<string | null>()
+
+    const ready = readyFile === file
 
     return <div className="relative isolate grid min-h-0">
 
         <WallpaperBackground file={file} onReady={() => {
 
-            setReady(true)
-
-            onReady?.()
+            setReadyFile(file)
         }} />
 
         <div className="relative z-1 grid min-h-0">
@@ -129,7 +130,16 @@ export function WallpaperStage({ file, children, onReady }: WallpaperStageProps)
 
         {!ready && <Loading />}
 
+        {ready && <ReadyWallpaper />}
+
     </div>
+}
+
+export function ReadyWallpaper() {
+
+    useReady("wallpaper")
+
+    return null
 }
 
 interface WallpaperStageProps {
@@ -137,8 +147,6 @@ interface WallpaperStageProps {
     file: string | null
 
     children: ReactNode
-
-    onReady?: () => void
 }
 
 interface WallpaperBackgroundProps {

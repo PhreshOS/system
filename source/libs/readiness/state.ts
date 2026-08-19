@@ -5,22 +5,18 @@ export default class ReadinessState {
 
     public readonly pending: readonly string[]
 
-    public readonly sealed: boolean
-
-    private constructor(requirements: readonly string[], pending: readonly string[], sealed: boolean) {
+    private constructor(requirements: readonly string[], pending: readonly string[]) {
 
         this.requirements = [...requirements]
 
         this.pending = [...pending]
-
-        this.sealed = sealed
     }
 
     public static start(requirements: readonly string[]) {
 
         validate(requirements)
 
-        return new ReadinessState(requirements, requirements, requirements.length === 0)
+        return new ReadinessState(requirements, requirements)
     }
 
     /** Mark one known requirement ready. Repeated readiness is harmless. */
@@ -32,19 +28,23 @@ export default class ReadinessState {
 
         const pending = this.pending.filter(candidate => candidate !== requirement)
 
-        return new ReadinessState(this.requirements, pending, pending.length === 0)
+        return new ReadinessState(this.requirements, pending)
     }
 
-    /** Add work while the boundary is still pending. */
+    /** Add new work or restore one completed requirement. */
     public require(requirement: string) {
 
         validateRequirement(requirement)
 
-        if (this.sealed) throw new Error("Readiness is already complete and cannot accept another requirement")
+        if (this.pending.includes(requirement)) return this
 
-        if (this.requirements.includes(requirement)) throw new Error(`Readiness already knows the requirement "${requirement}"`)
+        const requirements = this.requirements.includes(requirement)
+            ? this.requirements
+            : [...this.requirements, requirement]
 
-        return new ReadinessState([...this.requirements, requirement], [...this.pending, requirement], false)
+        const restored = new Set([...this.pending, requirement])
+
+        return new ReadinessState(requirements, requirements.filter(candidate => restored.has(candidate)))
     }
 }
 
