@@ -34,13 +34,12 @@ import { dirname } from "node:path"
  * that means inventing a token — a mechanism the transport made
  * necessary rather than one anything needed.
  *
- * **POSIX only, deliberately.** Node maps a listening path onto a named
- * pipe on Windows, so the *address* would port with two lines. The
- * authorization would not: a named pipe made through Node has no
- * permission story reachable from here, and its default admits any local
- * process. Windows support is therefore not a transport change but a
- * security-model change, and it is not owed one until something needs
- * it. The rest of the system is already POSIX-only for smaller reasons.
+ * On POSIX, the socket file's 0600 mode is the authorization. On Windows,
+ * the equivalent address is a named pipe created without `readableAll` or
+ * `writableAll`. Windows grants the creator owner full control while other
+ * accounts do not receive the duplex access required by this protocol. The
+ * pipe name is derived from the storage root so users and isolated instances
+ * do not collide in Windows' machine-wide pipe namespace.
  *
  * **One system per storage root.** The socket lives in the root, so it
  * follows wherever the root is — which is how the lab runs a throwaway
@@ -74,6 +73,8 @@ import { dirname } from "node:path"
  * means persistent.** Something meant to outlive a terminal is installed.
  */
 export default function intake(application: Application, path: string) {
+
+    const namedPipe = process.platform === "win32"
 
     // A message is a line. The first version had no framing at all — a
     // question was whatever arrived before the asker closed its own side
@@ -115,7 +116,7 @@ export default function intake(application: Application, path: string) {
         socket.on("error", () => undefined)
     })
 
-    mkdirSync(dirname(path), { recursive: true })
+    if (!namedPipe) mkdirSync(dirname(path), { recursive: true })
 
     return new Promise<string>(function (settle, refuse) {
 
@@ -136,21 +137,23 @@ export default function intake(application: Application, path: string) {
 
                 if (running) return refuse(new Error(`A system is already running here — ${dirname(path)} holds one system, and two would share its programs and persistent state`))
 
+                if (namedPipe) return refuse(error)
+
                 rmSync(path, { force: true })
 
-                server.listen(path, () => settle(secured(path)))
+                server.listen(path, () => settle(secured(path, namedPipe)))
             }, refuse)
         })
 
-        server.listen(path, () => settle(secured(path)))
+        server.listen({ path, readableAll: false, writableAll: false }, () => settle(secured(path, namedPipe)))
     })
 }
 
 // The mode is the authorization, so it is set before anything is
 // answered rather than left to whatever umask was in force.
-function secured(path: string) {
+function secured(path: string, namedPipe: boolean) {
 
-    chmodSync(path, 0o600)
+    if (!namedPipe) chmodSync(path, 0o600)
 
     return path
 }

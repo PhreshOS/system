@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server"
 import { WebSocketServer } from "ws"
 import doors from "./doors"
 import intake from "./intake"
+import intakeAddress from "./intake-address"
 import program from "./program"
 import proxy from "./proxy"
 import storage from "./storage"
@@ -72,7 +73,7 @@ export default async function (config: Config) {
     // Local program intake beside the way the network reaches the system.
     // Not HTTP: it is a filesystem socket reachable only from this machine,
     // for installing or running the one program a local project declares.
-    const socket = await intake(application, application.storage.join("intake.sock"))
+    const socket = await intake(application, intakeAddress(application.storage.path))
 
     const origin = `http://localhost:${port}`
 
