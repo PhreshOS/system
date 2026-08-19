@@ -44,6 +44,14 @@ assert.deepEqual(first.state("bare").position, { x: 60, y: 70 })
 assert.deepEqual(second.state("ordinary").position, { x: 0, y: 0 })
 assert.deepEqual(ordinary.window.position, { x: 0, y: 0 })
 
+// A reader reports the rectangle currently painted by the browser. Policy
+// such as fill/restore still needs the underlying projection, because a
+// relative full-surface value and its measured pixels are not equivalent.
+first.represent("ordinary", () => ({ position: { x: 0, y: 0 }, size: { width: 1200, height: 800 } }))
+assert.deepEqual(first.state("ordinary").size, { width: 1200, height: 800 })
+assert.deepEqual(first.projection("ordinary").size, { width: 300, height: 200 })
+first.represent("ordinary", null)
+
 first.represent("bare", () => ({ position: { x: 65, y: 75 }, size: { width: 290, height: 190 } }))
 assert.deepEqual(first.state("bare").position, { x: 65, y: 75 })
 assert.deepEqual(first.state("bare").size, { width: 290, height: 190 })

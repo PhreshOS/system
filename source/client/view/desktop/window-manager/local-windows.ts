@@ -82,6 +82,12 @@ export default class LocalWindows implements LocalWindowHost {
         return windowState(state, frontmost(this.windows, state.layer) === identity, geometry)
     }
 
+    /** Returns the values currently driving this desktop's representation. */
+    public projection(process: string) {
+
+        return this.existing(process).state
+    }
+
     public readonly represent = (process: string, reader: LocalGeometryReader | null) => {
 
         const identity = this.live.get(process)

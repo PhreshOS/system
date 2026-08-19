@@ -313,11 +313,13 @@ export default function useWindows() {
 
         if (!window || window.layer !== "window") return
 
-        const local = localWindow.state(process.identity)
+        const shown = localWindow.state(process.identity)
+
+        const projection = localWindow.projection(process.identity)
 
         const was = filled.current.get(process.identity)
 
-        const whole = wholeWindowGeometry(local.position, local.size)
+        const whole = wholeWindowGeometry(projection.position, projection.size)
 
         if (whole && was) {
 
@@ -328,7 +330,7 @@ export default function useWindows() {
             return
         }
 
-        filled.current.set(process.identity, { position: local.position, size: local.size })
+        filled.current.set(process.identity, { position: shown.position, size: shown.size })
 
         snap(process, { x: "0/1", y: "0/1" }, { width: "1/1", height: "1/1" })
 
