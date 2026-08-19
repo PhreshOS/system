@@ -5,7 +5,7 @@ import { type ClientBody, type ProxiedResponse, type ServedValue } from "@client
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, type ProgramIconSize, type Size, type WindowLayer } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type ProgramIconSize, type WindowLayer } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -19,6 +19,14 @@ import {
 export class TransferredAnswer {
 
     public constructor(public readonly result: unknown[], public readonly transfer: Transferable[]) { }
+}
+
+/** The complete measured desktop area in CSS pixels. */
+export interface DesktopSize {
+
+    width: number
+
+    height: number
 }
 
 /**
@@ -45,7 +53,7 @@ export class TransferredAnswer {
  * no prototypes and refuses functions — so every word answers with plain
  * values built here, never with an instance the desktop holds.
  */
-export default function host(authManager: AuthManager, pane: string, desktop: () => Size, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
+export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSize, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 

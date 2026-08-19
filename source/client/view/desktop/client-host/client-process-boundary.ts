@@ -1,11 +1,11 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import TheLink from "@libs/the-link/the-link"
-import host, { TransferredAnswer } from "./host"
+import host, { type DesktopSize, TransferredAnswer } from "./host"
 import { type PointerHost } from "./pointer"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName, type PermissionName, type Size } from "@phreshos/core"
+import { isPermissionName, type PermissionName } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 
 /** The desktop boundary around one iframe execution endpoint. */
@@ -17,7 +17,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly authManager: AuthManager
 
-    private readonly desktop: () => Size
+    private readonly desktop: () => DesktopSize
 
     private readonly pointer: PointerHost
 
@@ -58,7 +58,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private document: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => Size, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSize, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
         super()
 

@@ -1,6 +1,7 @@
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
-import { isPermissionName, type Size } from "@phreshos/core"
+import { isPermissionName } from "@phreshos/core"
 import useAnnouncements from "./announcements"
+import { type DesktopSize } from "./host"
 import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
@@ -31,9 +32,9 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
 
-    const latestDesktopSize = useRef<Size>({ width: 0, height: 0 })
+    const latestDesktopSize = useRef<DesktopSize>({ width: 0, height: 0 })
 
-    const desktopSize = useCallback(function (): Size {
+    const desktopSize = useCallback(function (): DesktopSize {
 
         const bounds = desktop.current?.getBoundingClientRect()
 
@@ -47,12 +48,12 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
         if (!desktop.current || !windowSurfaceRef.current) return
 
-        function measure(bounds: { width: number, height: number }): Size {
+        function measure(bounds: { width: number, height: number }): DesktopSize {
 
             return { width: Math.round(bounds.width), height: Math.round(bounds.height) }
         }
 
-        function announceDesktop(now: Size) {
+        function announceDesktop(now: DesktopSize) {
 
             if (latestDesktopSize.current.width === now.width && latestDesktopSize.current.height === now.height) return
 
