@@ -1,7 +1,8 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type WindowSurfaceSize } from "./window-geometry"
-import { type ClientSurfaceState } from "../client-host/client-surface"
+import { type LocalAnimation, type LocalSurfaceState } from "../client-host/local-window"
+import { type LocalGeometryReader } from "./local-windows"
 import { type ProgramAccess } from "../program-access"
 import { type Position, type Size } from "@phreshos/core"
 import Loading from "../../components/loading"
@@ -18,7 +19,7 @@ const loadingExitDuration = 200
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, clientSurface, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -37,6 +38,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
     const resize = useCallback((width: number, height: number, origin: { x: number, y: number } | null) => onResize(record, width, height, origin), [onResize, record])
 
     const snap = useCallback((position: Position, size: Size) => onSnap(record, position, size), [onSnap, record])
+
+    const represent = useCallback((reader: LocalGeometryReader | null) => onLocalRepresentation(record.identity, reader), [onLocalRepresentation, record])
 
     const frameSource = programFrameSource(record, client, door)
 
@@ -96,7 +99,13 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         size={size}
 
-        clientSurface={clientSurface}
+        localSurface={localSurface}
+
+        geometryAnimation={geometryAnimation}
+
+        onLocalAnimationComplete={onLocalAnimationComplete}
+
+        onLocalRepresentation={represent}
 
         paintSurfaceSize={paintSurfaceSize}
 
@@ -173,7 +182,13 @@ interface ProcessWindowProps {
 
     size: Size
 
-    clientSurface?: ClientSurfaceState
+    localSurface: LocalSurfaceState | null
+
+    geometryAnimation: LocalAnimation | null
+
+    onLocalAnimationComplete: (kind: "geometry" | "surface", revision: number) => void
+
+    onLocalRepresentation: (identity: string, reader: LocalGeometryReader | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
 

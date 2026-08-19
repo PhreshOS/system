@@ -1,18 +1,21 @@
 import { useReducedMotion } from "@libs/react-motion"
-import { isScaleLevel, scale, type ClientSurfaceEasing, type ClientSurfaceSettings } from "@phreshos/core"
+import { isScaleLevel, scale, type Easing, type SurfaceSettings } from "@phreshos/core"
 import { GlassSurface, useTheme } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
+import { type LocalSurfaceState } from "../client-host/local-window"
 
 const systemDuration = 240
 
 const systemEasing = "ease-out"
 
 /** Projects one representation-local target and animates explicit replacements. */
-export default function WindowSurface({ revision, settings }: WindowSurfaceProps) {
+export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
+
+    const { settings, animation: requestedAnimation } = state
 
     const element = useRef<HTMLDivElement>(null)
 
-    const previousRevision = useRef<number | null>(null)
+    const firstRender = useRef(true)
 
     const reducedMotion = useReducedMotion()
 
@@ -33,19 +36,17 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
 
         const current = getComputedStyle(surface)
 
-        const changed = previousRevision.current === null
+        const revision = requestedAnimation?.revision ?? null
 
-            ? revision > 0
+        const changed = revision !== null
 
-            : revision !== previousRevision.current
-
-        const from = previousRevision.current === null && changed
+        const from = firstRender.current && changed
 
             ? { opacity: 0, borderRadius: "0px" }
 
             : { opacity: Number(current.opacity), borderRadius: current.borderRadius }
 
-        previousRevision.current = revision
+        firstRender.current = false
 
         setRendered(settings)
 
@@ -53,11 +54,18 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
 
         surface.style.borderRadius = target.borderRadius
 
-        const transaction = settings.transaction
+        const transaction = requestedAnimation?.transaction
 
         const duration = transaction?.duration ?? systemDuration
 
-        if (!transaction || reducedMotion || duration === 0 || !changed) return
+        if (!transaction || !changed) return
+
+        if (reducedMotion || duration === 0) {
+
+            onComplete(revision!)
+
+            return
+        }
 
         const animation = surface.animate([from, target], {
 
@@ -72,6 +80,8 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
 
             animation.cancel()
 
+            onComplete(revision!)
+
         }, () => undefined)
 
         return function () {
@@ -85,7 +95,7 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
             animation.cancel()
         }
 
-    }, [reducedMotion, revision, settings, themeRadius])
+    }, [reducedMotion, requestedAnimation?.revision, settings, themeRadius])
 
     const target = values(rendered, themeRadius)
 
@@ -104,7 +114,7 @@ export default function WindowSurface({ revision, settings }: WindowSurfaceProps
     />
 }
 
-function values(settings: ClientSurfaceSettings, themeRadius: number) {
+function values(settings: SurfaceSettings, themeRadius: number) {
 
     const radius = settings.radius
 
@@ -116,7 +126,7 @@ function values(settings: ClientSurfaceSettings, themeRadius: number) {
     }
 }
 
-function easing(value: ClientSurfaceEasing | undefined) {
+function easing(value: Easing | undefined) {
 
     if (typeof value === "string") return value
 
@@ -125,8 +135,7 @@ function easing(value: ClientSurfaceEasing | undefined) {
 
 interface WindowSurfaceProps {
 
-    settings: ClientSurfaceSettings
+    state: LocalSurfaceState
 
-    /** Every positive revision came from an explicit live Client command. */
-    revision: number
+    onComplete: (revision: number) => void
 }

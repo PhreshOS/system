@@ -47,7 +47,7 @@ export default function Workspace() {
     // lets the desktop announce the surface that actually contains it.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, clientSurfaces, frame, frameLoaded } = useClientHost(desktop, sources.current)
+    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(desktop, sources.current, windows.localWindow)
 
     const wallpaperLoaded = useCallback((event: SyntheticEvent<HTMLIFrameElement>) => {
 
@@ -80,7 +80,7 @@ export default function Workspace() {
 
     function renderWindows(layer: Layer) {
 
-        return windows.panesByLayer[layer].map(({ identity, record, client, closing, entering, stopping }) => <ProcessWindow
+        return windows.panesByLayer[layer].map(({ identity, record, client, local, closing, entering, stopping }) => <ProcessWindow
 
             key={identity}
 
@@ -90,27 +90,33 @@ export default function Workspace() {
 
             client={client}
 
-            title={client.window.title}
+            title={local.title}
 
             icon={icon(record)}
 
-            position={client.window.position}
+            position={local.position}
 
-            size={client.window.size}
+            size={local.size}
 
-            clientSurface={clientSurfaces.get(record.identity)}
+            localSurface={local.surface}
+
+            geometryAnimation={local.geometryAnimation}
+
+            onLocalAnimationComplete={(kind, revision) => windows.localWindow.complete(record.identity, kind, revision)}
+
+            onLocalRepresentation={windows.localWindow.represent}
 
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.
             paintSurfaceSize={layer === "window" ? windowSurfaceSize : undefined}
 
-            depth={client.window.depth}
+            depth={local.depth}
 
             active={fronts[layer]?.identity === record.identity}
 
             bare={layer !== "window"}
 
-            minimized={client.window.minimized}
+            minimized={local.minimized}
 
             closing={closing}
 

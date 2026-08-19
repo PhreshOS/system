@@ -6,7 +6,8 @@ import { absoluteWindowGeometry, resolveWindowValue, wholeWindowGeometry, window
 import { numericScale, type Position, type Size } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
-import { type ClientSurfaceState } from "../client-host/client-surface"
+import { type LocalAnimation, type LocalSurfaceState } from "../client-host/local-window"
+import { type LocalGeometryReader } from "./local-windows"
 import gsap from "gsap"
 
 /**
@@ -49,7 +50,7 @@ const settle = ["left", "top", "width", "height", "transform"].map(property => `
 
 const morphing = ["left", "top", "width", "height"].map(property => `${property} 0.22s cubic-bezier(0.33, 1, 0.68, 1)`).join(", ")
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, clientSurface, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
     const frame = useRef<HTMLDivElement>(null)
 
@@ -64,6 +65,46 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     const innerRadius = radius.medium
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
+
+    useLayoutEffect(function () {
+
+        if (!onLocalRepresentation) return
+
+        const read: LocalGeometryReader = function () {
+
+            const element = frame.current
+
+            const parent = element?.offsetParent
+
+            if (!element || !parent) return { position, size }
+
+            const shown = element.getBoundingClientRect()
+
+            const surface = parent.getBoundingClientRect()
+
+            return {
+                position: { x: shown.left - surface.left, y: shown.top - surface.top },
+                size: { width: shown.width, height: shown.height }
+            }
+        }
+
+        onLocalRepresentation(read)
+
+        return () => onLocalRepresentation(null)
+
+    }, [onLocalRepresentation, position, size])
+
+    useLayoutEffect(function () {
+
+        if (!geometryAnimation) return
+
+        const duration = reducedMotion ? 0 : geometryAnimation.transaction.duration ?? 300
+
+        const completed = globalThis.setTimeout(() => onLocalAnimationComplete?.("geometry", geometryAnimation.revision), duration)
+
+        return () => globalThis.clearTimeout(completed)
+
+    }, [geometryAnimation?.revision, reducedMotion])
 
     const closureCompleted = useRef(false)
 
@@ -496,7 +537,11 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             // paints nothing on is one whose motion is not the
             // system's either: asked to be somewhere, it is there,
             // rather than gliding over half a second nobody asked for.
-            transition: bare || landed || reducedMotion ? "none" : settle
+            transition: geometryAnimation && !reducedMotion
+
+                ? explicitGeometryTransition(geometryAnimation)
+
+                : bare || landed || reducedMotion ? "none" : settle
         }
 
     const surface = active
@@ -563,7 +608,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 {/* A bare Client cannot refract the desktop through its iframe.
                     Its host surface is therefore a sibling behind the frame,
                     with its own radius and no clipping parent. */}
-                {bare && clientSurface && <WindowSurface settings={clientSurface.settings} revision={clientSurface.revision} />}
+                {bare && localSurface && <WindowSurface state={localSurface} onComplete={revision => onLocalAnimationComplete?.("surface", revision)} />}
 
                 {/* LAYER 1 — the shared Theme-driven glass material. */}
                 {!bare && <GlassSurface aria-hidden="true" radius="inherit" className="pointer-events-none absolute inset-0" />}
@@ -602,7 +647,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
             </div>
 
-            {edges.map(handle => <div
+            {!bare && edges.map(handle => <div
 
                 key={handle.edge}
 
@@ -661,10 +706,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
     // controls, and no gutter — so what a program asked to be is what it
     // gets, edge to edge, rather than half a gutter smaller.
     //
-    // What stays is what is invisible and functional. The resize edges
-    // are hit areas rather than paint, so they stay; the geometry, the
-    // snapping and the layer are the system's and stay. What goes is
-    // only what was there to be seen.
+    // The endpoint owns later local projection in a bare layer, so the
+    // ordinary window manager contributes neither resize edges nor snapping.
     bare?: boolean
 
     closing?: boolean
@@ -682,7 +725,13 @@ interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
     size?: Size
 
     /** Surface target owned by this live iframe representation. */
-    clientSurface?: ClientSurfaceState
+    localSurface?: LocalSurfaceState | null
+
+    geometryAnimation?: LocalAnimation | null
+
+    onLocalAnimationComplete?: (kind: "geometry" | "surface", revision: number) => void
+
+    onLocalRepresentation?: (reader: LocalGeometryReader | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize
@@ -704,4 +753,15 @@ interface Gesture {
     shown: Snap | null
 
     morph: boolean
+}
+
+function explicitGeometryTransition(animation: LocalAnimation) {
+
+    const duration = animation.transaction.duration ?? 300
+
+    const easing = animation.transaction.easing
+
+    const curve = Array.isArray(easing) ? `cubic-bezier(${easing.join(", ")})` : easing ?? "ease-out"
+
+    return ["left", "top", "width", "height"].map(property => `${property} ${duration}ms ${curve}`).join(", ")
 }

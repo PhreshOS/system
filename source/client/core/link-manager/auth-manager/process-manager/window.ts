@@ -1,5 +1,5 @@
 import { type TransmittedWindow, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { isRelativeValue, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
 /**
@@ -84,43 +84,6 @@ export default class Window {
 
     }
 
-    // A local geometry change is a draft held by this desktop. It redraws
-    // through ProcessManager but says nothing through `$outbound`; the normal
-    // move and resize methods remain the only roads to the authoritative host.
-    public localMove(position: Position) {
-
-        validate(position.x, "x")
-
-        validate(position.y, "y")
-
-        this.position = position
-    }
-
-    public localResize(size: Size) {
-
-        validate(size.width, "width")
-
-        validate(size.height, "height")
-
-        this.size = size
-    }
-
-    /** Applies a complete desktop-local draft in one notification cycle. */
-    public localSetGeometry(geometry: WindowGeometry) {
-
-        validate(geometry.position.x, "x")
-
-        validate(geometry.position.y, "y")
-
-        validate(geometry.size.width, "width")
-
-        validate(geometry.size.height, "height")
-
-        this.position = geometry.position
-
-        this.size = geometry.size
-    }
-
     public async move(position: Position) {
 
         await this.processManager.$outbound.publish("/move", this.process, position)
@@ -153,13 +116,6 @@ export default class Window {
 
         await this.processManager.$outbound.publish("/minimize", this.process, minimized)
     }
-}
-
-function validate(value: number | string, name: string) {
-
-    if (isRelativeValue(value)) return
-
-    throw new Error(`${name} must be a finite pixel number or a relative expression such as "50% + 10"`)
 }
 
 export type { Position, Size }

@@ -7,7 +7,14 @@ import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
 import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
-import { clientSurfaceSettings, type ClientSurfaceHost } from "./client-surface"
+import {
+    localGeometry,
+    localPosition,
+    localSize,
+    surfaceSettings,
+    visualTransaction,
+    type LocalWindowHost
+} from "./local-window"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -49,7 +56,7 @@ export interface Space {
  * no prototypes and refuses functions — so every word answers with plain
  * values built here, never with an instance the desktop holds.
  */
-export default function host(authManager: AuthManager, pane: string, space: (layer: WindowLayer) => Space, frameOwner: () => string | null, pointer: PointerHost, clientSurface: ClientSurfaceHost) {
+export default function host(authManager: AuthManager, pane: string, space: (layer: WindowLayer) => Space, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 
@@ -106,17 +113,6 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
         const found = window(named)
 
         if (found.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
-        return found
-    }
-
-    function surfaceWindow(named: unknown) {
-
-        const found = window(named)
-
-        if (found.layer === "window") throw new Error("A window-layer Window cannot own a Surface")
-
-        if (found.layer === "wallpaper") throw new Error("A wallpaper-layer Window cannot own a Surface")
 
         return found
     }
@@ -623,15 +619,6 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             return [pane]
         }
 
-        if (word === "localMove") {
-
-            mutableWindow(args[0]).localMove(args[1] as never)
-
-            await processManager.changed()
-
-            return []
-        }
-
         if (word === "resize") {
 
             await mutableWindow(args[0]).resize(args[1] as never)
@@ -646,31 +633,62 @@ export default function host(authManager: AuthManager, pane: string, space: (lay
             return [pane]
         }
 
-        if (word === "localResize") {
+        if (word === "localWindow") return [localWindow.state(pane)]
 
-            mutableWindow(args[0]).localResize(args[1] as never)
+        if (word === "localWindowMove") {
 
-            await processManager.changed()
+            await localWindow.move(pane, localPosition(args[0]), visualTransaction(args[1]))
 
             return []
         }
 
-        if (word === "surfaceSet") {
+        if (word === "localWindowResize") {
 
-            const target = surfaceWindow(args[0])
+            await localWindow.resize(pane, localSize(args[0]), visualTransaction(args[1]))
 
-            clientSurface.set(target.process, clientSurfaceSettings(args[1] === undefined ? {} : args[1]))
-
-            return [pane]
+            return []
         }
 
-        if (word === "surfaceRemove") {
+        if (word === "localWindowGeometry") {
 
-            const target = surfaceWindow(args[0])
+            await localWindow.geometry(pane, localGeometry(args[0]), visualTransaction(args[1]))
 
-            clientSurface.remove(target.process)
+            return []
+        }
 
-            return [pane]
+        if (word === "localWindowMinimize") {
+
+            localWindow.minimize(pane, args[0] !== false)
+
+            return []
+        }
+
+        if (word === "localWindowTitle") {
+
+            localWindow.title(pane, String(args[0] ?? ""))
+
+            return []
+        }
+
+        if (word === "localWindowRaise") {
+
+            localWindow.raise(pane)
+
+            return []
+        }
+
+        if (word === "localWindowSurfaceSet") {
+
+            await localWindow.setSurface(pane, surfaceSettings(args[0] === undefined ? {} : args[0]), visualTransaction(args[1]))
+
+            return []
+        }
+
+        if (word === "localWindowSurfaceRemove") {
+
+            localWindow.removeSurface(pane)
+
+            return []
         }
 
         if (word === "changeTitle") {

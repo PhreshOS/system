@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "../source/client/view/desktop/client-host/client-process-boundary.ts"
-import { clientSurfaceSettings, removeClientSurface, setClientSurface } from "../source/client/view/desktop/client-host/client-surface.ts"
+import { surfaceSettings, visualTransaction } from "../source/client/view/desktop/client-host/local-window.ts"
 import host from "../source/client/view/desktop/client-host/host.ts"
+import LocalWindows from "../source/client/view/desktop/window-manager/local-windows.ts"
 import ServerWindow from "../source/server/core/link-manager/auth-manager/process-manager/window.ts"
 
 const authoritativeWindow = new ServerWindow(
@@ -15,26 +16,88 @@ const authoritativeWindow = new ServerWindow(
 assert.equal("surface" in authoritativeWindow, false)
 assert.equal("surface" in authoritativeWindow.toJSON(), false)
 
-const settings = clientSurfaceSettings({ opacity: 0.5, radius: "large", transaction: { duration: 240, easing: "ease-out" } })
+const settings = surfaceSettings({ opacity: 0.5, radius: "large" })
+const transaction = visualTransaction({ duration: 240, easing: "ease-out", wait: true })
 
-let firstDesktop = new Map()
-let secondDesktop = new Map()
+assert.throws(() => surfaceSettings({ opacity: 2 }), /from 0 to 1/)
+assert.throws(() => surfaceSettings({ radius: -1 }), /ScaleLevel/)
+assert.throws(() => visualTransaction({}), /must provide duration or easing/)
+assert.throws(() => visualTransaction({ wait: true }), /must provide duration or easing/)
+assert.throws(() => visualTransaction({ duration: 60_001 }), /0 to 60000/)
+assert.throws(() => surfaceSettings({ unknown: true }), /no "unknown" field/)
 
-firstDesktop = setClientSurface(firstDesktop, "target", settings)
+const ordinary = client("window")
+const bare = client("over")
+const clients = new Map([
+    ["ordinary", { identity: "ordinary:0", client: ordinary }],
+    ["bare", { identity: "bare:0", client: bare }]
+])
+const byProcess = new Map([["ordinary", ordinary], ["bare", bare]])
+const first = new LocalWindows(clients, identity => byProcess.get(identity) ?? null)
+const second = new LocalWindows(clients, identity => byProcess.get(identity) ?? null)
 
-assert.equal(firstDesktop.get("target")?.revision, 1)
-assert.equal(secondDesktop.has("target"), false)
-assert.equal(setClientSurface(firstDesktop, "target", settings), firstDesktop)
+await first.move("ordinary", { x: 40, y: 50 })
+await first.move("bare", { x: 60, y: 70 })
 
-firstDesktop = removeClientSurface(firstDesktop, "target")
+assert.deepEqual(first.state("ordinary").position, { x: 40, y: 50 })
+assert.deepEqual(first.state("bare").position, { x: 60, y: 70 })
+assert.deepEqual(second.state("ordinary").position, { x: 0, y: 0 })
+assert.deepEqual(ordinary.window.position, { x: 0, y: 0 })
 
-assert.equal(firstDesktop.has("target"), false)
-assert.equal(removeClientSurface(firstDesktop, "target"), firstDesktop)
+first.represent("bare", () => ({ position: { x: 65, y: 75 }, size: { width: 290, height: 190 } }))
+assert.deepEqual(first.state("bare").position, { x: 65, y: 75 })
+assert.deepEqual(first.state("bare").size, { width: 290, height: 190 })
+first.represent("bare", null)
 
-assert.throws(() => clientSurfaceSettings({ opacity: 2 }), /from 0 to 1/)
-assert.throws(() => clientSurfaceSettings({ radius: -1 }), /ScaleLevel/)
-assert.throws(() => clientSurfaceSettings({ transaction: { duration: 60_001 } }), /0 to 60000/)
-assert.throws(() => clientSurfaceSettings({ unknown: true }), /no "unknown" field/)
+// An unrelated full snapshot is not a Window change and must not erase a
+// local ordinary-window command.
+first.reconcile(clients)
+assert.deepEqual(first.state("ordinary").position, { x: 40, y: 50 })
+
+ordinary.window.position = { x: 15, y: 25 }
+bare.window.position = { x: 20, y: 30 }
+first.reconcile(clients)
+
+assert.deepEqual(first.state("ordinary").position, { x: 15, y: 25 })
+assert.deepEqual(first.state("bare").position, { x: 60, y: 70 })
+
+const matchingAuthority = first.move("ordinary", { x: 30, y: 40 }, { duration: 120, wait: true })
+const matchingRevision = first.windows.get("ordinary:0").geometryAnimation.revision
+ordinary.window.position = { x: 30, y: 40 }
+first.reconcile(clients)
+assert.equal(first.windows.get("ordinary:0").geometryAnimation.revision, matchingRevision)
+first.complete("ordinary", "geometry", matchingRevision)
+await matchingAuthority
+
+const waiting = first.geometry("bare", {
+    position: { x: 80, y: 90 },
+    size: { width: 320, height: 240 }
+}, transaction)
+const geometryRevision = first.windows.get("bare:0").geometryAnimation.revision
+first.complete("bare", "geometry", geometryRevision)
+await waiting
+assert.equal(first.windows.get("bare:0").geometryAnimation, null)
+
+const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, wait: true })
+await first.move("bare", { x: 120, y: 130 })
+await assert.rejects(interrupted, /interrupted/)
+
+const surfaceWaiting = first.setSurface("bare", settings, transaction)
+const surfaceRevision = first.windows.get("bare:0").surface.animation.revision
+first.complete("bare", "surface", surfaceRevision)
+await surfaceWaiting
+assert.equal(first.windows.get("bare:0").surface.animation, null)
+
+assert.throws(() => first.setSurface("ordinary", settings), /window-layer/)
+assert.equal(second.windows.get("bare:0").surface, null)
+
+first.release("bare")
+assert.deepEqual(first.state("bare").position, bare.window.position)
+assert.equal(first.windows.get("bare:0").surface, null)
+
+const removed = first.move("bare", { x: 140, y: 150 }, { duration: 200, wait: true })
+first.reconcile(new Map([["ordinary", clients.get("ordinary")]]))
+await assert.rejects(removed, /representation was removed/)
 
 const requester = {
     identity: "requester",
@@ -42,46 +105,33 @@ const requester = {
     program: "program",
     client: { window: { process: "requester", layer: "over" } }
 }
-
-const target = {
-    identity: "target",
-    reference: "target-reference",
-    program: "program",
-    client: { window: { process: "target", layer: "under" } }
-}
-
-const processes = new Map([[requester.identity, requester], [target.identity, target]])
+const processes = new Map([[requester.identity, requester]])
 const calls = []
-const surface = {
-    set(identity, value) { calls.push(["set", identity, value]) },
-    remove(identity) { calls.push(["remove", identity]) }
+const localWindow = {
+    setSurface(identity, value, motion) { calls.push(["set", identity, value, motion]) },
+    removeSurface(identity) { calls.push(["remove", identity]) }
 }
-
 const authManager = {
     processManager: { processes },
     programManager: { programs: new Map() }
 }
+const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, localWindow)
 
-const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, surface)
+await request("localWindowSurfaceSet", settings, transaction)
+await request("localWindowSurfaceRemove")
 
-await request("surfaceSet", { identity: target.identity, reference: target.reference }, settings)
-await request("surfaceRemove", { identity: target.identity, reference: target.reference })
-
-assert.deepEqual(calls, [["set", "target", settings], ["remove", "target"]])
-
-target.client.window.layer = "window"
-
-await assert.rejects(request("surfaceSet", { identity: target.identity, reference: target.reference }, {}), /window-layer/)
+assert.deepEqual(calls, [["set", "requester", settings, transaction], ["remove", "requester"]])
+await assert.rejects(request("localWindowSurfaceSet", { identity: "target" }), /no "identity" field/)
 
 const lifecycle = []
 const boundary = new ClientProcessBoundary(
-    "target",
+    "requester",
     { contentWindow: null },
     authManager,
     () => ({ width: 1, height: 1 }),
     {},
     {},
-    { set() {}, remove(identity) { lifecycle.push(identity) } }
+    { release(identity) { lifecycle.push(identity) } }
 )
 
 boundary.receive(["boundary", "document", "first-document"])
@@ -89,4 +139,18 @@ boundary.receive(["boundary", "document", "first-document"])
 boundary.receive(["boundary", "document", "second-document"])
 await boundary.release()
 
-assert.deepEqual(lifecycle, ["target", "target"])
+assert.deepEqual(lifecycle, ["requester", "requester"])
+
+function client(layer) {
+    return {
+        window: {
+            title: "Window",
+            position: { x: 0, y: 0 },
+            size: { width: 300, height: 200 },
+            minimized: false,
+            layer,
+            location: "/",
+            depth: 1
+        }
+    }
+}

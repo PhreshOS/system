@@ -6,15 +6,16 @@ import { type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"
 import { AuthManagerContext } from "../../contexts"
 import { wholeWindowGeometry } from "./window-geometry"
+import LocalWindows from "./local-windows"
 
 /**
  * The authorized view's windows: processes that have one. A window is a
  * process whose program has a client half, so the process itself says
  * whether it is shown — nothing else is consulted.
  *
- * Requests are answered before the server is: the object mutates here,
- * the same tunnel event re-emits, and the echo lands on a peer already
- * agreeing — while every other session sees the change as news.
+ * The local representation and authoritative counterpart are distinct.
+ * Ordinary windows project authoritative changes automatically; under and
+ * over windows retain their local projection after its initial seed.
  *
  * Departure is representation. The truth drops a stopped client and its
  * Window at once; the exit still has to play, so the last desktop-owned
@@ -56,6 +57,16 @@ export default function useWindows() {
 
     const initialClients = initialIncarnations.current
 
+    const localController = useRef<LocalWindows | null>(null)
+
+    if (!localController.current) localController.current = new LocalWindows(initialClients, process => peer.processes.get(process)?.client ?? null)
+
+    const localWindow = localController.current
+
+    const [localWindows, setLocalWindows] = useState(localWindow.windows)
+
+    localWindow.listen(setLocalWindows)
+
     const previousClients = useRef(initialClients)
 
     // Client states already present when this desktop mounts are restored,
@@ -95,6 +106,8 @@ export default function useWindows() {
         const present = new Set(list.map(process => process.identity))
 
         const currentClients = new Map(list.flatMap(record => record.client && record.client.window.layer !== "wallpaper" ? [[record.identity, incarnation(record, record.client)] as const] : []))
+
+        localWindow.reconcile(currentClients)
 
         let settled = false
 
@@ -157,23 +170,26 @@ export default function useWindows() {
 
     for (const process of records) {
 
-        const window = process.client!.window
+        const live = incarnation(process, process.client!)
 
-        if (window.layer === "wallpaper" || window.minimized) continue
+        const window = localWindows.get(live.identity)
+
+        if (!window || window.layer === "wallpaper" || window.minimized) continue
 
         const best = fronts[window.layer]
 
-        if (!best || best.client!.window.depth <= window.depth) fronts[window.layer] = process
+        const bestWindow = best && localWindows.get(incarnation(best, best.client!).identity)
+
+        if (!bestWindow || bestWindow.depth <= window.depth) fronts[window.layer] = process
     }
 
-    // A request answered locally first: the object changes, the tunnel
-    // re-emits, and the echo confirms what is already shown.
+    // Local representation and authoritative mutation are two explicit acts.
+    // The local act already rendered the result; only the server echo may
+    // project the authoritative act back onto an ordinary Window.
     const commit = useCallback(function (request: Promise<void>) {
 
-        peer.$inbound.publish("/processes", [...peer.processes.values()]).catch(() => undefined)
-
         request.catch(() => undefined)
-    }, [peer])
+    }, [])
 
     const close = useCallback(function (process: Process) {
 
@@ -198,19 +214,21 @@ export default function useWindows() {
 
         setOrder(current => current.filter(entry => entry !== identity))
 
+        localWindow.remove(identity)
+
     }, [])
 
     const raise = useCallback(function (process: Process) {
 
         const window = process.client?.window
 
-        if (!window || window.layer === "wallpaper") return
+        if (!window || window.layer !== "window") return
 
         const highest = summit(window.layer)
 
-        if (window.depth === highest) return
+        localWindow.raise(process.identity)
 
-        window.depth = highest + 1
+        if (window.depth === highest) return
 
         commit(window.raise())
 
@@ -220,9 +238,9 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
 
-        window.minimized = minimized
+        localWindow.minimize(process.identity, minimized)
 
         commit(window.minimize(minimized))
 
@@ -232,9 +250,9 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
 
-        if (window.minimized) minimize(process, false)
+        if (localWindow.state(process.identity).minimized) minimize(process, false)
 
         raise(process)
 
@@ -244,9 +262,9 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
 
-        window.localMove({ x, y })
+        void localWindow.move(process.identity, { x, y })
 
         commit(window.move({ x, y }))
 
@@ -256,11 +274,11 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
 
         if (!position) {
 
-            window.localResize({ width, height })
+            void localWindow.resize(process.identity, { width, height })
 
             commit(window.resize({ width, height }))
 
@@ -269,7 +287,7 @@ export default function useWindows() {
 
         const geometry = { position, size: { width, height } }
 
-        window.localSetGeometry(geometry)
+        void localWindow.geometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -279,11 +297,11 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
 
         const geometry = { position, size }
 
-        window.localSetGeometry(geometry)
+        void localWindow.geometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -293,11 +311,13 @@ export default function useWindows() {
 
         const window = process.client?.window
 
-        if (!window) return
+        if (!window || window.layer !== "window") return
+
+        const local = localWindow.state(process.identity)
 
         const was = filled.current.get(process.identity)
 
-        const whole = wholeWindowGeometry(window.position, window.size)
+        const whole = wholeWindowGeometry(local.position, local.size)
 
         if (whole && was) {
 
@@ -308,7 +328,7 @@ export default function useWindows() {
             return
         }
 
-        filled.current.set(process.identity, { position: window.position, size: window.size })
+        filled.current.set(process.identity, { position: local.position, size: local.size })
 
         snap(process, { x: "0/1", y: "0/1" }, { width: "1/1", height: "1/1" })
 
@@ -328,10 +348,10 @@ export default function useWindows() {
 
             const live = incarnation(record, record.client!)
 
-            return { ...live, closing: false, stopping: stopping.current.has(record.identity), entering: !inheritedClients.current.has(live.client) }
+            return { ...live, local: localWindows.get(live.identity)!, closing: false, stopping: stopping.current.has(record.identity), entering: !inheritedClients.current.has(live.client) }
         }),
 
-        ...leaving.map(window => ({ ...window, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
+        ...leaving.map(window => ({ ...window, local: localWindows.get(window.identity)!, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
     ]
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
@@ -340,7 +360,7 @@ export default function useWindows() {
 
     for (const pane of panes) {
 
-        const layer = pane.client.window.layer
+        const layer = pane.local.layer
 
         if (layer !== "wallpaper") panesByLayer[layer].push(pane)
     }
@@ -356,6 +376,8 @@ export default function useWindows() {
         panesByLayer,
 
         fronts,
+
+        localWindow,
 
         close,
 

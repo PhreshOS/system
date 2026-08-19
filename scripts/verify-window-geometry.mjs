@@ -63,14 +63,5 @@ const counterpart = new ClientWindow(
     "process",
     authority.toJSON()
 )
-const draft = {
-    position: { x: 5, y: 6 },
-    size: { width: 700, height: 500 }
-}
-
-counterpart.localSetGeometry(draft)
-assert.deepEqual(counterpart.position, draft.position)
-assert.deepEqual(counterpart.size, draft.size)
-
 await counterpart.setGeometry(next)
 assert.deepEqual(publications, [["/geometry", "process", next]])
