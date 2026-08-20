@@ -1,4 +1,4 @@
-import { externalDependencies } from "@/vite.server"
+import { externalDependencies } from "@/vite.config"
 import { rm, writeFile } from "node:fs/promises"
 import packageConfig from "@/package.json"
 
@@ -15,7 +15,7 @@ for (const externalDependency of externalDependencies) {
     dependencies[externalDependency] = packageConfig.dependencies[externalDependency]
 }
 
-await build({ configFile: "vite.server.ts", ssr: { noExternal: true } })
+await build({ configFile: "vite.config.ts", ssr: { noExternal: true } })
 
 await build({ configFile: "vite.client.ts" })
 

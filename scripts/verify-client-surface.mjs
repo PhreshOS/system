@@ -113,9 +113,17 @@ const requester = {
     program: "program",
     client: { window: { process: "requester", layer: "over" } }
 }
-const processes = new Map([[requester.identity, requester]])
+const target = {
+    identity: "target",
+    reference: "target-reference",
+    program: "program",
+    client: { window: { process: "target", layer: "over", position: { x: 10, y: 20 } } }
+}
+const processes = new Map([[requester.identity, requester], [target.identity, target]])
 const calls = []
 const localWindow = {
+    state(identity) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
+    move(identity, value, motion) { calls.push(["move", identity, value, motion]) },
     setSurface(identity, value, motion) { calls.push(["set", identity, value, motion]) },
     removeSurface(identity) { calls.push(["remove", identity]) }
 }
@@ -126,11 +134,20 @@ const authManager = {
 const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, localWindow)
 
 assert.deepEqual(await request("desktop"), [{ width: 1, height: 1 }])
-await request("localWindowSurfaceSet", settings, transaction)
-await request("localWindowSurfaceRemove")
+const targetAddress = { identity: target.identity, reference: target.reference }
+assert.deepEqual(await request("windowLocal", targetAddress), [{ position: { x: 70, y: 80 } }])
+await request("windowLocalMove", targetAddress, { x: 70, y: 80 })
+await request("windowLocalSurfaceSet", targetAddress, settings, transaction)
+await request("windowLocalSurfaceRemove", targetAddress)
 
-assert.deepEqual(calls, [["set", "requester", settings, transaction], ["remove", "requester"]])
-await assert.rejects(request("localWindowSurfaceSet", { identity: "target" }), /no "identity" field/)
+assert.deepEqual(calls, [
+    ["move", "target", { x: 70, y: 80 }, undefined],
+    ["set", "target", settings, transaction],
+    ["remove", "target"]
+])
+assert.deepEqual(target.client.window.position, { x: 10, y: 20 })
+await assert.rejects(request("windowLocalSurfaceSet", targetAddress, { identity: "unexpected" }), /no "identity" field/)
+await assert.rejects(request("windowLocalSurfaceSet", { ...targetAddress, reference: "wrong" }, settings), /does not know this process/)
 
 const lifecycle = []
 const boundary = new ClientProcessBoundary(

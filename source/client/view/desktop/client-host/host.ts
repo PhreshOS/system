@@ -114,6 +114,17 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         return found
     }
 
+    function localProcess(named: unknown) {
+
+        const found = sibling(named)
+
+        if (!found.client) throw new Error("This process has no live client endpoint")
+
+        if (found.client.window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
+
+        return found
+    }
+
     function declared(found: ReturnType<typeof process>, half: "server" | "client") {
 
         return (programManager.programs.get(found.program)?.[half] ?? null) !== null
@@ -630,60 +641,60 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [pane]
         }
 
-        if (word === "localWindow") return [localWindow.state(pane)]
+        if (word === "windowLocal") return [localWindow.state(localProcess(args[0]).identity)]
 
-        if (word === "localWindowMove") {
+        if (word === "windowLocalMove") {
 
-            await localWindow.move(pane, localPosition(args[0]), visualTransaction(args[1]))
-
-            return []
-        }
-
-        if (word === "localWindowResize") {
-
-            await localWindow.resize(pane, localSize(args[0]), visualTransaction(args[1]))
+            await localWindow.move(localProcess(args[0]).identity, localPosition(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
-        if (word === "localWindowGeometry") {
+        if (word === "windowLocalResize") {
 
-            await localWindow.geometry(pane, localGeometry(args[0]), visualTransaction(args[1]))
-
-            return []
-        }
-
-        if (word === "localWindowMinimize") {
-
-            localWindow.minimize(pane, args[0] !== false)
+            await localWindow.resize(localProcess(args[0]).identity, localSize(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
-        if (word === "localWindowTitle") {
+        if (word === "windowLocalGeometry") {
 
-            localWindow.title(pane, String(args[0] ?? ""))
-
-            return []
-        }
-
-        if (word === "localWindowRaise") {
-
-            localWindow.raise(pane)
+            await localWindow.geometry(localProcess(args[0]).identity, localGeometry(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
-        if (word === "localWindowSurfaceSet") {
+        if (word === "windowLocalMinimize") {
 
-            await localWindow.setSurface(pane, surfaceSettings(args[0] === undefined ? {} : args[0]), visualTransaction(args[1]))
+            localWindow.minimize(localProcess(args[0]).identity, args[1] !== false)
 
             return []
         }
 
-        if (word === "localWindowSurfaceRemove") {
+        if (word === "windowLocalTitle") {
 
-            localWindow.removeSurface(pane)
+            localWindow.title(localProcess(args[0]).identity, String(args[1] ?? ""))
+
+            return []
+        }
+
+        if (word === "windowLocalRaise") {
+
+            localWindow.raise(localProcess(args[0]).identity)
+
+            return []
+        }
+
+        if (word === "windowLocalSurfaceSet") {
+
+            await localWindow.setSurface(localProcess(args[0]).identity, surfaceSettings(args[1] === undefined ? {} : args[1]), visualTransaction(args[2]))
+
+            return []
+        }
+
+        if (word === "windowLocalSurfaceRemove") {
+
+            localWindow.removeSurface(localProcess(args[0]).identity)
 
             return []
         }

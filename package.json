@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -26,11 +26,11 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "check": "tsc --noEmit",
-    "dev": "vite-node --config vite.server.ts source/dev.ts",
-    "build": "vite-node --config vite.server.ts source/build.ts",
+    "dev": "vite-node scripts/dev.ts",
+    "build": "vite-node scripts/build.ts",
     "start": "node --run build && node dist/server/main.js",
-    "pack": "node --run build && vite-node --config vite.server.ts source/pack.ts",
-    "verify:contracts": "vite-node --config vite.server.ts scripts/verify-client-launch.mjs && vite-node --config vite.server.ts scripts/verify-client-surface.mjs && vite-node --config vite.server.ts scripts/verify-window-geometry.mjs && vite-node --config vite.server.ts scripts/verify-readiness.mjs && vite-node --config vite.server.ts scripts/verify-endpoint-services.mjs && vite-node --config vite.server.ts scripts/verify-intake-address.mjs",
+    "pack": "node --run build && vite-node scripts/pack.ts",
+    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-intake-address.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },
