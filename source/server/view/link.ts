@@ -1,7 +1,7 @@
 import ServerLink from "@libs/the-link/plugins/server-link/server-link"
 import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
-import superjson from "@libs/superjson"
+import messagepack from "@libs/messagepack"
 import { failed, succeeded } from "@server/core/outcome"
 
 export default function (application: Application, debugging: boolean) {
@@ -10,9 +10,9 @@ export default function (application: Application, debugging: boolean) {
 
     if (debugging) serverLink.enableDebugging()
 
-    serverLink.setSerialize(data => superjson.stringify(data))
+    serverLink.setSerialize(messagepack.serialize)
 
-    serverLink.setDeserialize(data => superjson.parse(data))
+    serverLink.setDeserialize(messagepack.deserialize)
 
     serverLink.onSubscribe(function (socketLink) {
 

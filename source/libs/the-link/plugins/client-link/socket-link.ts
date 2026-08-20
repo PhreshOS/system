@@ -1,4 +1,7 @@
 import TheLink from "../../the-link"
+import { receiveBytes } from "./transport"
+import { defaultDeserialize, defaultSerialize } from "../../codec"
+import type { Deserialize, Serialize } from "../../codec"
 import Tunnel from "../../tunnel"
 
 /**
@@ -37,15 +40,9 @@ export default class SocketLink<Payload = unknown> extends TheLink {
      */
     public readonly payload: Payload
 
-    /**
-     * Converts outbound values into wire-format strings.
-     */
-    private serialize = <Input>(input: Input): string => JSON.stringify(input)
+    private serialize: Serialize = defaultSerialize
 
-    /**
-     * Converts wire-format strings back into typed values.
-     */
-    private deserialize = <Output>(input: string): Output => JSON.parse(input)
+    private deserialize: Deserialize = defaultDeserialize
 
     /**
      * Initialize a SocketLink for one browser WebSocket subscription.
@@ -75,21 +72,21 @@ export default class SocketLink<Payload = unknown> extends TheLink {
     /**
      * Configure the serialization function used for WebSocket payloads.
      *
-     * @param serialize Custom function that converts values to strings
+     * @param serialize Custom function that converts values to bytes
      */
-    public setSerialize(serialize: typeof this.serialize<unknown>) {
+    public setSerialize(serialize: Serialize) {
 
-        this.serialize = serialize as typeof this.serialize
+        this.serialize = serialize
     }
 
     /**
      * Configure the deserialization function used for WebSocket payloads.
      *
-     * @param deserialize Custom function that parses values from strings
+     * @param deserialize Custom function that parses values from bytes
      */
-    public setDeserialize(deserialize: typeof this.deserialize<unknown>) {
+    public setDeserialize(deserialize: Deserialize) {
 
-        this.deserialize = deserialize as typeof this.deserialize
+        this.deserialize = deserialize
     }
 
     /**
@@ -135,7 +132,7 @@ export default class SocketLink<Payload = unknown> extends TheLink {
      */
     private async subscribeHandler(event: MessageEvent) {
 
-        const result = this.deserialize<{ type: string, data: [string, ...unknown[]] }>(event.data)
+        const result = this.deserialize(await receiveBytes(event.data)) as { type: string, data: [string, ...unknown[]] }
 
         if (result.type === "message") {
 

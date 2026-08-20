@@ -49,9 +49,9 @@ export interface DesktopSize {
  * A server half is the other thing and deliberately so: it runs
  * arbitrary code already, so vocabulary costs it nothing.
  *
- * Answers cross to a sandboxed frame by structured clone, which carries
- * no prototypes and refuses functions — so every word answers with plain
- * values built here, never with an instance the desktop holds.
+ * Answers cross to a sandboxed frame inside MessagePack envelopes. Native
+ * browser capabilities travel only as explicit attachments, so every ordinary
+ * word answers with data built here, never with an instance the desktop holds.
  */
 export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSize, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
 
@@ -130,8 +130,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
     // One process record on every road. Nullable values carry the resolved
     // shape as data; the SDK turns them into permanent addressed ends whose
-    // exists() reads the latest fact. A frame receives structured data,
-    // never the desktop's mutable record.
+    // exists() reads the latest fact. A frame receives MessagePack data, never
+    // the desktop's mutable record.
     function record(found: ReturnType<typeof process> | NonNullable<ReturnType<typeof process>["parent"]>) {
 
         return sdkProcess(found, owner(found))

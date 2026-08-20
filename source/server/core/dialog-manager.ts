@@ -1,5 +1,5 @@
 import { Subscribe } from "@libs/the-link/decorators/escript"
-import { Transmitted } from "@libs/superjson"
+import { Transmitted } from "@libs/messagepack"
 import TheLink from "@libs/the-link/the-link"
 import { randomUUID } from "node:crypto"
 import { type default as Process } from "./link-manager/auth-manager/process-manager/process"

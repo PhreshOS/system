@@ -2,7 +2,7 @@ import ClientLink from "@libs/the-link/plugins/client-link/client-link"
 import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaType } from "@server/core/protocol/proxy"
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
-import superjson from "@libs/superjson"
+import messagepack from "@libs/messagepack"
 
 export default class Application {
 
@@ -28,9 +28,9 @@ export default class Application {
 
         this.clientLink = new ClientLink(this.doors.link)
 
-        this.clientLink.setSerialize(data => superjson.stringify(data))
+        this.clientLink.setSerialize(messagepack.serialize)
 
-        this.clientLink.setDeserialize(data => superjson.parse(data))
+        this.clientLink.setDeserialize(messagepack.deserialize)
     }
 
     // A finite browser body keeps its length, so HTTP/1 can stream it from its

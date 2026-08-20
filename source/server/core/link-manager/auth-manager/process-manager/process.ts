@@ -2,7 +2,7 @@ import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
 import { ChildProcess } from "node:child_process"
-import { Transmitted } from "@libs/superjson"
+import { Transmitted } from "@libs/messagepack"
 import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
@@ -53,8 +53,8 @@ export default class Process {
     // When this instance began. A process's birth is its construction,
     // so nothing hands this over — there is no earlier moment to mean.
     //
-    // A `Date`, and the link keeps it one: superjson carries dates, and
-    // `libs/superjson` leaves them alone rather than letting `toJSON`
+    // A `Date`, and the link keeps it one: MessagePack carries dates, and
+    // `libs/messagepack` leaves them alone rather than letting `toJSON`
     // degrade them to strings. The other two roads out of here speak
     // plain JSON — a program's channel and this machine's door — so on
     // those it arrives as the ISO string a date serialises to. That is

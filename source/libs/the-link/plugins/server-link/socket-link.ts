@@ -1,4 +1,6 @@
 import TheLink from "../../the-link"
+import { defaultSerialize } from "../../codec"
+import type { Serialize } from "../../codec"
 import { WSContext } from "hono/ws"
 import Tunnel from "../../tunnel"
 
@@ -39,15 +41,7 @@ export default class SocketLink<Payload = unknown> extends TheLink {
      */
     public readonly payload: Payload
 
-    /**
-     * Converts outbound values into wire-format strings.
-     */
-    private serialize = <Input>(input: Input): string => JSON.stringify(input)
-
-    /**
-     * Converts wire-format strings back into typed values.
-     */
-    private deserialize = <Output>(input: string): Output => JSON.parse(input)
+    private serialize: Serialize = defaultSerialize
 
     /**
      * Initialize a SocketLink for one accepted WebSocket connection.
@@ -75,21 +69,11 @@ export default class SocketLink<Payload = unknown> extends TheLink {
     /**
      * Configure the serialization function used for WebSocket payloads.
      *
-     * @param serialize Custom function that converts values to strings
+     * @param serialize Custom function that converts values to bytes
      */
-    public setSerialize(serialize: typeof this.serialize<unknown>) {
+    public setSerialize(serialize: Serialize) {
 
-        this.serialize = serialize as typeof this.serialize
-    }
-
-    /**
-     * Configure the deserialization function used for WebSocket payloads.
-     *
-     * @param deserialize Custom function that parses values from strings
-     */
-    public setDeserialize(deserialize: typeof this.deserialize<unknown>) {
-
-        this.deserialize = deserialize as typeof this.deserialize
+        this.serialize = serialize
     }
 
     /**

@@ -1,4 +1,4 @@
-import { Transmitted } from "@libs/superjson"
+import { Transmitted } from "@libs/messagepack"
 import Program from "./program"
 
 /**

@@ -7,6 +7,7 @@ import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isPermissionName, type PermissionName } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
+import messagepack from "@libs/messagepack"
 
 /** The desktop boundary around one iframe execution endpoint. */
 export default class ClientProcessBoundary extends TheLink {
@@ -78,7 +79,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.$outbound.forwardTo((route, ...values) => {
 
-            this.element.contentWindow?.postMessage([route, ...values], "*")
+            this.send([route, ...values])
         })
     }
 
@@ -272,7 +273,20 @@ export default class ClientProcessBoundary extends TheLink {
 
     public post(route: string, values: unknown[], transfer: Transferable[] = []) {
 
-        this.element.contentWindow?.postMessage([route, ...values], "*", transfer)
+        this.send([route, ...values], transfer)
+    }
+
+    private send(message: unknown[], transfer: Transferable[] = []) {
+
+        const target = this.element.contentWindow
+
+        if (!target) return
+
+        const attachments = nativeAttachments(message, transfer)
+
+        const bytes = messagepack.serialize(message, attachments)
+
+        target.postMessage([bytes, ...attachments], "*", [bytes.buffer, ...transfer])
     }
 
     public impossible(subscription: string, reason: string) {
@@ -834,6 +848,54 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.deliver("host-pointer", "move", next).catch(() => undefined)
     }
+}
+
+const nativeAttachments = (value: unknown, transfer: readonly Transferable[]) => {
+
+    const attachments: object[] = [...transfer]
+
+    const known = new Set<object>(attachments)
+
+    const visit = (entry: unknown) => {
+
+        if (entry === null || typeof entry !== "object" || known.has(entry)) return
+
+        known.add(entry)
+
+        if (entry instanceof Blob) {
+
+            attachments.push(entry)
+
+            return
+        }
+
+        if (entry instanceof Date || entry instanceof RegExp || entry instanceof URL || entry instanceof Error || entry instanceof ArrayBuffer || ArrayBuffer.isView(entry)) return
+
+        if (entry instanceof Map) {
+
+            for (const [key, item] of entry) {
+
+                visit(key)
+
+                visit(item)
+            }
+
+            return
+        }
+
+        if (entry instanceof Set) {
+
+            for (const item of entry) visit(item)
+
+            return
+        }
+
+        for (const item of Array.isArray(entry) ? entry : Object.values(entry)) visit(item)
+    }
+
+    visit(value)
+
+    return attachments
 }
 
 function isPointerPosition(value: unknown): value is { x: number, y: number } {

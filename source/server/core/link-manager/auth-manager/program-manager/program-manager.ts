@@ -4,7 +4,7 @@ import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import TheLink from "@libs/the-link/the-link"
 import SqliteDatabase from "@libs/sqlite-database"
-import { Transmitted } from "@libs/superjson"
+import { Transmitted } from "@libs/messagepack"
 import FileManager from "@libs/file-manager"
 import FileArea from "@libs/file-area"
 import openStore from "@server/core/open-store"
@@ -1070,6 +1070,9 @@ export default class ProgramManager extends TheLink {
             // road of its own, it is the same drain with somebody else
             // also watching.
             stdio: ["ignore", "pipe", "pipe", "ipc"],
+
+            // MessagePack envelopes remain bytes across Node's IPC boundary.
+            serialization: "advanced",
 
             // Only what the operating system needs to run a command.
             // No program data travels this way: options and places are

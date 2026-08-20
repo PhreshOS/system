@@ -7,6 +7,7 @@ import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceKey } from "@phreshos/core"
 import Tunnel from "@libs/the-link/tunnel"
+import messagepack from "@libs/messagepack"
 
 /**
  * The boundary around one server execution endpoint.
@@ -60,7 +61,7 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     public constructor(child: ChildProcess, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, theme: Tunnel) {
 
-        super(child)
+        super(child, messagepack.serialize, messagepack.deserialize)
 
         this.clientDeclared = clientDeclared
 

@@ -1,5 +1,7 @@
 import { ChildProcess } from "child_process"
 import TheLink from "../../the-link"
+import { defaultDeserialize, defaultSerialize, type Deserialize, type Serialize } from "../../codec"
+import { receiveBytes } from "./transport"
 
 /**
  * Process communication adapter using Node.js IPC.
@@ -8,8 +10,7 @@ import TheLink from "../../the-link"
  * active IPC channel. Incoming IPC messages are published through the inbound
  * tunnel, and outbound tunnel events are sent to the target process.
  *
- * Messages use TheLink's array envelope format:
- * `[event, ...values]`.
+ * Messages carry TheLink's `[event, ...values]` envelope as bytes.
  *
  * @example
  * ```typescript
@@ -32,18 +33,26 @@ export default class ProcessLink extends TheLink {
      */
     private readonly target: NodeJS.Process | ChildProcess
 
+    private readonly serialize: Serialize
+
+    private readonly deserialize: Deserialize
+
     /**
      * Initialize a ProcessLink with a target IPC process.
      *
      * @param target Process to communicate with, defaults to the current process
      * @throws Error when the target does not have an active IPC channel
      */
-    public constructor(target: NodeJS.Process | ChildProcess = process) {
+    public constructor(target: NodeJS.Process | ChildProcess = process, serialize: Serialize = defaultSerialize, deserialize: Deserialize = defaultDeserialize) {
 
         super()
 
         // Store the IPC target for message delivery.
         this.target = target
+
+        this.serialize = serialize
+
+        this.deserialize = deserialize
 
         if (typeof this.target.send !== "function") throw new Error("IPC channel not available. Ensure the process was spawned with IPC support.")
 
@@ -64,10 +73,16 @@ export default class ProcessLink extends TheLink {
      */
     private async messageHandler(message: unknown) {
 
-        if (Array.isArray(message) && typeof message[0] === "string") {
+        let decoded: unknown
+
+        try { decoded = this.deserialize(receiveBytes(message)) }
+
+        catch { return }
+
+        if (Array.isArray(decoded) && typeof decoded[0] === "string") {
 
             // Decode the event envelope after validating its protocol shape.
-            const [event, ...values] = message as [string, ...unknown[]]
+            const [event, ...values] = decoded as [string, ...unknown[]]
 
             await this.$inbound.publish(event, ...values)
         }
@@ -82,6 +97,6 @@ export default class ProcessLink extends TheLink {
     private publishHandler(event: string, ...values: unknown[]) {
 
         // The non-null assertion is guarded by the constructor IPC check.
-        this.target.send!([event, ...values])
+        this.target.send!(this.serialize([event, ...values]))
     }
 }

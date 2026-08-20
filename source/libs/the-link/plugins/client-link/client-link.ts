@@ -1,4 +1,7 @@
 import Tunnel, { Subscriber } from "../../tunnel"
+import { bytesToText, receiveBytes } from "./transport"
+import { defaultDeserialize, defaultSerialize } from "../../codec"
+import type { Deserialize, Serialize } from "../../codec"
 import SocketLink from "./socket-link"
 import TheLink from "../../the-link"
 import { v4 as uuidv4 } from "uuid"
@@ -12,8 +15,8 @@ import { v4 as uuidv4 } from "uuid"
  * connection as a client-side SocketLink. Recoverable WebSocket closures trigger
  * a delayed resubscribe with the original connection payload.
  *
- * The adapter uses JSON serialization by default, with hooks for custom
- * serialization layers that must match the corresponding ServerLink.
+ * The adapter uses UTF-8 JSON bytes by default, with hooks for custom codecs
+ * that must match the corresponding ServerLink.
  *
  * @example
  * ```typescript
@@ -42,15 +45,9 @@ export default class ClientLink extends TheLink {
      */
     private readonly url: string
 
-    /**
-     * Converts outbound values into wire-format strings.
-     */
-    private serialize = <Input>(input: Input): string => JSON.stringify(input)
+    private serialize: Serialize = defaultSerialize
 
-    /**
-     * Converts wire-format strings back into typed values.
-     */
-    private deserialize = <Output>(input: string): Output => JSON.parse(input)
+    private deserialize: Deserialize = defaultDeserialize
 
     /**
      * Active WebSocket-backed SocketLink instances keyed by connection UUID.
@@ -76,21 +73,21 @@ export default class ClientLink extends TheLink {
     /**
      * Configure the serialization function used for HTTP and WebSocket payloads.
      *
-     * @param serialize Custom function that converts values to strings
+     * @param serialize Custom function that converts values to bytes
      */
-    public setSerialize(serialize: typeof this.serialize<unknown>) {
+    public setSerialize(serialize: Serialize) {
 
-        this.serialize = serialize as typeof this.serialize
+        this.serialize = serialize
     }
 
     /**
      * Configure the deserialization function used for HTTP and WebSocket payloads.
      *
-     * @param deserialize Custom function that parses values from strings
+     * @param deserialize Custom function that parses values from bytes
      */
-    public setDeserialize(deserialize: typeof this.deserialize<unknown>) {
+    public setDeserialize(deserialize: Deserialize) {
 
-        this.deserialize = deserialize as typeof this.deserialize
+        this.deserialize = deserialize
     }
 
     /**
@@ -107,7 +104,7 @@ export default class ClientLink extends TheLink {
     /**
      * Open a WebSocket subscription to the server.
      *
-     * The connection payload is serialized into the `payload` query parameter.
+     * The connection payload is serialized and encoded into the `payload` query parameter.
      * When the server responds with a `subscribe` envelope, this client creates a
      * SocketLink and publishes it on the internal `subscribe` event plus the
      * UUID-scoped `subscribe:<uuid>` event.
@@ -120,14 +117,16 @@ export default class ClientLink extends TheLink {
         const searchParams = new URLSearchParams()
 
         // Include caller-provided connection context in the subscribe request.
-        searchParams.set("payload", this.serialize({ current: payload }))
+        searchParams.set("payload", bytesToText(this.serialize({ current: payload })))
 
         const socket = new WebSocket(`${this.url}/subscribe?${searchParams.toString()}`)
+
+        socket.binaryType = "arraybuffer"
 
         const uuid = uuidv4()
 
         // Route the server subscribe envelope through the WebSocket message handler.
-        socket.addEventListener("message", (event) => this.webSocketMessageHandler(event, socket, uuid))
+        socket.addEventListener("message", (event) => this.webSocketMessageHandler(event, socket, uuid), { once: true })
 
         // Ensure SocketLink cleanup and reconnect handling when the WebSocket closes.
         socket.addEventListener("close", (event) => this.webSocketCloseHandler(event, payload, uuid))
@@ -191,7 +190,7 @@ export default class ClientLink extends TheLink {
 
         if (!response.ok) throw new Error(await response.text())
 
-        return this.deserialize(await response.text())
+        return this.deserialize(new Uint8Array(await response.arrayBuffer()))
     }
 
     /**
@@ -209,7 +208,7 @@ export default class ClientLink extends TheLink {
      */
     private async webSocketMessageHandler(event: MessageEvent, socket: WebSocket, uuid: string) {
 
-        const result = this.deserialize<{ type: string, data: unknown }>(event.data)
+        const result = this.deserialize(await receiveBytes(event.data)) as { type: string, data: unknown }
 
         if (result.type === "subscribe") {
 

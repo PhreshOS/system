@@ -8,6 +8,7 @@ import ClientTraffic from "./client-traffic"
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { AuthManagerContext } from "../../contexts"
 import { type LocalWindowHost } from "./local-window"
+import messagepack from "@libs/messagepack"
 
 /**
  * The browser boundary between a program pane and the desktop that hosts it.
@@ -290,7 +291,19 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
                 if (source?.contentWindow !== event.source) continue
 
-                boundary.receive(event.data)
+                const [bytes, ...attachments] = event.data as unknown[]
+
+                if (!(bytes instanceof Uint8Array)) return
+
+                let message: unknown
+
+                try { message = messagepack.deserialize(bytes, attachments) }
+
+                catch { return }
+
+                if (!Array.isArray(message)) return
+
+                boundary.receive(message)
 
                 return
             }

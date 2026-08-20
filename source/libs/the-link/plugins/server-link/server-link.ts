@@ -1,5 +1,8 @@
 import { UpgradeWebSocket, WSContext, WSEvents } from "hono/ws"
 import Tunnel, { Subscriber } from "../../tunnel"
+import { receiveBytes, textToBytes } from "./transport"
+import { defaultDeserialize, defaultSerialize } from "../../codec"
+import type { Deserialize, Serialize } from "../../codec"
 import { HonoOptions } from "hono/hono-base"
 import SocketLink from "./socket-link"
 import { BlankEnv } from "hono/types"
@@ -15,9 +18,8 @@ import { v4 as uuidv4 } from "uuid"
  * communication. Each accepted WebSocket connection gets a dedicated
  * SocketLink instance, allowing application code to route events per client.
  *
- * The adapter uses JSON serialization by default, with hooks for custom
- * serialization layers such as compression, encryption, or type-preserving
- * codecs.
+ * The adapter uses UTF-8 JSON bytes by default, with hooks for custom codecs
+ * such as compression, encryption, or type preservation.
  *
  * Connection lifecycle events:
  * - `subscribe`: Published on the internal tunnel when a socket connects
@@ -56,15 +58,9 @@ export default class ServerLink extends TheLink {
      */
     private debugging: boolean = false
 
-    /**
-     * Converts outbound values into wire-format strings.
-     */
-    private serialize = <Input>(input: Input): string => JSON.stringify(input)
+    private serialize: Serialize = defaultSerialize
 
-    /**
-     * Converts wire-format strings back into typed values.
-     */
-    private deserialize = <Output>(input: string): Output => JSON.parse(input)
+    private deserialize: Deserialize = defaultDeserialize
 
     /**
      * Active WebSocket-backed SocketLink instances keyed by connection UUID.
@@ -123,21 +119,21 @@ export default class ServerLink extends TheLink {
     /**
      * Configure the serialization function used for HTTP and WebSocket payloads.
      *
-     * @param serialize Custom function that converts values to strings
+     * @param serialize Custom function that converts values to bytes
      */
-    public setSerialize(serialize: typeof this.serialize<unknown>) {
+    public setSerialize(serialize: Serialize) {
 
-        this.serialize = serialize as typeof this.serialize
+        this.serialize = serialize
     }
 
     /**
      * Configure the deserialization function used for HTTP and WebSocket payloads.
      *
-     * @param deserialize Custom function that parses values from strings
+     * @param deserialize Custom function that parses values from bytes
      */
-    public setDeserialize(deserialize: typeof this.deserialize<unknown>) {
+    public setDeserialize(deserialize: Deserialize) {
 
-        this.deserialize = deserialize as typeof this.deserialize
+        this.deserialize = deserialize
     }
 
     /**
@@ -165,12 +161,14 @@ export default class ServerLink extends TheLink {
         try {
 
             // Decode the event envelope from the request body.
-            const [event, ...values] = this.deserialize<[string, ...unknown[]]>(await context.req.text())
+            const bytes = new Uint8Array(await context.req.arrayBuffer())
+
+            const [event, ...values] = this.deserialize(bytes) as [string, ...unknown[]]
 
             // Route the client event into the server-side inbound tunnel.
             const results = await this.$inbound.publish(event, ...values)
 
-            return context.text(this.serialize(results))
+            return context.body(this.serialize(results))
         }
 
         catch (exception) {
@@ -223,14 +221,12 @@ export default class ServerLink extends TheLink {
 
             if (payload === undefined) throw new Error("payload is required")
 
-            const parsedPayload = this.deserialize<{ current: unknown }>(payload)
+            const parsedPayload = this.deserialize(textToBytes(payload)) as { current: unknown }
 
             // Wrap the raw WebSocket in TheLink-compatible socket routing.
             const socketLink = new SocketLink(socket, parsedPayload.current)
 
             socketLink.setSerialize(value => this.serialize(value))
-
-            socketLink.setDeserialize(value => this.deserialize(value))
 
             // Let application code initialize the connection before notifying the client.
             const response = await this.$internal.publishFirst("subscribe", socketLink)
@@ -263,7 +259,7 @@ export default class ServerLink extends TheLink {
         if (socketLink) {
 
             // Decode the event payload from the message.
-            const [eventName, ...values] = this.deserialize<[string, ...unknown[]]>(event.data)
+            const [eventName, ...values] = this.deserialize(await receiveBytes(event.data)) as [string, ...unknown[]]
 
             try {
 
