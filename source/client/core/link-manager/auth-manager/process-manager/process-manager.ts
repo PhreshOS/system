@@ -334,9 +334,9 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/end-end")
-    protected async endEndHandle(identity: string, json: string) {
+    protected async endEndHandle(identity: string, values: unknown[]) {
 
-        this.$inbound.publish("/pane", identity, json).catch(() => undefined)
+        this.$inbound.publish("/pane", identity, values).catch(() => undefined)
     }
 }
 

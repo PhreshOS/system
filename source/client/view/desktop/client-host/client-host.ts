@@ -110,19 +110,17 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     useEffect(() => pointer.listen(), [pointer])
 
-    // The process-to-interface leg rides the same tunnel the echoes
-    // land on: an end-end arrives as (identity, json) and is posted into
-    // its pane in its envelope. The op's own echo shares the event name
-    // with a null payload — the type guard tells them apart.
+    // The process-to-interface leg rides the same tunnel the echoes land on:
+    // an end-end arrives as (identity, values) and is posted into its pane in
+    // its envelope. The op's own echo shares the event name with a null
+    // payload — the type guard tells them apart.
     const inbound = ReactTunnel.useFactory(authManager.processManager.$inbound)
 
     inbound.useSubscribe("/end-end", useCallback((...results: unknown[]) => {
 
-        const [identity, json] = results
+        const [identity, values] = results
 
-        if (typeof identity !== "string" || typeof json !== "string") return
-
-        const values = JSON.parse(json) as unknown[]
+        if (typeof identity !== "string" || !Array.isArray(values)) return
 
         if ((values[0] === "answer" || values[0] === "wait") && typeof values[1] === "string") boundaries.current.get(identity)?.deliver("end-end", ...values).catch(() => undefined)
 
@@ -136,13 +134,13 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
     // Observed publications and request answering remain separate routes.
     inbound.useSubscribe("/observed", useCallback((...results: unknown[]) => {
 
-        const [observer, owner, subscription, json] = results
+        const [observer, owner, subscription, values] = results
 
-        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || typeof json !== "string") return
+        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || !Array.isArray(values)) return
 
         if (frameOwners.current.get(observer) !== owner) return
 
-        traffic.emit(observer, "observed", subscription, ...JSON.parse(json) as unknown[]).catch(() => undefined)
+        traffic.emit(observer, "observed", subscription, ...values).catch(() => undefined)
 
     }, [sources, traffic]))
 
@@ -150,13 +148,13 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
     // appear in directed traffic observations.
     inbound.useSubscribe("/emitted", useCallback((...results: unknown[]) => {
 
-        const [observer, owner, subscription, json] = results
+        const [observer, owner, subscription, values] = results
 
-        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || typeof json !== "string") return
+        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || !Array.isArray(values)) return
 
         if (frameOwners.current.get(observer) !== owner) return
 
-        traffic.emit(observer, "emitted", subscription, ...JSON.parse(json) as unknown[]).catch(() => undefined)
+        traffic.emit(observer, "emitted", subscription, ...values).catch(() => undefined)
 
     }, [sources, traffic]))
 
@@ -164,13 +162,13 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
     // reach only the frame lease that registered the opaque subscription.
     inbound.useSubscribe("/service-event", useCallback((...results: unknown[]) => {
 
-        const [observer, owner, subscription, json] = results
+        const [observer, owner, subscription, values] = results
 
-        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || typeof json !== "string") return
+        if (typeof observer !== "string" || typeof owner !== "string" || typeof subscription !== "string" || !Array.isArray(values)) return
 
         if (frameOwners.current.get(observer) !== owner) return
 
-        traffic.emit(observer, "service-event", subscription, ...JSON.parse(json) as unknown[]).catch(() => undefined)
+        traffic.emit(observer, "service-event", subscription, ...values).catch(() => undefined)
 
     }, [sources, traffic]))
 
@@ -275,8 +273,8 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     // The interface wall: an iframe's end-end relays to its process's
     // other end; its end-host terminates here, handled by the desktop —
-    // the interface's host. Args cross The Link as standard JSON in a
-    // plain string — The Link's serialization never shapes a payload.
+    // the interface's host. Args remain one event tuple across The Link; no
+    // nested serialization is introduced inside the transport.
     // A cached iframe may begin executing before passive effects run. Install
     // its boundary listener during the commit, before the browser can run it,
     // so the document's first explicit request cannot disappear.

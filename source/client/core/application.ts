@@ -3,7 +3,6 @@ import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaTyp
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
 import superjson from "@libs/superjson"
-import LZString from "lz-string"
 
 export default class Application {
 
@@ -29,9 +28,9 @@ export default class Application {
 
         this.clientLink = new ClientLink(this.doors.link)
 
-        this.clientLink.setSerialize(data => LZString.compressToBase64(superjson.stringify(data)))
+        this.clientLink.setSerialize(data => superjson.stringify(data))
 
-        this.clientLink.setDeserialize(data => superjson.parse(LZString.decompressFromBase64(data)))
+        this.clientLink.setDeserialize(data => superjson.parse(data))
     }
 
     // A finite browser body keeps its length, so HTTP/1 can stream it from its

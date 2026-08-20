@@ -62,7 +62,7 @@ export default class ClientProcessForwarder {
 
             const values = this.shapeObservedValues(event === null ? [word, ...payload] : payload)
 
-            this.authManager.publishToConnection(this.connection, "/process/observed", this.pane, this.owner, subscription, JSON.stringify(values)).catch(() => undefined)
+            this.authManager.publishToConnection(this.connection, "/process/observed", this.pane, this.owner, subscription, values).catch(() => undefined)
         }, reportImpossible ? reason => this.impossible(subscription, reason) : undefined)
 
         this.observations.set(subscription, stop)
@@ -123,7 +123,7 @@ export default class ClientProcessForwarder {
 
             const values = event === null ? [word, payload] : [payload]
 
-            this.authManager.publishToConnection(this.connection, "/process/emitted", this.pane, this.owner, subscription, JSON.stringify(values)).catch(() => undefined)
+            this.authManager.publishToConnection(this.connection, "/process/emitted", this.pane, this.owner, subscription, values).catch(() => undefined)
         }, reportImpossible ? reason => this.impossibleFollow(subscription, reason) : undefined)
 
         this.endpointSubscriptions.set(subscription, stop)
@@ -149,7 +149,7 @@ export default class ClientProcessForwarder {
 
             const values = event === null ? [word, payload] : [payload]
 
-            return this.authManager.publishToConnection(this.connection, "/process/service-event", this.pane, this.owner, subscription, JSON.stringify(values)).catch(() => undefined)
+            return this.authManager.publishToConnection(this.connection, "/process/service-event", this.pane, this.owner, subscription, values).catch(() => undefined)
         })
 
         this.serviceSubscriptions.set(subscription, stop)
@@ -199,6 +199,6 @@ export default class ClientProcessForwarder {
 
     private async send(values: unknown[]) {
 
-        await this.authManager.publishToConnection(this.connection, "/process/end-end", this.pane, JSON.stringify(values))
+        await this.authManager.publishToConnection(this.connection, "/process/end-end", this.pane, values)
     }
 }

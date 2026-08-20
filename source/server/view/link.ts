@@ -2,7 +2,6 @@ import ServerLink from "@libs/the-link/plugins/server-link/server-link"
 import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
 import superjson from "@libs/superjson"
-import LZString from "lz-string"
 import { failed, succeeded } from "@server/core/outcome"
 
 export default function (application: Application, debugging: boolean) {
@@ -11,9 +10,9 @@ export default function (application: Application, debugging: boolean) {
 
     if (debugging) serverLink.enableDebugging()
 
-    serverLink.setSerialize(data => LZString.compressToBase64(superjson.stringify(data)))
+    serverLink.setSerialize(data => superjson.stringify(data))
 
-    serverLink.setDeserialize(data => superjson.parse(LZString.decompressFromBase64(data)))
+    serverLink.setDeserialize(data => superjson.parse(data))
 
     serverLink.onSubscribe(function (socketLink) {
 

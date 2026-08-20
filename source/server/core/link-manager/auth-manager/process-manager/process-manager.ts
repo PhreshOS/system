@@ -404,7 +404,7 @@ export default class ProcessManager extends TheLink {
 
         const answer = ["answer", values[1], values[2], values[3], failed(new Error(reason))]
 
-        this.authManager.publishToConnection(connection, "/process/end-end", pane, JSON.stringify(answer)).catch(() => undefined)
+        this.authManager.publishToConnection(connection, "/process/end-end", pane, answer).catch(() => undefined)
     }
 
     public releaseConnection(connection: string) {
@@ -2054,12 +2054,11 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/end-end")
-    protected async endEndClientFrame(connection: string, identity: string, json: string) {
+    protected async endEndClientFrame(connection: string, identity: string, values: unknown[]) {
 
-        // The payload crossed The Link as standard JSON in a plain
-        // string — parsed here, delivered in its envelope: an end knows
-        // who speaks by the route name it hears.
-        const values = JSON.parse(json) as unknown[]
+        // The payload crosses The Link once as its native event tuple. The
+        // route still supplies the speaker; no nested wire format is needed.
+        if (!Array.isArray(values)) return
 
         if (values[0] === "wait" && typeof values[1] === "string" && !this.retainClientQuestion(connection, identity, values[1], identity)) {
 

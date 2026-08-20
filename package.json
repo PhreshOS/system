@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -42,7 +42,6 @@
     "gsap": "^3.15.0",
     "hono": "^4.13.2",
     "keyv": "^5.6.0",
-    "lz-string": "^1.5.0",
     "node-rsa": "^2.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

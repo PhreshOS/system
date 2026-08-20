@@ -75,7 +75,7 @@ export default class Process {
     // The program's own words, to its other half.
     public async endEnd(...args: unknown[]) {
 
-        await this.processManager.$outbound.publish("/frame/end-end", this.identity, JSON.stringify(args))
+        await this.processManager.$outbound.publish("/frame/end-end", this.identity, args)
     }
 
     public serverStarted() {
