@@ -25,7 +25,7 @@
         "@babel/core": "^7.29.7",
         "@babel/plugin-proposal-decorators": "^7.29.7",
         "@phreshos/core": "^0.1.6",
-        "@phreshos/react-ui": "^0.1.1",
+        "@phreshos/react-ui": "^0.1.2",
         "@rolldown/plugin-babel": "^0.2.3",
         "@tailwindcss/vite": "^4.3.3",
         "@types/adm-zip": "^0.5.8",
@@ -232,7 +232,7 @@
 
     "@phreshos/core": ["@phreshos/core@0.1.6", "", {}, "sha512-x6xB/cNTyYa1BGvug4+eWxBJb0Y3dFEO1tP3VUX/1mCxzH6EoaH3d1w9L0GgZ19/DY+zKP9I2dXztLEkE78sfg=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.1", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.4", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-mj6+xizG/mlPOsEPydI4vlxeeFcu836/lHs7fxK169Jbhnc7oM3xsdV+tUpFaYcPtl4oDZdjMD4UDuW5jr+hhQ=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.2", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.4", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-koH3+QTSGQoMsgdKe2UUAZoNLZhe34V5gNBpdr/qGO+llP9w4ay50+rj3BSY/2Cf9xe8LXvRDjKejhTeEiOIEQ=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 

@@ -1,7 +1,7 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
-import { GlassSurface, useTheme } from "@phreshos/react-ui"
+import { Surface, useTheme } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "./window-geometry"
 import { numericScale, type Position, type Size } from "@phreshos/core"
 import WindowHeader from "./window-header"
@@ -27,12 +27,12 @@ import gsap from "gsap"
  * onSnap with the shares a zone names) and drops the gesture in the same
  * batch the record updates, so nothing jumps.
  *
- * GSAP keeps exactly one duty: presence — the scale and drift of
- * entering, minimising and closing, on the glass, never the frame.
+ * GSAP keeps exactly one duty: presence — the scale and drift of entering,
+ * minimising and closing on the painted surface, never the frame.
  *
- * The chrome is the liquid material: refraction, frost, specular shell;
- * content sits on an inset sheet. The close control requests — the
- * window leaves only when the truth drops its process.
+ * The chrome uses the shared system material and content sits on an inset
+ * sheet. The close control requests — the window leaves only when the truth
+ * drops its process.
  */
 const edges: { edge: WindowEdge, className: string }[] = [
 
@@ -54,7 +54,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const frame = useRef<HTMLDivElement>(null)
 
-    const glass = useRef<HTMLDivElement>(null)
+    const surfaceElement = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
 
@@ -63,6 +63,8 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     const outerRadius = radius.large
 
     const innerRadius = radius.medium
+
+    const WindowContainer = bare ? "div" : Surface
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
 
@@ -149,7 +151,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     // restored windows look newly opened.
     //
     // Bare, there is no entrance. Motion is a visual effect like the
-    // glass and the shadow, and `under` and `over` are the layers where
+    // surface and the shadow, and `under` and `over` are the layers where
     // the system paints nothing — so what would scale and drift here is
     // the program's own content, which reads as the program stumbling
     // rather than as a window opening. It showed on every refresh,
@@ -160,25 +162,25 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (minimized) {
 
-            gsap.set(glass.current, { scale: reducedMotion ? 1 : 0.86, y: reducedMotion ? 0 : 28, visibility: "hidden" })
+            gsap.set(surfaceElement.current, { scale: reducedMotion ? 1 : 0.86, y: reducedMotion ? 0 : 28, visibility: "hidden" })
 
             return
         }
 
         if (!animateEntrance) {
 
-            restSurface(glass.current)
+            restSurface(surfaceElement.current)
 
-            gsap.set(glass.current, { visibility: "visible" })
+            gsap.set(surfaceElement.current, { visibility: "visible" })
 
             return
         }
 
-        prepareSurfaceEntrance(glass.current, reducedMotion)
+        prepareSurfaceEntrance(surfaceElement.current, reducedMotion)
 
-        gsap.set(glass.current, { visibility: "visible" })
+        gsap.set(surfaceElement.current, { visibility: "visible" })
 
-        const animation = enterSurface(glass.current, reducedMotion)
+        const animation = enterSurface(surfaceElement.current, reducedMotion)
 
         return () => { animation?.kill() }
 
@@ -190,20 +192,20 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     // closing still answers its completion handshake.
     useLayoutEffect(function () {
 
-        if (!glass.current) return
+        if (!surfaceElement.current) return
 
         // A hidden window can silently prepare the pose that a future
         // restore will animate from if the preference has been relaxed.
         if (!reducedMotion) {
 
-            if (minimized) gsap.set(glass.current, { scale: 0.86, y: 28, visibility: "hidden" })
+            if (minimized) gsap.set(surfaceElement.current, { scale: 0.86, y: 28, visibility: "hidden" })
 
             return
         }
 
-        gsap.killTweensOf(glass.current)
+        gsap.killTweensOf(surfaceElement.current)
 
-        gsap.set(glass.current, { scale: 1, y: 0, visibility: minimized || closing ? "hidden" : "visible" })
+        gsap.set(surfaceElement.current, { scale: 1, y: 0, visibility: minimized || closing ? "hidden" : "visible" })
 
         if (closing) {
 
@@ -228,7 +230,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        if (!glass.current) return
+        if (!surfaceElement.current) return
 
         if (minimized) onUnavailable?.("minimize")
 
@@ -238,24 +240,21 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // would be motion toward nowhere.
         if (bare || reducedMotion) {
 
-            gsap.set(glass.current, { scale: 1, y: 0, visibility: minimized ? "hidden" : "visible" })
+            gsap.set(surfaceElement.current, { scale: 1, y: 0, visibility: minimized ? "hidden" : "visible" })
 
             return
         }
 
-        // Presence is scale and drift, never opacity: an element with
-        // opacity below 1 is a backdrop root, and inside one there is
-        // nothing behind to sample — the glass would be dead for as long
-        // as the fade lasted, which is exactly as long as the eye is on
-        // it. Going away is a departure toward the taskbar; hiding at
-        // the end is visibility, which forms no such root.
-        if (!minimized) gsap.set(glass.current, { visibility: "visible" })
+        // Presence is scale and drift, never opacity, so the material and its
+        // content remain visually stable throughout the movement. Going away
+        // is a departure toward the taskbar; hiding happens only at the end.
+        if (!minimized) gsap.set(surfaceElement.current, { visibility: "visible" })
 
         const animation = minimized
 
-            ? gsap.to(glass.current, { scale: 0.86, y: 28, duration: 0.11, ease: "power3.in", onComplete: () => gsap.set(glass.current, { visibility: "hidden" }) })
+            ? gsap.to(surfaceElement.current, { scale: 0.86, y: 28, duration: 0.11, ease: "power3.in", onComplete: () => gsap.set(surfaceElement.current, { visibility: "hidden" }) })
 
-            : gsap.to(glass.current, { scale: 1, y: 0, duration: 0.24, ease: "power3.out" })
+            : gsap.to(surfaceElement.current, { scale: 1, y: 0, duration: 0.24, ease: "power3.out" })
 
         return () => { animation.kill() }
 
@@ -265,7 +264,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     // element may be unmounted.
     useLayoutEffect(function () {
 
-        if (!closing || !glass.current) return
+        if (!closing || !surfaceElement.current) return
 
         onUnavailable?.("close")
 
@@ -279,7 +278,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        const animation = gsap.to(glass.current, { scale: 0.86, y: 12, duration: 0.16, ease: "power2.in", onComplete: completeClosure })
+        const animation = gsap.to(surfaceElement.current, { scale: 0.86, y: 12, duration: 0.16, ease: "power2.in", onComplete: completeClosure })
 
         return () => { animation.kill() }
 
@@ -603,15 +602,12 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={glass} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${reducedMotion ? "" : "transition-shadow duration-200"} ${surface}`}`}>
+            <WindowContainer data-window-container ref={surfaceElement} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${reducedMotion ? "" : "transition-shadow duration-200"} ${surface}`}`}>
 
-                {/* A bare Client cannot refract the desktop through its iframe.
-                    Its host surface is therefore a sibling behind the frame,
-                    with its own radius and no clipping parent. */}
+                {/* A bare Client controls its own host surface. It remains a
+                    sibling behind the frame, with its own radius and no
+                    clipping parent. */}
                 {bare && localSurface && <WindowSurface state={localSurface} onComplete={revision => onLocalAnimationComplete?.("surface", revision)} />}
-
-                {/* LAYER 1 — the shared Theme-driven glass material. */}
-                {!bare && <GlassSurface aria-hidden="true" radius="inherit" className="pointer-events-none absolute inset-0" />}
 
                 {!bare && <WindowHeader
 
@@ -645,7 +641,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 </div>
 
-            </div>
+            </WindowContainer>
 
             {!bare && edges.map(handle => <div
 
@@ -702,7 +698,7 @@ interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
     active?: boolean
 
     // Nothing the system paints. The window's boundaries become the
-    // frame's exactly: no glass, no shadow, no rounding, no header, no
+    // frame's exactly: no surface, no shadow, no rounding, no header, no
     // controls, and no gutter — so what a program asked to be is what it
     // gets, edge to edge, rather than half a gutter smaller.
     //

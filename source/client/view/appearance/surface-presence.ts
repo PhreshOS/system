@@ -4,7 +4,7 @@ const entered = { scale: 1, y: 0 }
 
 const entering = { scale: 0.92, y: 14 }
 
-/** Establish the first frame before a glass surface becomes visible. */
+/** Establish the first frame before a surface becomes visible. */
 export function prepareSurfaceEntrance(surface: HTMLElement | null, reducedMotion: boolean) {
 
     if (!surface) return
@@ -14,7 +14,7 @@ export function prepareSurfaceEntrance(surface: HTMLElement | null, reducedMotio
     gsap.set(surface, reducedMotion ? entered : entering)
 }
 
-/** Give every system glass surface the same entrance motion. */
+/** Give every system surface the same entrance motion. */
 export function enterSurface(surface: HTMLElement | null, reducedMotion: boolean) {
 
     if (!surface) return null

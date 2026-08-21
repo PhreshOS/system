@@ -1,6 +1,6 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { isScaleLevel, scale, type Easing, type SurfaceSettings } from "@phreshos/core"
-import { GlassSurface, useTheme } from "@phreshos/react-ui"
+import { Surface, useTheme } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
 import { type LocalSurfaceState } from "../client-host/local-window"
 
@@ -99,7 +99,7 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
     const target = values(rendered, themeRadius)
 
-    return <GlassSurface
+    return <Surface
 
         ref={element}
 

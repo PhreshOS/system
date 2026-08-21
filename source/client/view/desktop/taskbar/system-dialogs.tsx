@@ -74,7 +74,7 @@ export default function SystemDialogs() {
 
         onCancel={event => event.preventDefault()}
 
-        className={`${taskbarSurfaceClassName} grid grid-rows-[auto_minmax(0,1fr)] backdrop:bg-transparent`}
+        className={`${taskbarSurfaceClassName} backdrop:bg-transparent`}
 
     >
 

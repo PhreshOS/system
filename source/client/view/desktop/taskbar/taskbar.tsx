@@ -1,5 +1,5 @@
 import { ComponentProps, ReactNode } from "react"
-import { GlassSurface, useTheme } from "@phreshos/react-ui"
+import { Surface, useTheme } from "@phreshos/react-ui"
 import { numericScale } from "@phreshos/core"
 import { taskbarAnchorName } from "../geometry"
 import TaskbarSeparator from "./taskbar-separator"
@@ -12,17 +12,15 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
 
     const radius = numericScale(useTheme().radius).large
 
-    return <section
+    return <Surface
 
-        className={`relative isolate h-taskbar border border-white/30 shadow-taskbar ${className ?? ""}`}
+        className={`relative isolate h-taskbar overflow-hidden shadow-taskbar ${className ?? ""}`}
 
         style={{ anchorName: taskbarAnchorName, ...style, borderRadius: radius }}
 
         {...props}
 
     >
-
-        <GlassSurface aria-hidden="true" radius="inherit" className="pointer-events-none absolute inset-0" />
 
         <div className="relative grid h-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 p-2">
 
@@ -40,10 +38,10 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
 
         {dialogs}
 
-    </section>
+    </Surface>
 }
 
-interface TaskbarProps extends ComponentProps<"section"> {
+interface TaskbarProps extends ComponentProps<"div"> {
 
     leading: ReactNode
 

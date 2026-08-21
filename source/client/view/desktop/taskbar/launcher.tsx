@@ -89,7 +89,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
             style={{ ...style, borderRadius: radius }}
 
-            className={`${taskbarSurfaceClassName} hidden grid-rows-[auto_minmax(0,1fr)] open:grid ${className ?? ""}`}
+            className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
 
             onBeforeToggle={event => {
 
