@@ -30,7 +30,7 @@
     "build": "vite-node scripts/build.ts",
     "start": "node --run build && node dist/server/main.js",
     "pack": "node --run build && vite-node scripts/pack.ts",
-    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-intake-address.mjs",
+    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-intake-address.mjs && vite-node scripts/verify-theme.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },
@@ -54,7 +54,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/plugin-proposal-decorators": "^7.29.7",
-    "@phreshos/core": "^0.1.6",
+    "@phreshos/core": "^0.1.7",
     "@phreshos/react-ui": "^0.1.2",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.3",

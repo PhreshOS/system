@@ -1,5 +1,5 @@
-import { ComponentProps, ReactNode } from "react"
-import { Surface, useTheme } from "@phreshos/react-ui"
+import { ReactNode } from "react"
+import { Surface, useTheme, type SurfaceProps } from "@phreshos/react-ui"
 import { numericScale } from "@phreshos/core"
 import { taskbarAnchorName } from "../geometry"
 import TaskbarSeparator from "./taskbar-separator"
@@ -41,7 +41,7 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
     </Surface>
 }
 
-interface TaskbarProps extends ComponentProps<"div"> {
+interface TaskbarProps extends SurfaceProps {
 
     leading: ReactNode
 
