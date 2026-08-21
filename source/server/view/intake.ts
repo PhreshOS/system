@@ -233,26 +233,18 @@ async function answer(application: Application, attached: Set<string>, say: (eve
 
         if (asked.startup !== undefined && typeof asked.startup !== "boolean") throw new Error("Enabling startup during installation must be true or false")
 
-        const { entry, replaced } = await programManager.installSource(asked.program)
+        for await (const stage of programManager.installSource(asked.program, { run: asked.run, startup: asked.startup })) {
 
-        // Whether it replaced one. Installation has already ended every
-        // process that could have retained one of the previous paths.
-        say({ event: "installed", replaced, program: { identity: entry.identity, name: entry.program.name, version: entry.program.config.version ?? null } })
+            if (stage.stage === "installed") {
 
-        const launch = {}
+                // Whether it replaced one. Installation has already ended every
+                // process that could have retained one of the previous paths.
+                say({ event: "installed", replaced: stage.replaced, program: { identity: stage.entry.identity, name: stage.entry.program.name, version: stage.entry.program.config.version ?? null } })
+            }
 
-        if (asked.startup) {
+            else if (stage.stage === "startup-enabled") say({ event: "startupEnabled" })
 
-            await programManager.startup(entry.program, "enable", launch)
-
-            say({ event: "startupEnabled" })
-        }
-
-        if (asked.run) {
-
-            const process = await programManager.runInstalled(entry.program, launch)
-
-            say({ event: "running", process })
+            else say({ event: "running", process: stage.process })
         }
 
         return done()

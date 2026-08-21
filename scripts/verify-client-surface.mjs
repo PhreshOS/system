@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "../source/client/view/desktop/client-host/client-process-boundary.ts"
+import ClientProcessManager from "../source/client/core/link-manager/auth-manager/process-manager/process-manager.ts"
 import { surfaceSettings, visualTransaction } from "../source/client/view/desktop/client-host/local-window.ts"
 import host from "../source/client/view/desktop/client-host/host.ts"
 import LocalWindows from "../source/client/view/desktop/window-manager/local-windows.ts"
@@ -127,8 +128,13 @@ const localWindow = {
     setSurface(identity, value, motion) { calls.push(["set", identity, value, motion]) },
     removeSurface(identity) { calls.push(["remove", identity]) }
 }
+const processManager = {
+    processes,
+    front: ClientProcessManager.prototype.front,
+    scope: ClientProcessManager.prototype.scope
+}
 const authManager = {
-    processManager: { processes },
+    processManager,
     programManager: { programs: new Map() }
 }
 const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, localWindow)

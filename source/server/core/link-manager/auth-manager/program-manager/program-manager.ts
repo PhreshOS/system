@@ -580,7 +580,12 @@ export default class ProgramManager extends TheLink {
         return await this.forget(program, asker)
     }
 
-    public async installSource(source: ProgramConfig) {
+    /**
+     * Install one external Program description and coordinate every requested
+     * follow-up as one Core operation. Each yielded stage lets a View represent
+     * progress without taking ownership of the workflow.
+     */
+    public async *installSource(source: ProgramConfig, options: InstallSourceOptions = {}): AsyncGenerator<InstallSourceStage> {
 
         const program = new Program(source)
 
@@ -591,7 +596,25 @@ export default class ProgramManager extends TheLink {
         // durable files, not the current registry entry's installed flag.
         const replaced = existsSync(this.fileManager.join(program.identity, "program.json"))
 
-        return { entry: await this.install(program), replaced }
+        const entry = await this.install(program)
+
+        yield { stage: "installed", entry, replaced }
+
+        const launch = {}
+
+        if (options.startup) {
+
+            await this.startup(entry.program, "enable", launch)
+
+            yield { stage: "startup-enabled" }
+        }
+
+        if (options.run) {
+
+            const process = await this.runInstalled(entry.program, launch)
+
+            yield { stage: "running", process }
+        }
     }
 
     /** Run a durable Program independently of the local intake connection. */
@@ -1159,6 +1182,21 @@ export default class ProgramManager extends TheLink {
 }
 
 export type TransmittedProgramManager = Transmitted<ProgramManager>
+
+export interface InstallSourceOptions {
+
+    run?: boolean
+
+    startup?: boolean
+}
+
+export type InstallSourceStage =
+
+    | { stage: "installed", entry: Entry, replaced: boolean }
+
+    | { stage: "startup-enabled" }
+
+    | { stage: "running", process: string }
 
 // Which of a half's own pages a launch asked for.
 //

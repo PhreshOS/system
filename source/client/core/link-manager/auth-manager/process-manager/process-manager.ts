@@ -5,9 +5,10 @@ import { Publish, Subscribe } from "@libs/the-link/decorators/escript"
 import TheLink from "@libs/the-link/the-link"
 import AuthManager from "../auth-manager"
 import Process from "./process"
+import ProcessScope from "./process-scope"
 import { type LaunchClient } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName, type ServiceKey } from "@phreshos/core"
+import { isPermissionName, type ServiceKey, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
 
 /**
@@ -40,6 +41,33 @@ export default class ProcessManager extends TheLink {
     private list() {
 
         return [...this.processes.values()]
+    }
+
+    /** Bind application operations and visibility policy to one framed Process. */
+    public scope(pane: string) {
+
+        return new ProcessScope(this, pane)
+    }
+
+    /** The shown authoritative Window at the front of one projected layer. */
+    public front(layer: WindowLayer) {
+
+        let best: string | null = null
+
+        let depth = -Infinity
+
+        for (const [identity, process] of this.processes) {
+
+            const window = process.client?.window
+
+            if (!window || window.layer === "wallpaper" || window.minimized || window.layer !== layer || window.depth <= depth) continue
+
+            best = identity
+
+            depth = window.depth
+        }
+
+        return best
     }
 
     // The structural frame gate supplies `source`; Program code supplies only

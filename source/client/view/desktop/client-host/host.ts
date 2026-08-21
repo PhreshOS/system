@@ -5,7 +5,7 @@ import { type ClientBody, type ProxiedResponse, type ServedValue } from "@client
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, type ProgramIconSize, type WindowLayer } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -57,86 +57,11 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
     const { processManager, programManager } = authManager
 
+    const scope = processManager.scope(pane)
+
     function process() {
 
-        const found = processManager.processes.get(pane)
-
-        if (!found) throw new Error("The desktop does not know this process")
-
-        return found
-    }
-
-    // The gate.
-    //
-    // Program words resolve their subject from the frame and discard
-    // what was asked, which is why their isolation needs nothing checked:
-    // there is nothing to get wrong. Process-handle words take an
-    // identity — a sibling this program is running — and that identity
-    // is the first subject this side accepts from a pane.
-    //
-    // So it is measured, once, here: an identity a pane names must belong to
-    // a process of the program that pane is a face of. A stranger's is
-    // refused whether or not it exists, because whether it exists is
-    // itself something a pane may not learn.
-    function related(named: unknown) {
-
-        if (!isHandleAddress(named)) return null
-
-        const found = processManager.processes.get(named.identity)
-
-        return found?.reference === named.reference && found.program === process().program ? found : null
-    }
-
-    function sibling(named: unknown) {
-
-        const found = related(named)
-
-        if (!found) throw new Error("The desktop does not know this process")
-
-        return found
-    }
-
-    function window(named: unknown) {
-
-        const found = sibling(named).client?.window
-
-        if (!found) throw new Error("This process has no live client endpoint")
-
-        return found
-    }
-
-    function mutableWindow(named: unknown) {
-
-        const found = window(named)
-
-        if (found.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
-        return found
-    }
-
-    function localProcess(named: unknown) {
-
-        const found = sibling(named)
-
-        if (!found.client) throw new Error("This process has no live client endpoint")
-
-        if (found.client.window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
-        return found
-    }
-
-    function declared(found: ReturnType<typeof process>, half: "server" | "client") {
-
-        return (programManager.programs.get(found.program)?.[half] ?? null) !== null
-    }
-
-    function owner(found: ReturnType<typeof process> | NonNullable<ReturnType<typeof process>["parent"]>) {
-
-        const program = programManager.programs.get(found.program)
-
-        if (!program) throw new Error("The desktop does not know this program")
-
-        return program
+        return scope.current()
     }
 
     // One process record on every road. Nullable values carry the resolved
@@ -145,37 +70,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
     // the desktop's mutable record.
     function record(found: ReturnType<typeof process> | NonNullable<ReturnType<typeof process>["parent"]>) {
 
-        return sdkProcess(found, owner(found))
-    }
-
-    // Which window is topmost *of its own layer*, worked out the way the
-    // desktop draws it: the shown one in that layer with the greatest
-    // depth. A pane is told whether that is itself and nothing more, so
-    // it learns no other window exists.
-    //
-    // This read across every layer until the layers existed, and the day
-    // they did it began answering `false` to a window a person was
-    // typing in because something in `over` had a larger number. Three
-    // places now work this out — here, the core, and the desktop — and
-    // all three read depth within one layer.
-    function front(layer: WindowLayer) {
-
-        let best: string | null = null
-
-        let depth = -Infinity
-
-        for (const entry of processManager.processes.values()) {
-
-            const window = entry.client?.window
-
-            if (!window || window.layer === "wallpaper" || window.minimized || window.layer !== layer || window.depth <= depth) continue
-
-            best = entry.identity
-
-            depth = window.depth
-        }
-
-        return best
+        return sdkProcess(found, scope.programOf(found))
     }
 
     return async function answer(word: unknown, ...args: unknown[]) {
@@ -196,7 +91,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "exists") {
 
-            const target = args[1] === undefined ? process() : sibling(args[1])
+            const target = args[1] === undefined ? process() : scope.sibling(args[1])
 
             if (args[0] === "server") return [target.server !== null]
 
@@ -207,7 +102,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "start-endpoint") {
 
-            const target = args[0] === undefined ? process() : sibling(args[0])
+            const target = args[0] === undefined ? process() : scope.sibling(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -218,7 +113,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "stop-endpoint") {
 
-            const target = args[0] === undefined ? process() : sibling(args[0])
+            const target = args[0] === undefined ? process() : scope.sibling(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -250,7 +145,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "endpoint-service") {
 
-            const target = args[0] === null ? process() : sibling(args[0])
+            const target = args[0] === null ? process() : scope.sibling(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A service Endpoint must be server or client")
 
@@ -320,17 +215,11 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // the same `null`, so the relationship cannot reveal a stranger.
         if (word === "parent") {
 
-            const target = args[0] === undefined ? process() : sibling(args[0])
+            const target = args[0] === undefined ? process() : scope.sibling(args[0])
 
-            const address = target.parent
+            const parent = scope.parent(target)
 
-            if (!address) return [null]
-
-            const parent = processManager.processes.get(address.identity)
-
-            if (!parent || parent.reference !== address.reference) throw new Error("The parent Process no longer exists")
-
-            return [parent.program === process().program ? record(parent) : null]
+            return [parent ? record(parent) : null]
         }
 
         // Whether a process a pane holds has ended.
@@ -346,9 +235,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (!isHandleAddress(args[0])) throw new Error("The boundary returned an invalid Process handle")
 
-            const found = processManager.processes.get(args[0].identity)
-
-            return [!found || found.reference !== args[0].reference || found.program !== process().program]
+            return [scope.exited(args[0])]
         }
 
         // Every instance of this pane's program, this one among them: a
@@ -356,7 +243,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // are running. Nothing is named — the program is the frame's.
         if (word === "processes") {
 
-            return [[...processManager.processes.values()].filter(entry => entry.program === process().program).map(record)]
+            return [scope.processes().map(record)]
         }
 
         // One process of this program by immutable identity or by its
@@ -365,13 +252,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const wanted = String(args[1])
 
-            const identified = processManager.processes.get(wanted)
+            const found = scope.findProcess(wanted)
 
-            if (identified?.program === process().program) return [record(identified)]
-
-            const named = [...processManager.processes.values()].find(entry => entry.program === process().program && entry.name === wanted)
-
-            return [named ? record(named) : null]
+            return [found ? record(found) : null]
         }
 
         // Another instance of this pane's own program. The identity comes
@@ -384,11 +267,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const started = await programManager.createProcess(process().program, args[1] as Launch, process().identity)
 
-            const startedRecord = processManager.processes.get(started)
-
-            if (!startedRecord) throw new Error("The desktop does not know this process")
-
-            return [record(startedRecord)]
+            return [record(scope.requireProcess(started))]
         }
 
         // Every instance ended, the asker last. One implementation on the
@@ -409,7 +288,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const owner = frameOwner()
 
-            const target = args[1] === null ? process() : related(args[1])
+            const target = args[1] === null ? process() : scope.related(args[1])
 
             // Callback subscriptions are synchronous and remain silent when
             // their source is unavailable. waitFor() and events() identify
@@ -422,7 +301,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!declared(target, half)) {
+            if (!scope.declared(target, half)) {
 
                 if (reportImpossible) throw new Error(`This program declared no ${half} half`)
 
@@ -457,7 +336,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const frame = frameOwner()
 
-            const target = args[1] === null ? process() : related(args[1])
+            const target = args[1] === null ? process() : scope.related(args[1])
 
             if (!frame || !target) {
 
@@ -466,7 +345,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!declared(target, half)) {
+            if (!scope.declared(target, half)) {
 
                 if (reportImpossible) throw new Error(`This program declared no ${half} half`)
 
@@ -509,7 +388,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error(`A process has no "${String(args[1])}" end`)
 
-            await processManager.publish(pane, sibling(args[0]).identity, args[1], args.slice(2))
+            await processManager.publish(pane, scope.sibling(args[0]).identity, args[1], args.slice(2))
 
             return []
         }
@@ -521,7 +400,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (args[1] !== "server") throw new Error("Only a server end can be asked — a client end has no one answerer")
 
-            await processManager.askOf(pane, sibling(args[0]).identity, args.slice(2))
+            await processManager.askOf(pane, scope.sibling(args[0]).identity, args.slice(2))
 
             return []
         }
@@ -532,7 +411,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // exactly like every other `current` operation on this side.
         if (word === "option") {
 
-            const found = args[0] === undefined ? process() : sibling(args[0])
+            const found = args[0] === undefined ? process() : scope.sibling(args[0])
 
             return [found.options[String(args[1])]]
         }
@@ -543,9 +422,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "program") {
 
-            const program = programManager.programs.get(process().program)
-
-            if (!program) throw new Error("The desktop does not know this program")
+            const program = scope.program()
 
             // What it declared about its window comes too — the same
             // kind of fact as its name, and what a window needs to know
@@ -565,25 +442,19 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // the server side; neither is a capability of a client face.
         if (word === "installed") {
 
-            const program = programManager.programs.get(process().program)
-
-            return [program?.installed === true]
+            return [scope.program().installed === true]
         }
 
         if (word === "uninstall") {
 
-            const program = programManager.programs.get(process().program)
-
-            if (!program) throw new Error("The desktop does not know this program")
+            const program = scope.program()
 
             return [await program.uninstall(args[1] === true, pane)]
         }
 
         if (word === "forget") {
 
-            const program = programManager.programs.get(process().program)
-
-            if (!program) throw new Error("The desktop does not know this program")
+            const program = scope.program()
 
             return [await program.forget(pane)]
         }
@@ -595,7 +466,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // was being used to ask.
         if (word === "window") {
 
-            const shown = window(args[0] ?? address(process()))
+            const shown = scope.window(args[0] ?? address(process()))
 
             return [{
 
@@ -607,7 +478,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 minimized: shown.minimized,
 
-                front: front(shown.layer) === pane,
+                front: scope.front(shown.layer) === pane,
 
                 // Which layer it lives in, and which of its own pages it
                 // was opened at. Both are the system's answers about
@@ -622,107 +493,107 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "move") {
 
-            await mutableWindow(args[0]).move(args[1] as never)
+            await scope.mutableWindow(args[0]).move(args[1] as never)
 
             return [pane]
         }
 
         if (word === "resize") {
 
-            await mutableWindow(args[0]).resize(args[1] as never)
+            await scope.mutableWindow(args[0]).resize(args[1] as never)
 
             return [pane]
         }
 
         if (word === "setGeometry") {
 
-            await mutableWindow(args[0]).setGeometry(args[1] as never)
+            await scope.mutableWindow(args[0]).setGeometry(args[1] as never)
 
             return [pane]
         }
 
-        if (word === "windowLocal") return [localWindow.state(localProcess(args[0]).identity)]
+        if (word === "windowLocal") return [localWindow.state(scope.localProcess(args[0]).identity)]
 
         if (word === "windowLocalMove") {
 
-            await localWindow.move(localProcess(args[0]).identity, localPosition(args[1]), visualTransaction(args[2]))
+            await localWindow.move(scope.localProcess(args[0]).identity, localPosition(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalResize") {
 
-            await localWindow.resize(localProcess(args[0]).identity, localSize(args[1]), visualTransaction(args[2]))
+            await localWindow.resize(scope.localProcess(args[0]).identity, localSize(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalGeometry") {
 
-            await localWindow.geometry(localProcess(args[0]).identity, localGeometry(args[1]), visualTransaction(args[2]))
+            await localWindow.geometry(scope.localProcess(args[0]).identity, localGeometry(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalMinimize") {
 
-            localWindow.minimize(localProcess(args[0]).identity, args[1] !== false)
+            localWindow.minimize(scope.localProcess(args[0]).identity, args[1] !== false)
 
             return []
         }
 
         if (word === "windowLocalTitle") {
 
-            localWindow.title(localProcess(args[0]).identity, String(args[1] ?? ""))
+            localWindow.title(scope.localProcess(args[0]).identity, String(args[1] ?? ""))
 
             return []
         }
 
         if (word === "windowLocalRaise") {
 
-            localWindow.raise(localProcess(args[0]).identity)
+            localWindow.raise(scope.localProcess(args[0]).identity)
 
             return []
         }
 
         if (word === "windowLocalSurfaceSet") {
 
-            await localWindow.setSurface(localProcess(args[0]).identity, surfaceSettings(args[1] === undefined ? {} : args[1]), visualTransaction(args[2]))
+            await localWindow.setSurface(scope.localProcess(args[0]).identity, surfaceSettings(args[1] === undefined ? {} : args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalSurfaceRemove") {
 
-            localWindow.removeSurface(localProcess(args[0]).identity)
+            localWindow.removeSurface(scope.localProcess(args[0]).identity)
 
             return []
         }
 
         if (word === "changeTitle") {
 
-            await mutableWindow(args[0]).changeTitle(String(args[1] ?? ""))
+            await scope.mutableWindow(args[0]).changeTitle(String(args[1] ?? ""))
 
             return [pane]
         }
 
         if (word === "raise") {
 
-            await mutableWindow(args[0]).raise()
+            await scope.mutableWindow(args[0]).raise()
 
             return [pane]
         }
 
         if (word === "minimize") {
 
-            await mutableWindow(args[0]).minimize(args[1] !== false)
+            await scope.mutableWindow(args[0]).minimize(args[1] !== false)
 
             return [pane]
         }
 
         if (word === "exit") {
 
-            await sibling(args[0]).stop()
+            await scope.sibling(args[0]).stop()
 
             return [pane]
         }
