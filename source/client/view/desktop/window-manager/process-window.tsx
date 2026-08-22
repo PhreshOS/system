@@ -19,7 +19,7 @@ const loadingExitDuration = 200
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -72,7 +72,13 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
             secondFrame = requestAnimationFrame(() => {
 
-                settled = globalThis.setTimeout(() => setLoading({ source: frameSource, phase: "leaving" }), settleDelay)
+                settled = globalThis.setTimeout(() => {
+
+                    setLoading({ source: frameSource, phase: "leaving" })
+
+                    onReady(record.identity)
+
+                }, settleDelay)
             })
         })
 
@@ -85,7 +91,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
             if (settled) globalThis.clearTimeout(settled)
         }
 
-    }, [frameSource, loading])
+    }, [frameSource, loading, onReady, record.identity])
 
     const loadingVisible = closing || programAccess === "checking" || programAccess === "available" && (loading.source !== frameSource || loading.phase !== "hidden")
 
@@ -239,6 +245,8 @@ interface ProcessWindowProps {
     onFrame: (identity: string, element: HTMLIFrameElement | null) => void
 
     onFrameLoad: (identity: string, element: HTMLIFrameElement) => void
+
+    onReady: (identity: string) => void
 
     onRaise: (record: Process) => void
 

@@ -1,5 +1,5 @@
 import { type Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
-import { type SyntheticEvent, useCallback, useRef, useState } from "react"
+import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext } from "../contexts"
 import useClientHost from "./client-host/client-host"
 import DesktopDisplay from "./desktop-display"
@@ -18,6 +18,7 @@ import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { ReadyWallpaper, WallpaperBackground } from "../components/wallpaper"
 import ProgramFrame from "./program-frame"
 import Loading from "../components/loading"
+import { useRequirement } from "@libs/readiness/main"
 
 export default function Workspace() {
 
@@ -28,6 +29,14 @@ export default function Workspace() {
     const desktopWallpaper = useProperty(authManager.linkManager.desktopWallpaper)
 
     const windows = useWindows()
+
+    const completePrograms = useRequirement("programs")
+
+    const initialPrograms = useRef<ReadonlySet<string> | null>(null)
+
+    initialPrograms.current ??= new Set(windows.records.map(record => record.identity))
+
+    const [readyPrograms, setReadyPrograms] = useState<ReadonlySet<string>>(() => new Set())
 
     const wallpaperIdentity = windows.wallpaper?.identity ?? null
 
@@ -42,6 +51,16 @@ export default function Workspace() {
     const desktop = useRef<HTMLDivElement>(null)
 
     const [programAccess, setProgramAccess] = useState<ProgramAccess>("checking")
+
+    const currentPrograms = new Set(windows.records.map(record => record.identity))
+
+    const initialProgramsReady = programAccess === "blocked" || [...initialPrograms.current].every(identity => readyPrograms.has(identity) || !currentPrograms.has(identity))
+
+    useEffect(function () {
+
+        if (initialProgramsReady) completePrograms()
+
+    }, [completePrograms, initialProgramsReady])
 
     // Each frame, by process identity. This resolves a message's sender and
     // lets the desktop announce the surface that actually contains it.
@@ -65,6 +84,19 @@ export default function Workspace() {
     const fileWallpaperLoaded = useCallback(() => {
 
         setFileWallpaperReady(true)
+    }, [])
+
+    const programReady = useCallback(function (identity: string) {
+
+        if (!initialPrograms.current?.has(identity)) return
+
+        setReadyPrograms(current => {
+
+            if (current.has(identity)) return current
+
+            return new Set([...current, identity])
+        })
+
     }, [])
 
     const focus = useDesktopFocus(desktop, windows)
@@ -131,6 +163,8 @@ export default function Workspace() {
             onFrame={frame}
 
             onFrameLoad={frameLoaded}
+
+            onReady={programReady}
 
             onRaise={windows.raise}
 
