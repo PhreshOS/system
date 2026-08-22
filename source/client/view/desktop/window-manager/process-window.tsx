@@ -156,7 +156,13 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         {/* Bare layers are only the Program's content. Loading is system paint,
             so it belongs exclusively to an ordinary window. */}
-        {!bare && loadingVisible && <Loading className={!closing && loading.source === frameSource && loading.phase === "leaving" ? "pointer-events-none opacity-0 transition-opacity duration-200 ease-out" : ""} />}
+        {!bare && loadingVisible && <Loading
+
+            blur={false}
+
+            className={!closing && loading.source === frameSource && loading.phase === "leaving" ? "pointer-events-none opacity-0 transition-opacity duration-200 ease-out" : ""}
+
+        />}
 
         {/* First press focuses an inactive window before its program can
             receive input. Bare layers have no system click-catcher. */}
