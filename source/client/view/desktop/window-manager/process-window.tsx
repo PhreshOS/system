@@ -89,6 +89,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     const loadingVisible = closing || programAccess === "checking" || programAccess === "available" && (loading.source !== frameSource || loading.phase !== "hidden")
 
+    const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase === "loading" || loading.phase === "settling")
+
     return <Window
 
         title={title}
@@ -152,7 +154,25 @@ export default memo(function ({ identity, record, client, title, icon, position,
             cannot reach the desktop document or its authorization. Its
             channel crosses through postMessage and resolves identity from
             this frame, so isolation does not weaken communication. */}
-        {!closing && <ProgramFrame record={record} client={client} title={title} door={door} access={programAccess} onFrame={onFrame} onLoad={loaded} />}
+        {!closing && <ProgramFrame
+
+            record={record}
+
+            client={client}
+
+            title={title}
+
+            door={door}
+
+            access={programAccess}
+
+            className={`size-full border-0 ${frameLoading ? "opacity-0" : ""}`}
+
+            onFrame={onFrame}
+
+            onLoad={loaded}
+
+        />}
 
         {/* Bare layers are only the Program's content. Loading is system paint,
             so it belongs exclusively to an ordinary window. */}
