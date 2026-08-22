@@ -5,6 +5,7 @@ import { type LocalAnimation, type LocalSurfaceState } from "../client-host/loca
 import { type LocalGeometryReader } from "./local-windows"
 import { type ProgramAccess } from "../program-access"
 import { type Position, type Size } from "@phreshos/core"
+import Spinner from "../../components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "../program-frame"
 import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "react"
@@ -167,6 +168,18 @@ export default memo(function ({ identity, record, client, title, icon, position,
             onLoad={loaded}
 
         />}
+
+        {/* Closing is not document loading. The iframe is already absent;
+            only termination progress remains, without painting a backdrop. */}
+        {!bare && (stopping || closing) && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
+
+            <Spinner className="m-auto size-6 text-slate-700">
+
+                <span className="sr-only">Closing</span>
+
+            </Spinner>
+
+        </div>}
 
         {/* First press focuses an inactive window before its program can
             receive input. Bare layers have no system click-catcher. */}
