@@ -1,7 +1,7 @@
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { GlassSurface, useTheme } from "@phreshos/react-ui"
+import { Surface, useTheme } from "@phreshos/react-ui"
 import { numericScale } from "@phreshos/core"
 import { obscuredBackground } from "../../components/loading"
 import Alert from "../../components/alert"
@@ -58,7 +58,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <GlassSurface aria-hidden="true" radius="inherit" className="pointer-events-none absolute inset-0" />
+            <Surface aria-hidden="true" style={{ borderRadius: "inherit" }} className="pointer-events-none absolute inset-0" />
 
             <header className="relative grid gap-1 px-5 py-4 text-shadow-chrome">
 
