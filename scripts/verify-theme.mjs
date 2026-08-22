@@ -3,14 +3,14 @@ import Keyv from "keyv"
 import ThemeManager, { themeSchema } from "../source/server/core/theme-manager.ts"
 
 const expected = {
-  background: "#f5f4ee",
+  background: "#fffff5",
   foreground: "#183447",
   accent: "#4c9cff",
   spacing: 12,
   radius: 10,
   surface: {
-    grain: 0.04,
-    grainAmount: 1,
+    grain: 0,
+    grainAmount: 0,
     animation: 0,
     backdrop: 0,
     opacity: 1,

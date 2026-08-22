@@ -5,14 +5,11 @@ import { type LocalAnimation, type LocalSurfaceState } from "../client-host/loca
 import { type LocalGeometryReader } from "./local-windows"
 import { type ProgramAccess } from "../program-access"
 import { type Position, type Size } from "@phreshos/core"
-import Loading from "../../components/loading"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "../program-frame"
 import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "react"
 
 const settleDelay = 80
-
-const loadingExitDuration = 200
 
 /**
  * One process pane at the React boundary. Its primitive window values are
@@ -55,14 +52,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     useEffect(function () {
 
-        if (loading.source !== frameSource || loading.phase === "loading" || loading.phase === "hidden") return
-
-        if (loading.phase === "leaving") {
-
-            const hidden = globalThis.setTimeout(() => setLoading({ source: frameSource, phase: "hidden" }), loadingExitDuration)
-
-            return () => globalThis.clearTimeout(hidden)
-        }
+        if (loading.source !== frameSource || loading.phase !== "settling") return
 
         let secondFrame = 0
 
@@ -74,7 +64,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
                 settled = globalThis.setTimeout(() => {
 
-                    setLoading({ source: frameSource, phase: "leaving" })
+                    setLoading({ source: frameSource, phase: "ready" })
 
                     onReady(record.identity)
 
@@ -93,9 +83,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     }, [frameSource, loading, onReady, record.identity])
 
-    const loadingVisible = stopping || closing || programAccess === "checking" || programAccess === "available" && (loading.source !== frameSource || loading.phase !== "hidden")
-
-    const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase === "loading" || loading.phase === "settling")
+    const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
     return <Window
 
@@ -180,16 +168,6 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         />}
 
-        {/* Bare layers are only the Program's content. Loading is system paint,
-            so it belongs exclusively to an ordinary window. */}
-        {!bare && loadingVisible && <Loading
-
-            blur={false}
-
-            className={!closing && loading.source === frameSource && loading.phase === "leaving" ? "pointer-events-none opacity-0 transition-opacity duration-200 ease-out" : ""}
-
-        />}
-
         {/* First press focuses an inactive window before its program can
             receive input. Bare layers have no system click-catcher. */}
         {!bare && !active && <div className="absolute inset-0" />}
@@ -271,5 +249,5 @@ interface LoadingState {
 
     source: string | null
 
-    phase: "loading" | "settling" | "leaving" | "hidden"
+    phase: "loading" | "settling" | "ready"
 }
