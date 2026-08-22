@@ -13,9 +13,15 @@ export const themeSchema: z.ZodType<ThemeProperties> = z.strictObject({
     radius: bounded(themeLimits.radius).default(standardTheme.radius),
     surface: z.strictObject({
         grain: bounded(themeLimits.surface.grain).default(standardTheme.surface.grain),
+        grainAmount: bounded(themeLimits.surface.grainAmount).default(standardTheme.surface.grainAmount),
         animation: bounded(themeLimits.surface.animation).default(standardTheme.surface.animation),
         backdrop: bounded(themeLimits.surface.backdrop).default(standardTheme.surface.backdrop),
-        opacity: bounded(themeLimits.surface.opacity).default(standardTheme.surface.opacity)
+        opacity: bounded(themeLimits.surface.opacity).default(standardTheme.surface.opacity),
+        distortion: bounded(themeLimits.surface.distortion).default(standardTheme.surface.distortion),
+        waves: bounded(themeLimits.surface.waves).default(standardTheme.surface.waves),
+        ripples: bounded(themeLimits.surface.ripples).default(standardTheme.surface.ripples),
+        saturation: bounded(themeLimits.surface.saturation).default(standardTheme.surface.saturation),
+        brightness: bounded(themeLimits.surface.brightness).default(standardTheme.surface.brightness)
     }).default(standardTheme.surface)
 })
 
