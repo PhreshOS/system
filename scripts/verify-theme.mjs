@@ -8,13 +8,6 @@ const expected = {
   accent: "#4c9cff",
   spacing: 12,
   radius: 10,
-  glass: {
-    distortion: 70,
-    blur: 4,
-    saturation: 1.8,
-    brightness: 1.06,
-    opacity: 0.12
-  },
   surface: {
     grain: 0.04,
     animation: 0,
@@ -33,6 +26,7 @@ assert.deepEqual(configured.surface, {
   opacity: 0
 })
 assert.throws(() => themeSchema.parse({ surface: { color: "black" } }))
+assert.throws(() => themeSchema.parse({ glass: {} }))
 assert.throws(() => themeSchema.parse({ surface: { grain: 1.01 } }))
 assert.throws(() => themeSchema.parse({ surface: { animation: 17 } }))
 assert.throws(() => themeSchema.parse({ surface: { backdrop: 25 } }))

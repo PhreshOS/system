@@ -11,13 +11,6 @@ export const themeSchema: z.ZodType<ThemeProperties> = z.strictObject({
     accent: z.string().min(1).default(standardTheme.accent),
     spacing: bounded(themeLimits.spacing).default(standardTheme.spacing),
     radius: bounded(themeLimits.radius).default(standardTheme.radius),
-    glass: z.strictObject({
-        distortion: bounded(themeLimits.glass.distortion).default(standardTheme.glass.distortion),
-        blur: bounded(themeLimits.glass.blur).default(standardTheme.glass.blur),
-        saturation: bounded(themeLimits.glass.saturation).default(standardTheme.glass.saturation),
-        brightness: bounded(themeLimits.glass.brightness).default(standardTheme.glass.brightness),
-        opacity: bounded(themeLimits.glass.opacity).default(standardTheme.glass.opacity)
-    }).default(standardTheme.glass),
     surface: z.strictObject({
         grain: bounded(themeLimits.surface.grain).default(standardTheme.surface.grain),
         animation: bounded(themeLimits.surface.animation).default(standardTheme.surface.animation),
