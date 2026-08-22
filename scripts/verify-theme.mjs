@@ -14,10 +14,27 @@ const expected = {
     saturation: 1.8,
     brightness: 1.06,
     opacity: 0.12
+  },
+  surface: {
+    color: "#f5f4ee",
+    grain: 0.1,
+    animation: 0,
+    backdrop: 0,
+    opacity: 1
   }
 }
 
 assert.deepEqual(themeSchema.parse({}), expected)
+assert.deepEqual(themeSchema.parse({ surface: { color: "black", grain: 0.9, animation: 16, backdrop: 24, opacity: 0 } }).surface, {
+  color: "black",
+  grain: 0.9,
+  animation: 16,
+  backdrop: 24,
+  opacity: 0
+})
+assert.throws(() => themeSchema.parse({ surface: { grain: 1.01 } }))
+assert.throws(() => themeSchema.parse({ surface: { animation: 17 } }))
+assert.throws(() => themeSchema.parse({ surface: { backdrop: 25 } }))
 
 const store = new Keyv()
 const manager = await ThemeManager.open(store)
