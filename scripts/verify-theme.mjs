@@ -16,8 +16,7 @@ const expected = {
     opacity: 0.12
   },
   surface: {
-    color: "#f5f4ee",
-    grain: 0.1,
+    grain: 0.04,
     animation: 0,
     backdrop: 0,
     opacity: 1
@@ -25,13 +24,15 @@ const expected = {
 }
 
 assert.deepEqual(themeSchema.parse({}), expected)
-assert.deepEqual(themeSchema.parse({ surface: { color: "black", grain: 0.9, animation: 16, backdrop: 24, opacity: 0 } }).surface, {
-  color: "black",
+const configured = themeSchema.parse({ background: "black", surface: { grain: 0.9, animation: 16, backdrop: 24, opacity: 0 } })
+assert.equal(configured.background, "black")
+assert.deepEqual(configured.surface, {
   grain: 0.9,
   animation: 16,
   backdrop: 24,
   opacity: 0
 })
+assert.throws(() => themeSchema.parse({ surface: { color: "black" } }))
 assert.throws(() => themeSchema.parse({ surface: { grain: 1.01 } }))
 assert.throws(() => themeSchema.parse({ surface: { animation: 17 } }))
 assert.throws(() => themeSchema.parse({ surface: { backdrop: 25 } }))

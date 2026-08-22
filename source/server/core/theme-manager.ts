@@ -19,7 +19,6 @@ export const themeSchema: z.ZodType<ThemeProperties> = z.strictObject({
         opacity: bounded(themeLimits.glass.opacity).default(standardTheme.glass.opacity)
     }).default(standardTheme.glass),
     surface: z.strictObject({
-        color: z.string().min(1).default(standardTheme.surface.color),
         grain: bounded(themeLimits.surface.grain).default(standardTheme.surface.grain),
         animation: bounded(themeLimits.surface.animation).default(standardTheme.surface.animation),
         backdrop: bounded(themeLimits.surface.backdrop).default(standardTheme.surface.backdrop),
