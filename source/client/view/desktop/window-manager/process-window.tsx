@@ -93,7 +93,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     }, [frameSource, loading, onReady, record.identity])
 
-    const loadingVisible = closing || programAccess === "checking" || programAccess === "available" && (loading.source !== frameSource || loading.phase !== "hidden")
+    const loadingVisible = stopping || closing || programAccess === "checking" || programAccess === "available" && (loading.source !== frameSource || loading.phase !== "hidden")
 
     const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase === "loading" || loading.phase === "settling")
 
