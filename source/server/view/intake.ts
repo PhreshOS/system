@@ -107,7 +107,7 @@ export default function intake(application: Application, path: string) {
 
             for (const identity of attached) {
 
-                application.linkManager.authManager.processManager.stop(identity).catch(() => undefined)
+                application.linkManager.authManager.processManager.exit(identity).catch(() => undefined)
             }
 
             attached.clear()
@@ -284,7 +284,7 @@ async function answer(application: Application, attached: Set<string>, say: (eve
 
     if (!alive()) {
 
-        if (application.linkManager.authManager.processManager.processes.has(identity)) await application.linkManager.authManager.processManager.stop(identity)
+        if (application.linkManager.authManager.processManager.processes.has(identity)) await application.linkManager.authManager.processManager.exit(identity)
 
         return
     }

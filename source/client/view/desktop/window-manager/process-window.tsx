@@ -160,7 +160,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
             cannot reach the desktop document or its authorization. Its
             channel crosses through postMessage and resolves identity from
             this frame, so isolation does not weaken communication. */}
-        {!closing && <ProgramFrame
+        {!stopping && !closing && <ProgramFrame
 
             record={record}
 

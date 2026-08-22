@@ -67,9 +67,9 @@ export default class Process {
     }
 
     // Ending is asked for; the process leaves when its exit echoes.
-    public async stop() {
+    public async exit() {
 
-        await this.processManager.$outbound.publish("/stop", this.identity)
+        await this.processManager.$outbound.publish("/exit", this.identity)
     }
 
     // The program's own words, to its other half.

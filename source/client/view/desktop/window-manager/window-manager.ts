@@ -199,7 +199,7 @@ export default function useWindows() {
 
         redrawStopping(revision => revision + 1)
 
-        process.stop().catch(() => {
+        process.exit().catch(() => {
 
             stopping.current.delete(process.identity)
 

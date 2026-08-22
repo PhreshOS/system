@@ -593,7 +593,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "exit") {
 
-            await scope.sibling(args[0]).stop()
+            await scope.sibling(args[0]).exit()
 
             return [pane]
         }

@@ -183,7 +183,7 @@ export default class WallpaperManager {
 
             if (process.client?.window.layer !== "wallpaper") continue
 
-            await process.stop()
+            await process.exit()
         }
     }
 

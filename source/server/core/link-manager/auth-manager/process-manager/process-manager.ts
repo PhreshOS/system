@@ -972,7 +972,7 @@ export default class ProcessManager extends TheLink {
 
         const ended = [...this.processes.values()].filter(entry => entry.program === owner).map(entry => entry.identity)
 
-        for (const identity of [...ended.filter(identity => identity !== asker), ...ended.filter(identity => identity === asker)]) await this.stop(identity)
+        for (const identity of [...ended.filter(identity => identity !== asker), ...ended.filter(identity => identity === asker)]) await this.exit(identity)
 
         return ended
     }
@@ -1697,7 +1697,7 @@ export default class ProcessManager extends TheLink {
 
             const target = this.heldProcess(rest[0], process)
 
-            await this.stop(target.identity)
+            await this.exit(target.identity)
 
             return [target.identity]
         }
@@ -2077,8 +2077,8 @@ export default class ProcessManager extends TheLink {
         await this.publish(identity, "client", identity, "server", values)
     }
 
-    @Connect("/stop")
-    public async stop(identity: string) {
+    @Connect("/exit")
+    public async exit(identity: string) {
 
         return await this.exitProcess(identity)
     }

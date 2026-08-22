@@ -629,7 +629,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                     onClose={onClose}
 
-                    stopping={stopping}
+                    stopping={stopping || closing}
 
                 />}
 

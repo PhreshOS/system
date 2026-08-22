@@ -191,7 +191,7 @@ export default class Process {
     }
 
     /** Internal aggregate exit used by lifecycle owners and focused probes. */
-    public async stop() {
+    public async exit() {
 
         if (!this.exitProcess) throw new Error("This Process has no lifecycle owner")
 
