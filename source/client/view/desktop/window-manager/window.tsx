@@ -58,13 +58,13 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const reducedMotion = useReducedMotion()
 
-    const radius = numericScale(useTheme().radius)
+    const theme = useTheme()
+
+    const radius = numericScale(theme.radius)
 
     const outerRadius = radius.large
 
     const innerRadius = radius.medium
-
-    const WindowContainer = bare ? "div" : Surface
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
 
@@ -602,7 +602,23 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <WindowContainer data-window-container ref={surfaceElement} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${reducedMotion ? "" : "transition-shadow duration-200"} ${surface}`}`}>
+            <div data-window-container ref={surfaceElement} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius, color: theme.foreground }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${reducedMotion ? "" : "transition-shadow duration-200"} ${surface}`}`}>
+
+                {/* Material is paint, not the interaction container. Keeping
+                    it as a sibling behind the window contents prevents plain
+                    overlays such as the inactive-window click catcher from
+                    entering the Surface tree or receiving its effects. */}
+                {!bare && <Surface
+
+                    data-window-frame-surface
+
+                    aria-hidden="true"
+
+                    className="pointer-events-none absolute inset-0"
+
+                    style={{ borderRadius: "inherit", zIndex: -1 }}
+
+                />}
 
                 {/* A bare Client controls its own host surface. It remains a
                     sibling behind the frame, with its own radius and no
@@ -641,7 +657,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 </div>
 
-            </WindowContainer>
+            </div>
 
             {!bare && edges.map(handle => <div
 

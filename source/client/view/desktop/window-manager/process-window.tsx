@@ -183,7 +183,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         {/* First press focuses an inactive window before its program can
             receive input. Bare layers have no system click-catcher. */}
-        {!bare && !active && <div className="absolute inset-0" />}
+        {!bare && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" />}
 
     </Window>
 })
