@@ -18,6 +18,10 @@ export default class EndpointServices extends TheLink {
 
     public async enable(process: Process, endpoint: Half, value: unknown) {
 
+        const declaration = endpoint === "server" ? process.program.server : process.program.client
+
+        if (!declaration?.serviceable) throw new Error(`The ${endpoint} endpoint is not serviceable`)
+
         const definition = this.definition(value, endpoint)
 
         const { name } = definition

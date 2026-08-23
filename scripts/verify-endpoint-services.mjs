@@ -1,10 +1,33 @@
 import assert from "node:assert/strict"
 import EndpointServices from "../source/server/core/link-manager/auth-manager/process-manager/endpoint-services.ts"
+import Program from "../source/server/core/link-manager/auth-manager/program-manager/program.ts"
 
-function process(reference, program = "program") {
+const privateProgram = new Program({
+    identity: "private-program",
+    server: { location: ".", startCommand: "true" }
+})
+const publicProgram = new Program({
+    identity: "public-program",
+    server: { location: ".", startCommand: "true", serviceable: true },
+    client: { location: ".", serviceable: true }
+})
+
+assert.equal(privateProgram.record().server.serviceable, false)
+assert.equal(publicProgram.record().server.serviceable, true)
+assert.equal(publicProgram.record().client.serviceable, true)
+assert.throws(() => new Program({
+    identity: "invalid-program",
+    server: { location: ".", startCommand: "true", serviceable: "yes" }
+}), /serviceable capability/)
+
+function process(reference, program = "program", serviceable = true) {
     return {
         reference,
-        program: { identity: program },
+        program: {
+            identity: program,
+            server: { serviceable },
+            client: { serviceable }
+        },
         server: {},
         client: {}
     }
@@ -13,6 +36,7 @@ function process(reference, program = "program") {
 const services = new EndpointServices()
 const provider = process("provider")
 const conflicting = process("conflicting")
+const privateEndpoint = process("private", "private", false)
 const key = { program: "program", endpoint: "server", name: "counter" }
 const lifecycle = []
 const registry = []
@@ -22,6 +46,8 @@ let disableTransportCompleted = false
 assert.equal(services.enabled(key), false)
 assert.deepEqual(services.list(), [])
 assert.equal(services.service(provider, "server"), null)
+await assert.rejects(() => services.enable(privateEndpoint, "server", { name: "counter" }), /not serviceable/)
+await assert.rejects(() => services.enable(privateEndpoint, "client", { name: "counter" }), /not serviceable/)
 
 services.follow(key, "lifecycle", null, event => lifecycle.push(event))
 services.followRegistry(null, (event, service) => registry.push([event, service]))

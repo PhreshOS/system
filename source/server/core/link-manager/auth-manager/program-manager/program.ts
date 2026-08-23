@@ -95,12 +95,20 @@ export default class Program {
 
     public get server(): Resolved<ServerConfig> | null {
 
-        return this.config.server ? { ...this.config.server, start: this.config.server.start ?? true } : null
+        return this.config.server ? {
+            ...this.config.server,
+            start: this.config.server.start ?? true,
+            serviceable: this.config.server.serviceable ?? false
+        } : null
     }
 
     public get client(): Resolved<ClientConfig> | null {
 
-        return this.config.client ? { ...this.config.client, start: this.config.client.start ?? true } : null
+        return this.config.client ? {
+            ...this.config.client,
+            start: this.config.client.start ?? true,
+            serviceable: this.config.client.serviceable ?? false
+        } : null
     }
 
     // A client half may name a URL instead of a directory, which is how
@@ -172,6 +180,8 @@ export default class Program {
     public record() {
 
         const { version, description } = this.config
+        const server = this.server
+        const client = this.client
 
         return {
 
@@ -187,21 +197,28 @@ export default class Program {
 
             description: description ?? null,
 
-            server: this.server && { start: this.server.start },
+            server: server && {
 
-            client: this.client && {
+                start: server.start,
 
-                start: this.client.start,
+                serviceable: server.serviceable
+            },
 
-                title: this.client.title ?? null,
+            client: client && {
 
-                size: this.client.size ?? null,
+                start: client.start,
 
-                position: this.client.position ?? null,
+                serviceable: client.serviceable,
 
-                layer: this.client.layer ?? null,
+                title: client.title ?? null,
 
-                minimize: this.client.minimize ?? null
+                size: client.size ?? null,
+
+                position: client.position ?? null,
+
+                layer: client.layer ?? null,
+
+                minimize: client.minimize ?? null
             }
         }
     }
@@ -286,6 +303,8 @@ function coherent(config: ProgramConfig) {
         if (typeof declared.location !== "string") throw new Error(`A declared ${half} half must have a location`)
 
         if (declared.start !== undefined && typeof declared.start !== "boolean") throw new Error(`A declared ${half} endpoint's start default must be true or false`)
+
+        if (declared.serviceable !== undefined && typeof declared.serviceable !== "boolean") throw new Error(`A declared ${half} endpoint's serviceable capability must be true or false`)
     }
 
     if (config.client && /^https?:\/\//i.test(config.client.location)) {
@@ -324,7 +343,10 @@ function coherent(config: ProgramConfig) {
     return config
 }
 
-type Resolved<Half extends { start?: boolean }> = Omit<Half, "start"> & { start: boolean }
+type Resolved<Half extends { start?: boolean, serviceable?: boolean }> = Omit<Half, "start" | "serviceable"> & {
+    start: boolean
+    serviceable: boolean
+}
 
 function directory(path: string) {
 
