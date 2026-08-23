@@ -39,7 +39,7 @@ export default function ProgramFrame({ record, client, title, door, access, clas
 
         title={title}
 
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-forms"
 
         className={className}
 
