@@ -660,7 +660,7 @@ export default class ProgramManager extends TheLink {
 
             try {
 
-                copy(source, staged)
+                copyProgram(source, staged)
 
                 // Whether what was copied is a program: asked here, while the
                 // old one is still standing, so a description that turns out
@@ -1295,7 +1295,7 @@ export interface Watching {
 // Never `storage`: what a program kept belongs to the place it is kept
 // in, and a copy that carried it would be two programs sharing one
 // memory.
-function copy(program: Program, into: string) {
+export function copyProgram(program: Program, into: string) {
 
     const config: Record<string, unknown> = { ...program.config }
 
@@ -1321,6 +1321,19 @@ function copy(program: Program, into: string) {
 
     else delete config.icon
 
+    for (const endpoint of ["server", "client"] as const) {
+
+        const docs = program.serviceDocs(endpoint)
+
+        if (docs === null) continue
+
+        const target = `${endpoint}-docs.md`
+
+        writeFileSync(join(into, target), docs)
+
+        config[endpoint] = { ...config[endpoint] as object, serviceDocs: target }
+    }
+
     // The description names the places the system chose. Presence is
     // part of a half's declaration, so its location is never omitted.
     delete config.storage
@@ -1328,7 +1341,7 @@ function copy(program: Program, into: string) {
     writeFileSync(join(into, "program.json"), JSON.stringify(strip(config), null, 4))
 }
 
-const installedParts = ["server", "client", "icon.png", "program.json"] as const
+const installedParts = ["server", "client", "icon.png", "server-docs.md", "client-docs.md", "program.json"] as const
 
 // JSON has no `undefined`, and a key whose value is one would be written
 // as nothing at all — so they are removed rather than left to vanish.
