@@ -588,9 +588,9 @@ export default class ProcessManager extends TheLink {
 
         await Promise.all([
 
-            this.announce(event, process.program.identity, process.program.reference, record, endpoint),
+            this.announce("process", event, process.program.identity, process.program.reference, record, endpoint),
 
-            this.hostTraffic.emitSubject(event, process.reference, record, endpoint)
+            this.hostTraffic.emitSubject("process", event, process.reference, record, endpoint)
         ])
     }
 
@@ -715,7 +715,7 @@ export default class ProcessManager extends TheLink {
             //
             // An unscoped listener — `host` — is built for no subject and so
             // receives the subject as its first value.
-            await this.announce("processCreate", program.identity, program.reference, processReference(process))
+            await this.announce("process", "create", program.identity, program.reference, processReference(process))
 
             await this.$outbound.publish("/created", process.hosted())
 
@@ -776,12 +776,12 @@ export default class ProcessManager extends TheLink {
         // the process, whole, not an identity a listener would have to look
         // up. It is already gone, which is what `exited()` answers and
         // why holding it is legitimate.
-        await this.announce("processExit", process.program.identity, process.program.reference, processReference(process), code, signal)
+        await this.announce("process", "exit", process.program.identity, process.program.reference, processReference(process), code, signal)
 
         // The same ending, said to whoever holds this one process rather
         // than to whoever watches the program. A launcher wants the
         // second; a program managing its instances wants the first.
-        await this.hostTraffic.emitSubject("exit", process.reference, code, signal)
+        await this.hostTraffic.emitSubject("process", "exit", process.reference, code, signal)
 
         // The window that had it is gone, so nobody is told they lost
         // it — only whoever inherits it is told they have it.
@@ -1042,10 +1042,16 @@ export default class ProcessManager extends TheLink {
         return this.services.service(held, endpoint)
     }
 
-    @Connect("/service/disabled")
-    protected async serviceDisabled(key: unknown) {
+    @Connect("/service/enabled")
+    protected async serviceEnabled(key: unknown) {
 
-        return this.services.disabled(key)
+        return this.services.enabled(key)
+    }
+
+    @Connect("/service/wait-ready")
+    protected async waitServiceReady(key: unknown, timeout: unknown) {
+
+        await this.services.waitReady(key, timeout)
     }
 
     @Connect("/service/docs")
@@ -1160,9 +1166,21 @@ export default class ProcessManager extends TheLink {
 
     // Host facts enter only the Process boundaries whose endpoint subscriptions
     // established a matching the-link route.
-    public async announce(event: string, publicSubject: string, scopedSubject: string, ...values: unknown[]) {
+    public async announce(domain: "program" | "process", event: string, publicSubject: string, scopedSubject: string, ...values: unknown[]) {
 
-        await this.hostTraffic.emit(event, publicSubject, scopedSubject, ...values)
+        await this.hostTraffic.emit(domain, event, publicSubject, scopedSubject, ...values)
+    }
+
+    /** Announces one fact only through an authoritative Host registry. */
+    public async announceHost(domain: "program" | "process", event: string, subject: string, ...values: unknown[]) {
+
+        await this.hostTraffic.emitHost(domain, event, subject, ...values)
+    }
+
+    /** Announces one fact only to observers of an exact Program or Process subject. */
+    public async announceSubject(domain: "program" | "process", event: string, subject: string, ...values: unknown[]) {
+
+        await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
 
     /** Reads the effective permission decision for one live Client Process. */
@@ -1245,7 +1263,7 @@ export default class ProcessManager extends TheLink {
 
         const process = this.processes.get(identity)
 
-        if (process?.client) this.hostTraffic.emitSubject(event, process.reference, value).catch(() => undefined)
+        if (process?.client) this.hostTraffic.emitSubject("window", event, process.reference, value).catch(() => undefined)
 
         this.$outbound.publish("/said", identity, event, value).catch(() => undefined)
     }
@@ -1260,14 +1278,18 @@ export default class ProcessManager extends TheLink {
 
         const programManager = this.authManager.programManager
 
-        if (word === "programs") return [[...programManager.programs.values()].filter(entry => rest[0] !== true || entry.installed)]
+        if (word === "host-program-list") return [[...programManager.programs.values()].filter(entry => rest[0] !== true || entry.installed)]
 
-        if (word === "program") {
+        if (word === "host-program-find") {
 
-            const identity = typeof rest[0] === "string" ? rest[0] : process.program.identity
+            const identity = String(rest[0])
 
-            return [programManager.find(identity)]
+            return [programManager.programs.get(identity) ?? null]
         }
+
+        if (word === "current-program") return [programManager.find(process.program.identity)]
+
+        if (word === "current-process") return [processReference(process)]
 
         if (word === "icon") {
 
@@ -1281,7 +1303,7 @@ export default class ProcessManager extends TheLink {
             return [await programManager.startup(program, String(rest[1]), rest[2])]
         }
 
-        if (word === "permissions") {
+        if (word === "program-permission") {
 
             const program = this.heldProgram(rest[0], process.program)
             const operation = rest[1]
@@ -1312,7 +1334,7 @@ export default class ProcessManager extends TheLink {
             throw new Error(`The host does not know the permission operation "${String(operation)}"`)
         }
 
-        // Which live process made this one through `program.createProcess()`.
+        // Which live process made this one through `program.process.create()`.
         // The child retains a handle, but the registry remains authoritative:
         // once the parent disappears that retained handle no longer resolves.
         if (word === "parent") {
@@ -1329,7 +1351,7 @@ export default class ProcessManager extends TheLink {
         // A program brought into being by a program enters the same
         // registry and returns the same record shape as every other
         // program. Its installed flag begins false.
-        if (word === "create-program") {
+        if (word === "host-program-create") {
 
             const source = rest[0]
 
@@ -1417,7 +1439,7 @@ export default class ProcessManager extends TheLink {
             return [await programManager.forget(program, process.identity)]
         }
 
-        if (word === "create-process") {
+        if (word === "program-process-create") {
 
             const program = this.heldProgram(rest[0])
 
@@ -1430,11 +1452,11 @@ export default class ProcessManager extends TheLink {
         }
 
         // Named, only that program's instances; unnamed, every one.
-        if (word === "processes") {
+        if (word === "host-process-list" || word === "program-process-list") {
 
             const living = [...this.processes.values()]
 
-            if (rest[0] === undefined) return [living.map(processReference)]
+            if (word === "host-process-list") return [living.map(processReference)]
 
             // Resolved before it is filtered. Filtering alone answered
             // an empty list for a program the system does not know,
@@ -1447,7 +1469,7 @@ export default class ProcessManager extends TheLink {
             return [living.filter(entry => entry.program === program).map(processReference)]
         }
 
-        if (word === "program-process") {
+        if (word === "program-process-find") {
 
             const program = this.heldProgram(rest[0])
 
@@ -1462,11 +1484,16 @@ export default class ProcessManager extends TheLink {
             return [found ? processReference(found) : null]
         }
 
-        if (word === "process") {
+        if (word === "host-process-find") {
 
-            const target = typeof rest[0] === "string" ? this.find(rest[0]) : this.heldProcess(rest[0], process)
+            if (typeof rest[0] === "string") {
 
-            return [processReference(target)]
+                const target = this.processes.get(rest[0])
+
+                return [target ? processReference(target) : null]
+            }
+
+            return [null]
         }
 
         if (word === "exists") {
@@ -1523,7 +1550,11 @@ export default class ProcessManager extends TheLink {
             return [this.services.service(endpoint, rest[1])]
         }
 
-        if (word === "service-disabled") return [this.services.disabled(rest[0])]
+        if (word === "host-service-list") return [this.services.list()]
+
+        if (word === "service-enabled") return [this.services.enabled(rest[0])]
+
+        if (word === "service-wait-ready") return [await this.services.waitReady(rest[0], rest[1])]
 
         if (word === "service-docs") return [this.services.docs(rest[0])]
 
@@ -1543,6 +1574,24 @@ export default class ProcessManager extends TheLink {
         }
 
         if (word === "service-unfollow") {
+
+            process.server?.unfollowService(String(rest[0]))
+
+            return []
+        }
+
+        if (word === "service-registry-follow") {
+
+            const [subscription, event] = rest
+
+            if (typeof subscription !== "string" || event !== null && typeof event !== "string") return []
+
+            process.server?.followServiceRegistry(this.services, subscription, event)
+
+            return []
+        }
+
+        if (word === "service-registry-unfollow") {
 
             process.server?.unfollowService(String(rest[0]))
 
@@ -1702,7 +1751,7 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
-        if (word === "exit-all") return [await this.exitAll(this.heldProgram(rest[0]).identity, process.identity)]
+        if (word === "program-process-exit-all") return [await this.exitAll(this.heldProgram(rest[0]).identity, process.identity)]
 
         if (word === "observe") {
 

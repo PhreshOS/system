@@ -269,7 +269,7 @@ export default class ProgramManager extends TheLink {
     // replayed event history, so only runtime registrations use this.
     private async created(entry: Entry) {
 
-        await this.authManager.processManager.announce("programCreate", entry.identity, entry.program.reference, entry)
+        await this.authManager.processManager.announceHost("program", "create", entry.identity, entry)
 
         await this.$outbound.publish("/create", entry.hosted())
     }
@@ -705,7 +705,7 @@ export default class ProgramManager extends TheLink {
 
                 if (createdHere) await this.created(entry)
 
-                await this.authManager.processManager.announce("programInstall", entry.identity, entry.program.reference, entry)
+                await this.authManager.processManager.announceHost("program", "install", entry.identity, entry)
 
                 // Said to the sessions, though none of them may ask for it.
                 // `@Connect` used to be both the road in and the echo out,
@@ -781,9 +781,9 @@ export default class ProgramManager extends TheLink {
 
         entry.installed = false
 
-        await this.authManager.processManager.announce("programUninstall", entry.identity, entry.program.reference, entry, everything)
+        await this.authManager.processManager.announceHost("program", "uninstall", entry.identity, entry, everything)
 
-        await this.authManager.processManager.announce("uninstall", entry.identity, entry.program.reference, everything)
+        await this.authManager.processManager.announceSubject("program", "uninstall", entry.program.reference, everything)
 
         await this.$outbound.publish("/uninstall", entry.hosted(), everything)
 
@@ -812,9 +812,9 @@ export default class ProgramManager extends TheLink {
 
         this.programs.delete(entry.identity)
 
-        await this.authManager.processManager.announce("programForget", entry.identity, entry.program.reference, entry)
+        await this.authManager.processManager.announceHost("program", "forget", entry.identity, entry)
 
-        await this.authManager.processManager.announce("forget", entry.identity, entry.program.reference)
+        await this.authManager.processManager.announceSubject("program", "forget", entry.program.reference)
 
         await this.$outbound.publish("/forget", entry.identity)
 

@@ -38,7 +38,10 @@ export default class EndpointServices extends TheLink {
 
         this.owners.set(owner, identity)
 
-        await this.$inbound.publish(this.event(key, "lifecycle", "enable"), "enable", undefined)
+        await Promise.all([
+            this.$inbound.publish(this.event(key, "lifecycle", "enable"), "enable", undefined),
+            this.$inbound.publish(this.registryEvent("enable"), "enable", key)
+        ])
 
         return key
     }
@@ -67,7 +70,10 @@ export default class EndpointServices extends TheLink {
 
         this.bindings.delete(identity)
 
-        await this.$inbound.publish(this.event(binding.key, "lifecycle", "disable"), "disable", undefined)
+        await Promise.all([
+            this.$inbound.publish(this.event(binding.key, "lifecycle", "disable"), "disable", undefined),
+            this.$inbound.publish(this.registryEvent("disable"), "disable", binding.key)
+        ])
 
         return true
     }
@@ -79,9 +85,45 @@ export default class EndpointServices extends TheLink {
         return identity ? this.bindings.get(identity)?.key ?? null : null
     }
 
-    public disabled(key: unknown) {
+    public list() {
 
-        return !this.bindings.has(this.identity(this.key(key)))
+        return Object.freeze([...this.bindings.values()].map(binding => binding.key))
+    }
+
+    public enabled(key: unknown) {
+
+        return this.bindings.has(this.identity(this.key(key)))
+    }
+
+    public async waitReady(key: unknown, timeout: unknown = 10_000) {
+
+        const resolved = this.key(key)
+
+        if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout < 0) throw new Error("A service readiness timeout must be a non-negative finite number")
+
+        if (this.enabled(resolved)) return
+
+        await new Promise<void>((resolve, reject) => {
+
+            let settled = false
+
+            const finish = (complete: () => void) => {
+
+                if (settled) return
+
+                settled = true
+                clearTimeout(timer)
+                stop()
+                complete()
+            }
+            const stop = this.$inbound.subscribe(this.registryEvent("enable"), (_event, enabled) => {
+
+                if (this.identity(this.key(enabled)) === this.identity(resolved)) finish(resolve)
+            })
+            const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), timeout)
+
+            if (this.enabled(resolved)) finish(resolve)
+        })
     }
 
     public docs(key: unknown) {
@@ -132,6 +174,20 @@ export default class EndpointServices extends TheLink {
         }, prefix)
     }
 
+    public followRegistry(event: string | null, subscriber: Subscriber) {
+
+        const prefix = "registry/"
+
+        if (event !== null) {
+
+            if (event !== "enable" && event !== "disable") throw new Error("A service registry event must be enable or disable")
+
+            return this.$inbound.subscribe(this.registryEvent(event), (_word, key) => subscriber(event, key))
+        }
+
+        return this.$inbound.forwardTo((word, _event, key) => subscriber(decodeURIComponent(word), key), prefix)
+    }
+
     private key(value: unknown) {
 
         if (!isServiceKey(value)) throw new Error("A complete service key is required")
@@ -177,6 +233,11 @@ export default class EndpointServices extends TheLink {
     private event(key: ServiceKey, scope: Scope, event: string) {
 
         return this.prefix(key, scope) + encodeURIComponent(event)
+    }
+
+    private registryEvent(event: string) {
+
+        return `registry/${encodeURIComponent(event)}`
     }
 }
 

@@ -71,7 +71,7 @@ export default class Process {
     // lifetime originate here. Stopping the client destroys this value whole.
     public client: ClientState | null = null
 
-    // The process whose call to `program.createProcess()` created this
+    // The process whose call to `program.process.create()` created this
     // one. Lineage only: keeping this handle neither owns nor prolongs
     // either life.
     public readonly parent: Process | null

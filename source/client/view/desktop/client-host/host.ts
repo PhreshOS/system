@@ -85,7 +85,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // When it started is a fact about this process, which a pane may
         // already ask everything else about — it was missing on this side
         // only because it was added on the other.
-        if (word === "process") return [record(process())]
+        if (word === "current-process") return [record(process())]
 
         if (word === "theme") return [authManager.linkManager.theme.value]
 
@@ -152,11 +152,18 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [await processManager.endpointService(pane, address(target), args[1])]
         }
 
-        if (word === "service-disabled") {
+        if (word === "service-enabled") {
 
             if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
 
-            return [await processManager.serviceDisabled(args[0])]
+            return [await processManager.serviceEnabled(args[0])]
+        }
+
+        if (word === "service-wait-ready") {
+
+            if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
+
+            return [await processManager.waitServiceReady(args[0], args[1] as number | undefined)]
         }
 
         if (word === "service-docs") {
@@ -241,16 +248,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // Every instance of this pane's program, this one among them: a
         // program's two halves must not disagree about how many of it
         // are running. Nothing is named — the program is the frame's.
-        if (word === "processes") {
+        if (word === "program-process-list") {
 
             return [scope.processes().map(record)]
         }
 
         // One process of this program by immutable identity or by its
         // living program-local name. An exact identity always wins.
-        if (word === "program-process") {
+        if (word === "program-process-find") {
 
-            const wanted = String(args[1])
+            const wanted = String(args[0])
 
             const found = scope.findProcess(wanted)
 
@@ -263,16 +270,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // kit's end knows only what the caller could already have
         // guessed, which is how the process a program starts was the one
         // process that did not know when it started.
-        if (word === "create-process") {
+        if (word === "program-process-create") {
 
-            const started = await programManager.createProcess(process().program, args[1] as Launch, process().identity)
+            const started = await programManager.createProcess(process().program, args[0] as Launch, process().identity)
 
             return [record(scope.requireProcess(started))]
         }
 
         // Every instance ended, the asker last. One implementation on the
         // core serves this and a server half both.
-        if (word === "exit-all") return [await processManager.exitAll(process().program, pane)]
+        if (word === "program-process-exit-all") return [await processManager.exitAll(process().program, pane)]
 
         if (word === "observe") {
 
@@ -420,7 +427,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // half has no disk, and where the machine put things is not a
         // program's own word about itself.
 
-        if (word === "program") {
+        if (word === "current-program") {
 
             const program = scope.program()
 

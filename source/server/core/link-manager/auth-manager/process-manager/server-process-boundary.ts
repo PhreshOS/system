@@ -219,6 +219,21 @@ export default class ServerProcessBoundary extends ProcessLink {
         this.serviceSubscriptions.delete(subscription)
     }
 
+    /** Follows lifecycle changes across the authoritative service registry. */
+    public followServiceRegistry(services: EndpointServices, subscription: string, event: string | null) {
+
+        this.unfollowService(subscription)
+
+        const stop = services.followRegistry(event, (word, key) => {
+
+            const values = event === null ? [word, key] : [key]
+
+            return this.deliver("service-registry-event", subscription, ...values)
+        })
+
+        this.serviceSubscriptions.set(subscription, stop)
+    }
+
     /** Remove a question whether it is waiting here or inside the SDK. */
     public forget(question: string) {
 
@@ -337,11 +352,16 @@ export default class ServerProcessBoundary extends ProcessLink {
 
             }
 
-            if (route === "host-events" || route === "host-end" || route === "process-host") {
+            const hostDomain = route === "host-program" || route === "program-host" ? "program"
+                : route === "host-process" || route === "program-process" || route === "process-host" ? "process"
+                    : route === "host-end" ? "window"
+                        : null
+
+            if (hostDomain) {
 
                 this.hostSubscriptions.get(subscription)?.()
 
-                this.hostSubscriptions.set(subscription, this.hostTraffic.observe(event, subject, (_delivery, word, ...values) => {
+                this.hostSubscriptions.set(subscription, this.hostTraffic.observe(hostDomain, event, subject, (_delivery, word, ...values) => {
 
                     this.deliver(route, word, ...values).catch(() => undefined)
                 }))

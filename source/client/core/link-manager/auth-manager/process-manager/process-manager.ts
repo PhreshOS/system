@@ -100,9 +100,14 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Explicit snapshot for one exact service key. */
-    public async serviceDisabled(key: ServiceKey) {
+    public async serviceEnabled(key: ServiceKey) {
 
-        return await this.$outbound.publishFirst("/service/disabled", key) as boolean
+        return await this.$outbound.publishFirst("/service/enabled", key) as boolean
+    }
+
+    public async waitServiceReady(key: ServiceKey, timeout: number | undefined) {
+
+        await this.$outbound.publishFirst("/service/wait-ready", key, timeout)
     }
 
     public async serviceDocs(key: ServiceKey) {
