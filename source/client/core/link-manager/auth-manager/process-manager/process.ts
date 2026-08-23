@@ -90,7 +90,20 @@ export default class Process {
 
     public clientStarted(payload: TransmittedProcess) {
 
-        if (payload.client) this.client = new ClientState(this.processManager, this.identity, payload.client)
+        if (!payload.client) return
+
+        // A Process creation snapshot already contains every endpoint that is
+        // live at birth. Its following lifecycle announcement describes that
+        // same Client; it must update the existing projection rather than
+        // inventing a second local incarnation for the Window Manager.
+        if (this.client) {
+
+            this.client.window.follow(payload.client.window)
+
+            return
+        }
+
+        this.client = new ClientState(this.processManager, this.identity, payload.client)
     }
 
     public clientStopped() {
