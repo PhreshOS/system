@@ -166,13 +166,6 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [await processManager.waitServiceReady(args[0], args[1] as number | undefined)]
         }
 
-        if (word === "service-docs") {
-
-            if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("A Server service key is required")
-
-            return [await processManager.serviceDocs(args[0])]
-        }
-
         if (word === "service-follow") {
 
             const [subscription, key, scope, event] = args
@@ -435,6 +428,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             // kind of fact as its name, and what a window needs to know
             // how large another instance of itself would open.
             return [sdkProgram(program)]
+        }
+
+        if (word === "endpoint-docs") {
+
+            if (args[0] !== "server" && args[0] !== "client") throw new Error("A Program Endpoint is server or client")
+
+            return [await programManager.docs(process().program, args[0])]
         }
 
         // Icon bytes are requested only when this frame asks. The frame cannot

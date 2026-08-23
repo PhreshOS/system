@@ -20,11 +20,9 @@ export default class EndpointServices extends TheLink {
 
         const declaration = endpoint === "server" ? process.program.server : process.program.client
 
-        if (!declaration?.serviceable) throw new Error(`The ${endpoint} endpoint is not serviceable`)
+        if (!declaration?.serviceDocs) throw new Error(`The ${endpoint} endpoint declared no Service documentation`)
 
-        const definition = this.definition(value, endpoint)
-
-        const { name } = definition
+        const name = this.name(value)
 
         if (!this.live(process, endpoint)) throw new Error(`The ${endpoint} endpoint is not running`)
 
@@ -38,14 +36,11 @@ export default class EndpointServices extends TheLink {
 
         if (this.bindings.has(identity)) throw new Error(`The "${name}" ${endpoint} service is already enabled for this Program`)
 
-        this.bindings.set(identity, { key, process, endpoint, docs: definition.docs })
+        this.bindings.set(identity, { key, process, endpoint })
 
         this.owners.set(owner, identity)
 
-        await Promise.all([
-            this.$inbound.publish(this.event(key, "lifecycle", "enable"), "enable", undefined),
-            this.$inbound.publish(this.registryEvent("enable"), "enable", key)
-        ])
+        await this.$inbound.publish(this.event(key, "lifecycle", "enable"), "enable", undefined)
 
         return key
     }
@@ -74,10 +69,7 @@ export default class EndpointServices extends TheLink {
 
         this.bindings.delete(identity)
 
-        await Promise.all([
-            this.$inbound.publish(this.event(binding.key, "lifecycle", "disable"), "disable", undefined),
-            this.$inbound.publish(this.registryEvent("disable"), "disable", binding.key)
-        ])
+        await this.$inbound.publish(this.event(binding.key, "lifecycle", "disable"), "disable", undefined)
 
         return true
     }
@@ -87,11 +79,6 @@ export default class EndpointServices extends TheLink {
         const identity = this.owners.get(this.owner(process, endpoint))
 
         return identity ? this.bindings.get(identity)?.key ?? null : null
-    }
-
-    public list() {
-
-        return Object.freeze([...this.bindings.values()].map(binding => binding.key))
     }
 
     public enabled(key: unknown) {
@@ -120,27 +107,11 @@ export default class EndpointServices extends TheLink {
                 stop()
                 complete()
             }
-            const stop = this.$inbound.subscribe(this.registryEvent("enable"), (_event, enabled) => {
-
-                if (this.identity(this.key(enabled)) === this.identity(resolved)) finish(resolve)
-            })
+            const stop = this.$inbound.subscribe(this.event(resolved, "lifecycle", "enable"), () => finish(resolve))
             const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), timeout)
 
             if (this.enabled(resolved)) finish(resolve)
         })
-    }
-
-    public docs(key: unknown) {
-
-        const resolved = this.key(key)
-
-        if (resolved.endpoint !== "server") throw new Error("Only a Server service can provide API documentation")
-
-        const binding = this.binding(resolved, "server")
-
-        if (!binding) throw new Error("The service is disabled")
-
-        return binding.docs
     }
 
     public binding(key: unknown, endpoint?: Half) {
@@ -178,20 +149,6 @@ export default class EndpointServices extends TheLink {
         }, prefix)
     }
 
-    public followRegistry(event: string | null, subscriber: Subscriber) {
-
-        const prefix = "registry/"
-
-        if (event !== null) {
-
-            if (event !== "enable" && event !== "disable") throw new Error("A service registry event must be enable or disable")
-
-            return this.$inbound.subscribe(this.registryEvent(event), (_word, key) => subscriber(event, key))
-        }
-
-        return this.$inbound.forwardTo((word, _event, key) => subscriber(decodeURIComponent(word), key), prefix)
-    }
-
     private key(value: unknown) {
 
         if (!isServiceKey(value)) throw new Error("A complete service key is required")
@@ -199,19 +156,11 @@ export default class EndpointServices extends TheLink {
         return value
     }
 
-    private definition(value: unknown, endpoint: Half) {
+    private name(value: unknown) {
 
-        if (typeof value !== "object" || value === null) throw new Error("A service definition is required")
+        if (typeof value !== "string" || value.length === 0) throw new Error("A service name must be a non-empty string")
 
-        const candidate = value as { name?: unknown, docs?: unknown }
-
-        if (typeof candidate.name !== "string" || candidate.name.length === 0) throw new Error("A service name must be a non-empty string")
-
-        if (candidate.docs !== undefined && typeof candidate.docs !== "string") throw new Error("Service documentation must be a string")
-
-        if (endpoint === "client" && candidate.docs !== undefined) throw new Error("A Client service cannot provide API documentation")
-
-        return { name: candidate.name, docs: endpoint === "server" ? candidate.docs ?? null : null }
+        return value
     }
 
     private live(process: Process, endpoint: Half) {
@@ -239,10 +188,6 @@ export default class EndpointServices extends TheLink {
         return this.prefix(key, scope) + encodeURIComponent(event)
     }
 
-    private registryEvent(event: string) {
-
-        return `registry/${encodeURIComponent(event)}`
-    }
 }
 
 export type ServiceScope = Scope
@@ -258,8 +203,6 @@ type Binding = Readonly<{
     process: Process
 
     endpoint: Half
-
-    docs: string | null
 }>
 
 type Subscriber = (event: string, payload: unknown) => unknown

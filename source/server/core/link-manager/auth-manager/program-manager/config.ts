@@ -49,9 +49,9 @@ export interface ServerConfig {
     // Whether a Process starts this endpoint by default. True when omitted.
     start?: boolean
 
-    // Whether this endpoint may expose its Channel as a public Service.
-    // False when omitted.
-    serviceable?: boolean
+    // Markdown file documenting the Service this endpoint may expose.
+    // Presence grants the endpoint permission to enable one Service.
+    serviceDocs?: string
 
     // Run once before the program is first started, in that directory.
     installCommand?: string
@@ -73,9 +73,9 @@ export interface ClientConfig {
     // Whether a Process starts this endpoint by default. True when omitted.
     start?: boolean
 
-    // Whether this endpoint may expose its Channel as a public Service.
-    // False when omitted.
-    serviceable?: boolean
+    // Markdown file documenting the Service this endpoint may expose.
+    // Presence grants the endpoint permission to enable one Service.
+    serviceDocs?: string
 
     // What its window is called when it opens. The window owns its title
     // from then on and may change it; this is what it is born with, so

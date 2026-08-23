@@ -219,21 +219,6 @@ export default class ServerProcessBoundary extends ProcessLink {
         this.serviceSubscriptions.delete(subscription)
     }
 
-    /** Follows lifecycle changes across the authoritative service registry. */
-    public followServiceRegistry(services: EndpointServices, subscription: string, event: string | null) {
-
-        this.unfollowService(subscription)
-
-        const stop = services.followRegistry(event, (word, key) => {
-
-            const values = event === null ? [word, key] : [key]
-
-            return this.deliver("service-registry-event", subscription, ...values)
-        })
-
-        this.serviceSubscriptions.set(subscription, stop)
-    }
-
     /** Remove a question whether it is waiting here or inside the SDK. */
     public forget(question: string) {
 

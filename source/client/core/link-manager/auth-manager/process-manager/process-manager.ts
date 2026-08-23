@@ -110,11 +110,6 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publishFirst("/service/wait-ready", key, timeout)
     }
 
-    public async serviceDocs(key: ServiceKey) {
-
-        return await this.$outbound.publishFirst("/service/docs", key) as string | null
-    }
-
     /** Registers one exact service interest for this frame lease. */
     public async followService(pane: string, owner: string, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
 

@@ -217,7 +217,7 @@ export default class ProgramManager extends TheLink {
         // is not holding on disk.
         if (typeof source.storage !== "string") throw new Error("A created program names its storage")
 
-        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["server", source.server?.location]] as const) {
+        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["server", source.server?.location], ["server serviceDocs", source.server?.serviceDocs], ["client serviceDocs", source.client?.serviceDocs]] as const) {
 
             if (place === undefined) continue
 
@@ -384,6 +384,15 @@ export default class ProgramManager extends TheLink {
         if (!isIconSize(size)) throw new Error("A Program icon size is small, medium, or large")
 
         return [...await this.icons.render(this.reachOrRefuse(identity), size)]
+    }
+
+    /** Reads a declared Endpoint's Service documentation before it is started. */
+    @Connect("/docs")
+    public async docs(identity: string, endpoint: unknown) {
+
+        if (endpoint !== "server" && endpoint !== "client") throw new Error("A Program Endpoint is server or client")
+
+        return this.reachOrRefuse(identity).serviceDocs(endpoint)
     }
 
     /** Read or change the system-managed startup launch for one Program. */

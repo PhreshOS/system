@@ -97,8 +97,7 @@ export default class Program {
 
         return this.config.server ? {
             ...this.config.server,
-            start: this.config.server.start ?? true,
-            serviceable: this.config.server.serviceable ?? false
+            start: this.config.server.start ?? true
         } : null
     }
 
@@ -106,8 +105,7 @@ export default class Program {
 
         return this.config.client ? {
             ...this.config.client,
-            start: this.config.client.start ?? true,
-            serviceable: this.config.client.serviceable ?? false
+            start: this.config.client.start ?? true
         } : null
     }
 
@@ -176,6 +174,16 @@ export default class Program {
         return this.config.icon ? this.place(this.config.icon) : null
     }
 
+    /** Reads the documentation that declares one Endpoint's Service capability. */
+    public serviceDocs(endpoint: "server" | "client") {
+
+        const declared = this.config[endpoint]?.serviceDocs
+
+        if (!declared) return null
+
+        return readFileSync(this.place(declared), "utf-8")
+    }
+
     /** SDK Program record; internal references are consumed by the SDK boundary. */
     public record() {
 
@@ -201,14 +209,14 @@ export default class Program {
 
                 start: server.start,
 
-                serviceable: server.serviceable
+                hasService: server.serviceDocs !== undefined
             },
 
             client: client && {
 
                 start: client.start,
 
-                serviceable: client.serviceable,
+                hasService: client.serviceDocs !== undefined,
 
                 title: client.title ?? null,
 
@@ -249,6 +257,13 @@ export default class Program {
         if (client && !existsSync(resolve(client, "index.html"))) throw new Error(`The client directory has no index.html: ${client}`)
 
         if (this.iconPath) await validateIcon(this.iconPath)
+
+        for (const endpoint of ["server", "client"] as const) {
+
+            const declared = this.config[endpoint]?.serviceDocs
+
+            if (declared && !file(this.place(declared))) throw new Error(`The ${endpoint} service documentation is not there: ${this.place(declared)}`)
+        }
 
     }
 
@@ -304,7 +319,7 @@ function coherent(config: ProgramConfig) {
 
         if (declared.start !== undefined && typeof declared.start !== "boolean") throw new Error(`A declared ${half} endpoint's start default must be true or false`)
 
-        if (declared.serviceable !== undefined && typeof declared.serviceable !== "boolean") throw new Error(`A declared ${half} endpoint's serviceable capability must be true or false`)
+        if (declared.serviceDocs !== undefined && (typeof declared.serviceDocs !== "string" || declared.serviceDocs.trim().length === 0)) throw new Error(`A declared ${half} endpoint's serviceDocs must be a non-empty path`)
     }
 
     if (config.client && /^https?:\/\//i.test(config.client.location)) {
@@ -343,14 +358,18 @@ function coherent(config: ProgramConfig) {
     return config
 }
 
-type Resolved<Half extends { start?: boolean, serviceable?: boolean }> = Omit<Half, "start" | "serviceable"> & {
+type Resolved<Half extends { start?: boolean }> = Omit<Half, "start"> & {
     start: boolean
-    serviceable: boolean
 }
 
 function directory(path: string) {
 
     return existsSync(path) && statSync(path).isDirectory()
+}
+
+function file(path: string) {
+
+    return existsSync(path) && statSync(path).isFile()
 }
 
 

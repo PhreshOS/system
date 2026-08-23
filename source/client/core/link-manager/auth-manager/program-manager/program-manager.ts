@@ -93,6 +93,12 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/icon", identity, size) as number[]
     }
 
+    /** Reads one declared Endpoint's Service documentation from authoritative Core. */
+    public async docs(identity: string, endpoint: "server" | "client") {
+
+        return await this.$outbound.publishFirst("/docs", identity, endpoint) as string | null
+    }
+
     @Subscribe("/install")
     @Publish("/programs", "inbound")
     protected async installed(payload: HostedEntry | null) {

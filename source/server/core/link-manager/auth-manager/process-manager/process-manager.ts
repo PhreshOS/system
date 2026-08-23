@@ -1054,12 +1054,6 @@ export default class ProcessManager extends TheLink {
         await this.services.waitReady(key, timeout)
     }
 
-    @Connect("/service/docs")
-    protected async serviceDocs(key: unknown) {
-
-        return this.services.docs(key)
-    }
-
     @Subscribe("/service/send")
     protected async sendClientService(source: string, key: unknown, event: unknown, payload: unknown) {
 
@@ -1288,6 +1282,13 @@ export default class ProcessManager extends TheLink {
         }
 
         if (word === "current-program") return [programManager.find(process.program.identity)]
+
+        if (word === "endpoint-docs") {
+
+            const program = this.heldProgram(rest[0], process.program)
+
+            return [await programManager.docs(program.identity, rest[1])]
+        }
 
         if (word === "current-process") return [processReference(process)]
 
@@ -1550,13 +1551,9 @@ export default class ProcessManager extends TheLink {
             return [this.services.service(endpoint, rest[1])]
         }
 
-        if (word === "host-service-list") return [this.services.list()]
-
         if (word === "service-enabled") return [this.services.enabled(rest[0])]
 
         if (word === "service-wait-ready") return [await this.services.waitReady(rest[0], rest[1])]
-
-        if (word === "service-docs") return [this.services.docs(rest[0])]
 
         if (word === "service-follow") {
 
@@ -1574,24 +1571,6 @@ export default class ProcessManager extends TheLink {
         }
 
         if (word === "service-unfollow") {
-
-            process.server?.unfollowService(String(rest[0]))
-
-            return []
-        }
-
-        if (word === "service-registry-follow") {
-
-            const [subscription, event] = rest
-
-            if (typeof subscription !== "string" || event !== null && typeof event !== "string") return []
-
-            process.server?.followServiceRegistry(this.services, subscription, event)
-
-            return []
-        }
-
-        if (word === "service-registry-unfollow") {
 
             process.server?.unfollowService(String(rest[0]))
 
