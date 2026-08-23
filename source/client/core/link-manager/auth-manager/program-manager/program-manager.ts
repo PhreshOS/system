@@ -52,6 +52,12 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/create-process", identity, launch, parent) as string
     }
 
+    /** Atomically resolves one named Process at the authoritative host. */
+    public async findOrCreateProcess(identity: string, launch: Launch & { name: string }, parent?: string) {
+
+        return await this.$outbound.publishFirst("/find-or-create-process", identity, launch, parent) as string
+    }
+
     public async install(identity: string, asker: string) {
 
         return await this.$outbound.publishFirst("/install-program", identity, asker)

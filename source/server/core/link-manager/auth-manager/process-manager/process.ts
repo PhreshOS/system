@@ -7,7 +7,7 @@ import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
-import { type PermissionName } from "@phreshos/core"
+import { type Layer, type PermissionName } from "@phreshos/core"
 import Tunnel from "@libs/the-link/tunnel"
 
 /**
@@ -46,6 +46,9 @@ export default class Process {
     // wherever it goes — a process is exactly one launch, so this is
     // the process's own state rather than a message it was sent.
     public readonly options: Options
+
+    /** Immutable normalized intent used only to converge named creation. */
+    public readonly launch: ProcessLaunch
 
     /** Permission grants that live exactly as long as this Process. */
     public readonly permissions = new Set<PermissionName>()
@@ -92,7 +95,7 @@ export default class Process {
 
     private exitProcess: (() => Promise<unknown>) | null = null
 
-    public constructor(identity: string, name: string | null, program: Program, options: Options, parent: Process | null, hostTraffic: HostTraffic) {
+    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic) {
 
         this.identity = identity
 
@@ -101,6 +104,8 @@ export default class Process {
         this.program = program
 
         this.options = options
+
+        this.launch = launch
 
         this.parent = parent
 
@@ -322,3 +327,26 @@ export type Ending = (code: number | null, signal: NodeJS.Signals | null) => voi
 export type { Position, Size }
 
 export type { Stream } from "./server-process-boundary"
+
+/** Stable launch meaning, excluding mutable endpoint and Window state. */
+export interface ProcessLaunch {
+
+    readonly server: boolean
+
+    readonly client: Readonly<{
+
+        title: string
+
+        position: Position | null
+
+        size: Size | null
+
+        layer: Layer
+
+        location: string
+
+        minimize: boolean
+    }> | null
+
+    readonly options: Readonly<Record<string, string>>
+}

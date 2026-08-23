@@ -270,6 +270,15 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [record(scope.requireProcess(started))]
         }
 
+        if (word === "program-process-find-or-create") {
+
+            const launch = args[0] as Launch & { name: string }
+
+            const found = await programManager.findOrCreateProcess(process().program, launch, process().identity)
+
+            return [record(scope.requireProcess(found))]
+        }
+
         // Every instance ended, the asker last. One implementation on the
         // core serves this and a server half both.
         if (word === "program-process-exit-all") return [await processManager.exitAll(process().program, pane)]

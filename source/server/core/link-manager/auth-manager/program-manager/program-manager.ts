@@ -10,10 +10,11 @@ import FileArea from "@libs/file-area"
 import openStore from "@server/core/open-store"
 import AuthManager from "../auth-manager"
 import { dirname, isAbsolute, join } from "node:path"
+import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers, type Layer, type Position, type ProgramConfig, type Size } from "./config"
 import { type PermissionName, type WallpaperLaunch } from "@phreshos/core"
-import { type default as Process, type Stream } from "../process-manager/process"
+import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape, type WallpaperShape } from "../process-manager/process-manager"
 import Program from "./program"
 import Entry, { type HostedEntry } from "./entry"
@@ -43,6 +44,10 @@ export default class ProgramManager extends TheLink {
     // the trusted link. A new occupant can therefore never be erased by
     // the previous occupant's late echo.
     private readonly changing = new Map<string, Promise<void>>()
+
+    // Named convergence and ordinary creation share one Program-local queue.
+    // This keeps find-or-create atomic even when another caller uses create.
+    private readonly creating = new Map<string, Promise<void>>()
 
     // What each program remembers about itself, opened on first use and
     // kept by the identity of the program that asked.
@@ -294,6 +299,30 @@ export default class ProgramManager extends TheLink {
             if (this.changing.get(identity) === changing) this.changing.delete(identity)
 
             finish()
+        }
+    }
+
+    private async serializeCreation<T>(identity: string, operation: () => Promise<T>) {
+
+        const previous = this.creating.get(identity) ?? Promise.resolve()
+
+        let finish: () => void = () => undefined
+
+        const pending = new Promise<void>(settle => { finish = settle })
+
+        const creating = previous.catch(() => undefined).then(() => pending)
+
+        this.creating.set(identity, creating)
+
+        await previous.catch(() => undefined)
+
+        try { return await operation() }
+
+        finally {
+
+            finish()
+
+            if (this.creating.get(identity) === creating) this.creating.delete(identity)
         }
     }
 
@@ -850,18 +879,51 @@ export default class ProgramManager extends TheLink {
     @Connect("/create-process")
     public async createProcess(identity: string, launch: Launch = {}, parent: Process | string | null = null) {
 
-        // Every runtime program, installed or not, is reached through the
-        // same registry. A created process therefore starts from the exact
-        // Program its caller addressed, never from an installed-only view.
-        const program = this.reach(identity)
+        return await this.serializeCreation(identity, async () => {
 
-        if (!program) throw new Error("The system does not know this program")
+            // Every runtime program, installed or not, is reached through the
+            // same registry. A created process therefore starts from the exact
+            // Program its caller addressed, never from an installed-only view.
+            const program = this.reach(identity)
 
-        const creator = typeof parent === "string" ? this.authManager.processManager.processes.get(parent) : parent
+            if (!program) throw new Error("The system does not know this program")
 
-        if (typeof parent === "string" && !creator) throw new Error("The system does not know the parent process")
+            const creator = typeof parent === "string" ? this.authManager.processManager.processes.get(parent) : parent
 
-        return await this.start(program, launch, undefined, creator ?? null)
+            if (typeof parent === "string" && !creator) throw new Error("The system does not know the parent process")
+
+            return await this.start(program, launch, undefined, creator ?? null)
+        })
+    }
+
+    @Connect("/find-or-create-process")
+    public async findOrCreateProcess(identity: string, launch: Launch & { name: string }, parent: Process | string | null = null) {
+
+        return await this.serializeCreation(identity, async () => {
+
+            const program = this.reach(identity)
+
+            if (!program) throw new Error("The system does not know this program")
+
+            const resolved = this.resolveLaunch(program, launch)
+
+            if (typeof launch.name !== "string" || !launch.name) throw new Error("findOrCreate requires a non-empty process name")
+
+            const existing = [...this.authManager.processManager.processes.values()].find(process => process.program === program && process.name === launch.name)
+
+            if (existing) {
+
+                if (!isDeepStrictEqual(existing.launch, resolved.intent)) throw new Error(`The process "${launch.name}" already exists with a different launch`)
+
+                return existing.identity
+            }
+
+            const creator = typeof parent === "string" ? this.authManager.processManager.processes.get(parent) : parent
+
+            if (typeof parent === "string" && !creator) throw new Error("The system does not know the parent process")
+
+            return await this.start(program, launch, undefined, creator ?? null, false, false, resolved)
+        })
     }
 
     // An attached launch is the local project's authoritative runtime use of
@@ -961,9 +1023,11 @@ export default class ProgramManager extends TheLink {
 
         if (launch.name !== undefined && (typeof launch.name !== "string" || !launch.name)) throw new Error("A process name must be non-empty text")
 
-        const options = launch.options ?? {}
+        const suppliedOptions = launch.options ?? {}
 
-        if (typeof options !== "object" || options === null || Array.isArray(options) || Object.values(options).some(value => typeof value !== "string")) throw new Error("A launch's options must be text values")
+        if (typeof suppliedOptions !== "object" || suppliedOptions === null || Array.isArray(suppliedOptions) || Object.values(suppliedOptions).some(value => typeof value !== "string")) throw new Error("A launch's options must be text values")
+
+        const options = Object.fromEntries(Object.entries(suppliedOptions).sort(([left], [right]) => left.localeCompare(right)))
 
         if (launch.server !== undefined && typeof launch.server !== "boolean") throw new Error("A launch's server must be true or false")
 
@@ -988,10 +1052,26 @@ export default class ProgramManager extends TheLink {
         // is persisted; system defaults are derived again when it actually runs.
         const shape = client ? this.clientShape(program, asked) : null
 
-        return { options, server, client, shape }
+        const intent: ProcessLaunch = {
+
+            server: server !== null,
+
+            client: shape ? {
+
+                ...shape,
+
+                position: asked.position ?? program.client?.position ?? null,
+
+                size: asked.size ?? program.client?.size ?? null
+            } : null,
+
+            options
+        }
+
+        return { options, server, client, shape, intent }
     }
 
-    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, wallpaper = false) {
+    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, wallpaper = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>) {
 
         if (!transitionOwnsIdentity && this.changing.has(program.identity)) throw new Error("This program is changing and cannot create a process")
 
@@ -1000,7 +1080,7 @@ export default class ProgramManager extends TheLink {
         // allocated, so a failed launch never briefly exists.
         await program.validate()
 
-        const resolved = this.resolveLaunch(program, launch)
+        const resolved = prepared ?? this.resolveLaunch(program, launch)
 
         const { options, server, client } = resolved
 
@@ -1041,7 +1121,7 @@ export default class ProgramManager extends TheLink {
         // Lifecycle consumers are attached before either initial endpoint is
         // activated, so even a server command that exits immediately has a
         // complete output and exit record.
-        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, child, client !== null, shape, parent, record => {
+        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, child, client !== null, shape, parent, record => {
 
             record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
 

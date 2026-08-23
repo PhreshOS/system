@@ -9,7 +9,7 @@ import TheLink from "@libs/the-link/the-link"
 import { Transmitted } from "@libs/messagepack"
 import AuthManager from "../auth-manager"
 import { signalProcessTree } from "@libs/process-tree"
-import Process, { type HostedProcess } from "./process"
+import Process, { type HostedProcess, type ProcessLaunch } from "./process"
 import ServerProcessBoundary from "./server-process-boundary"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import ClientProcessForwarder from "./client-process-forwarder"
@@ -664,7 +664,7 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
 
-    public async register(identity: string, name: string | null, program: Program, options: Options, child: ChildProcess | null, client: boolean, shape: Shape | null, parent: Process | null, configure?: (process: Process) => void) {
+    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, child: ChildProcess | null, client: boolean, shape: Shape | null, parent: Process | null, configure?: (process: Process) => void) {
 
         if (this.processes.has(identity)) {
 
@@ -688,7 +688,7 @@ export default class ProcessManager extends TheLink {
 
         const window = shape ? this.window(program, shape) : null
 
-        const process = new Process(identity, name, program, options, parent, this.hostTraffic)
+        const process = new Process(identity, name, program, options, launch, parent, this.hostTraffic)
 
         this.processes.set(identity, process)
 
@@ -1450,6 +1450,13 @@ export default class ProcessManager extends TheLink {
             // process held by its launcher had no startedAt while every
             // other road's did.
             return [processReference(this.find(await programManager.createProcess(program.identity, rest[1] as Launch, process)))]
+        }
+
+        if (word === "program-process-find-or-create") {
+
+            const program = this.heldProgram(rest[0])
+
+            return [processReference(this.find(await programManager.findOrCreateProcess(program.identity, rest[1] as Launch & { name: string }, process)))]
         }
 
         // Named, only that program's instances; unnamed, every one.
