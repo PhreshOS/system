@@ -2,33 +2,32 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayout
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { Surface, useTheme } from "@phreshos/react-ui"
-import { absoluteWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "./window-geometry"
-import { numericScale, type Position, type Size } from "@phreshos/core"
+import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "./window-geometry"
+import { numericScale, type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
 import { type LocalAnimation, type LocalSurfaceState } from "../client-host/local-window"
 import { type LocalGeometryReader } from "./local-windows"
-import gsap from "gsap"
+import gsap, { motionDuration, motionEase } from "../../appearance/motion"
+import SnapPreview, { type SnapTarget } from "./snap-preview"
 
 /**
  * A window: a pure function of the record it is given. Every render
- * declares the whole geometry from props — a float as left/top pixels,
- * a tile as its relative form — and CSS transitions animate whatever
- * changes between renders. There is no imperative geometry writer, no
- * birth snapshot, no mode to reconcile: a refreshed page renders the
- * truth it was born with because rendering the truth is all this
- * component does.
+ * declares the whole target geometry from props — a float as left/top
+ * pixels, a tile as its relative form. GSAP interpolates only the local
+ * representation between targets; the record remains the truth and a
+ * refreshed page renders that truth directly.
  *
  * A gesture is state, not a side channel: while one runs, the render
  * derives from the gesture's rectangle instead of the record — movement
- * rides a transform above the grabbed origin, transitions pause — and
+ * rides a transform above the grabbed origin, interpolation pauses — and
  * release reports the outcome (onMove or onResize with resting pixels —
  * a resize carrying an origin only when the edge dragged moved one —
  * onSnap with the shares a zone names) and drops the gesture in the same
  * batch the record updates, so nothing jumps.
  *
- * GSAP keeps exactly one duty: presence — the scale and drift of entering,
- * minimising and closing on the painted surface, never the frame.
+ * GSAP owns every structural interpolation: frame geometry, local Surface
+ * replacement, and the scale and drift of presence. It never owns state.
  *
  * The chrome uses the shared system material and content sits on an inset
  * sheet. The close control requests — the window leaves only when the truth
@@ -45,10 +44,6 @@ const edges: { edge: WindowEdge, className: string }[] = [
     { edge: "sw", className: "bottom-0 left-0 size-4 cursor-nesw-resize" },
     { edge: "se", className: "bottom-0 right-0 size-4 cursor-nwse-resize" }
 ]
-
-const settle = ["left", "top", "width", "height", "transform"].map(property => `${property} 0.3s cubic-bezier(0.65, 0, 0.35, 1)`).join(", ")
-
-const morphing = ["left", "top", "width", "height"].map(property => `${property} 0.22s cubic-bezier(0.33, 1, 0.68, 1)`).join(", ")
 
 export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
@@ -67,6 +62,14 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     const innerRadius = radius.medium
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
+
+    const [renderedGeometry, setRenderedGeometry] = useState<WindowGeometry>({ position, size })
+
+    const [renderedActive, setRenderedActive] = useState(active)
+
+    const morphStart = useRef<WindowRegion | null>(null)
+
+    const morphRevision = useRef(0)
 
     useLayoutEffect(function () {
 
@@ -98,15 +101,140 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     useLayoutEffect(function () {
 
-        if (!geometryAnimation) return
+        const element = frame.current
 
-        const duration = reducedMotion ? 0 : geometryAnimation.transaction.duration ?? 300
+        const parent = element?.offsetParent
 
-        const completed = globalThis.setTimeout(() => onLocalAnimationComplete?.("geometry", geometryAnimation.revision), duration)
+        if (!element || !parent || gesture) return
 
-        return () => globalThis.clearTimeout(completed)
+        if (sameGeometry(renderedGeometry, { position, size })) {
 
-    }, [geometryAnimation?.revision, reducedMotion])
+            if (geometryAnimation) onLocalAnimationComplete?.("geometry", geometryAnimation.revision)
+
+            return
+        }
+
+        const parentBounds = parent.getBoundingClientRect()
+        const shown = element.getBoundingClientRect()
+        const current = {
+            x: shown.left - parentBounds.left,
+            y: shown.top - parentBounds.top,
+            width: shown.width,
+            height: shown.height
+        }
+        const target = resolveWindowGeometry(position, size, parentBounds)
+        const transaction = geometryAnimation?.transaction
+        const duration = transaction?.duration ?? 300
+
+        gsap.killTweensOf(element)
+
+        const complete = function () {
+
+            setRenderedGeometry({ position, size })
+
+            if (geometryAnimation) onLocalAnimationComplete?.("geometry", geometryAnimation.revision)
+        }
+
+        if (bare || reducedMotion || duration === 0 || sameRegion(current, target)) {
+
+            gsap.set(element, { left: target.x, top: target.y, width: target.width, height: target.height, transform: "none" })
+            complete()
+
+            return
+        }
+
+        const animation = gsap.fromTo(element, {
+            left: current.x,
+            top: current.y,
+            width: current.width,
+            height: current.height,
+            transform: "none"
+        }, {
+            left: target.x,
+            top: target.y,
+            width: target.width,
+            height: target.height,
+            transform: "none",
+            duration: motionDuration(duration),
+            ease: transaction ? motionEase(transaction.easing) : motionEase([0.65, 0, 0.35, 1]),
+            overwrite: "auto",
+            onComplete: complete
+        })
+
+        return function () {
+
+            const held = element.getBoundingClientRect()
+            const bounds = parent.getBoundingClientRect()
+
+            animation.kill()
+
+            gsap.set(element, {
+                left: held.left - bounds.left,
+                top: held.top - bounds.top,
+                width: held.width,
+                height: held.height,
+                transform: "none"
+            })
+        }
+
+    }, [position.x, position.y, size.width, size.height, geometryAnimation?.revision, reducedMotion, bare, gesture !== null])
+
+    useLayoutEffect(function () {
+
+        const element = frame.current
+        const from = morphStart.current
+
+        if (!element || !from || gesture?.morph == null || reducedMotion) return
+
+        const animation = gsap.fromTo(element, {
+            left: from.x,
+            top: from.y,
+            width: from.width,
+            height: from.height
+        }, {
+            left: gesture.origin.x,
+            top: gesture.origin.y,
+            width: gesture.current.width,
+            height: gesture.current.height,
+            duration: 0.22,
+            ease: motionEase([0.33, 1, 0.68, 1]),
+            overwrite: "auto"
+        })
+
+        return () => { animation.kill() }
+
+    }, [gesture?.morph, reducedMotion])
+
+    useLayoutEffect(function () {
+
+        const element = surfaceElement.current
+
+        if (!element || renderedActive === active) return
+
+        const property = active ? "--shadow-window-active" : "--shadow-window-inactive"
+        const target = getComputedStyle(element).getPropertyValue(property).trim() || "none"
+
+        gsap.killTweensOf(element, "boxShadow")
+
+        if (reducedMotion) {
+
+            gsap.set(element, { boxShadow: target })
+            setRenderedActive(active)
+
+            return
+        }
+
+        const animation = gsap.to(element, {
+            boxShadow: target,
+            duration: 0.2,
+            ease: motionEase("ease-out"),
+            overwrite: "auto",
+            onComplete: () => setRenderedActive(active)
+        })
+
+        return () => { animation.kill() }
+
+    }, [active, reducedMotion, renderedActive])
 
     const closureCompleted = useRef(false)
 
@@ -127,23 +255,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     // state any more: filling the surface is a size like any other, and
     // this is the interface recognising a size it offered to set.
     const whole = wholeWindowGeometry(position, size)
-
-    // The render that lands a plain commit suppresses transitions for one
-    // frame: the record now equals what the gesture showed, and the
-    // decomposition swap (origin+transform to left alone) must not be
-    // interpolated — two properties animating opposite ways cancel only
-    // in exact math, and the browser's residue reads as drift.
-    const [landed, setLanded] = useState(false)
-
-    useLayoutEffect(function () {
-
-        if (!landed) return
-
-        const settle = requestAnimationFrame(() => setLanded(false))
-
-        return () => cancelAnimationFrame(settle)
-
-    }, [landed])
 
     // Presence: a newly created window enters, while a window inherited
     // when its desktop mounts is already here and renders at rest. A full
@@ -309,6 +420,17 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         let current: WindowRegion = { ...origin }
 
+        gsap.killTweensOf(frame.current)
+
+        gsap.set(frame.current, { left: origin.x, top: origin.y, width: origin.width, height: origin.height, transform: "none" })
+
+        setRenderedGeometry({
+            position: { x: origin.x, y: origin.y },
+            size: { width: origin.width, height: origin.height }
+        })
+
+        if (geometryAnimation) onLocalAnimationComplete?.("geometry", geometryAnimation.revision)
+
         // Pulling a shared window out of its placement belongs to the
         // header alone. An edge is not a hand asking to float — it is a
         // hand asking for a different size, and a window keeps whatever
@@ -317,7 +439,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         let moved = false
 
-        let morph = false
+        let morph: number | null = null
 
         let zone: Snap | null = null
 
@@ -408,13 +530,15 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 // stays live: a brief morph phase transitions the body,
                 // never the transform — and it must survive the moves
                 // that arrive while it plays.
-                morph = !reducedMotion
+                morphStart.current = { ...current }
 
-                if (morph) setTimeout(() => {
+                morph = reducedMotion ? null : ++morphRevision.current
 
-                    morph = false
+                if (morph !== null) setTimeout(() => {
 
-                    setGesture(active => active && { ...active, morph: false })
+                    morph = null
+
+                    setGesture(active => active && { ...active, morph: null })
 
                 }, 220)
 
@@ -496,8 +620,17 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 // share with the pixels it happened to resolve to.
                 else onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: current.x, y: current.y })
 
-                if (!reducedMotion) setLanded(true)
             }
+
+            if (moved && motion.type === "pointerup") {
+
+                setRenderedGeometry({
+                    position: { x: current.x, y: current.y },
+                    size: { width: current.width, height: current.height }
+                })
+            }
+
+            else if (motion.type === "pointercancel") setRenderedGeometry({ position, size })
 
             setGesture(null)
         }
@@ -508,42 +641,33 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         handle.addEventListener("pointercancel", release)
 
-        setGesture({ origin, current, zone, shown, morph: false })
+        setGesture({ origin, current, zone, shown, morph: null })
     }
 
     // ------------------------------------------------------------ render
 
     // The geometry, declared whole every render: the gesture's rectangle
     // while one runs — movement as a transform above the grabbed origin,
-    // transitions paused — otherwise the record's own form.
+    // otherwise the last settled representation. GSAP moves that stable
+    // representation to each new authoritative target.
     const geometry = gesture
 
-        ? { left: gesture.origin.x, top: gesture.origin.y, width: gesture.current.width, height: gesture.current.height, transform: `translate(${gesture.current.x - gesture.origin.x}px, ${gesture.current.y - gesture.origin.y}px)`, transition: gesture.morph && !reducedMotion ? morphing : "none" }
+        ? { left: gesture.origin.x, top: gesture.origin.y, width: gesture.current.width, height: gesture.current.height, transform: `translate(${gesture.current.x - gesture.origin.x}px, ${gesture.current.y - gesture.origin.y}px)` }
 
         : {
 
-            left: resolveWindowValue(position.x),
+            left: resolveWindowValue(renderedGeometry.position.x),
 
-            top: resolveWindowValue(position.y),
+            top: resolveWindowValue(renderedGeometry.position.y),
 
-            width: resolveWindowValue(size.width),
+            width: resolveWindowValue(renderedGeometry.size.width),
 
-            height: resolveWindowValue(size.height),
+            height: resolveWindowValue(renderedGeometry.size.height),
 
-            transform: "none",
-
-            // Bare, geometry does not travel. A window the system
-            // paints nothing on is one whose motion is not the
-            // system's either: asked to be somewhere, it is there,
-            // rather than gliding over half a second nobody asked for.
-            transition: geometryAnimation && !reducedMotion
-
-                ? explicitGeometryTransition(geometryAnimation)
-
-                : bare || landed || reducedMotion ? "none" : settle
+            transform: "none"
         }
 
-    const surface = active
+    const surface = renderedActive
 
         ? "shadow-window-active"
 
@@ -554,17 +678,15 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     return <>
 
         {/* The snap preview and its result resolve the same edge contacts. */}
-        {gesture?.shown && <div
-
-            className="pointer-events-none absolute"
-
-            style={{ left: resolveWindowValue(gesture.shown.position.x), top: resolveWindowValue(gesture.shown.position.y), width: resolveWindowValue(gesture.shown.size.width), height: resolveWindowValue(gesture.shown.size.height), opacity: gesture.zone ? 1 : 0, transition: reducedMotion ? "none" : "opacity 0.15s, left 0.18s, top 0.18s, width 0.18s, height 0.18s", zIndex: style?.zIndex }}
-
-        >
-
-            <div data-snap-preview-frame className="absolute border border-white/50 bg-white/25 shadow-snap-preview backdrop-blur-sm" style={bare ? { inset: 0 } : { ...windowPaintInsets(gesture.shown.position, gesture.shown.size, paintSurfaceSize), borderRadius: outerRadius }} />
-
-        </div>}
+        {gesture?.shown && <SnapPreview
+            shown={gesture.shown}
+            visible={gesture.zone !== null}
+            bare={bare}
+            paintSurfaceSize={paintSurfaceSize}
+            radius={outerRadius}
+            reducedMotion={reducedMotion}
+            zIndex={style?.zIndex}
+        />}
 
         <div
 
@@ -602,7 +724,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={surfaceElement} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius, color: theme.foreground }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${reducedMotion ? "" : "transition-shadow duration-200"} ${surface}`}`}>
+            <div data-window-container ref={surfaceElement} style={bare ? { inset: 0 } : { ...paintedInsets, borderRadius: outerRadius, color: theme.foreground }} className={`absolute isolate grid ${bare ? "grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
 
                 {/* Material is paint, not the interaction container. Keeping
                     it as a sibling behind the window contents prevents plain
@@ -676,12 +798,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
 type WindowEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
 
-interface Snap {
-
-    position: Position
-
-    size: Size
-}
+type Snap = SnapTarget
 
 interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
 
@@ -764,16 +881,21 @@ interface Gesture {
 
     shown: Snap | null
 
-    morph: boolean
+    morph: number | null
 }
 
-function explicitGeometryTransition(animation: LocalAnimation) {
+function sameGeometry(left: WindowGeometry, right: WindowGeometry) {
 
-    const duration = animation.transaction.duration ?? 300
+    return left.position.x === right.position.x
+        && left.position.y === right.position.y
+        && left.size.width === right.size.width
+        && left.size.height === right.size.height
+}
 
-    const easing = animation.transaction.easing
+function sameRegion(left: WindowRegion, right: WindowRegion) {
 
-    const curve = Array.isArray(easing) ? `cubic-bezier(${easing.join(", ")})` : easing ?? "ease-out"
-
-    return ["left", "top", "width", "height"].map(property => `${property} ${duration}ms ${curve}`).join(", ")
+    return Math.abs(left.x - right.x) <= 0.5
+        && Math.abs(left.y - right.y) <= 0.5
+        && Math.abs(left.width - right.width) <= 0.5
+        && Math.abs(left.height - right.height) <= 0.5
 }

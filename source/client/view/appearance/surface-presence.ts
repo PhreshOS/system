@@ -1,4 +1,4 @@
-import gsap from "gsap"
+import gsap from "./motion"
 
 const entered = { scale: 1, y: 0 }
 

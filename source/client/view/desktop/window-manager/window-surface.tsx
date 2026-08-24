@@ -1,12 +1,11 @@
 import { useReducedMotion } from "@libs/react-motion"
-import { isScaleLevel, scale, type Easing, type SurfaceSettings } from "@phreshos/core"
+import { isScaleLevel, scale, type SurfaceSettings } from "@phreshos/core"
 import { Surface, useTheme } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
 import { type LocalSurfaceState } from "../client-host/local-window"
+import gsap, { motionDuration, motionEase } from "../../appearance/motion"
 
 const systemDuration = 240
-
-const systemEasing = "ease-out"
 
 /** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
@@ -48,41 +47,33 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         firstRender.current = false
 
-        setRendered(settings)
-
-        surface.style.opacity = String(target.opacity)
-
-        surface.style.borderRadius = target.borderRadius
-
         const transaction = requestedAnimation?.transaction
 
         const duration = transaction?.duration ?? systemDuration
 
-        if (!transaction || !changed) return
+        gsap.killTweensOf(surface)
 
-        if (reducedMotion || duration === 0) {
+        if (!transaction || !changed || reducedMotion || duration === 0) {
 
-            onComplete(revision!)
+            gsap.set(surface, target)
+            setRendered(settings)
+
+            if (transaction && changed) onComplete(revision!)
 
             return
         }
 
-        const animation = surface.animate([from, target], {
+        const animation = gsap.fromTo(surface, from, {
+            ...target,
+            duration: motionDuration(duration),
+            ease: motionEase(transaction.easing),
+            overwrite: "auto",
+            onComplete: function () {
 
-            duration,
-
-            easing: easing(transaction.easing),
-
-            fill: "both"
+                setRendered(settings)
+                onComplete(revision!)
+            }
         })
-
-        animation.finished.then(function () {
-
-            animation.cancel()
-
-            onComplete(revision!)
-
-        }, () => undefined)
 
         return function () {
 
@@ -92,7 +83,7 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
             surface.style.borderRadius = shown.borderRadius
 
-            animation.cancel()
+            animation.kill()
         }
 
     }, [reducedMotion, requestedAnimation?.revision, settings, themeRadius])
@@ -124,13 +115,6 @@ function values(settings: SurfaceSettings, themeRadius: number) {
 
         borderRadius: radius === "full" ? "50%" : `${isScaleLevel(radius) ? scale(themeRadius, radius) : radius ?? 0}px`
     }
-}
-
-function easing(value: Easing | undefined) {
-
-    if (typeof value === "string") return value
-
-    return value ? `cubic-bezier(${value.join(", ")})` : systemEasing
 }
 
 interface WindowSurfaceProps {

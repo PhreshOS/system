@@ -1,7 +1,47 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode } from "react"
+import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
+import gsap, { motionEase } from "../../appearance/motion"
 
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
+
+    const iconElement = useRef<HTMLImageElement>(null)
+    const titleElement = useRef<HTMLSpanElement>(null)
+    const [renderedActive, setRenderedActive] = useState(active)
+
+    useLayoutEffect(function () {
+
+        const icon = iconElement.current
+        const title = titleElement.current
+
+        if (!icon || !title || renderedActive === active) return
+
+        const target = {
+            opacity: active ? 1 : 0.6,
+            color: active ? "#1e293b" : "#64748b"
+        }
+
+        gsap.killTweensOf([icon, title])
+
+        if (reducedMotion) {
+
+            gsap.set(icon, { opacity: target.opacity })
+            gsap.set(title, { color: target.color })
+            setRenderedActive(active)
+
+            return
+        }
+
+        const timeline = gsap.timeline({
+            defaults: { duration: 0.2, ease: motionEase("ease-out"), overwrite: "auto" },
+            onComplete: () => setRenderedActive(active)
+        })
+
+        timeline.to(icon, { opacity: target.opacity }, 0)
+        timeline.to(title, { color: target.color }, 0)
+
+        return () => { timeline.kill() }
+
+    }, [active, reducedMotion, renderedActive])
 
     return <header
 
@@ -17,19 +57,27 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
             <img
 
+                ref={iconElement}
+
                 src={icon}
 
                 alt=""
 
                 draggable={false}
 
-                className={`size-4 rounded-sm object-contain ${reducedMotion ? "" : "transition-opacity duration-200"} ${active ? "opacity-100" : "opacity-60"}`}
+                className="size-4 rounded-sm object-contain"
+
+                style={{ opacity: renderedActive ? 1 : 0.6 }}
 
             />
 
             {/* Focus is said on the chrome and nowhere else. Content stays
                 equally legible when another window owns the keyboard. */}
-            <span className={`truncate text-window-title font-medium text-shadow-chrome ${reducedMotion ? "" : "transition-colors duration-200"} ${active ? "text-slate-800" : "text-slate-500"}`}>{title}</span>
+            <span
+                ref={titleElement}
+                className="truncate text-window-title font-medium text-shadow-chrome"
+                style={{ color: renderedActive ? "#1e293b" : "#64748b" }}
+            >{title}</span>
 
         </div>
 
@@ -67,21 +115,59 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 // assistive technology still use the button's native click activation.
 function Control({ label, danger = false, focusOnPointerDown = true, reducedMotion, children, onClick, ...props }: ControlProps) {
 
-    const reaction = danger
+    const element = useRef<HTMLButtonElement>(null)
+    const hovering = useRef(false)
 
-        ? "hover:border-rose-300/70 hover:bg-rose-500 hover:text-white active:bg-rose-600"
+    const base = { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 }
 
-        : "hover:border-white/70 hover:bg-white/65 hover:text-slate-900 active:bg-white/80"
+    const hover = danger
+
+        ? { borderColor: "rgba(253, 164, 175, 0.7)", backgroundColor: "#f43f5e", color: "#ffffff", scale: 1 }
+
+        : { borderColor: "rgba(255, 255, 255, 0.7)", backgroundColor: "rgba(255, 255, 255, 0.65)", color: "#0f172a", scale: 1 }
+
+    const pressed = { ...hover, backgroundColor: danger ? "#e11d48" : "rgba(255, 255, 255, 0.8)", scale: 0.95 }
+
+    function react(values: typeof base) {
+
+        const button = element.current
+
+        if (!button) return
+
+        gsap.killTweensOf(button)
+
+        if (reducedMotion) gsap.set(button, values)
+
+        else gsap.to(button, { ...values, duration: 0.1, ease: motionEase("ease-out"), overwrite: "auto" })
+    }
 
     return <button
 
+        {...props}
+
+        ref={element}
+
         aria-label={label}
+
+        onPointerEnter={() => {
+
+            hovering.current = true
+            react(hover)
+        }}
+
+        onPointerLeave={() => {
+
+            hovering.current = false
+            react(base)
+        }}
 
         onPointerDown={event => {
 
             event.stopPropagation()
 
             if (event.button !== 0) return
+
+            react(pressed)
 
             if (focusOnPointerDown) event.currentTarget.focus({ preventScroll: true })
 
@@ -92,6 +178,20 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
             onClick?.()
         }}
 
+        onPointerUp={() => react(hovering.current ? hover : base)}
+
+        onPointerCancel={() => react(hovering.current ? hover : base)}
+
+        onKeyDown={event => {
+
+            if (event.key === "Enter" || event.key === " ") react(pressed)
+        }}
+
+        onKeyUp={event => {
+
+            if (event.key === "Enter" || event.key === " ") react(hovering.current ? hover : base)
+        }}
+
         onClick={event => {
 
             event.stopPropagation()
@@ -99,9 +199,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
             if (event.detail === 0) onClick?.()
         }}
 
-        className={`grid size-6 place-items-center rounded-md border border-transparent bg-white/15 text-slate-600 outline-none shadow-sm disabled:pointer-events-none disabled:opacity-40 focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-sky-500 ${reducedMotion ? "" : "transition-colors duration-100 active:scale-95"} ${reaction}`}
-
-        {...props}
+        className="grid size-6 place-items-center rounded-md border border-transparent bg-white/15 text-slate-600 outline-none shadow-sm disabled:pointer-events-none disabled:opacity-40 focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-sky-500"
 
     >
 

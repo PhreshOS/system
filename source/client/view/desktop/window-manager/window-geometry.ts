@@ -50,6 +50,17 @@ export function wholeWindowGeometry(position: Position, size: Size) {
     return equal(position.x, 0, 0) && equal(position.y, 0, 0) && equal(size.width, 1, 0) && equal(size.height, 1, 0)
 }
 
+/** Resolves one declarative Window geometry inside a measured surface. */
+export function resolveWindowGeometry(position: Position, size: Size, surface: WindowSurfaceSize): WindowRegion {
+
+    return {
+        x: pixels(position.x, surface.width),
+        y: pixels(position.y, surface.height),
+        width: pixels(size.width, surface.width),
+        height: pixels(size.height, surface.height)
+    }
+}
+
 /**
  * The window's box is its geometry; an ordinary painted frame is inset only
  * on edges that do not touch that box's containing surface. Snap previews use
