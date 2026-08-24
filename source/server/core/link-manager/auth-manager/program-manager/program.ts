@@ -174,14 +174,17 @@ export default class Program {
         return this.config.icon ? this.place(this.config.icon) : null
     }
 
-    /** Reads the documentation that declares one Endpoint's Service capability. */
-    public serviceDocs(endpoint: "server" | "client") {
+    public get agentPath() {
 
-        const declared = this.config[endpoint]?.serviceDocs
+        return this.config.agent ? this.place(this.config.agent) : null
+    }
 
-        if (!declared) return null
+    /** Reads this Program's agent-independent operating documentation. */
+    public agent() {
 
-        return readFileSync(this.place(declared), "utf-8")
+        if (!this.agentPath) return null
+
+        return readFileSync(this.agentPath, "utf-8")
     }
 
     /** SDK Program record; internal references are consumed by the SDK boundary. */
@@ -205,18 +208,16 @@ export default class Program {
 
             description: description ?? null,
 
+            hasAgent: this.agentPath !== null,
+
             server: server && {
 
-                start: server.start,
-
-                hasService: server.serviceDocs !== undefined
+                start: server.start
             },
 
             client: client && {
 
                 start: client.start,
-
-                hasService: client.serviceDocs !== undefined,
 
                 title: client.title ?? null,
 
@@ -258,12 +259,7 @@ export default class Program {
 
         if (this.iconPath) await validateIcon(this.iconPath)
 
-        for (const endpoint of ["server", "client"] as const) {
-
-            const declared = this.config[endpoint]?.serviceDocs
-
-            if (declared && !file(this.place(declared))) throw new Error(`The ${endpoint} service documentation is not there: ${this.place(declared)}`)
-        }
+        if (this.agentPath && !file(this.agentPath)) throw new Error(`The agent documentation is not there: ${this.agentPath}`)
 
     }
 
@@ -302,10 +298,12 @@ function coherent(config: ProgramConfig) {
 
     if (!config.server && !config.client) throw new Error("A program must have a server half, a client half, or both")
 
-    for (const field of ["name", "version", "description", "icon", "storage"] as const) {
+    for (const field of ["name", "version", "description", "icon", "agent", "storage"] as const) {
 
         if (config[field] !== undefined && typeof config[field] !== "string") throw new Error(`A program's ${field} must be text`)
     }
+
+    if (config.agent !== undefined && config.agent.trim().length === 0) throw new Error("A program's agent documentation must be a non-empty path")
 
     for (const half of ["server", "client"] as const) {
 
@@ -319,7 +317,6 @@ function coherent(config: ProgramConfig) {
 
         if (declared.start !== undefined && typeof declared.start !== "boolean") throw new Error(`A declared ${half} endpoint's start default must be true or false`)
 
-        if (declared.serviceDocs !== undefined && (typeof declared.serviceDocs !== "string" || declared.serviceDocs.trim().length === 0)) throw new Error(`A declared ${half} endpoint's serviceDocs must be a non-empty path`)
     }
 
     if (config.client && /^https?:\/\//i.test(config.client.location)) {

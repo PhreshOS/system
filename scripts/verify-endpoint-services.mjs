@@ -6,28 +6,25 @@ const privateProgram = new Program({
     identity: "private-program",
     server: { location: ".", startCommand: "true" }
 })
-const publicProgram = new Program({
-    identity: "public-program",
-    server: { location: ".", startCommand: "true", serviceDocs: "server-api.md" },
-    client: { location: ".", serviceDocs: "client-api.md" }
+const documentedProgram = new Program({
+    identity: "documented-program",
+    agent: "agent.md",
+    server: { location: ".", startCommand: "true" },
+    client: { location: "." }
 })
 
-assert.equal(privateProgram.record().server.hasService, false)
-assert.equal(publicProgram.record().server.hasService, true)
-assert.equal(publicProgram.record().client.hasService, true)
+assert.equal(privateProgram.record().hasAgent, false)
+assert.equal(documentedProgram.record().hasAgent, true)
 assert.throws(() => new Program({
     identity: "invalid-program",
-    server: { location: ".", startCommand: "true", serviceDocs: "" }
-}), /serviceDocs/)
+    agent: "",
+    server: { location: ".", startCommand: "true" }
+}), /agent documentation/)
 
-function process(reference, program = "program", hasService = true) {
+function process(reference, program = "program") {
     return {
         reference,
-        program: {
-            identity: program,
-            server: { serviceDocs: hasService ? "server-api.md" : undefined },
-            client: { serviceDocs: hasService ? "client-api.md" : undefined }
-        },
+        program: { identity: program },
         server: {},
         client: {}
     }
@@ -36,7 +33,7 @@ function process(reference, program = "program", hasService = true) {
 const services = new EndpointServices()
 const provider = process("provider")
 const conflicting = process("conflicting")
-const privateEndpoint = process("private", "private", false)
+const independent = process("independent", "independent")
 const key = { program: "program", endpoint: "server", name: "counter" }
 const lifecycle = []
 const publications = []
@@ -49,8 +46,9 @@ await assert.rejects(() => services.waitReady(key, -1), /non-negative finite num
 
 assert.equal(services.enabled(key), false)
 assert.equal(services.service(provider, "server"), null)
-await assert.rejects(() => services.enable(privateEndpoint, "server", "counter"), /declared no Service documentation/)
-await assert.rejects(() => services.enable(privateEndpoint, "client", "counter"), /declared no Service documentation/)
+await services.enable(independent, "server", "independent")
+assert.equal(services.enabled({ program: "independent", endpoint: "server", name: "independent" }), true)
+await services.release(independent, "server")
 
 services.follow(key, "lifecycle", null, event => lifecycle.push(event))
 services.follow(key, "lifecycle", "disable", async () => {

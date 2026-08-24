@@ -17,7 +17,7 @@ import HostTraffic from "./host-traffic"
 import { failed, succeeded, type Outcome } from "@server/core/outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
-import EndpointServices, { serviceTimeout } from "./endpoint-services"
+import EndpointServices from "./endpoint-services"
 import { isPermissionName, isServiceKey, type PermissionName, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 
 /**
@@ -1054,58 +1054,6 @@ export default class ProcessManager extends TheLink {
         await this.services.waitReady(key, timeout)
     }
 
-    /** Atomically creates the dedicated providing Process and awaits its exact Service. */
-    public async createAndWaitServiceReady(
-        source: string,
-        key: unknown,
-        client: unknown,
-        timeout: unknown
-    ) {
-
-        if (!isServiceKey(key)) throw new Error("A complete service key is required")
-
-        const requester = this.find(source)
-        const program = this.authManager.programManager.reach(key.program)
-
-        if (!program) throw new Error(`Unknown Program "${key.program}"`)
-
-        const declaration = program[key.endpoint]
-
-        if (!declaration?.serviceDocs) {
-
-            throw new Error(`Program "${program.identity}" does not declare a ${key.endpoint} Service`)
-        }
-
-        if (key.endpoint === "server" && client !== undefined) {
-
-            throw new Error("A Server Service does not accept Client launch configuration")
-        }
-
-        const milliseconds = serviceTimeout(timeout)
-
-        if (this.services.enabled(key)) return
-
-        const expiresAt = Date.now() + milliseconds
-        const name = `service:${this.services.identity(key)}`
-        const launch: Launch & { name: string } = key.endpoint === "server"
-            ? { name, server: true, client: false }
-            : { name, server: false, client: client as LaunchClient | undefined ?? true }
-
-        await this.authManager.programManager.findOrCreateProcess(program.identity, launch, requester)
-        await this.services.waitReady(key, Math.max(0, expiresAt - Date.now()))
-    }
-
-    @Connect("/service/create-and-wait-ready")
-    protected async connectCreateAndWaitServiceReady(
-        source: string,
-        key: unknown,
-        client: unknown,
-        timeout: unknown
-    ) {
-
-        await this.createAndWaitServiceReady(source, key, client, timeout)
-    }
-
     @Subscribe("/service/send")
     protected async sendClientService(source: string, key: unknown, event: unknown, payload: unknown) {
 
@@ -1335,11 +1283,11 @@ export default class ProcessManager extends TheLink {
 
         if (word === "current-program") return [programManager.find(process.program.identity)]
 
-        if (word === "endpoint-docs") {
+        if (word === "program-agent") {
 
             const program = this.heldProgram(rest[0], process.program)
 
-            return [await programManager.docs(program.identity, rest[1])]
+            return [await programManager.agent(program.identity)]
         }
 
         if (word === "current-process") return [processReference(process)]
@@ -1613,11 +1561,6 @@ export default class ProcessManager extends TheLink {
         if (word === "service-enabled") return [this.services.enabled(rest[0])]
 
         if (word === "service-wait-ready") return [await this.services.waitReady(rest[0], rest[1])]
-
-        if (word === "service-create-and-wait-ready") {
-
-            return [await this.createAndWaitServiceReady(process.identity, rest[0], rest[1], rest[2])]
-        }
 
         if (word === "service-follow") {
 

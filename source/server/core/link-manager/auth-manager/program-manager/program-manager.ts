@@ -222,7 +222,7 @@ export default class ProgramManager extends TheLink {
         // is not holding on disk.
         if (typeof source.storage !== "string") throw new Error("A created program names its storage")
 
-        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["server", source.server?.location], ["server serviceDocs", source.server?.serviceDocs], ["client serviceDocs", source.client?.serviceDocs]] as const) {
+        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["agent", source.agent], ["server", source.server?.location]] as const) {
 
             if (place === undefined) continue
 
@@ -415,13 +415,11 @@ export default class ProgramManager extends TheLink {
         return [...await this.icons.render(this.reachOrRefuse(identity), size)]
     }
 
-    /** Reads a declared Endpoint's Service documentation before it is started. */
-    @Connect("/docs")
-    public async docs(identity: string, endpoint: unknown) {
+    /** Reads Program-specific operating knowledge for agents. */
+    @Connect("/agent")
+    public async agent(identity: string) {
 
-        if (endpoint !== "server" && endpoint !== "client") throw new Error("A Program Endpoint is server or client")
-
-        return this.reachOrRefuse(identity).serviceDocs(endpoint)
+        return this.reachOrRefuse(identity).agent()
     }
 
     /** Read or change the system-managed startup launch for one Program. */
@@ -1401,18 +1399,16 @@ export function copyProgram(program: Program, into: string) {
 
     else delete config.icon
 
-    for (const endpoint of ["server", "client"] as const) {
+    const agent = program.agent()
 
-        const docs = program.serviceDocs(endpoint)
+    if (agent !== null) {
 
-        if (docs === null) continue
+        writeFileSync(join(into, "agent.md"), agent)
 
-        const target = `${endpoint}-docs.md`
-
-        writeFileSync(join(into, target), docs)
-
-        config[endpoint] = { ...config[endpoint] as object, serviceDocs: target }
+        config.agent = "agent.md"
     }
+
+    else delete config.agent
 
     // The description names the places the system chose. Presence is
     // part of a half's declaration, so its location is never omitted.
@@ -1421,7 +1417,7 @@ export function copyProgram(program: Program, into: string) {
     writeFileSync(join(into, "program.json"), JSON.stringify(strip(config), null, 4))
 }
 
-const installedParts = ["server", "client", "icon.png", "server-docs.md", "client-docs.md", "program.json"] as const
+const installedParts = ["server", "client", "icon.png", "agent.md", "program.json"] as const
 
 // JSON has no `undefined`, and a key whose value is one would be written
 // as nothing at all — so they are removed rather than left to vanish.

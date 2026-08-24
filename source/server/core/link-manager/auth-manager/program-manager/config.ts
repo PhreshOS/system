@@ -37,6 +37,10 @@ interface Described {
     // headless Program is shown too.
     icon?: string
 
+    // Program-specific operating knowledge for agents. Any source path is
+    // accepted here; installation canonicalizes it to agent.md.
+    agent?: string
+
     // Where it keeps what it keeps. Absent means the system decides.
     storage?: string
 }
@@ -48,10 +52,6 @@ export interface ServerConfig {
 
     // Whether a Process starts this endpoint by default. True when omitted.
     start?: boolean
-
-    // Markdown file documenting the Service this endpoint may expose.
-    // Presence grants the endpoint permission to enable one Service.
-    serviceDocs?: string
 
     // Run once before the program is first started, in that directory.
     installCommand?: string
@@ -72,10 +72,6 @@ export interface ClientConfig {
 
     // Whether a Process starts this endpoint by default. True when omitted.
     start?: boolean
-
-    // Markdown file documenting the Service this endpoint may expose.
-    // Presence grants the endpoint permission to enable one Service.
-    serviceDocs?: string
 
     // What its window is called when it opens. The window owns its title
     // from then on and may change it; this is what it is born with, so

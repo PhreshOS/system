@@ -439,12 +439,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [sdkProgram(program)]
         }
 
-        if (word === "endpoint-docs") {
-
-            if (args[0] !== "server" && args[0] !== "client") throw new Error("A Program Endpoint is server or client")
-
-            return [await programManager.docs(process().program, args[0])]
-        }
+        if (word === "program-agent") return [await programManager.agent(process().program)]
 
         // Icon bytes are requested only when this frame asks. The frame cannot
         // provide an identity; its owning Process determines the Program.

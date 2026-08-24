@@ -19,10 +19,6 @@ export default class EndpointServices extends TheLink {
 
     public async enable(process: Process, endpoint: Half, value: unknown) {
 
-        const declaration = endpoint === "server" ? process.program.server : process.program.client
-
-        if (!declaration?.serviceDocs) throw new Error(`The ${endpoint} endpoint declared no Service documentation`)
-
         const name = this.name(value)
 
         if (!this.live(process, endpoint)) throw new Error(`The ${endpoint} endpoint is not running`)

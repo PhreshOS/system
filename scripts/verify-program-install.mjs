@@ -13,20 +13,18 @@ try {
     mkdirSync(join(source, "server"), { recursive: true })
     mkdirSync(join(source, "client"), { recursive: true })
     writeFileSync(join(source, "client", "index.html"), "<!doctype html>")
-    writeFileSync(join(source, "server-api.md"), "Server Service")
-    writeFileSync(join(source, "client-api.md"), "Client Service")
+    writeFileSync(join(source, "operating-guide.md"), "Program operating knowledge")
     mkdirSync(installed)
 
     const program = new Program({
         identity: "documented-program",
+        agent: join(source, "operating-guide.md"),
         server: {
             location: join(source, "server"),
-            serviceDocs: join(source, "server-api.md"),
             startCommand: "true"
         },
         client: {
-            location: join(source, "client"),
-            serviceDocs: join(source, "client-api.md")
+            location: join(source, "client")
         }
     })
 
@@ -35,10 +33,8 @@ try {
 
     const declaration = JSON.parse(readFileSync(join(installed, "program.json"), "utf8"))
 
-    assert.equal(declaration.server.serviceDocs, "server-docs.md")
-    assert.equal(declaration.client.serviceDocs, "client-docs.md")
-    assert.equal(readFileSync(join(installed, "server-docs.md"), "utf8"), "Server Service")
-    assert.equal(readFileSync(join(installed, "client-docs.md"), "utf8"), "Client Service")
+    assert.equal(declaration.agent, "agent.md")
+    assert.equal(readFileSync(join(installed, "agent.md"), "utf8"), "Program operating knowledge")
 }
 finally {
     rmSync(temporary, { recursive: true, force: true })

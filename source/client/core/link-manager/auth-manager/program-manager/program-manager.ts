@@ -99,10 +99,10 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/icon", identity, size) as number[]
     }
 
-    /** Reads one declared Endpoint's Service documentation from authoritative Core. */
-    public async docs(identity: string, endpoint: "server" | "client") {
+    /** Reads Program-specific operating knowledge from authoritative Core. */
+    public async agent(identity: string) {
 
-        return await this.$outbound.publishFirst("/docs", identity, endpoint) as string | null
+        return await this.$outbound.publishFirst("/agent", identity) as string | null
     }
 
     @Subscribe("/install")

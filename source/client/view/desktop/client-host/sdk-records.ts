@@ -36,6 +36,8 @@ export function sdkProgram(program: Program) {
 
         description: program.description,
 
+        hasAgent: program.hasAgent,
+
         server: program.server,
 
         client: program.client

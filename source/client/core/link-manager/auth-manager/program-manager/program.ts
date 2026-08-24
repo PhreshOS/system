@@ -29,6 +29,8 @@ export default class Program {
 
     public readonly description: string | null
 
+    public readonly hasAgent: boolean
+
     public readonly server: HostedEntry["server"]
 
     public readonly client: HostedEntry["client"]
@@ -50,6 +52,8 @@ export default class Program {
         this.version = payload.version
 
         this.description = payload.description
+
+        this.hasAgent = payload.hasAgent
 
         this.server = payload.server
 
