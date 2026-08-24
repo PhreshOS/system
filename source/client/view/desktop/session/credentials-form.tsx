@@ -52,7 +52,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             style={{ borderRadius: outerRadius }}
 
-            className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden border border-white/30 text-slate-800 shadow-window-active"
+            className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden text-slate-800 shadow-window-active"
 
             onSubmit={submit}
 
