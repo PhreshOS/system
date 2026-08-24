@@ -1,5 +1,6 @@
 import { isServiceKey, type ServiceKey } from "@phreshos/core"
 import TheLink from "@libs/the-link/the-link"
+import { createHash } from "node:crypto"
 import type Process from "./process"
 import type { Half } from "./process-traffic"
 
@@ -89,8 +90,7 @@ export default class EndpointServices extends TheLink {
     public async waitReady(key: unknown, timeout: unknown = 10_000) {
 
         const resolved = this.key(key)
-
-        if (typeof timeout !== "number" || !Number.isFinite(timeout) || timeout < 0) throw new Error("A service readiness timeout must be a non-negative finite number")
+        const milliseconds = serviceTimeout(timeout)
 
         if (this.enabled(resolved)) return
 
@@ -108,7 +108,7 @@ export default class EndpointServices extends TheLink {
                 complete()
             }
             const stop = this.$inbound.subscribe(this.event(resolved, "lifecycle", "enable"), () => finish(resolve))
-            const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), timeout)
+            const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), milliseconds)
 
             if (this.enabled(resolved)) finish(resolve)
         })
@@ -173,9 +173,14 @@ export default class EndpointServices extends TheLink {
         return `${process.reference}:${endpoint}`
     }
 
-    private identity(key: ServiceKey) {
+    /** Stable internal identity of one exact Service coordinate tuple. */
+    public identity(value: unknown) {
 
-        return JSON.stringify([key.program, key.endpoint, key.name])
+        const key = this.key(value)
+
+        return createHash("sha256")
+            .update(JSON.stringify([key.program, key.endpoint, key.name]))
+            .digest("hex")
     }
 
     private prefix(key: ServiceKey, scope: Scope) {
@@ -188,6 +193,16 @@ export default class EndpointServices extends TheLink {
         return this.prefix(key, scope) + encodeURIComponent(event)
     }
 
+}
+
+export function serviceTimeout(value: unknown = 10_000) {
+
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+
+        throw new Error("A service readiness timeout must be a non-negative finite number")
+    }
+
+    return value
 }
 
 export type ServiceScope = Scope

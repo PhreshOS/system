@@ -42,6 +42,11 @@ const lifecycle = []
 const publications = []
 let disableTransportCompleted = false
 
+assert.equal(services.identity(key), services.identity({ ...key }))
+assert.notEqual(services.identity(key), services.identity({ ...key, endpoint: "client" }))
+assert.match(services.identity(key), /^[a-f0-9]{64}$/)
+await assert.rejects(() => services.waitReady(key, -1), /non-negative finite number/)
+
 assert.equal(services.enabled(key), false)
 assert.equal(services.service(provider, "server"), null)
 await assert.rejects(() => services.enable(privateEndpoint, "server", "counter"), /declared no Service documentation/)
