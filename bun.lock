@@ -24,7 +24,7 @@
       "devDependencies": {
         "@babel/core": "^7.29.7",
         "@babel/plugin-proposal-decorators": "^7.29.7",
-        "@phreshos/core": "^0.1.11",
+        "@phreshos/core": "^0.1.12",
         "@phreshos/react-ui": "^0.1.5",
         "@rolldown/plugin-babel": "^0.2.3",
         "@tailwindcss/vite": "^4.3.3",
@@ -230,7 +230,7 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.11", "", {}, "sha512-h1Q5ar8ghisWdvWqQ/9/iRp0H0QPCZj6X1VFzSvbkkPd4A7OMVuEM/itRNbpDvaxgmsfDD0D22T4Hm41AlmGzw=="],
+    "@phreshos/core": ["@phreshos/core@0.1.12", "", {}, "sha512-Khfu0kUWaYu0Hf4ssPkYScPykdxzKBUfC1vX8PZBbYgPfcSzc2iY/Ncwj6KYmgD6BysRc26WJCRik7LK6t6TDQ=="],
 
     "@phreshos/react-ui": ["@phreshos/react-ui@0.1.5", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.9", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-5yws41rmsxi2/0xpXG/0ZLy3zPyIGURvsGA2R2kLCiq4CiVFUcgbnWU7drENdMRMOj95Np9Vl7EVuJKV3Rfkpg=="],
 
