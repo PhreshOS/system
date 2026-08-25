@@ -169,6 +169,18 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         />}
 
+        {/* Loading keeps the iframe completely transparent. The spinner is
+            ordinary Window UI, with no backdrop or Surface behind it. */}
+        {!bare && frameLoading && !stopping && !closing && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
+
+            <Spinner className="m-auto size-6 text-slate-700">
+
+                <span className="sr-only">Loading</span>
+
+            </Spinner>
+
+        </div>}
+
         {/* Closing is not document loading. The iframe is already absent;
             only termination progress remains, without painting a backdrop. */}
         {!bare && (stopping || closing) && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
