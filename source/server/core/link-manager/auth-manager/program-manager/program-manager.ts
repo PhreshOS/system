@@ -513,7 +513,7 @@ export default class ProgramManager extends TheLink {
 
         if (operation === "clear") {
 
-            place.clear()
+            place.clear(joins)
 
             return undefined
         }

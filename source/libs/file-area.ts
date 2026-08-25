@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
+import { createReadStream, createWriteStream, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { dirname, isAbsolute, join, relative, sep } from "node:path"
 import { rm } from "node:fs/promises"
@@ -28,16 +28,41 @@ export default class FileArea {
 
         const step = relative(this.path, path)
 
-        if (step === ".." || step.startsWith(`..${sep}`) || isAbsolute(step)) throw new Error("A storage path may not leave its area")
+        if (step === ".." || step.startsWith(`..${sep}`) || isAbsolute(step)) throw new Error("A storage path may not leave its configured directory")
+
+        let current = this.path
+
+        for (const part of step.split(sep).filter(Boolean)) {
+
+            current = join(current, part)
+
+            try {
+
+                if (lstatSync(current).isSymbolicLink()) throw new Error("A storage path may not pass through a symbolic link")
+            }
+
+            catch (exception) {
+
+                if ((exception as NodeJS.ErrnoException).code === "ENOENT") break
+
+                throw exception
+            }
+        }
 
         return path
     }
 
-    public clear() {
+    public clear(joins: string[] = []) {
 
-        rmSync(this.path, { recursive: true, force: true })
+        const path = this.resolve(joins)
 
-        mkdirSync(this.path, { recursive: true })
+        const found = this.stat(joins)
+
+        if (found && found.kind !== "directory") throw new Error("Only a storage directory can be cleared")
+
+        rmSync(path, { recursive: true, force: true })
+
+        mkdirSync(path, { recursive: true })
     }
 
     public stat(joins: string[]): EntryStat | null {
