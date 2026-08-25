@@ -1873,6 +1873,16 @@ export default class ProcessManager extends TheLink {
             return [programManager.operate(program, word, "path", [])]
         }
 
+        // Native filesystem work remains local to the Server SDK. The System
+        // supplies only its authoritative home root; Storage confines every
+        // operation performed beneath it.
+        if (word === "host-storage") {
+
+            if (rest[0] !== "path") throw new Error("A server half asks the host only for its Storage path")
+
+            return [this.authManager.linkManager.application.home.path]
+        }
+
         // What a program has said, asked for and never told. The
         // connection behind this is read-only, so a query that tries to
         // change what it reads is refused by the database rather than by

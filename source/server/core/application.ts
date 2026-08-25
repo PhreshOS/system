@@ -8,6 +8,8 @@ import ThemeManager from "./theme-manager"
 import WallpaperManager from "./wallpaper-manager"
 import openStore from "./open-store"
 import Keyv from "keyv"
+import FileArea from "@libs/file-area"
+import { homedir } from "node:os"
 
 export default class Application {
 
@@ -21,6 +23,9 @@ export default class Application {
     public readonly defaultProgramIcon: string
 
     public readonly storage: FileManager
+
+    /** Native operating-system home exposed as the Server Host's Storage root. */
+    public readonly home: FileArea
 
     /** Internal application persistence, reached publicly through named methods. */
     public readonly store: Keyv
@@ -51,6 +56,8 @@ export default class Application {
 
         this.storage = payload.storage
 
+        this.home = payload.home
+
         this.encryptor = payload.encryptor
 
         this.store = payload.store
@@ -72,6 +79,8 @@ export default class Application {
 
         const storage = storagePath ? new FileManager(storagePath) : FileManager.forApp(name)
 
+        const home = new FileArea(homedir(), "the native home directory")
+
         const store = openStore(storage.path)
 
         const encryptor = await Encryptor.initialize(storage.join("private.pem"))
@@ -84,7 +93,7 @@ export default class Application {
 
         const wallpaperManager = await WallpaperManager.open(store, servedFiles)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, store, encryptor, authentication, themeManager, wallpaperManager, servedFiles })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, themeManager, wallpaperManager, servedFiles })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -105,6 +114,8 @@ interface ApplicationPayload {
     defaultProgramIcon: string
 
     storage: FileManager
+
+    home: FileArea
 
     store: Keyv
 
