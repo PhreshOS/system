@@ -92,6 +92,15 @@ export default class ServerProcessBoundary extends ProcessLink {
     /** Deliver one routed envelope only when this endpoint requested it. */
     public async deliver(route: string, ...values: unknown[]) {
 
+        if (values[0] === "stream" && typeof values[1] === "string") {
+
+            if (!this.expected.has(values[1])) return
+
+            await this.$outbound.publish(route, ...values)
+
+            return
+        }
+
         if (values[0] === "answer" && typeof values[1] === "string") {
 
             if (!this.expected.has(values[1])) return

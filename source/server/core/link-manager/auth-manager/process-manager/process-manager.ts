@@ -561,6 +561,13 @@ export default class ProcessManager extends TheLink {
 
             if (event === "end-host") {
 
+                if (values[0] === "stream" && typeof values[1] === "string") {
+
+                    this.endHostStream(process, values[1], values.slice(2)).catch(() => undefined)
+
+                    return
+                }
+
                 if (values[0] === "wait" && typeof values[1] === "string") {
 
                     this.endHostWait(process, values[1], values.slice(2)).catch(() => undefined)
@@ -1403,15 +1410,6 @@ export default class ProcessManager extends TheLink {
             throw new Error(`The host does not know the wallpaper surface "${String(surface)}"`)
         }
 
-        // Laid out here, or removed from here. Both operations mutate the
-        // installed flag on the exact Program the caller addressed.
-        if (word === "install") {
-
-            const program = this.heldProgram(rest[0])
-
-            return [await programManager.install(program, process.identity)]
-        }
-
         if (word === "fork") {
 
             const program = this.heldProgram(rest[0])
@@ -2007,6 +2005,36 @@ export default class ProcessManager extends TheLink {
         catch (exception) {
 
             this.say(process.server, "host-end", "answer", question, failed(exception))
+        }
+    }
+
+    private async endHostStream(process: Process, question: string, args: unknown[]) {
+
+        let active = true
+
+        process.server?.retain(question, () => { active = false })
+
+        await this.say(process.server, "host-end", "stream", question, "open")
+
+        try {
+
+            if (args[0] !== "install") throw new Error(`The host does not know the stream operation "${String(args[0])}"`)
+
+            const program = this.heldProgram(args[1])
+
+            for await (const chunk of this.authManager.programManager.installStreaming(program, process.identity)) {
+
+                if (!active) return
+
+                await this.say(process.server, "host-end", "stream", question, "data", chunk)
+            }
+
+            if (active) await this.say(process.server, "host-end", "stream", question, "answer", succeeded(undefined))
+        }
+
+        catch (exception) {
+
+            if (active) await this.say(process.server, "host-end", "stream", question, "answer", failed(exception))
         }
     }
 

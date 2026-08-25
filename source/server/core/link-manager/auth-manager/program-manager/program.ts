@@ -4,6 +4,7 @@ import { dirname, isAbsolute, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
+import type { ProgramInstallChunk } from "@phreshos/core"
 
 /**
  * A program: a description, and the things it names.
@@ -265,13 +266,13 @@ export default class Program {
 
     // Preparing a server half, when it says it needs preparing. Run
     // once, where the half lives, before anything starts it.
-    public async installServer() {
+    public async installServer(output: InstallOutput = () => undefined) {
 
         const command = this.config.server?.installCommand
 
         if (!command) return
 
-        await execute(command, this.serverPath!)
+        await execute(command, this.serverPath!, output)
     }
 }
 
@@ -370,14 +371,59 @@ function file(path: string) {
 }
 
 
-function execute(command: string, cwd: string) {
+export type InstallOutput = (chunk: ProgramInstallChunk) => void | Promise<void>
+
+function execute(command: string, cwd: string, output: InstallOutput) {
 
     return new Promise<void>(function (settle, refuse) {
 
-        const child = spawn(command, { shell: true, cwd, stdio: "ignore" })
+        const child = spawn(command, { shell: true, cwd, stdio: ["ignore", "pipe", "pipe"] })
 
-        child.on("error", refuse)
+        let delivery = Promise.resolve()
 
-        child.on("exit", code => code === 0 ? settle() : refuse(new Error(`"${command}" exited with ${code}`)))
+        let failed = false
+
+        const relay = function (stream: NodeJS.ReadableStream, name: ProgramInstallChunk["stream"]) {
+
+            stream.on("data", chunk => {
+
+                stream.pause()
+
+                delivery = delivery.then(() => output({ stream: name, text: String(chunk) }))
+
+                delivery.then(() => stream.resume(), error => {
+
+                    if (failed) return
+
+                    failed = true
+
+                    child.kill()
+
+                    refuse(error)
+                })
+            })
+        }
+
+        relay(child.stdout!, "stdout")
+
+        relay(child.stderr!, "stderr")
+
+        child.on("error", error => {
+
+            if (failed) return
+
+            failed = true
+
+            refuse(error)
+        })
+
+        child.on("close", code => delivery.then(() => {
+
+            if (failed) return
+
+            if (code === 0) settle()
+
+            else refuse(new Error(`"${command}" exited with ${code}`))
+        }, refuse))
     })
 }

@@ -13,10 +13,10 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers, type Layer, type Position, type ProgramConfig, type Size } from "./config"
-import { type PermissionName, type WallpaperLaunch } from "@phreshos/core"
+import { type PermissionName, type ProgramInstallChunk, type WallpaperLaunch } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape, type WallpaperShape } from "../process-manager/process-manager"
-import Program from "./program"
+import Program, { type InstallOutput } from "./program"
 import Entry, { type HostedEntry } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
@@ -632,7 +632,23 @@ export default class ProgramManager extends TheLink {
         // durable files, not the current registry entry's installed flag.
         const replaced = existsSync(this.fileManager.join(program.identity, "program.json"))
 
-        const entry = await this.install(program)
+        const installation = this.installStreaming(program)
+
+        let entry: Entry
+
+        while (true) {
+
+            const next = await installation.next()
+
+            if (next.done) {
+
+                entry = next.value
+
+                break
+            }
+
+            yield { stage: "output", chunk: next.value }
+        }
 
         yield { stage: "installed", entry, replaced }
 
@@ -661,7 +677,82 @@ export default class ProgramManager extends TheLink {
         return await this.start(program, launch)
     }
 
-    public async install(source: Program, asker: string | null = null) {
+    /** Install while exposing command output with consumer-driven backpressure. */
+    public async *installStreaming(source: Program, asker: string | null = null): AsyncGenerator<ProgramInstallChunk, Entry, void> {
+
+        const queue: { chunk: ProgramInstallChunk, consumed: () => void }[] = []
+
+        let wake: (() => void) | null = null
+
+        let settled = false
+
+        let installed: Entry | undefined
+
+        let failure: unknown
+
+        let detached = false
+
+        const operation = this.install(source, asker, chunk => {
+
+            if (detached) return
+
+            return new Promise<void>(consumed => {
+
+                queue.push({ chunk, consumed })
+
+                wake?.()
+
+                wake = null
+            })
+        }).then(entry => {
+
+            installed = entry
+        }, error => {
+
+            failure = error
+        }).finally(() => {
+
+            settled = true
+
+            wake?.()
+
+            wake = null
+        })
+
+        try {
+
+            while (!settled || queue.length) {
+
+                const next = queue.shift()
+
+                if (next) {
+
+                    try { yield next.chunk }
+
+                    finally { next.consumed() }
+
+                    continue
+                }
+
+                await new Promise<void>(resolve => { wake = resolve })
+            }
+
+            await operation
+
+            if (failure) throw failure
+
+            return installed!
+        }
+
+        finally {
+
+            detached = true
+
+            for (const pending of queue.splice(0)) pending.consumed()
+        }
+    }
+
+    public async install(source: Program, asker: string | null = null, output: InstallOutput = () => undefined) {
 
         return await this.change(source.identity, async () => {
 
@@ -719,7 +810,7 @@ export default class ProgramManager extends TheLink {
 
                 // Preparation runs against the laid-out files but before
                 // the registry claims the install succeeded.
-                await installed.installServer()
+                await installed.installServer(output)
 
                 let entry = this.programs.get(source.identity)
 
@@ -1278,6 +1369,8 @@ export interface InstallSourceOptions {
 }
 
 export type InstallSourceStage =
+
+    | { stage: "output", chunk: ProgramInstallChunk }
 
     | { stage: "installed", entry: Entry, replaced: boolean }
 

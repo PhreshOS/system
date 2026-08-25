@@ -235,7 +235,9 @@ async function answer(application: Application, attached: Set<string>, say: (eve
 
         for await (const stage of programManager.installSource(asked.program, { run: asked.run, startup: asked.startup })) {
 
-            if (stage.stage === "installed") {
+            if (stage.stage === "output") say({ event: "output", ...stage.chunk })
+
+            else if (stage.stage === "installed") {
 
                 // Whether it replaced one. Installation has already ended every
                 // process that could have retained one of the previous paths.
