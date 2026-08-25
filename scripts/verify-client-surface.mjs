@@ -131,7 +131,10 @@ const localWindow = {
 const processManager = {
     processes,
     front: ClientProcessManager.prototype.front,
-    scope: ClientProcessManager.prototype.scope
+    scope: ClientProcessManager.prototype.scope,
+    async ownFrame() {},
+    async releaseFrame() {},
+    async unsubscribeFrame() {}
 }
 const authManager = {
     processManager,
@@ -166,9 +169,8 @@ const boundary = new ClientProcessBoundary(
     { release(identity) { lifecycle.push(identity) } }
 )
 
-boundary.receive(["boundary", "document", "first-document"])
-boundary.receive(["boundary", "document", "first-document"])
-boundary.receive(["boundary", "document", "second-document"])
+await boundary.own("first-owner")
+await boundary.own("second-owner")
 await boundary.release()
 
 assert.deepEqual(lifecycle, ["requester", "requester"])

@@ -46,7 +46,8 @@ export default class ClientProcessBoundary extends TheLink {
 
     // A document can begin executing before its iframe load event gives the
     // desktop a server-host lease. Keep those endpoint envelopes at the near
-    // boundary; once the lease exists they follow the same path as later ones.
+    // boundary; once the load establishes ownership they follow the same path
+    // as later ones.
     private readonly pending = new Array<unknown[]>()
 
     private pointerStop: (() => void) | null = null
@@ -56,8 +57,6 @@ export default class ClientProcessBoundary extends TheLink {
     private owner: string | null = null
 
     private leased: string | null = null
-
-    private document: string | null = null
 
     public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSize, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
@@ -85,7 +84,29 @@ export default class ClientProcessBoundary extends TheLink {
 
     public async own(owner: string) {
 
-        await this.authManager.processManager.ownFrame(this.pane, owner)
+        // The iframe load event is the document lifecycle boundary. Preserve
+        // what the newly loading document already sent, discard everything
+        // retained for the previous document, then replay the preserved
+        // envelopes only after the new server-host lease exists.
+        const pending = this.pending.splice(0)
+
+        if (this.leased) this.localWindow.release(this.pane)
+
+        this.resetEndpoint()
+
+        this.owner = null
+
+        try {
+
+            await this.authManager.processManager.ownFrame(this.pane, owner)
+        }
+
+        catch (error) {
+
+            this.pending.unshift(...pending)
+
+            throw error
+        }
 
         this.owner = owner
 
@@ -96,7 +117,7 @@ export default class ClientProcessBoundary extends TheLink {
             if (directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, owner, subscription, description.kind, description.event).catch(() => undefined)
         }
 
-        const pending = this.pending.splice(0)
+        pending.push(...this.pending.splice(0))
 
         for (const message of pending) this.receive(message)
     }
@@ -110,8 +131,6 @@ export default class ClientProcessBoundary extends TheLink {
         this.owner = null
 
         this.leased = null
-
-        this.document = null
 
         this.resetEndpoint()
 
@@ -304,26 +323,6 @@ export default class ClientProcessBoundary extends TheLink {
     private control(values: unknown[]) {
 
         const [operation, ...args] = values
-
-        if (operation === "document") {
-
-            if (typeof args[0] !== "string" || args[0] === this.document) return
-
-            // The first document establishes this already-mounted iframe
-            // representation. A later document replaces it and therefore
-            // destroys the previous representation's local Surface.
-            if (this.document !== null) this.localWindow.release(this.pane)
-
-            this.document = args[0]
-
-            this.resetEndpoint()
-
-            // The new document cannot use the previous document's forwarding
-            // lease while its own lease is still being established.
-            this.owner = null
-
-            return
-        }
 
         if (operation === "log") {
 
