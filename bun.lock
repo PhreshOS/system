@@ -24,8 +24,8 @@
       "devDependencies": {
         "@babel/core": "^7.29.7",
         "@babel/plugin-proposal-decorators": "^7.29.7",
-        "@phreshos/core": "^0.1.12",
-        "@phreshos/react-ui": "^0.1.5",
+        "@phreshos/core": "^0.1.13",
+        "@phreshos/react-ui": "^0.1.6",
         "@rolldown/plugin-babel": "^0.2.3",
         "@tailwindcss/vite": "^4.3.3",
         "@types/adm-zip": "^0.5.8",
@@ -230,9 +230,9 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.12", "", {}, "sha512-Khfu0kUWaYu0Hf4ssPkYScPykdxzKBUfC1vX8PZBbYgPfcSzc2iY/Ncwj6KYmgD6BysRc26WJCRik7LK6t6TDQ=="],
+    "@phreshos/core": ["@phreshos/core@0.1.13", "", {}, "sha512-d/p6MVRwuM03R8xbtGlKDgXWFXYtncVuhItymxv+B97Wxxcz9Pu6LOnRfyzM5FZgrOQyquSK6xb5L5yNYGit4g=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.5", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.9", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-5yws41rmsxi2/0xpXG/0ZLy3zPyIGURvsGA2R2kLCiq4CiVFUcgbnWU7drENdMRMOj95Np9Vl7EVuJKV3Rfkpg=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.6", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.13", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-Vm5nHAe7DK3+CW3AX2CA745+jeLs/pJFZyRQKNOJtzic2m21X3WX2eHAmxlY+c6bjrz8kkT34PIY4synjPTh/Q=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 
