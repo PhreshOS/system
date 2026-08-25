@@ -41,6 +41,14 @@ interface Described {
     // accepted here; installation canonicalizes it to agent.md.
     agent?: string
 
+    // Optional public catalog information. These values describe a release;
+    // they do not affect whether or how the Program runs.
+    categories?: string[]
+
+    keywords?: string[]
+
+    website?: string
+
     // Where it keeps what it keeps. Absent means the system decides.
     storage?: string
 }
@@ -55,6 +63,9 @@ export interface ServerConfig {
 
     // Run once before the program is first started, in that directory.
     installCommand?: string
+
+    // Run while uninstalling, before the installed files are removed.
+    uninstallCommand?: string
 
     // Run to start a process, in that directory.
     startCommand: string

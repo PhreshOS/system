@@ -456,13 +456,6 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [scope.program().installed === true]
         }
 
-        if (word === "uninstall") {
-
-            const program = scope.program()
-
-            return [await program.uninstall(args[1] === true, pane)]
-        }
-
         if (word === "forget") {
 
             const program = scope.program()

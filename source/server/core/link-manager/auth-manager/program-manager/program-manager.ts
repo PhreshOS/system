@@ -13,10 +13,10 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers, type Layer, type Position, type ProgramConfig, type Size } from "./config"
-import { type PermissionName, type ProgramInstallChunk, type WallpaperLaunch } from "@phreshos/core"
+import { type PermissionName, type ProgramCommandChunk, type WallpaperLaunch } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape, type WallpaperShape } from "../process-manager/process-manager"
-import Program, { type InstallOutput } from "./program"
+import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type HostedEntry } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
@@ -570,14 +570,21 @@ export default class ProgramManager extends TheLink {
         return await this.install(program, asker)
     }
 
-    @Connect("/uninstall-program")
-    public async uninstallNamed(identity: string, everything = false, asker: string | null = null) {
+    @Connect("/uninstall-program-stream")
+    public async uninstallNamedStreaming(identity: string, everything = false, asker: string | null = null, stream: unknown) {
+
+        if (typeof stream !== "string" || !stream) throw new Error("Uninstalling needs a stream identity")
 
         const program = this.reach(identity)
 
         if (!program) throw new Error("The system does not know this program")
 
-        return await this.uninstall(program, everything, asker)
+        for await (const chunk of this.uninstallStreaming(program, everything, asker)) {
+
+            await this.$outbound.publish("/uninstall-program-output", stream, chunk)
+        }
+
+        return program.identity
     }
 
     // A local project addresses the durable installation, not a handle it
@@ -585,7 +592,7 @@ export default class ProgramManager extends TheLink {
     // entry while the installed declaration still exists, so this resolves
     // from the installed area first and reconstructs the runtime counterpart
     // only when the operation needs one.
-    public async uninstallInstalled(identity: string, everything = false, asker: string | null = null) {
+    public async uninstallInstalled(identity: string, everything = false, asker: string | null = null, output: CommandOutput = () => undefined) {
 
         return await this.change(identity, async () => {
 
@@ -602,8 +609,14 @@ export default class ProgramManager extends TheLink {
                 await this.created(entry)
             }
 
-            return await this.uninstallEntry(entry, everything, asker)
+            return await this.uninstallEntry(entry, everything, asker, output)
         })
+    }
+
+    /** Uninstall an installed Program while exposing cleanup command output. */
+    public uninstallInstalledStreaming(identity: string, everything = false, asker: string | null = null) {
+
+        return this.commandStreaming(output => this.uninstallInstalled(identity, everything, asker, output))
     }
 
     @Connect("/forget-program")
@@ -678,21 +691,33 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Install while exposing command output with consumer-driven backpressure. */
-    public async *installStreaming(source: Program, asker: string | null = null): AsyncGenerator<ProgramInstallChunk, Entry, void> {
+    public installStreaming(source: Program, asker: string | null = null) {
 
-        const queue: { chunk: ProgramInstallChunk, consumed: () => void }[] = []
+        return this.commandStreaming(output => this.install(source, asker, output))
+    }
+
+    /** Uninstall a held Program while exposing cleanup command output. */
+    public uninstallStreaming(program: Program, everything = false, asker: string | null = null) {
+
+        return this.commandStreaming(output => this.uninstall(program, everything, asker, output))
+    }
+
+    /** Runs one lifecycle command while preserving output order and backpressure. */
+    private async *commandStreaming<Result>(run: (output: CommandOutput) => Promise<Result>): AsyncGenerator<ProgramCommandChunk, Result, void> {
+
+        const queue: { chunk: ProgramCommandChunk, consumed: () => void }[] = []
 
         let wake: (() => void) | null = null
 
         let settled = false
 
-        let installed: Entry | undefined
+        let result: { value: Result } | undefined
 
         let failure: unknown
 
         let detached = false
 
-        const operation = this.install(source, asker, chunk => {
+        const operation = run(chunk => {
 
             if (detached) return
 
@@ -704,9 +729,9 @@ export default class ProgramManager extends TheLink {
 
                 wake = null
             })
-        }).then(entry => {
+        }).then(value => {
 
-            installed = entry
+            result = { value }
         }, error => {
 
             failure = error
@@ -741,7 +766,7 @@ export default class ProgramManager extends TheLink {
 
             if (failure) throw failure
 
-            return installed!
+            return result!.value
         }
 
         finally {
@@ -874,7 +899,7 @@ export default class ProgramManager extends TheLink {
     // files leave. Processes and open storage handles remain alive. With
     // it, everything the system owns for this program leaves: processes,
     // files, storage, and finally the runtime registry entry.
-    public async uninstall(program: Program, everything = false, asker: string | null = null) {
+    public async uninstall(program: Program, everything = false, asker: string | null = null, output: CommandOutput = () => undefined) {
 
         return await this.change(program.identity, async () => {
 
@@ -882,11 +907,11 @@ export default class ProgramManager extends TheLink {
 
             const entry = this.find(program.identity)
 
-            return await this.uninstallEntry(entry, everything, asker)
+            return await this.uninstallEntry(entry, everything, asker, output)
         })
     }
 
-    private async uninstallEntry(entry: Entry, everything: boolean, asker: string | null) {
+    private async uninstallEntry(entry: Entry, everything: boolean, asker: string | null, output: CommandOutput) {
 
         if (everything) {
 
@@ -894,6 +919,8 @@ export default class ProgramManager extends TheLink {
 
             await this.release(entry.identity)
         }
+
+        await entry.program.uninstallServer(output)
 
         const home = this.fileManager.join(entry.identity)
 
@@ -1370,7 +1397,7 @@ export interface InstallSourceOptions {
 
 export type InstallSourceStage =
 
-    | { stage: "output", chunk: ProgramInstallChunk }
+    | { stage: "output", chunk: ProgramCommandChunk }
 
     | { stage: "installed", entry: Entry, replaced: boolean }
 

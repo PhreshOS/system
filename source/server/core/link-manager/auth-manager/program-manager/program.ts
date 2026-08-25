@@ -4,7 +4,7 @@ import { dirname, isAbsolute, resolve } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import type { ProgramInstallChunk } from "@phreshos/core"
+import type { ProgramCommandChunk } from "@phreshos/core"
 
 /**
  * A program: a description, and the things it names.
@@ -274,6 +274,18 @@ export default class Program {
 
         await execute(command, this.serverPath!, output)
     }
+
+    // Cleaning up externally installed resources happens while the installed
+    // Server directory still exists, because that directory is the command's
+    // declared working environment.
+    public async uninstallServer(output: CommandOutput = () => undefined) {
+
+        const command = this.config.server?.uninstallCommand
+
+        if (!command) return
+
+        await execute(command, this.serverPath!, output)
+    }
 }
 
 function read(path: string): [ProgramConfig, string] {
@@ -299,12 +311,30 @@ function coherent(config: ProgramConfig) {
 
     if (!config.server && !config.client) throw new Error("A program must have a server half, a client half, or both")
 
-    for (const field of ["name", "version", "description", "icon", "agent", "storage"] as const) {
+    for (const field of ["name", "version", "description", "icon", "agent", "storage", "website"] as const) {
 
         if (config[field] !== undefined && typeof config[field] !== "string") throw new Error(`A program's ${field} must be text`)
     }
 
     if (config.agent !== undefined && config.agent.trim().length === 0) throw new Error("A program's agent documentation must be a non-empty path")
+
+    if (config.website !== undefined) {
+
+        try { new URL(config.website) }
+
+        catch { throw new Error("A program's website must be a valid URL") }
+    }
+
+    for (const [field, maximum] of [["categories", 20], ["keywords", 50]] as const) {
+
+        const values = config[field]
+
+        if (values === undefined) continue
+
+        if (!Array.isArray(values) || values.length > maximum || values.some(value => typeof value !== "string" || value.trim().length === 0 || value.trim().length > 50)) {
+            throw new Error(`A program's ${field} must contain at most ${maximum} non-empty values of at most 50 characters`)
+        }
+    }
 
     for (const half of ["server", "client"] as const) {
 
@@ -332,6 +362,8 @@ function coherent(config: ProgramConfig) {
     if (config.server && (typeof config.server.startCommand !== "string" || config.server.startCommand.length === 0)) throw new Error("A server half must declare a start command")
 
     if (config.server?.installCommand !== undefined && typeof config.server.installCommand !== "string") throw new Error("A server half's install command must be text")
+
+    if (config.server?.uninstallCommand !== undefined && typeof config.server.uninstallCommand !== "string") throw new Error("A server half's uninstall command must be text")
 
     if (config.client?.title !== undefined && typeof config.client.title !== "string") throw new Error("A client half's title must be text")
 
@@ -371,9 +403,11 @@ function file(path: string) {
 }
 
 
-export type InstallOutput = (chunk: ProgramInstallChunk) => void | Promise<void>
+export type CommandOutput = (chunk: ProgramCommandChunk) => void | Promise<void>
 
-function execute(command: string, cwd: string, output: InstallOutput) {
+export type InstallOutput = CommandOutput
+
+function execute(command: string, cwd: string, output: CommandOutput) {
 
     return new Promise<void>(function (settle, refuse) {
 
@@ -383,7 +417,7 @@ function execute(command: string, cwd: string, output: InstallOutput) {
 
         let failed = false
 
-        const relay = function (stream: NodeJS.ReadableStream, name: ProgramInstallChunk["stream"]) {
+        const relay = function (stream: NodeJS.ReadableStream, name: ProgramCommandChunk["stream"]) {
 
             stream.on("data", chunk => {
 

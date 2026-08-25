@@ -176,6 +176,13 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (route !== "end-host") return
 
+        if (values[0] === "stream" && typeof values[1] === "string") {
+
+            this.streamRequest(values[1], values.slice(2))
+
+            return
+        }
+
         if (values[0] === "wait" && typeof values[1] === "string") {
 
             this.request(values[1], values.slice(2))
@@ -504,6 +511,48 @@ export default class ClientProcessBoundary extends TheLink {
         )
     }
 
+    private streamRequest(question: string, args: unknown[]) {
+        let active = true
+        let iterator: AsyncIterator<unknown> | null = null
+
+        this.requests.set(question, () => {
+            if (!active) return
+            active = false
+            void iterator?.return?.()
+        })
+
+        const run = async () => {
+            await this.deliver("host-end", "stream", question, "open")
+
+            if (args[0] !== "uninstall") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
+
+            const operation = this.authManager.processManager.scope(this.pane).program().uninstall(args[2] === true, this.pane)
+
+            iterator = operation[Symbol.asyncIterator]()
+
+            while (active) {
+                const next = await iterator.next()
+
+                if (next.done) break
+
+                await this.deliver("host-end", "stream", question, "data", next.value)
+            }
+
+            if (active && this.expected.has(question)) {
+                await this.deliver("host-end", "stream", question, "answer", succeeded(undefined))
+            }
+        }
+
+        run().catch(async exception => {
+            if (active && this.expected.has(question)) {
+                await this.deliver("host-end", "stream", question, "answer", failed(exception))
+            }
+        }).finally(() => {
+            active = false
+            this.requests.delete(question)
+        })
+    }
+
     private waitReady(question: string, target: unknown, requireCurrentIncarnation: boolean) {
 
         const mine = this.authManager.processManager.processes.get(this.pane)
@@ -755,6 +804,8 @@ export default class ClientProcessBoundary extends TheLink {
             const [route, operation] = message
 
             if ((route === "end-end" || route === "end-host") && operation === "wait") return message[2] !== question
+
+            if (route === "end-host" && operation === "stream") return message[2] !== question
 
             if (route === "end-host" && operation === "ask") return message[4] !== question
 

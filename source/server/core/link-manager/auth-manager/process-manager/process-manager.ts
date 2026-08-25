@@ -1424,13 +1424,6 @@ export default class ProcessManager extends TheLink {
             return [programManager.installed(this.heldProgram(rest[0]))]
         }
 
-        if (word === "uninstall") {
-
-            const program = this.heldProgram(rest[0])
-
-            return [await programManager.uninstall(program, rest[1] === true, process.identity)]
-        }
-
         if (word === "forget") {
 
             const program = this.heldProgram(rest[0])
@@ -2018,11 +2011,17 @@ export default class ProcessManager extends TheLink {
 
         try {
 
-            if (args[0] !== "install") throw new Error(`The host does not know the stream operation "${String(args[0])}"`)
-
+            const operation = args[0]
             const program = this.heldProgram(args[1])
+            const stream = operation === "install"
+                ? this.authManager.programManager.installStreaming(program, process.identity)
+                : operation === "uninstall"
+                    ? this.authManager.programManager.uninstallStreaming(program, args[2] === true, process.identity)
+                    : null
 
-            for await (const chunk of this.authManager.programManager.installStreaming(program, process.identity)) {
+            if (!stream) throw new Error(`The host does not know the stream operation "${String(operation)}"`)
+
+            for await (const chunk of stream) {
 
                 if (!active) return
 

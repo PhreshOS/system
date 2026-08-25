@@ -4,7 +4,7 @@ import { Publish, Subscribe } from "@libs/the-link/decorators/escript"
 import TheLink from "@libs/the-link/the-link"
 import AuthManager from "../auth-manager"
 import Program from "./program"
-import { type ProgramIconSize } from "@phreshos/core"
+import { type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
 
 /**
  * The peer of the core's programs: born holding them from the
@@ -23,6 +23,8 @@ export default class ProgramManager extends TheLink {
     public readonly authManager: AuthManager
 
     public readonly programs = new Map<string, Program>()
+
+    private readonly commands = new Map<string, PendingCommand>()
 
     public constructor(authManager: AuthManager, payload: TransmittedProgramManager) {
 
@@ -63,9 +65,46 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/install-program", identity, asker)
     }
 
-    public async uninstall(identity: string, everything: boolean, asker: string) {
+    /** Streams one authoritative uninstall operation to its requesting View. */
+    public uninstallStreaming(identity: string, everything: boolean, asker: string) {
+        const manager = this
 
-        return await this.$outbound.publishFirst("/uninstall-program", identity, everything, asker)
+        return (async function* (): AsyncGenerator<ProgramCommandChunk, void, void> {
+            const stream = crypto.randomUUID()
+            const state: PendingCommand = { queue: [], settled: false, failure: null, wake: null }
+
+            manager.commands.set(stream, state)
+
+            const operation = manager.$outbound.publishFirst("/uninstall-program-stream", identity, everything, asker, stream).then(
+                () => { state.settled = true },
+                error => { state.failure = error instanceof Error ? error : new Error(String(error)) }
+            ).finally(() => {
+                state.wake?.()
+                state.wake = null
+            })
+
+            try {
+                while (!state.settled || state.queue.length) {
+                    const next = state.queue.shift()
+
+                    if (next) {
+                        yield next
+                        continue
+                    }
+
+                    if (state.failure) throw state.failure
+
+                    await new Promise<void>(resolve => { state.wake = resolve })
+                }
+
+                await operation
+
+                if (state.failure) throw state.failure
+            }
+            finally {
+                manager.commands.delete(stream)
+            }
+        })()
     }
 
     public async forget(identity: string, asker: string) {
@@ -135,6 +174,26 @@ export default class ProgramManager extends TheLink {
         return this.arrived(payload)
     }
 
+    @Subscribe("/uninstall-program-output")
+    protected commandOutput(stream: string, value: unknown) {
+        const state = this.commands.get(stream)
+
+        if (!state || state.failure) return
+
+        const chunk = value as Partial<ProgramCommandChunk> | null
+
+        if (!chunk || (chunk.stream !== "stdout" && chunk.stream !== "stderr") || typeof chunk.text !== "string") {
+            state.failure = new Error("The System returned an invalid Program command output chunk")
+        }
+        else if (state.queue.length >= maximumCommandQueue) {
+            state.failure = new Error(`Program command output exceeded its queue capacity of ${maximumCommandQueue}`)
+        }
+        else state.queue.push(Object.freeze({ stream: chunk.stream, text: chunk.text }))
+
+        state.wake?.()
+        state.wake = null
+    }
+
     @Subscribe("/forget")
     @Publish("/programs", "inbound")
     protected async forgotten(identity: string | null) {
@@ -146,3 +205,12 @@ export default class ProgramManager extends TheLink {
         return [...this.programs.values()]
     }
 }
+
+interface PendingCommand {
+    queue: ProgramCommandChunk[]
+    settled: boolean
+    failure: Error | null
+    wake: (() => void) | null
+}
+
+const maximumCommandQueue = 256

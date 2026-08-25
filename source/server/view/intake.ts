@@ -211,7 +211,10 @@ async function answer(application: Application, attached: Set<string>, say: (eve
 
         if (asked.everything !== undefined && typeof asked.everything !== "boolean") throw new Error("Uninstalling everything must be true or false")
 
-        await programManager.uninstallInstalled(asked.identity, asked.everything === true)
+        for await (const chunk of programManager.uninstallInstalledStreaming(asked.identity, asked.everything === true)) {
+
+            say({ event: "output", ...chunk })
+        }
 
         say({ event: "uninstalled", identity: asked.identity, everything: asked.everything === true })
 

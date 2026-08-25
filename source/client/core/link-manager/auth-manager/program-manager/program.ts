@@ -72,9 +72,9 @@ export default class Program {
 
     // False removes only installed program files. True removes everything
     // owned by the system and forgets the runtime Program.
-    public async uninstall(everything = false, asker = "") {
+    public uninstall(everything = false, asker = "") {
 
-        await this.programManager.uninstall(this.identity, everything, asker)
+        return this.programManager.uninstallStreaming(this.identity, everything, asker)
     }
 
     public async forget(asker: string) {
