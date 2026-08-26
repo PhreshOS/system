@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+@import "@heroui/styles";
+
+@import "@fontsource/roboto";
+
+@theme {
+
+    --font-roboto: "Roboto", sans-serif;
+}
