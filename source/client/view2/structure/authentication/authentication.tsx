@@ -1,8 +1,9 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { AuthManagerContext, LinkManagerContext } from "../../contexts"
-import { Button, Spinner } from "@heroui/react"
+import { Spinner } from "@heroui/react"
 import Credentials from "./credentials"
 import Desktop from "../desktop/desktop"
+import Failure from "../../components/failure"
 import usePromise from "@libs/react-promise"
 import useStorage from "@libs/storage-hook"
 import { useEffect, useState } from "react"
@@ -50,7 +51,7 @@ export default function () {
 
     if (session.isPending) return <Spinner aria-label="Restoring your session" className="place-self-center" />
 
-    if (session.exception) return <SessionFailure error={session.exception.current} retry={session.safeExecute} />
+    if (session.exception) return <Failure title="Your session could not be restored" error={session.exception.current} retry={session.safeExecute} />
 
     if (session.solve.kind === "authenticated") return <AuthManagerContext.Provider value={session.solve.manager}>
 
@@ -67,19 +68,6 @@ export default function () {
         onRegistered={() => setRevision(current => current + 1)}
 
     />
-}
-
-function SessionFailure({ error, retry }: { error: unknown, retry: () => Promise<Session | undefined> }) {
-
-    return <section className="grid place-self-center justify-items-center gap-4 p-6 text-center">
-
-        <h1 className="text-xl font-semibold">Your session could not be restored</h1>
-
-        <p className="text-muted">{error instanceof Error ? error.message : String(error)}</p>
-
-        <Button onPress={() => void retry()}>Try again</Button>
-
-    </section>
 }
 
 type Session = {

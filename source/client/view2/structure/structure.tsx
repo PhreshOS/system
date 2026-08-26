@@ -2,49 +2,24 @@ import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
 import { type TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import SocketLink from "@libs/the-link/plugins/client-link/socket-link"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { Button, Spinner, Switch, SwitchGroup } from "@heroui/react"
+import { Spinner, SwitchGroup } from "@heroui/react"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import Authentication from "./authentication/authentication"
+import DirectionSwitch from "../components/direction-switch"
+import ThemeSwitch from "../components/theme-switch"
+import Failure from "../components/failure"
 import usePromise from "@libs/react-promise"
-import useStorage from "@libs/storage-hook"
-import { useTheme } from "next-themes"
 import { useCallback, useState } from "react"
 
 export default function () {
-
-    const { resolvedTheme, setTheme } = useTheme()
-
-    const direction = useStorage("direction")
-
-    const reversed = direction.value === "rtl"
 
     return <>
 
         <SwitchGroup orientation="horizontal" className="justify-self-end p-4">
 
-            <Switch isSelected={resolvedTheme === "dark"} onChange={dark => setTheme(dark ? "dark" : "light")}>
+            <ThemeSwitch />
 
-                <Switch.Content>
-
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-
-                    Dark theme
-
-                </Switch.Content>
-
-            </Switch>
-
-            <Switch isSelected={reversed} onChange={value => direction.update(value ? "rtl" : "ltr")}>
-
-                <Switch.Content>
-
-                    <Switch.Control><Switch.Thumb /></Switch.Control>
-
-                    Reverse reading direction
-
-                </Switch.Content>
-
-            </Switch>
+            <DirectionSwitch />
 
         </SwitchGroup>
 
@@ -79,7 +54,7 @@ function Connection() {
 
     }, [])
 
-    if (connection.exception) return <ConnectionFailure error={connection.exception.current} retry={connection.safeExecute} />
+    if (connection.exception) return <Failure title="PhreshOS is unavailable" error={connection.exception.current} retry={connection.safeExecute} />
 
     if (!linkManager) return <Spinner aria-label="Connecting to PhreshOS" className="place-self-center" />
 
@@ -88,17 +63,4 @@ function Connection() {
         <Authentication />
 
     </LinkManagerContext.Provider>
-}
-
-function ConnectionFailure({ error, retry }: { error: unknown, retry: () => Promise<void | undefined> }) {
-
-    return <section className="grid place-self-center justify-items-center gap-4 p-6 text-center">
-
-        <h1 className="text-xl font-semibold">PhreshOS is unavailable</h1>
-
-        <p className="text-muted">{error instanceof Error ? error.message : String(error)}</p>
-
-        <Button onPress={() => void retry()}>Try again</Button>
-
-    </section>
 }
