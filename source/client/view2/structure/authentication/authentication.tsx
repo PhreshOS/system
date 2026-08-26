@@ -1,6 +1,8 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { AuthManagerContext, LinkManagerContext } from "../../contexts"
-import { Spinner } from "@heroui/react"
+import { Spinner, SwitchGroup } from "@heroui/react"
+import DirectionSwitch from "../../components/direction-switch"
+import ThemeSwitch from "../../components/theme-switch"
 import Credentials from "./credentials"
 import Desktop from "../desktop/desktop"
 import Failure from "../../components/failure"
@@ -59,15 +61,27 @@ export default function () {
 
     </AuthManagerContext.Provider>
 
-    return <Credentials
+    return <>
 
-        mode={session.solve.state.registered ? "sign-in" : "register"}
+        <SwitchGroup orientation="horizontal" className="absolute top-0 inset-e-0 p-4">
 
-        requirements={session.solve.state.requirements}
+            <ThemeSwitch />
 
-        onRegistered={() => setRevision(current => current + 1)}
+            <DirectionSwitch />
 
-    />
+        </SwitchGroup>
+
+        <Credentials
+
+            mode={session.solve.state.registered ? "sign-in" : "register"}
+
+            requirements={session.solve.state.requirements}
+
+            onRegistered={() => setRevision(current => current + 1)}
+
+        />
+
+    </>
 }
 
 type Session = {

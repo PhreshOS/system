@@ -15,7 +15,7 @@ export default function ({ children }: ComponentProps<typeof Fragment>) {
 
     return <ThemeProvider attribute="class" defaultTheme="system">
 
-        <div className="grid min-h-dvh grid-rows-[auto_minmax(0,1fr)] bg-background font-roboto text-foreground">
+        <div className="relative grid min-h-dvh bg-background font-roboto text-foreground">
 
             {children}
 
