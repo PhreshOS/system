@@ -1,20 +1,16 @@
 import { Switch, SwitchGroup } from "@heroui/react"
-import { useLayoutEffect, useState } from "react"
+import useStorage from "@libs/storage-hook"
 import { useTheme } from "next-themes"
 
-export default function ({ document }: StructureProps) {
+export default function () {
 
     const { resolvedTheme, setTheme } = useTheme()
 
-    const [reversed, setReversed] = useState(false)
+    const direction = useStorage("direction")
 
-    useLayoutEffect(function () {
+    const reversed = direction.value === "rtl"
 
-        document.documentElement.dir = reversed ? "rtl" : "ltr"
-
-    }, [document, reversed])
-
-    return <section className="grid justify-items-start gap-6">
+    return <main dir={reversed ? "rtl" : "ltr"} className="grid min-h-dvh place-content-center justify-items-start gap-6 bg-background font-roboto text-foreground">
 
         <p className="text-xl font-medium">PhreshOS</p>
 
@@ -36,7 +32,7 @@ export default function ({ document }: StructureProps) {
 
             </Switch>
 
-            <Switch isSelected={reversed} onChange={setReversed}>
+            <Switch isSelected={reversed} onChange={reversed => direction.update(reversed ? "rtl" : "ltr")}>
 
                 <Switch.Content>
 
@@ -54,10 +50,5 @@ export default function ({ document }: StructureProps) {
 
         </SwitchGroup>
 
-    </section>
-}
-
-interface StructureProps {
-
-    document: Document
+    </main>
 }

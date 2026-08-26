@@ -15,13 +15,9 @@ export default function (config: Config) {
 
     config.document.head.appendChild(icon)
 
-    const container = config.document.getElementById("root")
+    client.createRoot(config.document.body).render(<Appearance>
 
-    if (!container) throw new Error("The Client root container is missing")
-
-    client.createRoot(container).render(<Appearance>
-
-        <Structure document={config.document} />
+        <Structure />
 
     </Appearance>)
 }
