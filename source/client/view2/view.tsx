@@ -1,5 +1,7 @@
 import Appearance from "./appearance/appearance"
 import Structure from "./structure/structure"
+import Application, { type Doors } from "@client/core/application"
+import { ApplicationContext } from "./contexts"
 import client from "react-dom/client"
 import logo from "@/assets/bundled/logo.png"
 
@@ -15,11 +17,20 @@ export default function (config: Config) {
 
     config.document.head.appendChild(icon)
 
-    client.createRoot(config.document.body).render(<Appearance>
+    const application = new Application(config.name, config.displayName, config.version, config.doors)
 
-        <Structure />
+    client.createRoot(config.document.body).render(
 
-    </Appearance>)
+        <ApplicationContext.Provider value={application}>
+
+            <Appearance>
+
+                <Structure />
+
+            </Appearance>
+
+        </ApplicationContext.Provider>
+    )
 }
 
 interface Config {
@@ -29,6 +40,8 @@ interface Config {
     displayName: string
 
     version: string
+
+    doors: Doors
 
     document: Document
 }
