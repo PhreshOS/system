@@ -1,12 +1,10 @@
 import {
     isRelativeValue,
-    isScaleLevel,
     type Easing,
     type Position,
-    type ScaleLevel,
     type Size,
-    type SurfaceSettings,
     type Transaction,
+    type VisibilityTransition,
     type WindowGeometry,
     type WindowLayer,
     type WindowState
@@ -18,8 +16,8 @@ export type LocalAnimation = Readonly<{
 }>
 
 export type LocalSurfaceState = Readonly<{
-    settings: SurfaceSettings
-    animation: LocalAnimation | null
+    visible: boolean
+    transition: LocalAnimation | null
 }>
 
 /** Everything physically represented by one exact live Client iframe. */
@@ -38,8 +36,8 @@ export interface LocalWindowHost {
     minimize(identity: string, minimized: boolean): void
     title(identity: string, title: string): void
     raise(identity: string): void
-    setSurface(identity: string, settings: SurfaceSettings, transaction?: Transaction): Promise<void>
-    removeSurface(identity: string): void
+    setSurface(identity: string, transition: VisibilityTransition): Promise<void>
+    removeSurface(identity: string, transition: VisibilityTransition): Promise<void>
     complete(identity: string, kind: "geometry" | "surface", revision: number): void
     release(identity: string): void
 }
@@ -64,26 +62,6 @@ export function localGeometry(value: unknown): WindowGeometry {
     const record = plain(value, "Local Window geometry")
     fields(record, ["position", "size"], "Local Window geometry")
     return Object.freeze({ position: localPosition(record.position), size: localSize(record.size) })
-}
-
-export function surfaceSettings(value: unknown): SurfaceSettings {
-    const record = plain(value, "Surface settings")
-    fields(record, ["opacity", "radius"], "Surface settings")
-    const result: { opacity?: number, radius?: ScaleLevel | number | "full" } = {}
-
-    if ("opacity" in record) {
-
-        if (!finite(record.opacity) || record.opacity < 0 || record.opacity > 1) throw new Error("Surface opacity must be a finite number from 0 to 1")
-        result.opacity = record.opacity
-    }
-
-    if ("radius" in record) {
-
-        if (record.radius !== "full" && !isScaleLevel(record.radius) && (!finite(record.radius) || record.radius < 0)) throw new Error('Surface radius must be a ScaleLevel, a finite nonnegative pixel number, or "full"')
-        result.radius = record.radius
-    }
-
-    return Object.freeze(result)
 }
 
 export function visualTransaction(value: unknown): Transaction | undefined {
@@ -111,6 +89,12 @@ export function visualTransaction(value: unknown): Transaction | undefined {
     }
 
     return Object.freeze(result) as Transaction
+}
+
+export function visibilityTransition(value: unknown): VisibilityTransition {
+    const transition = visualTransaction(value)
+    if (!transition) throw new Error("A VisibilityTransition is required")
+    return transition
 }
 
 export function layerAllowsSurface(layer: WindowLayer) {

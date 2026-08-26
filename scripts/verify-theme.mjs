@@ -11,7 +11,7 @@ const expected = {
   surface: {
     grain: 0,
     grainAmount: 0,
-    animation: 0,
+    grainAnimation: 0,
     backdrop: 0,
     opacity: 1,
     distortion: 0,
@@ -28,7 +28,7 @@ const configured = themeSchema.parse({
   surface: {
     grain: 0.9,
     grainAmount: 0.5,
-    animation: 16,
+    grainAnimation: 16,
     backdrop: 24,
     opacity: 0,
     distortion: 140,
@@ -42,7 +42,7 @@ assert.equal(configured.background, "black")
 assert.deepEqual(configured.surface, {
   grain: 0.9,
   grainAmount: 0.5,
-  animation: 16,
+  grainAnimation: 16,
   backdrop: 24,
   opacity: 0,
   distortion: 140,
@@ -55,7 +55,8 @@ assert.throws(() => themeSchema.parse({ surface: { color: "black" } }))
 assert.throws(() => themeSchema.parse({ glass: {} }))
 assert.throws(() => themeSchema.parse({ surface: { grain: 1.01 } }))
 assert.throws(() => themeSchema.parse({ surface: { grainAmount: -0.01 } }))
-assert.throws(() => themeSchema.parse({ surface: { animation: 17 } }))
+assert.throws(() => themeSchema.parse({ surface: { animation: 1 } }))
+assert.throws(() => themeSchema.parse({ surface: { grainAnimation: 17 } }))
 assert.throws(() => themeSchema.parse({ surface: { backdrop: 25 } }))
 assert.throws(() => themeSchema.parse({ surface: { distortion: 141 } }))
 assert.throws(() => themeSchema.parse({ surface: { waves: 41 } }))

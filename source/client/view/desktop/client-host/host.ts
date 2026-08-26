@@ -10,7 +10,7 @@ import {
     localGeometry,
     localPosition,
     localSize,
-    surfaceSettings,
+    visibilityTransition,
     visualTransaction,
     type LocalWindowHost
 } from "./local-window"
@@ -562,14 +562,14 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "windowLocalSurfaceSet") {
 
-            await localWindow.setSurface(scope.localProcess(args[0]).identity, surfaceSettings(args[1] === undefined ? {} : args[1]), visualTransaction(args[2]))
+            await localWindow.setSurface(scope.localProcess(args[0]).identity, visibilityTransition(args[1]))
 
             return []
         }
 
         if (word === "windowLocalSurfaceRemove") {
 
-            localWindow.removeSurface(scope.localProcess(args[0]).identity)
+            await localWindow.removeSurface(scope.localProcess(args[0]).identity, visibilityTransition(args[1]))
 
             return []
         }

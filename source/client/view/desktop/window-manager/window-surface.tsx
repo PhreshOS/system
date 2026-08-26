@@ -1,6 +1,5 @@
 import { useReducedMotion } from "@libs/react-motion"
-import { isScaleLevel, scale, type SurfaceSettings } from "@phreshos/core"
-import { Surface, useTheme } from "@phreshos/react-ui"
+import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
 import { type LocalSurfaceState } from "../client-host/local-window"
 import gsap, { motionDuration, motionEase } from "../../appearance/motion"
@@ -10,7 +9,7 @@ const systemDuration = 240
 /** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
 
-    const { settings, animation: requestedAnimation } = state
+    const { transition, visible } = state
 
     const element = useRef<HTMLDivElement>(null)
 
@@ -18,12 +17,9 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
     const reducedMotion = useReducedMotion()
 
-    const themeRadius = useTheme().radius
-
-    // Rendering retains the last settled target while an incoming target is
-    // prepared imperatively. This leaves the element's current visual values
-    // available when a new transaction interrupts one already in flight.
-    const [rendered, setRendered] = useState(settings)
+    // Keep the last painted target in React while an incoming transition is
+    // prepared from the element's current compositor value.
+    const [renderedVisible, setRenderedVisible] = useState(visible)
 
     useLayoutEffect(function () {
 
@@ -31,23 +27,17 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         if (!surface) return
 
-        const target = values(settings, themeRadius)
-
         const current = getComputedStyle(surface)
 
-        const revision = requestedAnimation?.revision ?? null
+        const revision = transition?.revision ?? null
 
         const changed = revision !== null
 
-        const from = firstRender.current && changed
-
-            ? { opacity: 0, borderRadius: "0px" }
-
-            : { opacity: Number(current.opacity), borderRadius: current.borderRadius }
+        const from = { opacity: firstRender.current && visible ? 0 : Number(current.opacity) }
 
         firstRender.current = false
 
-        const transaction = requestedAnimation?.transaction
+        const transaction = transition?.transaction
 
         const duration = transaction?.duration ?? systemDuration
 
@@ -55,8 +45,8 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         if (!transaction || !changed || reducedMotion || duration === 0) {
 
-            gsap.set(surface, target)
-            setRendered(settings)
+            gsap.set(surface, { opacity: visible ? 1 : 0 })
+            setRenderedVisible(visible)
 
             if (transaction && changed) onComplete(revision!)
 
@@ -64,13 +54,13 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
         }
 
         const animation = gsap.fromTo(surface, from, {
-            ...target,
+            opacity: visible ? 1 : 0,
             duration: motionDuration(duration),
             ease: motionEase(transaction.easing),
             overwrite: "auto",
             onComplete: function () {
 
-                setRendered(settings)
+                setRenderedVisible(visible)
                 onComplete(revision!)
             }
         })
@@ -81,14 +71,10 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
             surface.style.opacity = shown.opacity
 
-            surface.style.borderRadius = shown.borderRadius
-
             animation.kill()
         }
 
-    }, [reducedMotion, requestedAnimation?.revision, settings, themeRadius])
-
-    const target = values(rendered, themeRadius)
+    }, [reducedMotion, transition?.revision, visible])
 
     return <Surface
 
@@ -100,21 +86,9 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         className="pointer-events-none absolute inset-0"
 
-        style={{ opacity: target.opacity, borderRadius: target.borderRadius }}
+        style={{ opacity: renderedVisible ? 1 : 0 }}
 
     />
-}
-
-function values(settings: SurfaceSettings, themeRadius: number) {
-
-    const radius = settings.radius
-
-    return {
-
-        opacity: settings.opacity ?? 1,
-
-        borderRadius: radius === "full" ? "50%" : `${isScaleLevel(radius) ? scale(themeRadius, radius) : radius ?? 0}px`
-    }
 }
 
 interface WindowSurfaceProps {

@@ -142,24 +142,28 @@ export default class LocalWindows implements LocalWindowHost {
         this.replace(identity, { ...state, depth: depth + 1 })
     }
 
-    public setSurface(process: string, settings: NonNullable<LocalWindowState["surface"]>["settings"], transaction?: Transaction) {
+    public setSurface(process: string, transaction: Transaction) {
 
         const { identity, state } = this.existing(process)
         layerAllowsSurface(state.layer)
-        if (state.surface && JSON.stringify(state.surface.settings) === JSON.stringify(settings)) return Promise.resolve()
+        if (state.surface?.visible) return Promise.resolve()
 
         this.cancel(identity, "surface")
-        const animation = transaction ? { revision: ++this.revision, transaction } : null
-        this.replace(identity, { ...state, surface: { settings, animation } })
-        return this.waitFor(identity, "surface", animation)
+        const transition = { revision: ++this.revision, transaction }
+        this.replace(identity, { ...state, surface: { visible: true, transition } })
+        return this.waitFor(identity, "surface", transition)
     }
 
-    public removeSurface(process: string) {
+    public removeSurface(process: string, transaction: Transaction) {
 
         const { identity, state } = this.existing(process)
         layerAllowsSurface(state.layer)
+        if (!state.surface || !state.surface.visible) return Promise.resolve()
+
         this.cancel(identity, "surface")
-        this.replace(identity, { ...state, surface: null })
+        const transition = { revision: ++this.revision, transaction }
+        this.replace(identity, { ...state, surface: { visible: false, transition } })
+        return this.waitFor(identity, "surface", transition)
     }
 
     public complete(process: string, kind: AnimationKind, revision: number) {
@@ -167,12 +171,12 @@ export default class LocalWindows implements LocalWindowHost {
         const identity = this.live.get(process)
         if (!identity) return
         const state = this.windows.get(identity)
-        const animation = kind === "geometry" ? state?.geometryAnimation : state?.surface?.animation
+        const animation = kind === "geometry" ? state?.geometryAnimation : state?.surface?.transition
         if (!state || animation?.revision !== revision) return
 
         this.replace(identity, kind === "geometry"
             ? { ...state, geometryAnimation: null }
-            : { ...state, surface: state.surface && { ...state.surface, animation: null } })
+            : { ...state, surface: state.surface?.visible ? { ...state.surface, transition: null } : null })
 
         const key = animationKey(identity, kind)
         const waiting = this.waiting.get(key)
