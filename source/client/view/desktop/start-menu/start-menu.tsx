@@ -23,7 +23,7 @@ export default memo(function StartMenu() {
 
     >
 
-        {close => <div className="grid max-h-full overflow-y-auto p-2">
+        {close => <div data-start-menu-scroll className="grid min-h-0 max-h-full overflow-y-auto p-2 [scrollbar-gutter:stable]">
 
             <ProgramsSection onChoose={close} />
 

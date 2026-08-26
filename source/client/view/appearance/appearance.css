@@ -41,3 +41,26 @@
 
     --text-shadow-chrome: 0 1px 0 rgba(255, 255, 255, 0.8);
 }
+
+[data-start-menu-scroll] {
+
+    scrollbar-color: color-mix(in oklch, currentColor 28%, transparent) transparent;
+
+    scrollbar-width: thin;
+}
+
+[data-start-menu-scroll]::-webkit-scrollbar {
+
+    width: 0.5rem;
+}
+
+[data-start-menu-scroll]::-webkit-scrollbar-thumb {
+
+    background: color-mix(in oklch, currentColor 28%, transparent);
+
+    background-clip: padding-box;
+
+    border: 0.125rem solid transparent;
+
+    border-radius: 999px;
+}

@@ -9,7 +9,7 @@ export default function TaskbarSurface({ label, labelId, children }: TaskbarSurf
 
     const contentRadius = numericScale(useTheme().radius).medium
 
-    return <Surface style={{ borderRadius: "inherit" }} className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
+    return <Surface style={{ borderRadius: "inherit" }} className="grid min-h-0 max-h-[inherit] grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
 
         <h2 id={labelId} className="relative grid h-10 items-center px-3.5 text-window-title font-medium text-shadow-chrome select-none">{label}</h2>
 
