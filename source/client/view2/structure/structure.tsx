@@ -8,7 +8,7 @@ import Authentication from "./authentication/authentication"
 import usePromise from "@libs/react-promise"
 import useStorage from "@libs/storage-hook"
 import { useTheme } from "next-themes"
-import { useCallback, useLayoutEffect, useState } from "react"
+import { useCallback, useState } from "react"
 
 export default function () {
 
@@ -18,13 +18,7 @@ export default function () {
 
     const reversed = direction.value === "rtl"
 
-    useLayoutEffect(function () {
-
-        document.documentElement.dir = reversed ? "rtl" : "ltr"
-
-    }, [reversed])
-
-    return <main className="grid min-h-dvh grid-rows-[auto_minmax(0,1fr)] bg-background font-roboto text-foreground">
+    return <>
 
         <SwitchGroup orientation="horizontal" className="justify-self-end p-4">
 
@@ -56,7 +50,7 @@ export default function () {
 
         <Connection />
 
-    </main>
+    </>
 }
 
 function Connection() {
