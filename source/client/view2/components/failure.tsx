@@ -2,7 +2,7 @@ import { Button } from "@heroui/react"
 
 export default function ({ title, error, retry }: FailureProps) {
 
-    return <section className="grid place-self-center justify-items-center gap-4 p-6 text-center">
+    return <div className="grid place-self-center justify-items-center gap-4 p-6 text-center">
 
         <h1 className="text-xl font-semibold">{title}</h1>
 
@@ -10,7 +10,7 @@ export default function ({ title, error, retry }: FailureProps) {
 
         <Button onPress={() => void retry()}>Try again</Button>
 
-    </section>
+    </div>
 }
 
 interface FailureProps {
