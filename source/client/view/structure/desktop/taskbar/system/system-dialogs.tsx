@@ -2,7 +2,7 @@ import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } 
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { useScale, useTheme } from "@phreshos/react-ui"
+import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { useEffect, useId, useRef } from "react"
 import { AuthManagerContext } from "../../../../contexts"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
@@ -33,7 +33,7 @@ export default function SystemDialogs() {
 
     const reducedMotion = useReducedMotion()
 
-    const radius = useScale(useTheme().radius).large
+    const radius = useScale(useResolveTheme(useAppearance().radius)).large
 
     useEffect(function () {
 

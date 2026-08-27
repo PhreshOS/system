@@ -194,7 +194,7 @@ export default class LocalWindows implements LocalWindowHost {
         this.cancel(identity, "surface", "The local Window representation was removed")
 
         const client = this.client(process)
-        if (!client || client.window.layer === "wallpaper") return
+        if (!client) return
         this.authoritative.set(identity, authoritativeSignature(client))
         this.replace(identity, localState(client))
     }

@@ -43,9 +43,9 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     private readonly hostSubscriptions = new Map<string, () => void>()
 
-    private readonly themeSubscriptions = new Set<string>()
+    private readonly appearanceSubscriptions = new Set<string>()
 
-    private stopTheme: (() => void) | null = null
+    private stopAppearance: (() => void) | null = null
 
     private readonly child: ChildProcess
 
@@ -53,13 +53,13 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     private readonly hostTraffic: HostTraffic
 
-    private readonly theme: Tunnel
+    private readonly appearance: Tunnel
 
     private readonly unanswered: (values: unknown[], reason: string) => void
 
     public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
 
-    public constructor(child: ChildProcess, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, theme: Tunnel) {
+    public constructor(child: ChildProcess, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
 
         super(child, messagepack.serialize, messagepack.deserialize)
 
@@ -80,7 +80,7 @@ export default class ServerProcessBoundary extends ProcessLink {
 
         this.hostTraffic = hostTraffic
 
-        this.theme = theme
+        this.appearance = appearance
 
         this.unanswered = unanswered
 
@@ -266,11 +266,11 @@ export default class ServerProcessBoundary extends ProcessLink {
 
         this.hostSubscriptions.clear()
 
-        this.themeSubscriptions.clear()
+        this.appearanceSubscriptions.clear()
 
-        this.stopTheme?.()
+        this.stopAppearance?.()
 
-        this.stopTheme = null
+        this.stopAppearance = null
 
         this.subscriptions.clear()
 
@@ -335,13 +335,13 @@ export default class ServerProcessBoundary extends ProcessLink {
 
             this.subscriptions.set(subscription, description)
 
-            if (themeSubscription(description)) {
+            if (appearanceSubscription(description)) {
 
-                this.themeSubscriptions.add(subscription)
+                this.appearanceSubscriptions.add(subscription)
 
-                if (!this.stopTheme) this.stopTheme = this.theme.subscribe("change", theme => {
+                if (!this.stopAppearance) this.stopAppearance = this.appearance.subscribe("change", appearance => {
 
-                    this.deliver("host-theme", "change", theme).catch(() => undefined)
+                    this.deliver("host-appearance", "change", appearance).catch(() => undefined)
                 })
 
             }
@@ -421,11 +421,11 @@ export default class ServerProcessBoundary extends ProcessLink {
 
         this.hostSubscriptions.delete(subscription)
 
-        if (this.themeSubscriptions.delete(subscription) && this.themeSubscriptions.size === 0) {
+        if (this.appearanceSubscriptions.delete(subscription) && this.appearanceSubscriptions.size === 0) {
 
-            this.stopTheme?.()
+            this.stopAppearance?.()
 
-            this.stopTheme = null
+            this.stopAppearance = null
         }
     }
 
@@ -480,9 +480,9 @@ interface EndpointSubscription {
     subject: string | null
 }
 
-function themeSubscription(subscription: EndpointSubscription) {
+function appearanceSubscription(subscription: EndpointSubscription) {
 
-    return subscription.kind === "publish" && subscription.route === "host-theme" && (subscription.event === null || subscription.event === "change")
+    return subscription.kind === "publish" && subscription.route === "host-appearance" && (subscription.event === null || subscription.event === "change")
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {

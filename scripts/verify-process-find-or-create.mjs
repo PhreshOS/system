@@ -26,7 +26,7 @@ const manager = Object.assign(Object.create(ProgramManager.prototype), {
   reach: identity => identity === program.identity ? program : null
 })
 
-manager.start = async (owner, launch, _watching, _parent, _transition, _wallpaper, prepared) => {
+manager.start = async (owner, launch, _watching, _parent, _transition, prepared) => {
   await Promise.resolve()
 
   const existing = [...processes.values()].find(process => process.program === owner && process.name === launch.name)

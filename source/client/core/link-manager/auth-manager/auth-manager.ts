@@ -5,7 +5,7 @@ import ProgramManager from "./program-manager/program-manager"
 import DialogManager from "./dialog-manager"
 import TheLink from "@libs/the-link/the-link"
 import LinkManager from "../link-manager"
-import { type PermissionDecision, type PermissionName, type ThemeProperties } from "@phreshos/core"
+import { type PermissionDecision, type PermissionName } from "@phreshos/core"
 
 export default class AuthManager extends TheLink {
 
@@ -46,12 +46,6 @@ export default class AuthManager extends TheLink {
     public emit(event: string, ...values: unknown[]) {
 
         this.linkManager.emitToSession(`/auth${event}`, this.authorization, ...values)
-    }
-
-    /** Replace the authoritative system Theme. */
-    public async updateTheme(theme: ThemeProperties) {
-
-        await this.$outbound.publish("/theme", theme)
     }
 
     /** Reads one effective permission for the structurally identified Process. */

@@ -1,12 +1,12 @@
 import { ReactNode } from "react"
-import { Surface, useScale, useTheme } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 
 /** The window-material shell shared by surfaces opened from the taskbar. */
 export const taskbarSurfaceClassName = "m-0 isolate overflow-hidden border-0 bg-transparent p-0 shadow-window-active outline-none"
 
 export default function TaskbarSurface({ label, labelId, children }: TaskbarSurfaceProps) {
 
-    const contentRadius = useScale(useTheme().radius).medium
+    const contentRadius = useScale(useResolveTheme(useAppearance().radius)).medium
 
     return <Surface className="grid min-h-0 max-h-[inherit] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-[inherit]">
 

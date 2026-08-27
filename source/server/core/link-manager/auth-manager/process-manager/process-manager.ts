@@ -155,8 +155,6 @@ export default class ProcessManager extends TheLink {
 
         const window = this.windowOf(identity)
 
-        if (window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
         return window
     }
 
@@ -728,7 +726,7 @@ export default class ProcessManager extends TheLink {
 
             (values, reason) => this.rejectQuestion(values, reason),
 
-            this.authManager.linkManager.theme.tunnel
+            this.authManager.linkManager.appearance.tunnel
         )
 
         this.bindServer(process, server)
@@ -972,8 +970,6 @@ export default class ProcessManager extends TheLink {
         await this.transition(process, async () => {
 
             if (!process.client) throw new Error("The client endpoint is already stopped")
-
-            if (process.client.window.layer === "wallpaper") throw new Error("A wallpaper Client cannot be stopped; exit the Process instead")
 
             if (!process.server) throw new Error("The final live endpoint cannot be stopped; exit the Process instead")
 
@@ -1442,44 +1438,13 @@ export default class ProcessManager extends TheLink {
             return [programManager.find(created.identity)]
         }
 
-        if (word === "theme") return [this.authManager.linkManager.theme.value]
+        if (word === "appearance") return [this.authManager.linkManager.appearance.value]
 
-        if (word === "update-theme") return [await this.authManager.updateTheme(rest[0])]
+        if (word === "update-appearance") {
 
-        if (word === "wallpaper") {
+            await this.authManager.updateAppearance(rest[0])
 
-            const surface = rest[0]
-
-            const operation = rest[1]
-
-            const link = this.authManager.linkManager
-
-            if (surface === "sign-in") {
-
-                if (operation === "set") return [await link.setSignInWallpaper(rest[2])]
-
-                if (operation === "remove") return [await link.removeSignInWallpaper()]
-
-                throw new Error(`The host does not know the sign-in wallpaper operation "${String(operation)}"`)
-            }
-
-            if (surface === "desktop") {
-
-                if (operation === "set") return [await link.setDesktopWallpaper(rest[2])]
-
-                if (operation === "remove") return [await link.removeDesktopWallpaper()]
-
-                if (operation === "set-program") {
-
-                    const program = this.heldProgram(rest[2])
-
-                    return [await link.setDesktopWallpaperProgram(program, rest[3] as import("@phreshos/core").WallpaperLaunch)]
-                }
-
-                throw new Error(`The host does not know the desktop wallpaper operation "${String(operation)}"`)
-            }
-
-            throw new Error(`The host does not know the wallpaper surface "${String(surface)}"`)
+            return []
         }
 
         if (word === "fork") {
@@ -2366,7 +2331,7 @@ export default class ProcessManager extends TheLink {
 
             const window = process.client?.window
 
-            if (!process.client || !window || window.layer === "wallpaper" || window.minimized || window.layer !== layer) continue
+            if (!process.client || !window || window.minimized || window.layer !== layer) continue
 
             if (window.depth <= depth) continue
 
@@ -2462,12 +2427,7 @@ export interface StandardShape extends ShapeBase {
     layer: Layer
 }
 
-export interface WallpaperShape extends ShapeBase {
-
-    layer: "wallpaper"
-}
-
-export type Shape = StandardShape | WallpaperShape
+export type Shape = StandardShape
 
 type EndpointEvent = "endpointStart" | "endpointStop"
 

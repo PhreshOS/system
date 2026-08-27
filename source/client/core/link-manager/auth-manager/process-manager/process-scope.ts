@@ -53,8 +53,6 @@ export default class ProcessScope {
 
         const found = this.window(named)
 
-        if (found.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
-
         return found
     }
 
@@ -63,8 +61,6 @@ export default class ProcessScope {
         const found = this.sibling(named)
 
         if (!found.client) throw new Error("This process has no live client endpoint")
-
-        if (found.client.window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
 
         return found
     }

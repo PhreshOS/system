@@ -4,8 +4,7 @@ import FileManager from "@libs/file-manager"
 import Encryptor from "@libs/encryptor"
 import ServedFileManager from "./served-file-manager"
 import DialogManager from "./dialog-manager"
-import ThemeManager from "./theme-manager"
-import WallpaperManager from "./wallpaper-manager"
+import AppearanceManager from "./appearance-manager"
 import openStore from "./open-store"
 import Keyv from "keyv"
 import FileArea from "@libs/file-area"
@@ -39,9 +38,7 @@ export default class Application {
 
     public readonly dialogManager: DialogManager
 
-    public readonly themeManager: ThemeManager
-
-    public readonly wallpaperManager: WallpaperManager
+    public readonly appearanceManager: AppearanceManager
 
     public readonly linkManager: LinkManager
 
@@ -67,11 +64,9 @@ export default class Application {
 
         this.authentication = payload.authentication
 
-        this.themeManager = payload.themeManager
-
-        this.wallpaperManager = payload.wallpaperManager
-
         this.servedFiles = payload.servedFiles
+
+        this.appearanceManager = payload.appearanceManager
 
         this.dialogManager = new DialogManager()
 
@@ -92,17 +87,13 @@ export default class Application {
 
         const authentication = await Authentication.open(storage.join("credentials.json"), store)
 
-        const themeManager = await ThemeManager.open(store)
-
         const servedFiles = new ServedFileManager(storage.navigateTo("uploads"))
 
-        const wallpaperManager = await WallpaperManager.open(store, servedFiles)
+        const appearanceManager = await AppearanceManager.open(store, servedFiles)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, themeManager, wallpaperManager, servedFiles })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, servedFiles })
 
         await application.linkManager.authManager.programManager.initialize()
-
-        await application.wallpaperManager.initialize(application.linkManager.authManager.programManager)
 
         return application
     }
@@ -128,9 +119,7 @@ interface ApplicationPayload {
 
     authentication: Authentication
 
-    themeManager: ThemeManager
-
-    wallpaperManager: WallpaperManager
+    appearanceManager: AppearanceManager
 
     servedFiles: ServedFileManager
 }

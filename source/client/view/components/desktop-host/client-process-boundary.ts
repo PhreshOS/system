@@ -42,6 +42,10 @@ export default class ClientProcessBoundary extends TheLink {
 
     private stopTheme: (() => void) | null = null
 
+    private readonly appearanceSubscriptions = new Set<string>()
+
+    private stopAppearance: (() => void) | null = null
+
     private readonly trafficDeliveries = new WeakSet<object>()
 
     // A document can begin executing before its iframe load event gives the
@@ -378,7 +382,7 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.subscriptions.set(subscription, description)
 
-            if (!themeSubscription(description)) this.addTraffic(kind, route, event)
+            if (!localPropertySubscription(description)) this.addTraffic(kind, route, event)
 
             if (this.owner && directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, this.owner, subscription, kind, event).catch(() => undefined)
 
@@ -389,6 +393,17 @@ export default class ClientProcessBoundary extends TheLink {
                 if (!this.stopTheme) this.stopTheme = this.authManager.linkManager.theme.tunnel.subscribe("change", (theme: unknown) => {
 
                     this.deliver("host-theme", "change", theme).catch(() => undefined)
+                })
+
+            }
+
+            if (appearanceSubscription(description)) {
+
+                this.appearanceSubscriptions.add(subscription)
+
+                if (!this.stopAppearance) this.stopAppearance = this.authManager.linkManager.appearance.tunnel.subscribe("change", (appearance: unknown) => {
+
+                    this.deliver("host-appearance", "change", appearance).catch(() => undefined)
                 })
 
             }
@@ -705,6 +720,13 @@ export default class ClientProcessBoundary extends TheLink {
             this.stopTheme = null
         }
 
+        if (this.appearanceSubscriptions.delete(subscription) && this.appearanceSubscriptions.size === 0) {
+
+            this.stopAppearance?.()
+
+            this.stopAppearance = null
+        }
+
         const key = JSON.stringify([existing.kind, existing.route, existing.event])
 
         const traffic = this.trafficSubscriptions.get(key)
@@ -839,9 +861,15 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.themeSubscriptions.clear()
 
+        this.appearanceSubscriptions.clear()
+
         this.stopTheme?.()
 
         this.stopTheme = null
+
+        this.stopAppearance?.()
+
+        this.stopAppearance = null
 
         for (const { stop } of this.trafficSubscriptions.values()) stop()
 
@@ -976,6 +1004,16 @@ function pointerSubscription(subscription: EndpointSubscription) {
 function themeSubscription(subscription: EndpointSubscription) {
 
     return subscription.kind === "publish" && subscription.route === "host-theme" && (subscription.event === null || subscription.event === "change")
+}
+
+function appearanceSubscription(subscription: EndpointSubscription) {
+
+    return subscription.kind === "publish" && subscription.route === "host-appearance" && (subscription.event === null || subscription.event === "change")
+}
+
+function localPropertySubscription(subscription: EndpointSubscription) {
+
+    return themeSubscription(subscription) || appearanceSubscription(subscription)
 }
 
 function directSubscription(subscription: EndpointSubscription) {

@@ -13,9 +13,9 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers, type Layer, type Position, type ProgramConfig, type Size } from "./config"
-import { type PermissionName, type ProgramCommandChunk, type WallpaperLaunch } from "@phreshos/core"
+import { type PermissionName, type ProgramCommandChunk } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
-import { type StandardShape, type WallpaperShape } from "../process-manager/process-manager"
+import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type HostedEntry } from "./entry"
 import Keyv from "keyv"
@@ -1038,7 +1038,7 @@ export default class ProgramManager extends TheLink {
 
             if (typeof parent === "string" && !creator) throw new Error("The system does not know the parent process")
 
-            return await this.start(program, launch, undefined, creator ?? null, false, false, resolved)
+            return await this.start(program, launch, undefined, creator ?? null, false, resolved)
         })
     }
 
@@ -1187,7 +1187,7 @@ export default class ProgramManager extends TheLink {
         return { options, server, client, shape, intent }
     }
 
-    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, wallpaper = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>) {
+    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>) {
 
         if (!transitionOwnsIdentity && this.changing.has(program.identity)) throw new Error("This program is changing and cannot create a process")
 
@@ -1200,7 +1200,7 @@ export default class ProgramManager extends TheLink {
 
         const { options, server, client } = resolved
 
-        const shape = client ? wallpaper ? this.wallpaperShape(resolved.shape!) : resolved.shape : null
+        const shape = client ? resolved.shape : null
 
         // Recheck the program-local name immediately before registration,
         // then create and register without yielding so concurrent launches
@@ -1254,14 +1254,6 @@ export default class ProgramManager extends TheLink {
         })
 
         return identity
-    }
-
-    /** Creates the one protected Process representation used as desktop wallpaper. */
-    public async startWallpaper(program: Program, launch: WallpaperLaunch = {}) {
-
-        if (!program.client) throw new Error("A desktop wallpaper Program must declare a Client")
-
-        return await this.start(program, { ...launch, client: launch.client ?? true }, undefined, null, false, true)
     }
 
     /** Starts one fresh server endpoint incarnation for a Process. */
@@ -1358,22 +1350,6 @@ export default class ProgramManager extends TheLink {
             location: page(asked.location, program.clientLocation),
 
             minimize: asked.minimize ?? client.minimize ?? false
-        }
-    }
-
-    private wallpaperShape(shape: StandardShape): WallpaperShape {
-
-        return {
-
-            ...shape,
-
-            position: { x: "0/1", y: "0/1" },
-
-            size: { width: "1/1", height: "1/1" },
-
-            layer: "wallpaper",
-
-            minimize: false
         }
     }
 

@@ -1,5 +1,5 @@
 import { type Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
-import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
 import DesktopDisplay from "./desktop-display"
@@ -14,11 +14,10 @@ import Taskbar from "./taskbar/taskbar"
 import WindowTaskbarItem from "./taskbar/programs/window-taskbar-item"
 import ProcessWindow from "./windows/process-window"
 import useWindows from "../../components/window-manager/window-manager"
-import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
-import ProgramFrame from "../../components/program-frame"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness/main"
+import { useAppearance, useResolveTheme } from "@phreshos/react-ui"
 
 export default function Workspace() {
 
@@ -26,7 +25,7 @@ export default function Workspace() {
 
     const authManager = AuthManagerContext.useValue()
 
-    const desktopWallpaper = useProperty(authManager.linkManager.desktopWallpaper)
+    const desktopWallpaper = useResolveTheme(useAppearance().desktopWallpaper)
 
     const windows = useWindows(authManager)
 
@@ -38,15 +37,9 @@ export default function Workspace() {
 
     const [readyPrograms, setReadyPrograms] = useState<ReadonlySet<string>>(() => new Set())
 
-    const wallpaperIdentity = windows.wallpaper?.identity ?? null
-
-    const [readyWallpaper, setReadyWallpaper] = useState<string | null>(null)
-
     const [fileWallpaperReady, setFileWallpaperReady] = useState(false)
 
-    const programWallpaperReady = wallpaperIdentity !== null && readyWallpaper === wallpaperIdentity
-
-    const wallpaperReady = windows.wallpaper ? programWallpaperReady : fileWallpaperReady
+    const wallpaperReady = fileWallpaperReady
 
     const desktop = useRef<HTMLDivElement>(null)
 
@@ -67,19 +60,6 @@ export default function Workspace() {
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
     const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.localWindow)
-
-    const wallpaperLoaded = useCallback((event: SyntheticEvent<HTMLIFrameElement>) => {
-
-        const wallpaper = windows.wallpaper
-
-        if (wallpaper) {
-
-            frameLoaded(wallpaper.identity, event.currentTarget)
-
-            setReadyWallpaper(wallpaper.identity)
-        }
-
-    }, [frameLoaded, windows.wallpaper])
 
     const fileWallpaperLoaded = useCallback(() => {
 
@@ -228,39 +208,7 @@ export default function Workspace() {
 
     </Taskbar>
 
-    const wallpaper = <>
-
-        <WallpaperBackground
-
-            file={windows.wallpaper ? undefined : desktopWallpaper}
-
-            visible={!programWallpaperReady}
-
-            onReady={fileWallpaperLoaded}
-
-        />
-
-        {windows.wallpaper?.client && programAccess !== "checking" && <ProgramFrame
-
-            record={windows.wallpaper}
-
-            client={windows.wallpaper.client}
-
-            title={windows.wallpaper.client.window.title}
-
-            door={application.doors.program}
-
-            access={programAccess}
-
-            className={`absolute inset-0 size-full border-0 ${programWallpaperReady ? "" : "pointer-events-none opacity-0"}`}
-
-            onFrame={frame}
-
-            onLoad={wallpaperLoaded}
-
-        />}
-
-    </>
+    const wallpaper = <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
     return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none">
 

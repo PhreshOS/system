@@ -51,7 +51,7 @@ export default function useWindows(authManager: AuthManager) {
 
     const initialIncarnations = useRef<Map<string, WindowIncarnation> | null>(null)
 
-    if (!initialIncarnations.current) initialIncarnations.current = new Map(processes.flatMap(record => record.client && record.client.window.layer !== "wallpaper" ? [[record.identity, incarnation(record, record.client)] as const] : []))
+    if (!initialIncarnations.current) initialIncarnations.current = new Map(processes.flatMap(record => record.client ? [[record.identity, incarnation(record, record.client)] as const] : []))
 
     const initialClients = initialIncarnations.current
 
@@ -103,7 +103,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const present = new Set(list.map(process => process.identity))
 
-        const currentClients = new Map(list.flatMap(record => record.client && record.client.window.layer !== "wallpaper" ? [[record.identity, incarnation(record, record.client)] as const] : []))
+        const currentClients = new Map(list.flatMap(record => record.client ? [[record.identity, incarnation(record, record.client)] as const] : []))
 
         localWindow.reconcile(currentClients)
 
@@ -146,9 +146,7 @@ export default function useWindows(authManager: AuthManager) {
 
     inbound.useSubscribe("/processes", subscriber)
 
-    const records = processes.filter(process => process.client && process.client.window.layer !== "wallpaper")
-
-    const wallpaper = processes.find(process => process.client?.window.layer === "wallpaper") ?? null
+    const records = processes.filter(process => process.client)
 
     // Everything that is shown, in the layer it is shown in — and the
     // taskbar's list, which is the `window` layer and nothing else. The
@@ -172,7 +170,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const window = localWindows.get(live.identity)
 
-        if (!window || window.layer === "wallpaper" || window.minimized) continue
+        if (!window || window.minimized) continue
 
         const best = fronts[window.layer]
 
@@ -360,16 +358,12 @@ export default function useWindows(authManager: AuthManager) {
 
     for (const pane of panes) {
 
-        const layer = pane.local.layer
-
-        if (layer !== "wallpaper") panesByLayer[layer].push(pane)
+        panesByLayer[pane.local.layer].push(pane)
     }
 
     return {
 
         records,
-
-        wallpaper,
 
         listed,
 

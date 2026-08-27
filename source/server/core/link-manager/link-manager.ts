@@ -4,8 +4,7 @@ import TheLink from "@libs/the-link/the-link"
 import Property from "@libs/the-link/property"
 import { Transmitted } from "@libs/messagepack"
 import Application from "../application"
-import { type ThemeProperties, type WallpaperLaunch } from "@phreshos/core"
-import { type default as Program } from "./auth-manager/program-manager/program"
+import { type Appearance } from "@phreshos/core"
 import { type AuthenticationState, type RegistrationError } from "../authentication/authentication"
 
 export default class LinkManager extends TheLink {
@@ -17,16 +16,10 @@ export default class LinkManager extends TheLink {
 
     public readonly authManager: AuthManager
 
-    /** Public, read-only representation of the authoritative system Theme. */
-    public readonly theme: Property<ThemeProperties>
+    /** Public, unresolved representation of authoritative System Appearance. */
+    public readonly appearance: Property<Appearance>
 
-    /** Public sign-in wallpaper filename, or `null` for the bundled asset. */
-    public readonly signInWallpaper: Property<string | null>
-
-    /** Public desktop file wallpaper, or `null` when bundled or Program-backed. */
-    public readonly desktopWallpaper: Property<string | null>
-
-    private updatingTheme: Promise<void> = Promise.resolve()
+    private updatingAppearance: Promise<void> = Promise.resolve()
 
     public constructor(application: Application) {
 
@@ -34,11 +27,7 @@ export default class LinkManager extends TheLink {
 
         this.application = application
 
-        this.theme = Property.private(this, this.application.themeManager.value)
-
-        this.signInWallpaper = Property.private(this, this.application.wallpaperManager.signIn)
-
-        this.desktopWallpaper = Property.private(this, this.application.wallpaperManager.desktopFile)
+        this.appearance = Property.private(this, this.application.appearanceManager.value)
 
         this.authManager = new AuthManager(this)
     }
@@ -183,56 +172,21 @@ export default class LinkManager extends TheLink {
         if (!this.connected(session)) await this.application.authentication.disconnectSession(session)
     }
 
-    /** Persist and publish one authorized Theme replacement in call order. */
-    public updateTheme(value: unknown) {
+    /** Persist and publish one authorized Appearance replacement in call order. */
+    public updateAppearance(value: unknown) {
 
-        const update = this.updatingTheme.then(async () => {
+        const update = this.updatingAppearance.then(async () => {
 
-            const theme = await this.application.themeManager.update(value)
+            const appearance = await this.application.appearanceManager.update(value)
 
-            await this.theme.update(theme)
+            await this.appearance.update(appearance)
 
-            return theme
+            return appearance
         })
 
-        this.updatingTheme = update.then(() => undefined, () => undefined)
+        this.updatingAppearance = update.then(() => undefined, () => undefined)
 
         return update
-    }
-
-    public async setSignInWallpaper(file: unknown) {
-
-        const selected = await this.application.wallpaperManager.setSignIn(file)
-
-        await this.signInWallpaper.update(selected)
-    }
-
-    public async removeSignInWallpaper() {
-
-        await this.application.wallpaperManager.removeSignIn()
-
-        await this.signInWallpaper.update(null)
-    }
-
-    public async setDesktopWallpaper(file: unknown) {
-
-        const selected = await this.application.wallpaperManager.setDesktopFile(file, this.authManager.programManager)
-
-        await this.desktopWallpaper.update(selected)
-    }
-
-    public async setDesktopWallpaperProgram(program: Program, launch: WallpaperLaunch) {
-
-        await this.application.wallpaperManager.setDesktopProgram(program, launch, this.authManager.programManager)
-
-        await this.desktopWallpaper.update(null)
-    }
-
-    public async removeDesktopWallpaper() {
-
-        await this.application.wallpaperManager.removeDesktop(this.authManager.programManager)
-
-        await this.desktopWallpaper.update(null)
     }
 
     // Nothing about the link itself crosses. The declaration stays, so
@@ -242,11 +196,7 @@ export default class LinkManager extends TheLink {
 
         return {
 
-            theme: this.theme,
-
-            signInWallpaper: this.signInWallpaper,
-
-            desktopWallpaper: this.desktopWallpaper
+            appearance: this.appearance
         }
     }
 }

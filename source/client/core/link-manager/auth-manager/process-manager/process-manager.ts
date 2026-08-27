@@ -60,7 +60,7 @@ export default class ProcessManager extends TheLink {
 
             const window = process.client?.window
 
-            if (!window || window.layer === "wallpaper" || window.minimized || window.layer !== layer || window.depth <= depth) continue
+            if (!window || window.minimized || window.layer !== layer || window.depth <= depth) continue
 
             best = identity
 

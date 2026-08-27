@@ -33,7 +33,7 @@ export default class Window {
 
     public url: string | null
 
-    // The authoritative runtime layer, including the system-only wallpaper.
+    // The authoritative Desktop layer.
     public layer: WindowLayer
 
     // Which of the half's own pages the frame opens on.

@@ -100,7 +100,6 @@ export function visibilityTransition(value: unknown): VisibilityTransition {
 export function layerAllowsSurface(layer: WindowLayer) {
 
     if (layer === "window") throw new Error("A window-layer representation cannot own a Surface")
-    if (layer === "wallpaper") throw new Error("A wallpaper-layer representation cannot own a Surface")
 }
 
 function easing(value: unknown): Easing {

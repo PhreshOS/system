@@ -1,7 +1,7 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../appearance/surface-presence"
-import { Surface, useScale, useTheme } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
@@ -54,9 +54,11 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const reducedMotion = useReducedMotion()
 
-    const theme = useTheme()
+    const appearance = useAppearance()
 
-    const radius = useScale(theme.radius)
+    const radius = useScale(useResolveTheme(appearance.radius))
+
+    const foreground = useResolveTheme(appearance.foreground)
 
     const outerRadius = radius.large
 
@@ -725,7 +727,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, borderRadius: outerRadius, color: theme.foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
+            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, borderRadius: outerRadius, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
 
                 {/* Material is paint, not the interaction container. Keeping
                     it as a sibling behind the window contents prevents plain

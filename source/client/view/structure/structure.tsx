@@ -3,7 +3,7 @@ import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import SocketLink from "@libs/the-link/plugins/client-link/socket-link"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { ThemeProvider } from "@phreshos/react-ui"
+import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
@@ -11,7 +11,7 @@ import usePromise from "@libs/react-promise"
 import Authentication from "./authentication/authentication"
 import { useCallback, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness/main"
-import { standardTheme } from "@phreshos/core"
+import { standardAppearance } from "@phreshos/core"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
@@ -29,7 +29,7 @@ export default function () {
 
                 className={`transition-opacity duration-200 ease-out ${pending.length ? "" : "pointer-events-none opacity-0"}`}
 
-                style={{ backgroundColor: standardTheme.background }}
+                style={{ backgroundColor: standardAppearance.background.light }}
 
             />}
 
@@ -50,11 +50,18 @@ function Desktop() {
 
     internal.useSubscribe("subscribe", useCallback(function (socketLink: SocketLink<[TransmittedLinkManager, string]>) {
 
-        socketLink.$internal.subscribeOnce("unsubscribe", () => setLinkManager(null))
-
         const [payload, connectionIdentity] = socketLink.payload
 
-        setLinkManager(new LinkManager(application, socketLink, payload, connectionIdentity))
+        const manager = new LinkManager(application, socketLink, payload, connectionIdentity)
+
+        socketLink.$internal.subscribeOnce("unsubscribe", () => {
+
+            manager.dispose()
+
+            setLinkManager(current => current === manager ? null : current)
+        })
+
+        setLinkManager(manager)
     }, [application]))
 
     const connection = usePromise(async () => application.clientLink.subscribe(), [application, connectionRevision])
@@ -93,19 +100,28 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady("connection")
 
+    const appearance = useProperty(linkManager.appearance)
+
     const theme = useProperty(linkManager.theme)
 
     return <LinkManagerContext.Provider value={linkManager}>
 
-        <ThemeProvider theme={theme}>
+        <AppearanceProvider appearance={appearance} theme={theme}>
 
-            <div className="grid min-h-0" style={{ backgroundColor: theme.background }}>
+            <ConnectedAppearance>
 
                 <Authentication />
 
-            </div>
+            </ConnectedAppearance>
 
-        </ThemeProvider>
+        </AppearanceProvider>
 
     </LinkManagerContext.Provider>
+}
+
+function ConnectedAppearance({ children }: { children: React.ReactNode }) {
+
+    const background = useResolveTheme(LinkManagerContext.useValue().appearance.value.background)
+
+    return <div className="grid min-h-0" style={{ backgroundColor: background }}>{children}</div>
 }

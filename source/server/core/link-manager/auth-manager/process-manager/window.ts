@@ -49,9 +49,7 @@ export interface Shown {
 
     url: string | null
 
-    // Which runtime layer this Window occupies. Ordinary clients are confined
-    // to the three authorable layers; the system assigns its wallpaper Window
-    // the dedicated fourth value.
+    // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
 
     // Which page of the client half to open, beneath its declared root.
@@ -81,8 +79,7 @@ export default class Window {
     // lets a program under development be shown from its own dev server.
     public readonly url: string | null
 
-    // The Window's authoritative runtime layer. `wallpaper` can only be
-    // assigned by the system's dedicated wallpaper launch path.
+    // The Window's authoritative Desktop layer.
     public readonly layer: WindowLayer
 
     // Which of the half's own pages the frame opens on.

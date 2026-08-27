@@ -1,7 +1,7 @@
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface, useScale, useTheme } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { obscuredBackground } from "../../components/loading"
 import Alert from "../../components/alert"
 import { type SyntheticEvent, useLayoutEffect, useRef } from "react"
@@ -13,7 +13,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
     const reducedMotion = useReducedMotion()
 
-    const radius = useScale(useTheme().radius)
+    const radius = useScale(useResolveTheme(useAppearance().radius))
 
     const outerRadius = radius.large
 

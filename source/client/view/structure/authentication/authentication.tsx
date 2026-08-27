@@ -9,9 +9,9 @@ import SignIn from "./sign-in"
 import Register from "./register"
 import { useState, type ReactNode } from "react"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
-import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { WallpaperStage } from "../desktop/wallpaper/wallpaper"
 import { useReady } from "@libs/readiness/main"
+import { useAppearance, useResolveTheme } from "@phreshos/react-ui"
 
 export default function () {
 
@@ -19,7 +19,7 @@ export default function () {
 
     const linkManager = LinkManagerContext.useValue()
 
-    const signInWallpaper = useProperty(linkManager.signInWallpaper)
+    const signInWallpaper = useResolveTheme(useAppearance().signInWallpaper)
 
     const [revision, setRevision] = useState(0)
 

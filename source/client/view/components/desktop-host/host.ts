@@ -87,7 +87,18 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // only because it was added on the other.
         if (word === "current-process") return [record(process())]
 
+        if (word === "appearance") return [authManager.linkManager.appearance.value]
+
         if (word === "theme") return [authManager.linkManager.theme.value]
+
+        if (word === "update-theme") {
+
+            if (args[0] !== "light" && args[0] !== "dark" && args[0] !== "default") throw new Error("A Theme is light, dark, or default")
+
+            await authManager.linkManager.updateTheme(args[0])
+
+            return []
+        }
 
         if (word === "exists") {
 

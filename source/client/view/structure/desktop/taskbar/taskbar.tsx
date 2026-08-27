@@ -1,5 +1,5 @@
 import { ReactNode } from "react"
-import { Surface, useScale, useTheme, type SurfaceProps } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSeparator from "./taskbar-separator"
 
 /**
@@ -8,7 +8,7 @@ import TaskbarSeparator from "./taskbar-separator"
  */
 export default function Taskbar({ leading, trailing, dialogs, className, style, children, ...props }: TaskbarProps) {
 
-    const radius = useScale(useTheme().radius).large
+    const radius = useScale(useResolveTheme(useAppearance().radius)).large
 
     return <Surface
 

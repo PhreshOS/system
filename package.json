@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -30,7 +30,7 @@
     "build": "vite-node scripts/build.ts",
     "start": "node --run build && node dist/server/main.js",
     "pack": "node --run build && vite-node scripts/pack.ts",
-    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-process-find-or-create.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-storage.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-program-install.mjs && vite-node scripts/verify-host-traffic.mjs && vite-node scripts/verify-intake-address.mjs && vite-node scripts/verify-theme.mjs",
+    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-process-find-or-create.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-storage.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-program-install.mjs && vite-node scripts/verify-host-traffic.mjs && vite-node scripts/verify-intake-address.mjs && vite-node scripts/verify-appearance.mjs",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },
@@ -59,8 +59,8 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/plugin-proposal-decorators": "^7.29.7",
-    "@phreshos/core": "^0.1.16",
-    "@phreshos/react-ui": "^0.1.8",
+    "@phreshos/core": "^0.1.17",
+    "@phreshos/react-ui": "^0.1.9",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/adm-zip": "^0.5.8",

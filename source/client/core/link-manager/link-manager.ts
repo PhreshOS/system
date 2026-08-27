@@ -2,7 +2,7 @@ import { TransmittedAuthManager } from "@server/core/link-manager/auth-manager/a
 import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { type RegistrationResponse } from "@server/core/link-manager/link-manager"
-import { type ThemeProperties } from "@phreshos/core"
+import { type Appearance, type Theme, type ThemePreference } from "@phreshos/core"
 import { Forward } from "@libs/the-link/decorators/escript"
 import TheLink from "@libs/the-link/the-link"
 import Property from "@libs/the-link/property"
@@ -18,14 +18,14 @@ export default class LinkManager extends TheLink {
 
     public readonly connectionIdentity: string
 
-    /** Immediate public Theme value and its future synchronized updates. */
-    public readonly theme: Property<ThemeProperties>
+    /** Immediate unresolved System Appearance and future authoritative updates. */
+    public readonly appearance: Property<Appearance>
 
-    /** Immediate public sign-in wallpaper filename and future updates. */
-    public readonly signInWallpaper: Property<string | null>
+    /** Effective local Desktop Theme and its future updates. */
+    public readonly theme: Property<Theme>
 
-    /** Immediate public desktop file wallpaper and future updates. */
-    public readonly desktopWallpaper: Property<string | null>
+    private themePreference: ThemePreference = "default"
+    private readonly nativeTheme = matchMedia("(prefers-color-scheme: dark)")
 
     public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, connectionIdentity: string) {
 
@@ -39,11 +39,30 @@ export default class LinkManager extends TheLink {
 
         this.subscribeTo(this.sourceLink)
 
-        this.theme = Property.consumer(this, payload.theme.key, payload.theme.value)
+        this.appearance = Property.consumer(this, payload.appearance.key, payload.appearance.value)
 
-        this.signInWallpaper = Property.consumer(this, payload.signInWallpaper.key, payload.signInWallpaper.value)
+        this.theme = Property.private(this, this.effectiveTheme())
 
-        this.desktopWallpaper = Property.consumer(this, payload.desktopWallpaper.key, payload.desktopWallpaper.value)
+        this.nativeTheme.addEventListener("change", this.nativeThemeChanged)
+    }
+
+    public async updateTheme(preference: ThemePreference) {
+        this.themePreference = preference
+        await this.theme.update(this.effectiveTheme())
+    }
+
+    private effectiveTheme(): Theme {
+        return this.themePreference === "default"
+            ? this.nativeTheme.matches ? "dark" : "light"
+            : this.themePreference
+    }
+
+    private readonly nativeThemeChanged = () => {
+        if (this.themePreference === "default") void this.theme.update(this.effectiveTheme())
+    }
+
+    public dispose() {
+        this.nativeTheme.removeEventListener("change", this.nativeThemeChanged)
     }
 
     @Forward("outbound")

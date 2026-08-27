@@ -84,11 +84,10 @@ export default class AuthManager extends TheLink {
         return this.programManager.streamArea(identity, area, path)
     }
 
-    /** Replace the system Theme through the authenticated boundary. */
-    @Subscribe("/theme")
-    public async updateTheme(value: unknown) {
+    /** Replace System Appearance through the authenticated boundary. */
+    public async updateAppearance(value: unknown) {
 
-        return await this.linkManager.updateTheme(value)
+        return await this.linkManager.updateAppearance(value)
     }
 
     @Connect("/permission/granted")

@@ -1,55 +1,69 @@
 import bundledWallpaper from "@/assets/bundled/wallpaper.jpg"
 import { ApplicationContext } from "../../../contexts"
-import { useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Loading from "../../../components/loading"
 import { useReady } from "@libs/readiness/main"
 
 type WallpaperSource = Readonly<{
     key: string
     source: string
-    html: boolean
 }>
 
 /**
  * Displays only a completely loaded wallpaper source.
  *
- * A filename asks for a new served wallpaper, `null` explicitly selects the
- * bundled wallpaper, and `undefined` retains the displayed source while a
- * different wallpaper owner prepares its representation.
+ * A filename asks for a served image and `null` selects the Desktop fallback.
+ * The previous loaded source stays visible until its replacement is ready.
  */
-export function WallpaperBackground({ file, visible = true, onReady }: WallpaperBackgroundProps) {
+export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps) {
 
     const application = ApplicationContext.useValue()
 
-    const desired = useMemo<WallpaperSource | null>(() => {
-
-        if (file === undefined) return null
-
+    const desired = useMemo<WallpaperSource>(() => {
         return file === null
-            ? { key: "bundled", source: bundledWallpaper, html: false }
+            ? { key: "bundled", source: bundledWallpaper }
             : {
                 key: `file:${file}`,
-                source: `${application.doors.uploads}/${encodeURIComponent(file)}`,
-                html: /\.html?$/i.test(file)
+                source: `${application.doors.uploads}/${encodeURIComponent(file)}`
             }
 
     }, [application.doors.uploads, file])
 
-    const [displayed, setDisplayed] = useState<WallpaperSource | null>(null)
+    const fallback = useMemo<WallpaperSource>(() => ({ key: "bundled", source: bundledWallpaper }), [])
+    const [displayed, setDisplayed] = useState<WallpaperSource>(fallback)
+    const [previous, setPrevious] = useState<WallpaperSource | null>(null)
+    const transition = useRef<number | null>(null)
 
-    const sources = desired && desired.key !== displayed?.key
+    useEffect(() => () => {
+        if (transition.current !== null) clearTimeout(transition.current)
+    }, [])
 
-        ? displayed ? [displayed, desired] : [desired]
-
-        : displayed ? [displayed] : desired ? [desired] : []
+    const sources = desired.key === displayed.key
+        ? previous ? [previous, displayed] : [displayed]
+        : previous ? [previous, displayed, desired] : [displayed, desired]
 
     function loaded(source: WallpaperSource) {
+        if (source.key !== desired.key) return
 
-        if (source.key !== desired?.key) return
+        if (source.key === displayed.key) {
+            onReady?.()
+            return
+        }
 
+        if (transition.current !== null) clearTimeout(transition.current)
+
+        setPrevious(displayed)
         setDisplayed(source)
-
         onReady?.()
+
+        transition.current = window.setTimeout(() => {
+            setPrevious(null)
+            transition.current = null
+        }, 700)
+    }
+
+    function failed(source: WallpaperSource) {
+        if (source.key === desired.key) onReady?.()
     }
 
     return <>{sources.map(source => <WallpaperLayer
@@ -58,42 +72,29 @@ export function WallpaperBackground({ file, visible = true, onReady }: Wallpaper
 
         source={source}
 
-        visible={visible && source.key === displayed?.key}
+        visible={source.key === displayed.key}
 
         onLoad={() => loaded(source)}
+
+        onError={() => failed(source)}
 
     />)}</>
 }
 
-function WallpaperLayer({ source, visible, onLoad }: { source: WallpaperSource, visible: boolean, onLoad: () => void }) {
-
-    if (source.html) return <iframe
-
-        src={source.source}
-
-        title="Wallpaper"
-
-        sandbox="allow-scripts"
-
-        className={`absolute inset-0 size-full border-0 ${visible ? "" : "pointer-events-none opacity-0"}`}
-
-        onLoad={onLoad}
-
-    />
-
+function WallpaperLayer({ source, visible, onLoad, onError }: { source: WallpaperSource, visible: boolean, onLoad: () => void, onError: () => void }) {
     return <>
 
         <div
 
             aria-hidden="true"
 
-            className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat ${visible ? "" : "opacity-0"}`}
+            className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out ${visible ? "opacity-100" : "opacity-0"}`}
 
             style={{ backgroundImage: `url(${source.source})` }}
 
         />
 
-        {!visible && <img
+        <img
 
             src={source.source}
 
@@ -103,7 +104,9 @@ function WallpaperLayer({ source, visible, onLoad }: { source: WallpaperSource, 
 
             onLoad={onLoad}
 
-        />}
+            onError={onError}
+
+        />
 
     </>
 }
@@ -151,9 +154,7 @@ interface WallpaperStageProps {
 
 interface WallpaperBackgroundProps {
 
-    file: string | null | undefined
-
-    visible?: boolean
+    file: string | null
 
     onReady?: () => void
 }

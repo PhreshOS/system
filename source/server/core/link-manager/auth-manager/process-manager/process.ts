@@ -112,13 +112,13 @@ export default class Process {
         this.hostTraffic = hostTraffic
     }
 
-    public startServer(child: ChildProcess, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, theme: Tunnel) {
+    public startServer(child: ChildProcess, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
 
         if (this.server) return this.server
 
         let boundary!: ServerProcessBoundary
 
-        boundary = new ServerProcessBoundary(child, this.program.client !== null, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, theme)
+        boundary = new ServerProcessBoundary(child, this.program.client !== null, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
 
         this.server = boundary
 
