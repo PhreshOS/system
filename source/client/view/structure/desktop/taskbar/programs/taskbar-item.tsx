@@ -18,7 +18,7 @@ export default function ({ active = false, icon, children, className, ...props }
 
         aria-pressed={active}
 
-        className={`relative flex h-8 max-w-40 shrink-0 scroll-mx-8 cursor-pointer select-none items-center gap-1.5 overflow-hidden rounded-lg border px-2.5 text-xs font-medium text-shadow-chrome outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${reducedMotion ? "" : "transition-colors duration-100 active:scale-95"} ${surface} ${className ?? ""}`}
+        className={`relative flex h-8 max-w-40 shrink-0 scroll-mx-8 cursor-pointer select-none items-center gap-1.5 overflow-hidden rounded-lg border px-2.5 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${reducedMotion ? "" : "transition-colors duration-100 active:scale-95"} ${surface} ${className ?? ""}`}
 
         {...props}
 

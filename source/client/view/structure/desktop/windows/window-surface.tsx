@@ -1,10 +1,12 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
-import { useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef } from "react"
 import { type LocalSurfaceState } from "../../../components/desktop-host/local-window"
 import gsap, { motionDuration, motionEase } from "../../../appearance/motion"
 
 const systemDuration = 240
+
+const paintSelector = "[data-surface-backdrop], [data-surface-border], [data-surface-material]"
 
 /** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
@@ -17,9 +19,9 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
     const reducedMotion = useReducedMotion()
 
-    // Keep the last painted target in React while an incoming transition is
-    // prepared from the element's current compositor value.
-    const [renderedVisible, setRenderedVisible] = useState(visible)
+    // The configured material and border opacity remain the visible targets;
+    // visibility animation must not replace those values with a root opacity.
+    const visibleOpacity = useRef(new Map<Element, number>())
 
     useLayoutEffect(function () {
 
@@ -27,13 +29,18 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         if (!surface) return
 
-        const current = getComputedStyle(surface)
+        const layers = [...surface.querySelectorAll(paintSelector)]
+
+        for (const layer of layers) {
+
+            if (!visibleOpacity.current.has(layer)) visibleOpacity.current.set(layer, Number(getComputedStyle(layer).opacity))
+        }
 
         const revision = transition?.revision ?? null
 
         const changed = revision !== null
 
-        const from = { opacity: firstRender.current && visible ? 0 : Number(current.opacity) }
+        const initial = firstRender.current
 
         firstRender.current = false
 
@@ -41,35 +48,31 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         const duration = transaction?.duration ?? systemDuration
 
-        gsap.killTweensOf(surface)
+        gsap.killTweensOf(layers)
 
         if (!transaction || !changed || reducedMotion || duration === 0) {
 
-            gsap.set(surface, { opacity: visible ? 1 : 0 })
-            setRenderedVisible(visible)
+            for (const layer of layers) gsap.set(layer, { opacity: visible ? visibleOpacity.current.get(layer) : 0 })
 
             if (transaction && changed) onComplete(revision!)
 
             return
         }
 
-        const animation = gsap.fromTo(surface, from, {
-            opacity: visible ? 1 : 0,
-            duration: motionDuration(duration),
-            ease: motionEase(transaction.easing),
-            overwrite: "auto",
-            onComplete: function () {
-
-                setRenderedVisible(visible)
-                onComplete(revision!)
-            }
+        const animation = gsap.timeline({
+            onComplete: () => onComplete(revision!)
         })
 
+        for (const layer of layers) animation.fromTo(layer, {
+            opacity: initial && visible ? 0 : Number(getComputedStyle(layer).opacity)
+        }, {
+            opacity: visible ? visibleOpacity.current.get(layer) : 0,
+            duration: motionDuration(duration),
+            ease: motionEase(transaction.easing),
+            overwrite: "auto"
+        }, 0)
+
         return function () {
-
-            const shown = getComputedStyle(surface)
-
-            surface.style.opacity = shown.opacity
 
             animation.kill()
         }
@@ -85,8 +88,6 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
         aria-hidden="true"
 
         className="pointer-events-none absolute inset-0"
-
-        style={{ opacity: renderedVisible ? 1 : 0 }}
 
     />
 }

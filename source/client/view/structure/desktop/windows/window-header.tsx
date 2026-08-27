@@ -75,7 +75,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
                 equally legible when another window owns the keyboard. */}
             <span
                 ref={titleElement}
-                className="truncate text-window-title font-medium text-shadow-chrome"
+                className="truncate text-window-title font-medium"
                 style={{ color: renderedActive ? "#1e293b" : "#64748b" }}
             >{title}</span>
 

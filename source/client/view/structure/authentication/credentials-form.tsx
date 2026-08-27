@@ -60,7 +60,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             <Surface aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[inherit]" />
 
-            <div className="relative grid gap-1 px-5 py-4 text-shadow-chrome">
+            <div className="relative grid gap-1 px-5 py-4">
 
                 <h1 className="text-xl font-semibold">{title}</h1>
 
