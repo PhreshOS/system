@@ -1,9 +1,9 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../appearance/surface-presence"
-import { Surface, useTheme } from "@phreshos/react-ui"
+import { Surface, useScale, useTheme } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
-import { numericScale, type Position, type Size, type WindowGeometry } from "@phreshos/core"
+import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
 import { type LocalAnimation, type LocalSurfaceState } from "../../../components/desktop-host/local-window"
@@ -56,7 +56,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const theme = useTheme()
 
-    const radius = numericScale(theme.radius)
+    const radius = useScale(theme.radius)
 
     const outerRadius = radius.large
 

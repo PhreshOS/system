@@ -1,8 +1,7 @@
 import { ComponentProps, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { useTheme } from "@phreshos/react-ui"
-import { numericScale } from "@phreshos/core"
+import { useScale, useTheme } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -18,7 +17,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
     const reducedMotion = useReducedMotion()
 
-    const radius = numericScale(useTheme().radius).large
+    const radius = useScale(useTheme().radius).large
 
     const [open, setOpen] = useState(false)
 

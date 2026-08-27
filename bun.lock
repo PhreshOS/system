@@ -29,8 +29,8 @@
       "devDependencies": {
         "@babel/core": "^7.29.7",
         "@babel/plugin-proposal-decorators": "^7.29.7",
-        "@phreshos/core": "^0.1.15",
-        "@phreshos/react-ui": "^0.1.7",
+        "@phreshos/core": "^0.1.16",
+        "@phreshos/react-ui": "^0.1.8",
         "@rolldown/plugin-babel": "^0.2.3",
         "@tailwindcss/vite": "^4.3.3",
         "@types/adm-zip": "^0.5.8",
@@ -249,9 +249,9 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.15", "", {}, "sha512-4KXyOO8dGCdsMj90sFSsD0B084H8LvLlWfsGYzIHUT0I21/NLZxl3/vnO2djbg1fizU82WSwOKoDzbZp7AyMpA=="],
+    "@phreshos/core": ["@phreshos/core@0.1.16", "", {}, "sha512-FT7wDVYZiTA352V2oHxuAuj7C+5CeBeb07KN2eqI46RTq1X27DlcSkJF1iUKhxfy+WSwvghxbjnO9KiKmPHZJQ=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.7", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.15", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-b3QC9cjYNKeEettVpat2UkmxvR0gvYz7ViAZEoG7mgIQvdOPTOgJP6QQj21U3Pwaz5xEAy/y/0qqewFNAqJYKQ=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.8", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.16", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-0Xc1kP72m4M7IDY7Qlp0Nu2BITttz9xGl9KXFKufF0aw/m6U7wJ6YsBdtSnYZPS0Kb/RYUPBUlmGHKDkG35ejg=="],
 
     "@react-aria/i18n": ["@react-aria/i18n@3.13.1", "", { "dependencies": { "@internationalized/date": "^3.12.1", "@internationalized/message": "^3.1.9", "@internationalized/string": "^3.2.8", "@swc/helpers": "^0.5.0", "react-aria": "^3.48.0" }, "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1", "react-dom": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-z56ZYcbfpNmMyiGLhyEjytpmEfoTlBaksk84q4kds3HvNkf7QWKj+DJVfVDrJX+c1LyuBsszLSX7yxJRiHsYKQ=="],
 

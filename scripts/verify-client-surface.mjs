@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
-import ClientProcessBoundary from "../source/client/view/desktop/client-host/client-process-boundary.ts"
+import ClientProcessBoundary from "../source/client/view/components/desktop-host/client-process-boundary.ts"
 import ClientProcessManager from "../source/client/core/link-manager/auth-manager/process-manager/process-manager.ts"
-import { visibilityTransition, visualTransaction } from "../source/client/view/desktop/client-host/local-window.ts"
-import host from "../source/client/view/desktop/client-host/host.ts"
-import LocalWindows from "../source/client/view/desktop/window-manager/local-windows.ts"
+import { visibilityTransition, visualTransaction } from "../source/client/view/components/desktop-host/local-window.ts"
+import host from "../source/client/view/components/desktop-host/host.ts"
+import LocalWindows from "../source/client/view/components/window-manager/local-windows.ts"
 import ServerWindow from "../source/server/core/link-manager/auth-manager/process-manager/window.ts"
 
 const authoritativeWindow = new ServerWindow(
