@@ -1,4 +1,4 @@
-import { Popover } from "@heroui/react"
+import { Surface } from "@heroui/react"
 import { CSSProperties } from "react"
 
 const position = {
@@ -19,7 +19,7 @@ const position = {
 
 } satisfies CSSProperties
 
-export default function () {
+export default function ({ id }: { id: string }) {
 
-    return <Popover.Content aria-label="Start Menu" placement="top start" style={position} className="size-80 rounded-lg">{null}</Popover.Content>
+    return <Surface id={id} popover="auto" aria-label="Start Menu" style={position} className="m-0 size-80 rounded-lg border-0 p-0 outline-none">{null}</Surface>
 }

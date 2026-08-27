@@ -1,13 +1,15 @@
-import { Popover } from "@heroui/react"
+import { useId } from "react"
 import StartMenu from "./start-menu"
 
 export default function () {
 
-    return <Popover>
+    const id = useId()
 
-        <Popover.Trigger aria-label="Start Menu" className="h-full min-w-[2.2rem] bg-danger" />
+    return <>
 
-        <StartMenu />
+        <button type="button" popoverTarget={id} aria-label="Start Menu" className="h-full min-w-[2.2rem] bg-danger" />
 
-    </Popover>
+        <StartMenu id={id} />
+
+    </>
 }
