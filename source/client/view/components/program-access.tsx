@@ -101,17 +101,17 @@ export const blockedProgramDocument = `<!doctype html>
     :root { color-scheme: light; font-family: system-ui, sans-serif; color: #233548; background: #eef8ff; }
     * { box-sizing: border-box; }
     body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 2rem; background: radial-gradient(circle at top left, #ffffff 0, #eef8ff 48%, #dff4ff 100%); }
-    main { width: min(34rem, 100%); padding: 1.5rem; border: 1px solid rgba(89, 151, 191, .28); border-radius: 1.25rem; background: rgba(255, 255, 255, .82); box-shadow: 0 1.25rem 3rem rgba(47, 104, 145, .15); }
+    .message { width: min(34rem, 100%); padding: 1.5rem; border: 1px solid rgba(89, 151, 191, .28); border-radius: 1.25rem; background: rgba(255, 255, 255, .82); box-shadow: 0 1.25rem 3rem rgba(47, 104, 145, .15); }
     h1 { margin: 0 0 .75rem; font-size: 1.35rem; }
     p { margin: 0; line-height: 1.6; }
     p + p { margin-top: .8rem; color: #526b7f; font-size: .92rem; }
 </style>
 </head>
 <body>
-<main>
+<div class="message">
     <h1>This Program cannot load</h1>
     <p>The desktop is connected, but this hosting server blocks requests made by isolated Program frames.</p>
     <p>Configure the server or reverse proxy to preserve the CORS headers on <code>/program/*</code>, including requests whose origin is <code>null</code>, then reload the desktop.</p>
-</main>
+</div>
 </body>
 </html>`

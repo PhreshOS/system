@@ -17,7 +17,7 @@ import messagepack from "@libs/messagepack"
  */
 export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, localWindow: LocalWindowHost) {
 
-    const windowSurfaceRef = useRef<HTMLElement>(null)
+    const windowSurfaceRef = useRef<HTMLDivElement>(null)
 
     const frameOwners = useRef(new Map<string, string>())
 

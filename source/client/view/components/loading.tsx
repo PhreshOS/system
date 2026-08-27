@@ -12,8 +12,8 @@ interface LoadingProps extends ComponentProps<"div"> {
     blur?: boolean
 }
 
-/** A loading surface that obscures unresolved content, with blur by default. */
-export default function ({ blur = true, className, ...props }: LoadingProps) {
+/** A loading surface that obscures unresolved content. Blur is explicitly opt-in. */
+export default function ({ blur = false, className, ...props }: LoadingProps) {
 
     return <div
 

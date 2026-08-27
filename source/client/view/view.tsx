@@ -1,7 +1,7 @@
 import Appearance from "./appearance/appearance"
 import Application, { type Doors } from "@client/core/application"
 import { ApplicationContext } from "./contexts"
-import Desktop from "./desktop/desktop"
+import Structure from "./structure/structure"
 import client from "react-dom/client"
 import logo from "@/assets/bundled/logo.png"
 
@@ -25,7 +25,7 @@ export default function (config: Config) {
 
         <Appearance>
 
-            <Desktop />
+            <Structure />
 
         </Appearance>
 

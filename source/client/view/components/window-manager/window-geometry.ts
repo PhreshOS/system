@@ -1,5 +1,4 @@
 import { parseRelativeValue, type Position, type RelativeValue, type Size, type Value } from "@phreshos/core"
-import { windowPaintInset } from "../../desktop/geometry"
 
 export interface WindowRegion {
 
@@ -66,7 +65,7 @@ export function resolveWindowGeometry(position: Position, size: Size, surface: W
  * on edges that do not touch that box's containing surface. Snap previews use
  * this same function, so preview and final paint cannot disagree.
  */
-export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, current?: WindowRegion) {
+export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, current?: WindowRegion) {
 
     const x = current?.x ?? pixels(position.x, surface.width)
 
@@ -78,13 +77,13 @@ export function windowPaintInsets(position: Position, size: Size, surface: Windo
 
     return {
 
-        top: startsAtBoundary(position.y, y, surface.height) ? 0 : windowPaintInset,
+        top: startsAtBoundary(position.y, y, surface.height) ? 0 : inset,
 
-        right: endsAtBoundary(position.x, size.width, x, width, surface.width) ? 0 : windowPaintInset,
+        right: endsAtBoundary(position.x, size.width, x, width, surface.width) ? 0 : inset,
 
-        bottom: endsAtBoundary(position.y, size.height, y, height, surface.height) ? 0 : windowPaintInset,
+        bottom: endsAtBoundary(position.y, size.height, y, height, surface.height) ? 0 : inset,
 
-        left: startsAtBoundary(position.x, x, surface.width) ? 0 : windowPaintInset
+        left: startsAtBoundary(position.x, x, surface.width) ? 0 : inset
     }
 }
 

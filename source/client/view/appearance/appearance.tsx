@@ -9,11 +9,7 @@ export default function ({ children, reducedMotion }: AppearanceProps) {
 
         <div className="relative isolate grid h-dvh overflow-hidden font-roboto" style={{ backgroundColor: standardTheme.background }}>
 
-            <div className="relative grid min-h-0">
-
-                {children}
-
-            </div>
+            {children}
 
         </div>
 
