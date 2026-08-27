@@ -211,11 +211,15 @@ export default class Process {
     public onServerStop(listener: (code: number | null, signal: NodeJS.Signals | null) => void) {
 
         this.serverStops.push(listener)
+
+        return () => removeListener(this.serverStops, listener)
     }
 
     public onClientStop(listener: () => void) {
 
         this.clientStops.push(listener)
+
+        return () => removeListener(this.clientStops, listener)
     }
 
     // Every aggregate ending, one word. Endpoint stops are separate lifecycle
@@ -313,6 +317,13 @@ export default class Process {
 
         return this.record()
     }
+}
+
+function removeListener<Listener>(listeners: Listener[], listener: Listener) {
+
+    const index = listeners.indexOf(listener)
+
+    if (index >= 0) listeners.splice(index, 1)
 }
 
 export type HostedProcess = ReturnType<Process["hosted"]>

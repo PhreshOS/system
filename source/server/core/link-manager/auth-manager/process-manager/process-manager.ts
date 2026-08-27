@@ -18,6 +18,7 @@ import { failed, succeeded, type Outcome } from "@server/core/outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
+import OutsideQuestions from "./outside-questions"
 import { isPermissionName, isServiceKey, type PermissionName, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 
 /**
@@ -64,6 +65,8 @@ export default class ProcessManager extends TheLink {
     private readonly transitions = new Map<string, Promise<void>>()
 
     private readonly stoppingServers = new Set<ServerProcessBoundary>()
+
+    private readonly outsideQuestions = new OutsideQuestions()
 
     private highest = 0
 
@@ -155,6 +158,68 @@ export default class ProcessManager extends TheLink {
         if (window.layer === "wallpaper") throw new Error("A wallpaper Window is managed by the system")
 
         return window
+    }
+
+    /** Complete public Window state, shared by every representation. */
+    public windowSnapshot(identity: string) {
+
+        const process = this.find(identity)
+        const window = this.windowOf(identity)
+
+        return Object.freeze({
+            title: window.title,
+            position: window.position,
+            size: window.size,
+            minimized: window.minimized,
+            front: this.front(window.layer) === process.identity,
+            layer: window.layer,
+            location: window.location
+        })
+    }
+
+    /** Observe one authoritative host fact without creating a Program boundary. */
+    public observeHost(domain: "program" | "process" | "window", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+
+        return this.hostTraffic.observe(domain, event, subject, (_delivery, word, ...values) => subscriber(word, ...values))
+    }
+
+    /** Observe destinationless events from one exact live Endpoint. */
+    public observeEndpoint(identity: string, half: Half, event: string, subscriber: (payload: unknown) => void, impossible?: (reason: string) => void) {
+
+        const process = this.find(identity)
+
+        if (half === "server" ? !process.server : !process.client) throw new Error(`This process has no live ${half} endpoint`)
+
+        return this.endpointEvents.follow(process.reference, half, event, (_word, payload) => subscriber(payload), impossible)
+    }
+
+    /** Publish from a trusted execution boundary whose identity is not a Program Endpoint. */
+    public async publishFromOutside(identity: string, half: Half, event: string, payload: unknown) {
+
+        const process = this.find(identity)
+
+        if (half === "server" ? !process.server : !process.client) throw new Error(`This process has no live ${half} endpoint`)
+
+        await this.deliver(identity, half, [event, { from: null, payload }])
+    }
+
+    /** Ask a Server from a trusted execution boundary whose identity is intentionally hidden. */
+    public askFromOutside(identity: string, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
+
+        const process = this.find(identity)
+        const target = process.server
+
+        if (!target) return Promise.reject(new Error("This process has no live server endpoint"))
+
+        return this.outsideQuestions.ask(target, timeout, signal, (question, publicQuestion) => (
+            this.deliver(identity, "server", [
+                "wait",
+                question,
+                publicQuestion,
+                event,
+                { from: null, payload }
+            ])
+        ))
     }
 
     // A server runtime is a ProcessLink. Speaking through its outbound
@@ -485,6 +550,13 @@ export default class ProcessManager extends TheLink {
         const back = addressed(values[1])
 
         if (!back) return false
+
+        if (back.half === "outside") {
+
+            this.outsideQuestions.answer(values[1], values[4] as Outcome)
+
+            return true
+        }
 
         const process = this.processes.get(back.identity)
 
@@ -1637,32 +1709,9 @@ export default class ProcessManager extends TheLink {
         // depth was being used to ask.
         if (word === "window") {
 
-            const { process: target, window } = this.heldWindow(rest[0], process)
+            const target = this.heldWindow(rest[0], process).process
 
-            return [{
-
-                title: window.title,
-
-                position: window.position,
-
-                size: window.size,
-
-                minimized: window.minimized,
-
-                // At the front of its own layer — which is ordering, and
-                // is not the keyboard. There is no word here for the
-                // keyboard at all.
-                front: this.front(window.layer) === target.identity,
-
-                // Which layer it lives in, and which of its own pages it
-                // was opened at. A launch may say either, so a program
-                // cannot read them off its own description — and `front`
-                // is a weaker claim than it reads as unless you know
-                // which layer it is the front of.
-                layer: window.layer,
-
-                location: window.location
-            }]
+            return [this.windowSnapshot(target.identity)]
         }
 
         if (word === "move") {
@@ -2362,11 +2411,11 @@ export default class ProcessManager extends TheLink {
 // memory at all. The address is in the message, which is the one place
 // it cannot go stale, and the only place that does not require the
 // middle to be trusted.
-function addressed(question: string): { half: Half, identity: string } | null {
+function addressed(question: string): { half: Half | "outside", identity: string } | null {
 
     const [half, identity] = question.split(":")
 
-    if (half !== "server" && half !== "client") return null
+    if (half !== "server" && half !== "client" && half !== "outside") return null
 
     return { half, identity }
 }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import intakeAddress from "../source/server/view/intake-address.ts"
+import controlAddress from "../source/server/view/control-address.ts"
 import { join } from "node:path"
 
 const first = intakeAddress("C:\\Users\\Person\\.phreshos", "win32")
@@ -11,3 +12,7 @@ assert.equal(first, intakeAddress("c:/users/person/.phreshos/", "win32"))
 assert.notEqual(first, intakeAddress("C:\\Users\\Other\\.phreshos", "win32"))
 
 assert.equal(intakeAddress("/home/person/.phreshos", "linux"), join("/home/person/.phreshos", "intake.sock"))
+
+assert.match(controlAddress("C:\\Users\\Person\\.phreshos", "win32"), /^\\\\\.\\pipe\\phreshos-[a-f0-9]{32}-control$/)
+
+assert.equal(controlAddress("/home/person/.phreshos", "linux"), join("/home/person/.phreshos", "control.sock"))

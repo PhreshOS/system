@@ -1,80 +1,18 @@
-import { chmodSync, mkdirSync, rmSync } from "node:fs"
 import Application from "@server/core/application"
-import { connect, createServer, type Socket } from "node:net"
-import { dirname } from "node:path"
+import { type Socket } from "node:net"
+import localServer from "./local-server"
 
 /**
- * The local program intake: programs entering from this machine.
+ * Owner-local intake for one Program project.
  *
- * One narrow local interface beside the web view a person lives in. The
- * two views are the two audiences, and this one accepts exactly one subject:
- * the Program a local project declares: attached, installed, or uninstalled.
+ * Its closed vocabulary is install, uninstall, and attached run. General
+ * System control uses a separate boundary. An attached Process lives exactly
+ * as long as this connection; installed Programs are persistent.
  *
- * It was called *control* while it had two words and no stated limit,
- * and the name invited every next word: anything about the machine could
- * be called controlling it, so the surface had no edge. The role is
- * named instead. The boundary is the lifecycle of one locally identified
- * Program project: laid out, run attached, or removed from its installed
- * place. Words about arbitrary Processes, Windows, stores, or application
- * state remain outside it because this is not the machine's control panel.
- *
- * The link is how a person somewhere else reaches the system, and it has
- * to prove who it is because it arrived over a network. This is how a
- * local project standing on the same machine reaches it, and it is already
- * proven by being able to open the socket.
- *
- * **That is the whole authorization model, and it is the operating
- * system's rather than ours.** The socket is a filesystem entry at mode
- * 0600, so only the account that owns this machine may speak here — and
- * that account is exactly who may run programs on it. Nothing is checked
- * in this file because there is nothing left to check.
- *
- * A port would have had the opposite property. Every process on the
- * machine can reach a port, a browser page can `fetch` one, and stopping
- * that means inventing a token — a mechanism the transport made
- * necessary rather than one anything needed.
- *
- * On POSIX, the socket file's 0600 mode is the authorization. On Windows,
- * the equivalent address is a named pipe created without `readableAll` or
- * `writableAll`. Windows grants the creator owner full control while other
- * accounts do not receive the duplex access required by this protocol. The
- * pipe name is derived from the storage root so users and isolated instances
- * do not collide in Windows' machine-wide pipe namespace.
- *
- * **One system per storage root.** The socket lives in the root, so it
- * follows wherever the root is — which is how the lab runs a throwaway
- * system beside a real one, by moving `HOME`. Two systems sharing a root
- * were already colliding over its persistent state and its programs before this
- * existed; the socket is where that finally gets said out loud.
- *
- * **Three words, and the list is closed.** `install` lays a Program out,
- * `uninstall` removes that same project's installed form, and `run` starts it
- * attached. None was ever a session's business —
- * install had a button on the desktop until it was noticed that a person
- * at a browser somewhere else installing software onto this machine is
- * exactly what the remote and local split says should not happen.
- *
- * What is refused is inheriting a vocabulary wholesale: running The Link
- * over this would hand intake the whole remote surface, and the two views
- * do not have the same trust to spend. Nor does a word earn a
- * place here by being about the machine — that test admits everything.
- * It earns one by being a way the local project enters the system, and
- * nothing else is.
- *
- * **The connection is the lifetime.** A program launched here is attached
- * to the connection that asked for it: when that connection goes, the
- * process is stopped. Not a pid, not a heartbeat, not a timeout — the
- * operating system closes an ended process's descriptors whatever killed
- * it, so a terminal closed, an ssh session dropped and a `kill -9` all
- * arrive here as the same event, and none of them can be missed.
- *
- * That makes a launched program's life its launcher's, which is the line
- * between the two ways in: **attached means not installed, installed
- * means persistent.** Something meant to outlive a terminal is installed.
+ * Authorization belongs to `localServer`: a mode-0600 POSIX socket or an
+ * owner-only Windows named pipe, scoped by the System storage root.
  */
 export default function intake(application: Application, path: string) {
-
-    const namedPipe = process.platform === "win32"
 
     // A message is a line. The first version had no framing at all — a
     // question was whatever arrived before the asker closed its own side
@@ -82,7 +20,7 @@ export default function intake(application: Application, path: string) {
     // does not half-close: `end(data)` there closes the socket, so the
     // answer was written into nothing. A line costs one delimiter and
     // depends on no runtime agreeing about anything.
-    const server = createServer(function (socket) {
+    return localServer(path, function (socket) {
 
         let said = ""
 
@@ -114,61 +52,6 @@ export default function intake(application: Application, path: string) {
         })
 
         socket.on("error", () => undefined)
-    })
-
-    if (!namedPipe) mkdirSync(dirname(path), { recursive: true })
-
-    return new Promise<string>(function (settle, refuse) {
-
-        server.once("error", function (error: NodeJS.ErrnoException) {
-
-            if (error.code !== "EADDRINUSE") return refuse(error)
-
-            // Two meanings, and only one of them is safe to act on. A
-            // socket file outlives the process that made it, so this is
-            // either a system that is running or the litter of one that
-            // is not — and the only way to tell is to knock.
-            //
-            // The first version unlinked before listening, which never
-            // asked. A second system took the path, the first kept
-            // running and was reachable by nobody, and every launch
-            // afterwards spoke to the newcomer. Proved by running two.
-            alive(path).then(function (running) {
-
-                if (running) return refuse(new Error(`A system is already running here — ${dirname(path)} holds one system, and two would share its programs and persistent state`))
-
-                if (namedPipe) return refuse(error)
-
-                rmSync(path, { force: true })
-
-                server.listen(path, () => settle(secured(path, namedPipe)))
-            }, refuse)
-        })
-
-        server.listen({ path, readableAll: false, writableAll: false }, () => settle(secured(path, namedPipe)))
-    })
-}
-
-// The mode is the authorization, so it is set before anything is
-// answered rather than left to whatever umask was in force.
-function secured(path: string, namedPipe: boolean) {
-
-    if (!namedPipe) chmodSync(path, 0o600)
-
-    return path
-}
-
-// Whether anything is listening there. Connecting is the only honest
-// test: the file's existence says only that a socket was made once.
-function alive(path: string) {
-
-    return new Promise<boolean>(function (settle) {
-
-        const knock = connect(path)
-
-        knock.on("connect", () => { knock.destroy(); settle(true) })
-
-        knock.on("error", () => settle(false))
     })
 }
 

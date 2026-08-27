@@ -10,6 +10,7 @@ import openStore from "./open-store"
 import Keyv from "keyv"
 import FileArea from "@libs/file-area"
 import { homedir } from "node:os"
+import SystemControl from "./system-control/system-control"
 
 export default class Application {
 
@@ -44,6 +45,8 @@ export default class Application {
 
     public readonly linkManager: LinkManager
 
+    public readonly systemControl: SystemControl
+
     private constructor(payload: ApplicationPayload) {
 
         this.name = payload.name
@@ -73,6 +76,8 @@ export default class Application {
         this.dialogManager = new DialogManager()
 
         this.linkManager = new LinkManager(this)
+
+        this.systemControl = new SystemControl(this)
     }
 
     public static async initialize(name: string, displayName: string, version: string, storagePath: string | undefined, defaultProgramIcon: string) {
