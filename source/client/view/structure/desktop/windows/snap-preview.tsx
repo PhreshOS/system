@@ -3,6 +3,7 @@ import gsap, { motionEase } from "../../../appearance/motion"
 import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
+import { Surface } from "@phreshos/react-ui"
 
 /** GSAP-owned preview of the placement currently offered by a drag. */
 export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, radius, reducedMotion, zIndex }: SnapPreviewProps) {
@@ -75,9 +76,10 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
             zIndex
         }}
     >
-        <div
+        <Surface
             data-snap-preview-frame
-            className={`absolute border border-white/50 bg-white/25 shadow-snap-preview ${bare ? "inset-0" : ""}`}
+            opacity="xsmall"
+            className={`absolute ${bare ? "inset-0" : ""}`}
             style={bare ? undefined : { ...windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset), borderRadius: radius }}
         />
     </div>

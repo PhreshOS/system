@@ -37,8 +37,6 @@
 
     --shadow-window-content: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 
-    --shadow-snap-preview: inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
-
 }
 
 [data-start-menu-scroll] {
