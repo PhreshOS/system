@@ -1,5 +1,5 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import useWindows from "./window-manager/window-manager"
+import useWindows from "../components/window-manager/window-manager"
 import { type FocusEvent, type RefObject, useCallback, useRef } from "react"
 
 /** Focus transfer between the workspace, its windows and their taskbar items. */

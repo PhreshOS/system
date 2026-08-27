@@ -1,6 +1,6 @@
 import { type CSSProperties, useLayoutEffect, useRef, useState } from "react"
 import gsap, { motionEase } from "../../appearance/motion"
-import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "./window-geometry"
+import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "../../components/window-manager/window-geometry"
 import { type Position, type Size } from "@phreshos/core"
 
 /** GSAP-owned preview of the placement currently offered by a drag. */

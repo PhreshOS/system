@@ -1,11 +1,11 @@
 import { type Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
 import { type SyntheticEvent, useCallback, useEffect, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext } from "../contexts"
-import useClientHost from "./client-host/client-host"
+import useClientHost from "../components/desktop-host/client-host"
 import DesktopDisplay from "./desktop-display"
 import useDesktopFocus from "./desktop-focus"
 import programIcon from "./programs/program-icon"
-import ProgramAccessProbe, { type ProgramAccess } from "./program-access"
+import ProgramAccessProbe, { type ProgramAccess } from "../components/program-access"
 import StartMenu from "./start-menu/start-menu"
 import OverflowRow from "./taskbar/overflow-row"
 import SignOut from "./taskbar/sign-out"
@@ -13,10 +13,10 @@ import SystemDialogs from "./taskbar/system-dialogs"
 import Taskbar from "./taskbar/taskbar"
 import WindowTaskbarItem from "./taskbar/window-taskbar-item"
 import ProcessWindow from "./window-manager/process-window"
-import useWindows from "./window-manager/window-manager"
+import useWindows from "../components/window-manager/window-manager"
 import useProperty from "@libs/the-link/plugins/react-helper/property-hook"
 import { ReadyWallpaper, WallpaperBackground } from "../components/wallpaper"
-import ProgramFrame from "./program-frame"
+import ProgramFrame from "../components/program-frame"
 import Loading from "../components/loading"
 import { useRequirement } from "@libs/readiness/main"
 
@@ -28,7 +28,7 @@ export default function Workspace() {
 
     const desktopWallpaper = useProperty(authManager.linkManager.desktopWallpaper)
 
-    const windows = useWindows()
+    const windows = useWindows(authManager)
 
     const completePrograms = useRequirement("programs")
 
@@ -66,7 +66,7 @@ export default function Workspace() {
     // lets the desktop announce the surface that actually contains it.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(desktop, sources.current, windows.localWindow)
+    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.localWindow)
 
     const wallpaperLoaded = useCallback((event: SyntheticEvent<HTMLIFrameElement>) => {
 

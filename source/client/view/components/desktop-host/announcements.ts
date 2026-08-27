@@ -4,7 +4,6 @@ import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
 import { useCallback } from "react"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
-import { AuthManagerContext } from "../../contexts"
 import { sdkProcess } from "./sdk-records"
 
 /**
@@ -30,9 +29,7 @@ import { sdkProcess } from "./sdk-records"
  * A server half reaches the same facts through its own subscribed host routes;
  * the desktop does not reinterpret them.
  */
-export default function useAnnouncements(panes: Map<string, ClientProcessBoundary>, traffic: ClientTraffic) {
-
-    const authManager = AuthManagerContext.useValue()
+export default function useAnnouncements(authManager: AuthManager, panes: Map<string, ClientProcessBoundary>, traffic: ClientTraffic) {
 
     // Two tunnels, because there are two managers and each carries its
     // own words. A subscription put on the wrong one is silent forever

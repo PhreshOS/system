@@ -4,7 +4,7 @@ import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
 import { Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
 import { type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"
-import { AuthManagerContext } from "../../contexts"
+import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { wholeWindowGeometry } from "./window-geometry"
 import LocalWindows from "./local-windows"
 
@@ -22,9 +22,7 @@ import LocalWindows from "./local-windows"
  * representation is kept until its animation reports done. Its iframe is
  * not part of that snapshot and leaves as soon as the stop is confirmed.
  */
-export default function useWindows() {
-
-    const authManager = AuthManagerContext.useValue()
+export default function useWindows(authManager: AuthManager) {
 
     const peer = authManager.processManager
 
@@ -420,6 +418,8 @@ export default function useWindows() {
         snap
     }
 }
+
+export type DesktopWindows = ReturnType<typeof useWindows>
 
 interface WindowIncarnation {
 

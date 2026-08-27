@@ -1,6 +1,6 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type Transaction, type WindowGeometry, type WindowState } from "@phreshos/core"
-import { layerAllowsSurface, type LocalWindowHost, type LocalWindowState } from "../client-host/local-window"
+import { layerAllowsSurface, type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
 
 export interface LocalWindowEntry {
     identity: string

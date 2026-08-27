@@ -1,5 +1,5 @@
 import { parseRelativeValue, type Position, type RelativeValue, type Size, type Value } from "@phreshos/core"
-import { windowPaintInset } from "../geometry"
+import { windowPaintInset } from "../../desktop/geometry"
 
 export interface WindowRegion {
 

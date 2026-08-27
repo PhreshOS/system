@@ -1,7 +1,7 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
-import { type LocalSurfaceState } from "../client-host/local-window"
+import { type LocalSurfaceState } from "../../components/desktop-host/local-window"
 import gsap, { motionDuration, motionEase } from "../../appearance/motion"
 
 const systemDuration = 240

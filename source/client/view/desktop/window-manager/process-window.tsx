@@ -1,13 +1,13 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
-import { type WindowSurfaceSize } from "./window-geometry"
-import { type LocalAnimation, type LocalSurfaceState } from "../client-host/local-window"
-import { type LocalGeometryReader } from "./local-windows"
-import { type ProgramAccess } from "../program-access"
+import { type WindowSurfaceSize } from "../../components/window-manager/window-geometry"
+import { type LocalAnimation, type LocalSurfaceState } from "../../components/desktop-host/local-window"
+import { type LocalGeometryReader } from "../../components/window-manager/local-windows"
+import { type ProgramAccess } from "../../components/program-access"
 import { type Position, type Size } from "@phreshos/core"
 import Spinner from "../../components/spinner"
 import Window from "./window"
-import ProgramFrame, { programFrameSource } from "../program-frame"
+import ProgramFrame, { programFrameSource } from "../../components/program-frame"
 import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "react"
 
 const settleDelay = 80

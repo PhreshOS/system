@@ -6,7 +6,7 @@ import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
-import { AuthManagerContext } from "../../contexts"
+import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 
@@ -15,9 +15,7 @@ import messagepack from "@libs/messagepack"
  * It owns frame messages and the measured desktop containing those frames;
  * neither fact participates in rendering.
  */
-export default function useClientHost(desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, localWindow: LocalWindowHost) {
-
-    const authManager = AuthManagerContext.useValue()
+export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, localWindow: LocalWindowHost) {
 
     const windowSurfaceRef = useRef<HTMLElement>(null)
 
@@ -107,7 +105,7 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     }, [authManager, desktop, sources, traffic])
 
-    useAnnouncements(boundaries.current, traffic)
+    useAnnouncements(authManager, boundaries.current, traffic)
 
     useEffect(() => pointer.listen(), [pointer])
 
@@ -317,6 +315,8 @@ export default function useClientHost(desktop: RefObject<HTMLDivElement | null>,
 
     return { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded }
 }
+
+export type ClientHost = ReturnType<typeof useClientHost>
 
 export interface SurfaceSize {
 
