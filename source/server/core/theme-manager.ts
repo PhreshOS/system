@@ -14,7 +14,6 @@ export const themeSchema: z.ZodType<ThemeProperties> = z.strictObject({
     surface: z.strictObject({
         grain: bounded(themeLimits.surface.grain).default(standardTheme.surface.grain),
         grainAmount: bounded(themeLimits.surface.grainAmount).default(standardTheme.surface.grainAmount),
-        grainAnimation: bounded(themeLimits.surface.grainAnimation).default(standardTheme.surface.grainAnimation),
         backdrop: bounded(themeLimits.surface.backdrop).default(standardTheme.surface.backdrop),
         opacity: bounded(themeLimits.surface.opacity).default(standardTheme.surface.opacity),
         distortion: bounded(themeLimits.surface.distortion).default(standardTheme.surface.distortion),
