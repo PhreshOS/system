@@ -6,7 +6,7 @@ import Taskbar from "./taskbar/taskbar"
 
 export default function () {
 
-    return <div className="grid grid-rows-5 p-3">
+    return <div className="relative isolate grid min-h-0 grid-cols-1 grid-rows-[minmax(0,1fr)_auto] gap-2.5 p-2.5">
 
         <Wallpaper />
 
