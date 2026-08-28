@@ -1,5 +1,5 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionEase } from "../../../appearance/motion"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
@@ -32,7 +32,11 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
         }
 
         const timeline = gsap.timeline({
-            defaults: { duration: 0.2, ease: motionEase("ease-out"), overwrite: "auto" },
+            defaults: {
+                duration: motionDuration(motionDurations.feedback),
+                ease: motionEase("ease-out"),
+                overwrite: "auto"
+            },
             onComplete: () => setRenderedActive(active)
         })
 
@@ -138,7 +142,12 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
         if (reducedMotion) gsap.set(button, values)
 
-        else gsap.to(button, { ...values, duration: 0.1, ease: motionEase("ease-out"), overwrite: "auto" })
+        else gsap.to(button, {
+            ...values,
+            duration: motionDuration(motionDurations.control),
+            ease: motionEase("ease-out"),
+            overwrite: "auto"
+        })
     }
 
     return <button

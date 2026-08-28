@@ -175,7 +175,7 @@ export default function Workspace() {
 
         dialogs={<SystemDialogs />}
 
-        className="z-4 overflow-hidden"
+        className="z-4"
 
     >
 

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import { connect } from "node:net"
-import { join, resolve } from "node:path"
+import { resolve } from "node:path"
+import gatewayAddress from "@server/view/gateway/address"
 import gateway from "@server/view/gateway/gateway"
 import type Application from "@server/core/application"
 
 const directory = await mkdtemp(resolve(".verify-gateway-"))
-const path = join(directory, "gateway.sock")
+const path = gatewayAddress(directory)
 const application = {
     systemControl: {
         async execute(request: unknown) { return { received: request } }

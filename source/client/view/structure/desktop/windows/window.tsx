@@ -8,7 +8,7 @@ import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
 import { type LocalAnimation, type LocalSurfaceState } from "../../../components/desktop-host/local-window"
 import { type LocalGeometryReader } from "../../../components/window-manager/local-windows"
-import gsap, { motionDuration, motionEase } from "../../../appearance/motion"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import { windowPaintInset } from "../geometry"
 
@@ -127,7 +127,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         }
         const target = resolveWindowGeometry(position, size, parentBounds)
         const transaction = geometryAnimation?.transaction
-        const duration = transaction?.duration ?? 300
+        const duration = transaction?.duration ?? motionDurations.geometry
 
         gsap.killTweensOf(element)
 
@@ -146,22 +146,36 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        const animation = gsap.fromTo(element, {
-            left: current.x,
-            top: current.y,
-            width: current.width,
-            height: current.height,
-            transform: "none"
-        }, {
+        // Lay out the authoritative target once, then animate only the visual
+        // difference. Reflowing an iframe-sized box on every animation frame
+        // causes the small hitch this transition is meant to hide.
+        gsap.set(element, {
             left: target.x,
             top: target.y,
             width: target.width,
             height: target.height,
-            transform: "none",
+            transformOrigin: "0 0"
+        })
+
+        const animation = gsap.fromTo(element, {
+            x: current.x - target.x,
+            y: current.y - target.y,
+            scaleX: current.width / target.width,
+            scaleY: current.height / target.height
+        }, {
+            x: 0,
+            y: 0,
+            scaleX: 1,
+            scaleY: 1,
             duration: motionDuration(duration),
-            ease: transaction ? motionEase(transaction.easing) : motionEase([0.65, 0, 0.35, 1]),
+            ease: transaction ? motionEase(transaction.easing) : motionEase([0.33, 1, 0.68, 1]),
+            force3D: true,
             overwrite: "auto",
-            onComplete: complete
+            onComplete: function () {
+
+                gsap.set(element, { transform: "none", transformOrigin: "" })
+                complete()
+            }
         })
 
         return function () {
@@ -199,7 +213,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             top: gesture.origin.y,
             width: gesture.current.width,
             height: gesture.current.height,
-            duration: 0.22,
+            duration: motionDuration(motionDurations.morph),
             ease: motionEase([0.33, 1, 0.68, 1]),
             overwrite: "auto"
         })
@@ -229,7 +243,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         const animation = gsap.to(element, {
             boxShadow: target,
-            duration: 0.2,
+            duration: motionDuration(motionDurations.feedback),
             ease: motionEase("ease-out"),
             overwrite: "auto",
             onComplete: () => setRenderedActive(active)
@@ -366,9 +380,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         const animation = minimized
 
-            ? gsap.to(surfaceElement.current, { scale: 0.86, y: 28, duration: 0.11, ease: "power3.in", onComplete: () => gsap.set(surfaceElement.current, { visibility: "hidden" }) })
+            ? gsap.to(surfaceElement.current, { scale: 0.86, y: 28, duration: motionDuration(motionDurations.minimize), ease: "power3.in", overwrite: "auto", onComplete: () => gsap.set(surfaceElement.current, { visibility: "hidden" }) })
 
-            : gsap.to(surfaceElement.current, { scale: 1, y: 0, duration: 0.24, ease: "power3.out" })
+            : gsap.to(surfaceElement.current, { scale: 1, y: 0, duration: motionDuration(motionDurations.restore), ease: "power3.out", overwrite: "auto" })
 
         return () => { animation.kill() }
 
@@ -392,7 +406,14 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        const animation = gsap.to(surfaceElement.current, { scale: 0.86, y: 12, duration: 0.16, ease: "power2.in", onComplete: completeClosure })
+        const animation = gsap.to(surfaceElement.current, {
+            scale: 0.86,
+            y: 12,
+            duration: motionDuration(motionDurations.close),
+            ease: "power2.in",
+            overwrite: "auto",
+            onComplete: completeClosure
+        })
 
         return () => { animation.kill() }
 
@@ -727,7 +748,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, borderRadius: outerRadius, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : `overflow-hidden grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
+            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, borderRadius: outerRadius, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : `grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
 
                 {/* Material is paint, not the interaction container. Keeping
                     it as a sibling behind the window contents prevents plain

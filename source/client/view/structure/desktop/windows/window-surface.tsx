@@ -2,9 +2,7 @@ import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef } from "react"
 import { type LocalSurfaceState } from "../../../components/desktop-host/local-window"
-import gsap, { motionDuration, motionEase } from "../../../appearance/motion"
-
-const systemDuration = 240
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 
 const paintSelector = "[data-surface-backdrop], [data-surface-border], [data-surface-material]"
 
@@ -46,7 +44,7 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         const transaction = transition?.transaction
 
-        const duration = transaction?.duration ?? systemDuration
+        const duration = transaction?.duration ?? motionDurations.presence
 
         gsap.killTweensOf(layers)
 

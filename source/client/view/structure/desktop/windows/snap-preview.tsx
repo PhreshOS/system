@@ -1,5 +1,5 @@
 import { type CSSProperties, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionEase } from "../../../appearance/motion"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
@@ -54,7 +54,7 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
             width: target.width,
             height: target.height,
             opacity: visible ? 1 : 0,
-            duration: 0.18,
+            duration: motionDuration(motionDurations.snap),
             ease: motionEase([0.33, 1, 0.68, 1]),
             overwrite: "auto",
             onComplete: () => setRendered(shown)

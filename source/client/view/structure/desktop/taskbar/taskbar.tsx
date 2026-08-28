@@ -12,7 +12,7 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
 
     return <Surface
 
-        className={`relative isolate h-taskbar overflow-hidden shadow-taskbar [anchor-name:--desktop-taskbar] ${className ?? ""}`}
+        className={`relative isolate h-taskbar shadow-taskbar [anchor-name:--desktop-taskbar] ${className ?? ""}`}
 
         style={{ ...style, borderRadius: radius }}
 

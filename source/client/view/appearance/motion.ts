@@ -14,6 +14,19 @@ const curves: Record<Exclude<Easing, readonly number[]>, readonly [number, numbe
 
 const registered = new Map<string, gsap.EaseFunction>()
 
+/** Shared interaction timings in the same millisecond unit as public transactions. */
+export const motionDurations = Object.freeze({
+    control: 100,
+    minimize: 110,
+    close: 160,
+    snap: 180,
+    feedback: 200,
+    morph: 220,
+    presence: 240,
+    restore: 240,
+    geometry: 300
+})
+
 /** Preserves public CSS timing curves while GSAP owns their interpolation. */
 export function motionEase(value: Easing | undefined, fallback: Easing = "ease-out") {
 
