@@ -46,9 +46,9 @@ export default class LinkManager extends TheLink {
         this.nativeTheme.addEventListener("change", this.nativeThemeChanged)
     }
 
-    public async updateTheme(preference: ThemePreference) {
-        this.themePreference = preference
-        await this.theme.update(this.effectiveTheme())
+    public async updateTheme(theme: ThemePreference) {
+        this.themePreference = theme
+        await this.$inbound.publish("/change-theme", theme)
     }
 
     private effectiveTheme(): Theme {

@@ -4,14 +4,15 @@ import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import SocketLink from "@libs/the-link/plugins/client-link/socket-link"
 import LinkManager from "@client/core/link-manager/link-manager"
 import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
+import { useTheme } from "next-themes"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
 import Authentication from "./authentication/authentication"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness/main"
-import { standardAppearance } from "@phreshos/core"
+import { standardAppearance, type ThemePreference } from "@phreshos/core"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
@@ -100,9 +101,21 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady("connection")
 
+    const { resolvedTheme, setTheme } = useTheme()
+
+    const inbound = ReactTunnel.useFactory(linkManager.$inbound)
+
+    inbound.useSubscribe("/change-theme", useCallback(function (theme: ThemePreference) {
+        setTheme(theme === "default" ? "system" : theme)
+    }, [setTheme]))
+
     const appearance = useProperty(linkManager.appearance)
 
-    const theme = useProperty(linkManager.theme)
+    const theme = resolvedTheme === "dark" ? "dark" : "light"
+
+    useEffect(function () {
+        void linkManager.theme.update(theme)
+    }, [linkManager, theme])
 
     return <LinkManagerContext.Provider value={linkManager}>
 
