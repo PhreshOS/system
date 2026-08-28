@@ -1,16 +1,21 @@
 import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { delimiter, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { decode, encode } from "@msgpack/msgpack"
-import { WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
+import { commandServerEnvironment, WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
 
 const directory = await mkdtemp(join(tmpdir(), "phresh-worker-runtime-"))
 const entry = join(directory, "server.mjs")
 const codec = pathToFileURL(resolve("node_modules/@msgpack/msgpack/dist.esm/index.mjs")).href
+
+assert.equal(
+    commandServerEnvironment(directory, { Path: "/native/bin" }).Path,
+    `${join(directory, "node_modules", ".bin")}${delimiter}/native/bin`
+)
 
 await writeFile(entry, `
 import { parentPort } from "node:worker_threads"

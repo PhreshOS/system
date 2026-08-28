@@ -1,7 +1,7 @@
 import ProcessTree from "@libs/process-tree"
 import { spawn, type ChildProcess } from "node:child_process"
 import { Worker } from "node:worker_threads"
-import { join } from "node:path"
+import { delimiter, join } from "node:path"
 
 export interface ServerRuntime {
 
@@ -41,12 +41,7 @@ export class CommandServerRuntime implements ServerRuntime {
 
             serialization: "advanced",
 
-            env: {
-
-                ...process.env,
-
-                PATH: `${join(process.cwd(), "node_modules", ".bin")}:${process.env.PATH}`
-            }
+            env: commandServerEnvironment(directory)
         })
 
         if (typeof this.child.send !== "function") throw new Error("The server process has no IPC channel")
@@ -74,6 +69,21 @@ export class CommandServerRuntime implements ServerRuntime {
     }
 
     public stop() { this.tree.stop() }
+}
+
+/** Give a Server command the package-local tools belonging to its execution directory. */
+export function commandServerEnvironment(directory: string, environment: NodeJS.ProcessEnv = process.env) {
+
+    const key = Object.keys(environment).find(name => name.toLowerCase() === "path") ?? "PATH"
+
+    const inherited = environment[key]
+
+    return {
+
+        ...environment,
+
+        [key]: [join(directory, "node_modules", ".bin"), inherited].filter(Boolean).join(delimiter)
+    }
 }
 
 /** One JavaScript Server running as an isolate inside the System process. */

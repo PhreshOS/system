@@ -12,7 +12,7 @@ type WallpaperSource = Readonly<{
 /**
  * Displays only a completely loaded wallpaper source.
  *
- * A filename asks for a served image and `null` selects the Desktop fallback.
+ * A filename asks for a served image and `null` selects the bundled wallpaper.
  * The previous loaded source stays visible until its replacement is ready.
  */
 export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps) {
@@ -29,23 +29,31 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
 
     }, [application.doors.uploads, file])
 
-    const fallback = useMemo<WallpaperSource>(() => ({ key: "bundled", source: bundledWallpaper }), [])
-    const [displayed, setDisplayed] = useState<WallpaperSource>(fallback)
+    const [displayed, setDisplayed] = useState<WallpaperSource | null>(null)
     const [previous, setPrevious] = useState<WallpaperSource | null>(null)
+    const loadedSources = useRef(new Set<string>())
     const transition = useRef<number | null>(null)
 
     useEffect(() => () => {
         if (transition.current !== null) clearTimeout(transition.current)
     }, [])
 
-    const sources = desired.key === displayed.key
-        ? previous ? [previous, displayed] : [displayed]
-        : previous ? [previous, displayed, desired] : [displayed, desired]
+    const sources = distinct([previous, displayed, desired])
+
+    useEffect(() => {
+        if (loadedSources.current.has(desired.key)) display(desired)
+    }, [desired])
 
     function loaded(source: WallpaperSource) {
+        loadedSources.current.add(source.key)
+
+        display(source)
+    }
+
+    function display(source: WallpaperSource) {
         if (source.key !== desired.key) return
 
-        if (source.key === displayed.key) {
+        if (source.key === displayed?.key) {
             onReady?.()
             return
         }
@@ -56,10 +64,12 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
         setDisplayed(source)
         onReady?.()
 
-        transition.current = window.setTimeout(() => {
-            setPrevious(null)
-            transition.current = null
-        }, 700)
+        if (displayed) {
+            transition.current = window.setTimeout(() => {
+                setPrevious(null)
+                transition.current = null
+            }, 700)
+        }
     }
 
     function failed(source: WallpaperSource) {
@@ -72,7 +82,9 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
 
         source={source}
 
-        visible={source.key === displayed.key}
+        visible={source.key === displayed?.key}
+
+        transitioning={previous !== null}
 
         onLoad={() => loaded(source)}
 
@@ -81,14 +93,30 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
     />)}</>
 }
 
-function WallpaperLayer({ source, visible, onLoad, onError }: { source: WallpaperSource, visible: boolean, onLoad: () => void, onError: () => void }) {
+function distinct(sources: readonly (WallpaperSource | null)[]) {
+    const keys = new Set<string>()
+
+    return sources.filter((source): source is WallpaperSource => {
+        if (!source || keys.has(source.key)) return false
+        keys.add(source.key)
+        return true
+    })
+}
+
+function WallpaperLayer({ source, visible, transitioning, onLoad, onError }: {
+    source: WallpaperSource
+    visible: boolean
+    transitioning: boolean
+    onLoad: () => void
+    onError: () => void
+}) {
     return <>
 
         <div
 
             aria-hidden="true"
 
-            className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out ${visible ? "opacity-100" : "opacity-0"}`}
+            className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat ${transitioning ? "transition-opacity duration-700 ease-out" : ""} ${visible ? "opacity-100" : "opacity-0"}`}
 
             style={{ backgroundImage: `url(${source.source})` }}
 
