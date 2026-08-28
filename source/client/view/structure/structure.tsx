@@ -4,15 +4,15 @@ import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import SocketLink from "@libs/the-link/plugins/client-link/socket-link"
 import LinkManager from "@client/core/link-manager/link-manager"
 import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
-import { useTheme } from "next-themes"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
+import { useDesktopPreferences } from "../appearance/desktop-preferences"
 import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness/main"
-import { standardAppearance, type ThemePreference } from "@phreshos/core"
+import { standardAppearance, type DesktopPreferencesUpdate } from "@phreshos/core"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
@@ -42,6 +42,7 @@ export default function () {
 function Desktop() {
 
     const application = ApplicationContext.useValue()
+    const { preferences } = useDesktopPreferences()
 
     const [linkManager, setLinkManager] = useState<LinkManager | null>(null)
 
@@ -53,17 +54,14 @@ function Desktop() {
 
         const [payload, connectionIdentity] = socketLink.payload
 
-        const manager = new LinkManager(application, socketLink, payload, connectionIdentity)
+        const manager = new LinkManager(application, socketLink, payload, connectionIdentity, preferences)
 
         socketLink.$internal.subscribeOnce("unsubscribe", () => {
-
-            manager.dispose()
-
             setLinkManager(current => current === manager ? null : current)
         })
 
         setLinkManager(manager)
-    }, [application]))
+    }, [application, preferences]))
 
     const connection = usePromise(async () => application.clientLink.subscribe(), [application, connectionRevision])
 
@@ -101,25 +99,23 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady("connection")
 
-    const { resolvedTheme, setTheme } = useTheme()
+    const { preferences, update } = useDesktopPreferences()
 
     const inbound = ReactTunnel.useFactory(linkManager.$inbound)
 
-    inbound.useSubscribe("/change-theme", useCallback(function (theme: ThemePreference) {
-        setTheme(theme === "default" ? "system" : theme)
-    }, [setTheme]))
+    inbound.useSubscribe("/change-desktop-preferences", useCallback(function (change: DesktopPreferencesUpdate) {
+        update(change)
+    }, [update]))
 
     const appearance = useProperty(linkManager.appearance)
 
-    const theme = resolvedTheme === "dark" ? "dark" : "light"
-
     useEffect(function () {
-        void linkManager.theme.update(theme)
-    }, [linkManager, theme])
+        void linkManager.updateDesktopPreferences(preferences)
+    }, [linkManager, preferences])
 
     return <LinkManagerContext.Provider value={linkManager}>
 
-        <AppearanceProvider appearance={appearance} theme={theme}>
+        <AppearanceProvider appearance={appearance} theme={preferences.theme}>
 
             <ConnectedAppearance>
 

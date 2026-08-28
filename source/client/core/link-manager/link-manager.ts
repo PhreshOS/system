@@ -2,7 +2,7 @@ import { TransmittedAuthManager } from "@server/core/link-manager/auth-manager/a
 import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { type RegistrationResponse } from "@server/core/link-manager/link-manager"
-import { type Appearance, type Theme, type ThemePreference } from "@phreshos/core"
+import { type Appearance, type DesktopPreferences, type DesktopPreferencesUpdate } from "@phreshos/core"
 import { Forward } from "@libs/the-link/decorators/escript"
 import TheLink from "@libs/the-link/the-link"
 import Property from "@libs/the-link/property"
@@ -21,13 +21,10 @@ export default class LinkManager extends TheLink {
     /** Immediate unresolved System Appearance and future authoritative updates. */
     public readonly appearance: Property<Appearance>
 
-    /** Effective local Desktop Theme and its future updates. */
-    public readonly theme: Property<Theme>
+    /** Complete effective local Desktop preferences and future updates. */
+    public readonly desktopPreferences: Property<DesktopPreferences>
 
-    private themePreference: ThemePreference = "default"
-    private readonly nativeTheme = matchMedia("(prefers-color-scheme: dark)")
-
-    public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, connectionIdentity: string) {
+    public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, connectionIdentity: string, desktopPreferences: DesktopPreferences) {
 
         super()
 
@@ -41,28 +38,15 @@ export default class LinkManager extends TheLink {
 
         this.appearance = Property.consumer(this, payload.appearance.key, payload.appearance.value)
 
-        this.theme = Property.private(this, this.effectiveTheme())
-
-        this.nativeTheme.addEventListener("change", this.nativeThemeChanged)
+        this.desktopPreferences = Property.private(this, desktopPreferences)
     }
 
-    public async updateTheme(theme: ThemePreference) {
-        this.themePreference = theme
-        await this.$inbound.publish("/change-theme", theme)
+    public requestDesktopPreferences(preferences: DesktopPreferencesUpdate) {
+        return this.$inbound.publish("/change-desktop-preferences", preferences)
     }
 
-    private effectiveTheme(): Theme {
-        return this.themePreference === "default"
-            ? this.nativeTheme.matches ? "dark" : "light"
-            : this.themePreference
-    }
-
-    private readonly nativeThemeChanged = () => {
-        if (this.themePreference === "default") void this.theme.update(this.effectiveTheme())
-    }
-
-    public dispose() {
-        this.nativeTheme.removeEventListener("change", this.nativeThemeChanged)
+    public updateDesktopPreferences(preferences: DesktopPreferences) {
+        return this.desktopPreferences.update(preferences)
     }
 
     @Forward("outbound")

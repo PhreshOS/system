@@ -1,29 +1,34 @@
 import ReducedMotion from "@libs/react-motion"
 import { standardAppearance } from "@phreshos/core"
-import { ThemeProvider } from "next-themes"
 import { ReactNode } from "react"
+import DesktopPreferencesProvider, { useDesktopPreferences } from "./desktop-preferences"
 import "./appearance.css"
 
-export default function ({ children, reducedMotion }: AppearanceProps) {
+export default function ({ children }: AppearanceProps) {
 
-    return <ThemeProvider attribute="class" defaultTheme="system">
+    return <DesktopPreferencesProvider>
 
-        <ReducedMotion reduced={reducedMotion}>
+        <AppearanceRoot>{children}</AppearanceRoot>
 
-            <div className="relative isolate grid h-dvh overflow-hidden font-roboto" style={{ backgroundColor: standardAppearance.background.light }}>
+    </DesktopPreferencesProvider>
+}
 
-                {children}
+function AppearanceRoot({ children }: AppearanceProps) {
+    const { preferences } = useDesktopPreferences()
+    const background = standardAppearance.background[preferences.theme]
 
-            </div>
+    return <ReducedMotion reduced={!preferences.animations}>
 
-        </ReducedMotion>
+        <div className="relative isolate grid h-dvh overflow-hidden font-roboto" style={{ backgroundColor: background }}>
 
-    </ThemeProvider>
+            {children}
+
+        </div>
+
+    </ReducedMotion>
 }
 
 interface AppearanceProps {
 
     children: ReactNode
-
-    reducedMotion?: boolean
 }

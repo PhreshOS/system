@@ -38,9 +38,9 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly trafficSubscriptions = new Map<string, TrafficSubscription>()
 
-    private readonly themeSubscriptions = new Set<string>()
+    private readonly desktopPreferencesSubscriptions = new Set<string>()
 
-    private stopTheme: (() => void) | null = null
+    private stopDesktopPreferences: (() => void) | null = null
 
     private readonly appearanceSubscriptions = new Set<string>()
 
@@ -386,13 +386,13 @@ export default class ClientProcessBoundary extends TheLink {
 
             if (this.owner && directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, this.owner, subscription, kind, event).catch(() => undefined)
 
-            if (themeSubscription(description)) {
+            if (desktopPreferencesSubscription(description)) {
 
-                this.themeSubscriptions.add(subscription)
+                this.desktopPreferencesSubscriptions.add(subscription)
 
-                if (!this.stopTheme) this.stopTheme = this.authManager.linkManager.theme.tunnel.subscribe("change", (theme: unknown) => {
+                if (!this.stopDesktopPreferences) this.stopDesktopPreferences = this.authManager.linkManager.desktopPreferences.tunnel.subscribe("change", (preferences: unknown) => {
 
-                    this.deliver("host-theme", "change", theme).catch(() => undefined)
+                    this.deliver("host-desktop-preferences", "change", preferences).catch(() => undefined)
                 })
 
             }
@@ -713,11 +713,11 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.subscriptions.delete(subscription)
 
-        if (this.themeSubscriptions.delete(subscription) && this.themeSubscriptions.size === 0) {
+        if (this.desktopPreferencesSubscriptions.delete(subscription) && this.desktopPreferencesSubscriptions.size === 0) {
 
-            this.stopTheme?.()
+            this.stopDesktopPreferences?.()
 
-            this.stopTheme = null
+            this.stopDesktopPreferences = null
         }
 
         if (this.appearanceSubscriptions.delete(subscription) && this.appearanceSubscriptions.size === 0) {
@@ -859,13 +859,13 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.blockedSubscriptions.clear()
 
-        this.themeSubscriptions.clear()
+        this.desktopPreferencesSubscriptions.clear()
 
         this.appearanceSubscriptions.clear()
 
-        this.stopTheme?.()
+        this.stopDesktopPreferences?.()
 
-        this.stopTheme = null
+        this.stopDesktopPreferences = null
 
         this.stopAppearance?.()
 
@@ -1001,9 +1001,9 @@ function pointerSubscription(subscription: EndpointSubscription) {
     return subscription.kind === "publish" && subscription.route === "host-pointer" && (subscription.event === null || subscription.event === "move")
 }
 
-function themeSubscription(subscription: EndpointSubscription) {
+function desktopPreferencesSubscription(subscription: EndpointSubscription) {
 
-    return subscription.kind === "publish" && subscription.route === "host-theme" && (subscription.event === null || subscription.event === "change")
+    return subscription.kind === "publish" && subscription.route === "host-desktop-preferences" && (subscription.event === null || subscription.event === "change")
 }
 
 function appearanceSubscription(subscription: EndpointSubscription) {
@@ -1013,7 +1013,7 @@ function appearanceSubscription(subscription: EndpointSubscription) {
 
 function localPropertySubscription(subscription: EndpointSubscription) {
 
-    return themeSubscription(subscription) || appearanceSubscription(subscription)
+    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription)
 }
 
 function directSubscription(subscription: EndpointSubscription) {

@@ -5,7 +5,7 @@ import { type ClientBody, type ProxiedResponse, type UploadValue } from "@client
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, isUploadFile, type ProgramIconSize } from "@phreshos/core"
+import { isPermissionName, isServiceKey, isUploadFile, type DesktopPreferencesUpdate, type ProgramIconSize } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -89,13 +89,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "appearance") return [authManager.linkManager.appearance.value]
 
-        if (word === "theme") return [authManager.linkManager.theme.value]
+        if (word === "desktopPreferences") return [authManager.linkManager.desktopPreferences.value]
 
-        if (word === "update-theme") {
+        if (word === "updateDesktopPreferences") {
 
-            if (args[0] !== "light" && args[0] !== "dark" && args[0] !== "default") throw new Error("A Theme is light, dark, or default")
+            const preferences = desktopPreferencesUpdate(args[0])
 
-            await authManager.linkManager.updateTheme(args[0])
+            await authManager.linkManager.requestDesktopPreferences(preferences)
 
             return []
         }
@@ -836,6 +836,25 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         throw new Error(`The desktop does not know the word "${String(word)}"`)
     }
+}
+
+function desktopPreferencesUpdate(value: unknown): DesktopPreferencesUpdate {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Desktop preferences must be an object")
+
+    const preferences = value as Record<string, unknown>
+    const keys = Object.keys(preferences)
+
+    if (keys.length === 0 || keys.some(key => key !== "theme" && key !== "animations")) throw new Error("Desktop preferences must update theme, animations, or both")
+
+    if ("theme" in preferences && preferences.theme !== "light" && preferences.theme !== "dark" && preferences.theme !== "default") {
+        throw new Error("The Desktop theme preference must be light, dark, or default")
+    }
+
+    if ("animations" in preferences && typeof preferences.animations !== "boolean" && preferences.animations !== "default") {
+        throw new Error("The Desktop animations preference must be true, false, or default")
+    }
+
+    return Object.freeze({ ...preferences }) as DesktopPreferencesUpdate
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {
