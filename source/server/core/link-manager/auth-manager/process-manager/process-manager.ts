@@ -181,13 +181,13 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Observe destinationless events from one exact live Endpoint. */
-    public observeEndpoint(identity: string, half: Half, event: string, subscriber: (payload: unknown) => void, impossible?: (reason: string) => void) {
+    public observeEndpoint(identity: string, half: Half, event: string | null, subscriber: (payload: unknown, event: string) => void, impossible?: (reason: string) => void) {
 
         const process = this.find(identity)
 
         if (half === "server" ? !process.server : !process.client) throw new Error(`This process has no live ${half} endpoint`)
 
-        return this.endpointEvents.follow(process.reference, half, event, (_word, payload) => subscriber(payload), impossible)
+        return this.endpointEvents.follow(process.reference, half, event, (word, payload) => subscriber(payload, word), impossible)
     }
 
     /** Publish from a trusted execution boundary whose identity is not a Program Endpoint. */
@@ -217,6 +217,47 @@ export default class ProcessManager extends TheLink {
                 { from: null, payload }
             ])
         ))
+    }
+
+    /** Read one live Endpoint's public Service without inventing an external Endpoint identity. */
+    public serviceFromOutside(identity: string, endpoint: Half) {
+
+        return this.services.service(this.find(identity), endpoint)
+    }
+
+    public serviceEnabledFromOutside(key: unknown) {
+
+        return this.services.enabled(key)
+    }
+
+    public waitServiceReadyFromOutside(key: unknown, timeout?: number) {
+
+        return this.services.waitReady(key, timeout)
+    }
+
+    /** Publish through a Service from an owner boundary represented by `from: null`. */
+    public async publishServiceFromOutside(key: unknown, event: string, payload: unknown) {
+
+        const binding = this.services.binding(key)
+
+        if (!binding) throw new Error("The service is disabled")
+
+        await this.deliver(binding.process.identity, binding.endpoint, [event, { from: null, payload }])
+    }
+
+    /** Ask a Server Service from an owner boundary represented by `from: null`. */
+    public askServiceFromOutside(key: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
+
+        const binding = this.services.binding(key, "server")
+
+        if (!binding) return Promise.reject(new Error("The service is disabled"))
+
+        return this.askFromOutside(binding.process.identity, event, payload, timeout, signal)
+    }
+
+    public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "channel", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
+
+        return this.services.follow(key, scope, event, subscriber)
     }
 
     // The boundary owns its server runtime transport. A stopped child remains

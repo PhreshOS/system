@@ -26,6 +26,64 @@ export default async function programRequest(application: Application, socket: S
 
     const programManager = application.linkManager.authManager.programManager
 
+    if (asked.word === "create") {
+
+        if (!asked.program) throw new Error("Creating needs a Program description")
+
+        const program = await programManager.create(asked.program)
+
+        say({ event: "created", identity: program.identity })
+        return done()
+    }
+
+    if (asked.word === "installed") {
+
+        if (typeof asked.identity !== "string" || !asked.identity) throw new Error("Reading installation needs a Program identity")
+
+        const entry = programManager.programs.get(asked.identity)
+
+        say({ event: "installedState", installed: entry?.installed === true })
+        return done()
+    }
+
+    if (asked.word === "forget") {
+
+        if (typeof asked.identity !== "string" || !asked.identity) throw new Error("Forgetting needs a Program identity")
+
+        await programManager.forgetNamed(asked.identity)
+
+        say({ event: "forgotten", identity: asked.identity })
+        return done()
+    }
+
+    if (asked.word === "install-existing") {
+
+        if (typeof asked.identity !== "string" || !asked.identity) throw new Error("Installing needs a Program identity")
+
+        const entry = programManager.programs.get(asked.identity)
+
+        if (!entry) throw new Error(`Unknown Program "${asked.identity}"`)
+
+        for await (const chunk of programManager.installStreaming(entry.program)) say({ event: "output", ...chunk })
+
+        say({ event: "installed", identity: asked.identity })
+        return done()
+    }
+
+    if (asked.word === "uninstall-existing") {
+
+        if (typeof asked.identity !== "string" || !asked.identity) throw new Error("Uninstalling needs a Program identity")
+
+        const entry = programManager.programs.get(asked.identity)
+
+        if (!entry) throw new Error(`Unknown Program "${asked.identity}"`)
+
+        for await (const chunk of programManager.uninstallStreaming(entry.program, asked.everything === true)) say({ event: "output", ...chunk })
+
+        say({ event: "uninstalled", identity: asked.identity, everything: asked.everything === true })
+        return done()
+    }
+
     if (asked.word === "uninstall") {
 
         if (typeof asked.identity !== "string" || !asked.identity) throw new Error("Uninstalling needs a Program identity")

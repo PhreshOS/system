@@ -4,6 +4,7 @@ import {
     type EndpointAskInput,
     type EndpointInput,
     type EndpointPublishInput,
+    type EndpointStartInput,
     type EndpointWaitInput,
     type EndpointWaitReadyInput,
     type ProcessCreateInput,
@@ -81,12 +82,12 @@ export default class SystemControl {
             ))
             const selected = found
                 .sort((left, right) => left.identity.localeCompare(right.identity))
-                .slice(0, request.limit ?? 30)
+                .slice(request.offset ?? 0, (request.offset ?? 0) + (request.limit ?? 30))
 
             return Object.freeze({
                 data: Object.freeze(selected.map(programSnapshot)),
                 total: found.length,
-                truncated: found.length > selected.length
+                truncated: (request.offset ?? 0) + selected.length < found.length
             })
         }
 
@@ -117,12 +118,12 @@ export default class SystemControl {
             ))
             const selected = found
                 .sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime())
-                .slice(0, request.limit ?? 30)
+                .slice(request.offset ?? 0, (request.offset ?? 0) + (request.limit ?? 30))
 
             return Object.freeze({
                 data: Object.freeze(selected.map(processSnapshot)),
                 total: found.length,
-                truncated: found.length > selected.length
+                truncated: (request.offset ?? 0) + selected.length < found.length
             })
         }
 
@@ -155,7 +156,7 @@ export default class SystemControl {
         return snapshot
     }
 
-    private async endpoint(operation: string, input: EndpointInput | EndpointWaitReadyInput | EndpointAskInput | EndpointPublishInput | EndpointWaitInput, signal?: AbortSignal) {
+    private async endpoint(operation: string, input: EndpointInput | EndpointStartInput | EndpointWaitReadyInput | EndpointAskInput | EndpointPublishInput | EndpointWaitInput, signal?: AbortSignal) {
 
         const process = resolveProcess(this.processes.processes, this.programs.programs, input)
         const declaration = process.program[input.endpoint]
@@ -168,7 +169,7 @@ export default class SystemControl {
 
             if (operation === "start") {
                 if (input.endpoint === "server") await this.processes.startServer(process.identity)
-                else await this.processes.startClient(process.identity)
+                else await this.processes.startClient(process.identity, (input as EndpointStartInput).client)
             } else {
                 if (input.endpoint === "server") await this.processes.stopServer(process.identity)
                 else await this.processes.stopClient(process.identity)
@@ -317,12 +318,17 @@ export default class SystemControl {
             payload: request.event === "exit"
                 ? Object.freeze({
                     process: record?.identity ?? process?.identity ?? null,
+                    ...(record ? { processSnapshot: processRecordSnapshot(record) } : {}),
                     status: values.at(-1) ? "signaled" : "exited",
                     code: values.at(-2) ?? null,
                     signal: values.at(-1) ?? null
                 })
                 : request.event === "endpointStart" || request.event === "endpointStop"
-                    ? Object.freeze({ process: record?.identity ?? process?.identity ?? null, endpoint: values.at(-1) })
+                    ? Object.freeze({
+                        process: record?.identity ?? process?.identity ?? null,
+                        ...(record ? { processSnapshot: processRecordSnapshot(record) } : {}),
+                        endpoint: values.at(-1)
+                    })
                     : record ? processRecordSnapshot(record) : values
         })
     }
@@ -389,10 +395,21 @@ function programSnapshot(entry: Entry) {
 
 function processSnapshot(process: Process) {
 
+    const owner = process.program.record()
+
     return Object.freeze({
         identity: process.identity,
         name: process.name,
         program: process.program.identity,
+        programSnapshot: Object.freeze({
+            identity: owner.identity,
+            name: owner.name,
+            version: owner.version,
+            description: owner.description,
+            hasAgent: owner.hasAgent,
+            server: owner.server,
+            client: owner.client
+        }),
         startedAt: process.startedAt.toISOString(),
         server: Object.freeze({ declared: process.program.server !== null, running: process.server !== null }),
         client: Object.freeze({ declared: process.program.client !== null, running: process.client !== null })
@@ -404,7 +421,15 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
     const record = process as unknown as {
         identity: string
         name: string | null
-        program: { identity: string, server: unknown, client: unknown }
+        program: {
+            identity: string
+            name: string
+            version: string | null
+            description: string | null
+            hasAgent: boolean
+            server: unknown
+            client: unknown
+        }
         startedAt: Date | string
         server: unknown
         client: unknown
@@ -414,6 +439,15 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
         identity: record.identity,
         name: record.name,
         program: record.program.identity,
+        programSnapshot: Object.freeze({
+            identity: record.program.identity,
+            name: record.program.name,
+            version: record.program.version,
+            description: record.program.description,
+            hasAgent: record.program.hasAgent,
+            server: record.program.server,
+            client: record.program.client
+        }),
         startedAt: new Date(record.startedAt).toISOString(),
         server: Object.freeze({ declared: record.program.server !== null, running: record.server !== null }),
         client: Object.freeze({ declared: record.program.client !== null, running: record.client !== null })

@@ -1,5 +1,6 @@
 import type Application from "@server/core/application"
 import localServer from "./local-server"
+import apiRequest from "./api-request"
 import programRequest from "./program-request"
 import systemRequest from "./system-request"
 
@@ -43,6 +44,15 @@ export default function gateway(application: Application, path: string) {
                 return
             }
 
+            if (envelope.target === "api") {
+
+                apiRequest(application, envelope.request, controller.signal).then(
+                    result => finish(socket, { success: true, result }),
+                    error => finish(socket, { success: false, error: reason(error) })
+                )
+                return
+            }
+
             systemRequest(application, envelope.request, controller.signal).then(
                 result => finish(socket, { success: true, result }),
                 error => finish(socket, { success: false, error: reason(error) })
@@ -67,7 +77,7 @@ function parseEnvelope(line: string): GatewayEnvelope {
 
     if (Object.keys(envelope).some(key => key !== "target" && key !== "request")) throw new Error("The gateway request contains an unknown field")
 
-    if (envelope.target !== "program" && envelope.target !== "system") throw new Error("The gateway target must be program or system")
+    if (envelope.target !== "api" && envelope.target !== "program" && envelope.target !== "system") throw new Error("The Gateway target must be api, program, or system")
     if (!("request" in envelope)) throw new Error("The gateway request is missing")
 
     return { target: envelope.target, request: envelope.request }
@@ -90,6 +100,6 @@ function reason(error: unknown) {
 
 interface GatewayEnvelope {
 
-    target: "program" | "system"
+    target: "api" | "program" | "system"
     request: unknown
 }
