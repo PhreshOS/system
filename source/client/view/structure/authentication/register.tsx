@@ -1,7 +1,6 @@
 import { type AuthenticationState, type RegistrationError } from "@server/core/authentication/authentication"
 import CredentialsForm from "./credentials-form"
 import { LinkManagerContext } from "../../contexts"
-import Loading from "../../components/loading"
 import usePromise from "@libs/react-promise"
 import useStorage from "@libs/storage-hook"
 
@@ -22,8 +21,6 @@ export default function Register({ state, onClosed }: RegisterProps) {
         return "error" in response ? message(response.error, state) : null
     })
 
-    if (registration.isPending) return <Loading />
-
     return <CredentialsForm
 
         title="Set up your system"
@@ -37,6 +34,8 @@ export default function Register({ state, onClosed }: RegisterProps) {
         requirements={state.requirements}
 
         error={registration.exception ? String(registration.exception.current) : registration.solve?.current}
+
+        pending={registration.isPending}
 
         onSubmit={registration.safeExecute}
 

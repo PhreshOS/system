@@ -1,6 +1,5 @@
 import CredentialsForm from "./credentials-form"
 import { LinkManagerContext } from "../../contexts"
-import Loading from "../../components/loading"
 import usePromise from "@libs/react-promise"
 import useStorage from "@libs/storage-hook"
 
@@ -19,8 +18,6 @@ export default function () {
         return !!authorizationToken
     })
 
-    if (signIn.isPending) return <Loading />
-
     return <CredentialsForm
 
         title="Sign in"
@@ -32,6 +29,8 @@ export default function () {
         passwordAutocomplete="current-password"
 
         error={signIn.exception ? String(signIn.exception.current) : signIn.solve && !signIn.solve.current ? "The username or password is incorrect." : null}
+
+        pending={signIn.isPending}
 
         onSubmit={signIn.safeExecute}
 

@@ -3,11 +3,12 @@ import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appeara
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { obscuredBackground } from "../../components/loading"
+import Spinner from "../../components/spinner"
 import Alert from "../../components/alert"
 import { type SyntheticEvent, useLayoutEffect, useRef } from "react"
 
 /** The common username-and-password surface for registration and sign-in. */
-export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, onSubmit }: CredentialsFormProps) {
+export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onSubmit }: CredentialsFormProps) {
 
     const surface = useRef<HTMLFormElement>(null)
 
@@ -38,6 +39,8 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         event.preventDefault()
 
+        if (pending) return
+
         const data = new FormData(event.currentTarget)
 
         onSubmit(String(data.get("username") ?? ""), String(data.get("password") ?? ""))
@@ -52,6 +55,8 @@ export default function CredentialsForm({ title, description, submitLabel, passw
             style={{ borderRadius: outerRadius }}
 
             className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] text-slate-800 shadow-window-active"
+
+            aria-busy={pending}
 
             onSubmit={submit}
 
@@ -89,6 +94,8 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                             required
 
+                            disabled={pending}
+
                             autoFocus
 
                             className="h-10 rounded-lg border border-white/70 bg-white/70 px-3 font-normal shadow-window-content outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/80"
@@ -115,6 +122,8 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                             required
 
+                            disabled={pending}
+
                             className="h-10 rounded-lg border border-white/70 bg-white/70 px-3 font-normal shadow-window-content outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/80"
 
                         />
@@ -135,11 +144,13 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                     type="submit"
 
+                    disabled={pending}
+
                     className="h-10 cursor-pointer rounded-lg border border-sky-700/35 from-sky-500 to-sky-600 px-4 font-medium text-white shadow-taskbar-control outline-none hover:from-sky-400 hover:to-sky-500 focus-visible:ring-2 focus-visible:ring-white/90"
 
                 >
 
-                    {submitLabel}
+                    {pending ? <Spinner className="m-auto size-5" /> : submitLabel}
 
                 </button>
 
@@ -163,6 +174,8 @@ interface CredentialsFormProps {
     requirements?: AuthenticationState["requirements"]
 
     error?: string | null
+
+    pending: boolean
 
     onSubmit: (username: string, password: string) => void
 }
