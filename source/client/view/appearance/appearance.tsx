@@ -1,10 +1,10 @@
-import ReducedMotion from "@libs/react-motion"
-import { standardAppearance } from "@phreshos/core"
-import { ReactNode } from "react"
 import DesktopPreferencesProvider, { useDesktopPreferences } from "./desktop-preferences"
+import { standardAppearance } from "@phreshos/core"
+import ReducedMotion from "@libs/react-motion"
+import { PropsWithChildren } from "react"
 import "./appearance.css"
 
-export default function ({ children }: AppearanceProps) {
+export default function ({ children }: PropsWithChildren) {
 
     return <DesktopPreferencesProvider>
 
@@ -13,7 +13,7 @@ export default function ({ children }: AppearanceProps) {
     </DesktopPreferencesProvider>
 }
 
-function AppearanceRoot({ children }: AppearanceProps) {
+function AppearanceRoot({ children }: PropsWithChildren) {
     const { preferences } = useDesktopPreferences()
     const background = standardAppearance.background[preferences.theme]
 
@@ -26,9 +26,4 @@ function AppearanceRoot({ children }: AppearanceProps) {
         </div>
 
     </ReducedMotion>
-}
-
-interface AppearanceProps {
-
-    children: ReactNode
 }
