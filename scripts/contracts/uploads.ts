@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { resolve } from "node:path"
-import FileManager from "../source/libs/file-manager.ts"
-import UploadManager from "../source/server/core/upload-manager.ts"
-import uploadView from "../source/server/view/uploads.ts"
+import FileManager from "@libs/file-manager"
+import UploadManager from "@server/core/upload-manager"
+import uploadView from "@server/view/uploads"
+import type Application from "@server/core/application"
 import { Hono } from "hono"
 
 const directory = await mkdtemp(resolve(".verify-uploads-"))
@@ -23,21 +24,25 @@ try {
 
     const view = new Hono()
 
-    view.route("/uploads", uploadView({
+    const application = {
         uploads,
         linkManager: {
             authManager: {
-                verify(value) {
+                verify(value: unknown) {
                     if (value !== "allowed") throw new Error("Unauthorized")
                 },
-                async upload(authorization, content, extension, signal) {
+                async upload(authorization: unknown, content: ReadableStream<Uint8Array> | null, extension: string, signal?: AbortSignal) {
                     this.verify(authorization)
                     const written = await uploads.write(extension, content, signal)
-                    return uploads.stat(written)
+                    const upload = uploads.stat(written)
+                    assert(upload)
+                    return upload
                 }
             }
         }
-    }))
+    } as unknown as Application
+
+    view.route("/uploads", uploadView(application))
     const response = await view.request("http://system/uploads", {
         method: "POST",
         headers: {

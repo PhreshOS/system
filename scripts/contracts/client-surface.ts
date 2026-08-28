@@ -1,10 +1,13 @@
 import assert from "node:assert/strict"
-import ClientProcessBoundary from "../source/client/view/components/desktop-host/client-process-boundary.ts"
-import ClientProcessManager from "../source/client/core/link-manager/auth-manager/process-manager/process-manager.ts"
-import { visibilityTransition, visualTransaction } from "../source/client/view/components/desktop-host/local-window.ts"
-import host from "../source/client/view/components/desktop-host/host.ts"
-import LocalWindows from "../source/client/view/components/window-manager/local-windows.ts"
-import ServerWindow from "../source/server/core/link-manager/auth-manager/process-manager/window.ts"
+import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
+import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
+import { visibilityTransition, visualTransaction } from "@client/view/components/desktop-host/local-window"
+import host from "@client/view/components/desktop-host/host"
+import LocalWindows from "@client/view/components/window-manager/local-windows"
+import type { LocalWindowEntry } from "@client/view/components/window-manager/local-windows"
+import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
+import type { LocalWindowState } from "@client/view/components/desktop-host/local-window"
+import type { Transaction, WindowLayer } from "@phreshos/core"
 
 const authoritativeWindow = new ServerWindow(
     { title: "Target", url: null, layer: "over", location: "/" },
@@ -31,10 +34,10 @@ const bare = client("over")
 const clients = new Map([
     ["ordinary", { identity: "ordinary:0", client: ordinary }],
     ["bare", { identity: "bare:0", client: bare }]
-])
+]) as unknown as ReadonlyMap<string, LocalWindowEntry>
 const byProcess = new Map([["ordinary", ordinary], ["bare", bare]])
-const first = new LocalWindows(clients, identity => byProcess.get(identity) ?? null)
-const second = new LocalWindows(clients, identity => byProcess.get(identity) ?? null)
+const first = new LocalWindows(clients, identity => byProcess.get(identity) as never ?? null)
+const second = new LocalWindows(clients, identity => byProcess.get(identity) as never ?? null)
 
 await first.move("ordinary", { x: 40, y: 50 })
 await first.move("bare", { x: 60, y: 70 })
@@ -70,10 +73,10 @@ assert.deepEqual(first.state("ordinary").position, { x: 15, y: 25 })
 assert.deepEqual(first.state("bare").position, { x: 60, y: 70 })
 
 const matchingAuthority = first.move("ordinary", { x: 30, y: 40 }, { duration: 120, wait: true })
-const matchingRevision = first.windows.get("ordinary:0").geometryAnimation.revision
+const matchingRevision = represented(first, "ordinary:0").geometryAnimation!.revision
 ordinary.window.position = { x: 30, y: 40 }
 first.reconcile(clients)
-assert.equal(first.windows.get("ordinary:0").geometryAnimation.revision, matchingRevision)
+assert.equal(represented(first, "ordinary:0").geometryAnimation!.revision, matchingRevision)
 first.complete("ordinary", "geometry", matchingRevision)
 await matchingAuthority
 
@@ -81,38 +84,40 @@ const waiting = first.geometry("bare", {
     position: { x: 80, y: 90 },
     size: { width: 320, height: 240 }
 }, transaction)
-const geometryRevision = first.windows.get("bare:0").geometryAnimation.revision
+const geometryRevision = represented(first, "bare:0").geometryAnimation!.revision
 first.complete("bare", "geometry", geometryRevision)
 await waiting
-assert.equal(first.windows.get("bare:0").geometryAnimation, null)
+assert.equal(represented(first, "bare:0").geometryAnimation, null)
 
 const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, wait: true })
 await first.move("bare", { x: 120, y: 130 })
 await assert.rejects(interrupted, /interrupted/)
 
 const surfaceWaiting = first.setSurface("bare", visibility)
-const surfaceRevision = first.windows.get("bare:0").surface.transition.revision
+const surfaceRevision = surface(first, "bare:0").transition!.revision
 first.complete("bare", "surface", surfaceRevision)
 await surfaceWaiting
-assert.equal(first.windows.get("bare:0").surface.transition, null)
-assert.equal(first.windows.get("bare:0").surface.visible, true)
+assert.equal(surface(first, "bare:0").transition, null)
+assert.equal(surface(first, "bare:0").visible, true)
 
 const surfaceRemoval = first.removeSurface("bare", visibility)
-const removalRevision = first.windows.get("bare:0").surface.transition.revision
-assert.equal(first.windows.get("bare:0").surface.visible, false)
+const removalRevision = surface(first, "bare:0").transition!.revision
+assert.equal(surface(first, "bare:0").visible, false)
 first.complete("bare", "surface", removalRevision)
 await surfaceRemoval
-assert.equal(first.windows.get("bare:0").surface, null)
+assert.equal(represented(first, "bare:0").surface, null)
 
 assert.throws(() => first.setSurface("ordinary", visibility), /window-layer/)
-assert.equal(second.windows.get("bare:0").surface, null)
+assert.equal(represented(second, "bare:0").surface, null)
 
 first.release("bare")
 assert.deepEqual(first.state("bare").position, bare.window.position)
-assert.equal(first.windows.get("bare:0").surface, null)
+assert.equal(represented(first, "bare:0").surface, null)
 
 const removed = first.move("bare", { x: 140, y: 150 }, { duration: 200, wait: true })
-first.reconcile(new Map([["ordinary", clients.get("ordinary")]]))
+const remaining = clients.get("ordinary")
+assert(remaining)
+first.reconcile(new Map([["ordinary", remaining]]))
 await assert.rejects(removed, /representation was removed/)
 
 const requester = {
@@ -128,12 +133,12 @@ const target = {
     client: { window: { process: "target", layer: "over", position: { x: 10, y: 20 } } }
 }
 const processes = new Map([[requester.identity, requester], [target.identity, target]])
-const calls = []
+const calls: unknown[][] = []
 const localWindow = {
-    state(identity) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
-    move(identity, value, motion) { calls.push(["move", identity, value, motion]) },
-    setSurface(identity, motion) { calls.push(["set", identity, motion]) },
-    removeSurface(identity, motion) { calls.push(["remove", identity, motion]) }
+    state(identity: string) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
+    move(identity: string, value: unknown, motion: Transaction | undefined) { calls.push(["move", identity, value, motion]) },
+    setSurface(identity: string, motion: Transaction) { calls.push(["set", identity, motion]) },
+    removeSurface(identity: string, motion: Transaction) { calls.push(["remove", identity, motion]) }
 }
 const processManager = {
     processes,
@@ -147,7 +152,7 @@ const authManager = {
     processManager,
     programManager: { programs: new Map() }
 }
-const request = host(authManager, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {}, localWindow)
+const request = host(authManager as never, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {} as never, localWindow as never)
 
 assert.deepEqual(await request("desktop"), [{ width: 1, height: 1 }])
 const targetAddress = { identity: target.identity, reference: target.reference }
@@ -165,15 +170,15 @@ assert.deepEqual(target.client.window.position, { x: 10, y: 20 })
 await assert.rejects(request("windowLocalSurfaceSet", targetAddress, { identity: "unexpected" }), /no "identity" field/)
 await assert.rejects(request("windowLocalSurfaceSet", { ...targetAddress, reference: "wrong" }, visibility), /does not know this process/)
 
-const lifecycle = []
+const lifecycle: string[] = []
 const boundary = new ClientProcessBoundary(
     "requester",
-    { contentWindow: null },
-    authManager,
+    { contentWindow: null } as unknown as HTMLIFrameElement,
+    authManager as never,
     () => ({ width: 1, height: 1 }),
-    {},
-    {},
-    { release(identity) { lifecycle.push(identity) } }
+    {} as never,
+    {} as never,
+    { release(identity: string) { lifecycle.push(identity) } } as never
 )
 
 await boundary.own("first-owner")
@@ -182,7 +187,7 @@ await boundary.release()
 
 assert.deepEqual(lifecycle, ["requester", "requester"])
 
-function client(layer) {
+function client(layer: WindowLayer) {
     return {
         window: {
             title: "Window",
@@ -194,4 +199,16 @@ function client(layer) {
             depth: 1
         }
     }
+}
+
+function represented(windows: LocalWindows, identity: string): LocalWindowState {
+    const value = windows.windows.get(identity)
+    assert(value)
+    return value
+}
+
+function surface(windows: LocalWindows, identity: string) {
+    const value = represented(windows, identity).surface
+    assert(value)
+    return value
 }

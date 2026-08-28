@@ -30,7 +30,7 @@
     "build": "vite-node scripts/build.ts",
     "start": "node --run build && node dist/server/main.js",
     "pack": "node --run build && vite-node scripts/pack.ts",
-    "verify:contracts": "vite-node scripts/verify-client-launch.mjs && vite-node scripts/verify-process-find-or-create.mjs && vite-node scripts/verify-client-surface.mjs && vite-node scripts/verify-window-geometry.mjs && vite-node scripts/verify-readiness.mjs && vite-node scripts/verify-storage.mjs && vite-node scripts/verify-uploads.mjs && vite-node scripts/verify-endpoint-services.mjs && vite-node scripts/verify-program-install.mjs && vite-node scripts/verify-host-traffic.mjs && vite-node scripts/verify-gateway-address.mjs && vite-node scripts/verify-gateway.mjs && vite-node scripts/verify-appearance.mjs && vite-node scripts/verify-worker-runtime.mjs",
+    "verify:contracts": "vite-node scripts/verify-contracts.ts",
     "verify:distribution": "node scripts/verify-distribution.mjs",
     "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
   },

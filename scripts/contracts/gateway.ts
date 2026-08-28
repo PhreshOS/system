@@ -2,13 +2,14 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import { connect } from "node:net"
 import { join, resolve } from "node:path"
-import gateway from "../source/server/view/gateway/gateway.ts"
+import gateway from "@server/view/gateway/gateway"
+import type Application from "@server/core/application"
 
 const directory = await mkdtemp(resolve(".verify-gateway-"))
 const path = join(directory, "gateway.sock")
 const application = {
     systemControl: {
-        async execute(request) { return { received: request } }
+        async execute(request: unknown) { return { received: request } }
     },
     linkManager: {
         authManager: {
@@ -17,7 +18,7 @@ const application = {
                 async exit() {}
             },
             programManager: {
-                async *installSource(program) {
+                async *installSource(program: { identity: string, name: string, version: string }) {
                     yield {
                         stage: "installed",
                         replaced: false,
@@ -32,7 +33,7 @@ const application = {
     }
 }
 
-const server = await gateway(application, path)
+const server = await gateway(application as unknown as Application, path)
 
 try {
     const system = await exchange(path, { target: "system", request: { capability: "program", operation: "list", input: {} } })
@@ -54,8 +55,8 @@ try {
     await rm(directory, { recursive: true, force: true })
 }
 
-async function exchange(path, request) {
-    return await new Promise((resolve, reject) => {
+async function exchange(path: string, request: unknown): Promise<unknown[]> {
+    return await new Promise<unknown[]>((resolve, reject) => {
         const socket = connect(path)
         let buffer = ""
 

@@ -1,8 +1,7 @@
 import assert from "node:assert/strict"
-import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
-import Readiness from "../source/libs/readiness/main.tsx"
-import ReadinessState from "../source/libs/readiness/state.ts"
+import Readiness from "@libs/readiness/main"
+import ReadinessState from "@libs/readiness/state"
 
 const startup = ReadinessState.start(["connection", "session", "wallpaper"])
 
@@ -34,28 +33,36 @@ assert.throws(() => startup.ready("unknown"), /does not know/)
 assert.throws(() => ReadinessState.start(["connection", "connection"]), /already knows/)
 assert.throws(() => ReadinessState.start([""]), /must have a name/)
 
-const pendingMarkup = renderToStaticMarkup(createElement(Readiness, { requirements: ["connection"] },
-    createElement(Readiness.Pending, null, createElement("span", null, "Loading")),
-    createElement("p", null, "Prepared content")
-))
+const pendingMarkup = renderToStaticMarkup(
+    <Readiness requirements={["connection"]}>
+        <Readiness.Pending><span>Loading</span></Readiness.Pending>
+        <p>Prepared content</p>
+    </Readiness>
+)
 
-const readyMarkup = renderToStaticMarkup(createElement(Readiness, { requirements: [] },
-    createElement(Readiness.Pending, null, createElement("span", null, "Loading")),
-    createElement("p", null, "Prepared content")
-))
+const readyMarkup = renderToStaticMarkup(
+    <Readiness requirements={[]}>
+        <Readiness.Pending><span>Loading</span></Readiness.Pending>
+        <p>Prepared content</p>
+    </Readiness>
+)
 
 assert.match(pendingMarkup, /Loading/)
 assert.match(pendingMarkup, /Prepared content/)
 assert.doesNotMatch(readyMarkup, /Loading/)
 assert.match(readyMarkup, /Prepared content/)
 
-const observedPendingMarkup = renderToStaticMarkup(createElement(Readiness, { requirements: ["connection", "session"] },
-    createElement(Readiness.Pending, null, pending => createElement("span", null, pending.join(",")))
-))
+const observedPendingMarkup = renderToStaticMarkup(
+    <Readiness requirements={["connection", "session"]}>
+        <Readiness.Pending>{pending => <span>{pending.join(",")}</span>}</Readiness.Pending>
+    </Readiness>
+)
 
-const observedReadyMarkup = renderToStaticMarkup(createElement(Readiness, { requirements: [] },
-    createElement(Readiness.Pending, null, pending => createElement("span", null, String(pending.length)))
-))
+const observedReadyMarkup = renderToStaticMarkup(
+    <Readiness requirements={[]}>
+        <Readiness.Pending>{pending => <span>{pending.length}</span>}</Readiness.Pending>
+    </Readiness>
+)
 
 assert.match(observedPendingMarkup, /connection,session/)
 assert.match(observedReadyMarkup, />0</)

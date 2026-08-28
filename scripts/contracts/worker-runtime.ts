@@ -4,8 +4,9 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { decode, encode } from "@msgpack/msgpack"
-import { WorkerServerRuntime } from "../source/server/core/link-manager/auth-manager/process-manager/server-runtime.ts"
-import Program from "../source/server/core/link-manager/auth-manager/program-manager/program.ts"
+import { WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
+import Program from "@server/core/link-manager/auth-manager/program-manager/program"
+import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
 
 const directory = await mkdtemp(join(tmpdir(), "phresh-worker-runtime-"))
 const entry = join(directory, "server.mjs")
@@ -30,14 +31,19 @@ try {
 
     assert.equal(program.serverEntryPath, entry)
 
-    assert.throws(() => new Program({ identity: "worker-conflict", server: { location: directory, startCommand: "node main.js", entryFile: "server.mjs" } }))
+    assert.throws(() => new Program({ identity: "worker-conflict", server: { location: directory, startCommand: "node main.js", entryFile: "server.mjs" } } as unknown as ProgramConfig))
     assert.throws(() => new Program({ identity: "worker-escape", server: { location: directory, entryFile: "../server.mjs" } }))
 
     const runtime = new WorkerServerRuntime(entry)
-    const messages = []
-    const output = []
+    const messages: unknown[][] = []
+    const output: ["out" | "err", string][] = []
 
-    runtime.onMessage(message => messages.push(decode(message)))
+    runtime.onMessage(message => {
+        if (!(message instanceof Uint8Array)) throw new Error("The Worker response must be bytes")
+        const decoded = decode(message)
+        if (!Array.isArray(decoded)) throw new Error("The Worker response must be an array")
+        messages.push(decoded)
+    })
     runtime.onOutput((stream, text) => output.push([stream, text]))
 
     await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready"))
@@ -58,7 +64,7 @@ try {
     await rm(directory, { recursive: true, force: true })
 }
 
-async function until(condition, timeout = 2_000) {
+async function until(condition: () => boolean, timeout = 2_000) {
     const began = Date.now()
 
     while (!condition()) {

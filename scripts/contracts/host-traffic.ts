@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
-import HostTraffic from "../source/server/core/link-manager/auth-manager/process-manager/host-traffic.ts"
+import HostTraffic from "@server/core/link-manager/auth-manager/process-manager/host-traffic"
 
 const traffic = new HostTraffic()
-const hostProgram = []
-const ownProgram = []
-const hostProcess = []
-const programProcess = []
+const hostProgram: unknown[][] = []
+const ownProgram: unknown[][] = []
+const hostProcess: unknown[][] = []
+const programProcess: unknown[][] = []
 
 traffic.observe("program", "uninstall", null, (_delivery, event, ...values) => hostProgram.push([event, ...values]))
 traffic.observe("program", "uninstall", "program-reference", (_delivery, event, ...values) => ownProgram.push([event, ...values]))

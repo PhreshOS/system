@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
-import EndpointServices from "../source/server/core/link-manager/auth-manager/process-manager/endpoint-services.ts"
-import Program from "../source/server/core/link-manager/auth-manager/program-manager/program.ts"
+import EndpointServices from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
+import Program from "@server/core/link-manager/auth-manager/program-manager/program"
+import type Process from "@server/core/link-manager/auth-manager/process-manager/process"
+import type { ServiceKey } from "@phreshos/core"
 
 const privateProgram = new Program({
     identity: "private-program",
@@ -21,22 +23,22 @@ assert.throws(() => new Program({
     server: { location: ".", startCommand: "true" }
 }), /agent documentation/)
 
-function process(reference, program = "program") {
+function process(reference: string, program = "program") {
     return {
         reference,
         program: { identity: program },
         server: {},
         client: {}
-    }
+    } as unknown as Process
 }
 
 const services = new EndpointServices()
 const provider = process("provider")
 const conflicting = process("conflicting")
 const independent = process("independent", "independent")
-const key = { program: "program", endpoint: "server", name: "counter" }
-const lifecycle = []
-const publications = []
+const key = { program: "program", endpoint: "server", name: "counter" } satisfies ServiceKey
+const lifecycle: unknown[] = []
+const publications: unknown[] = []
 let disableTransportCompleted = false
 
 assert.equal(services.identity(key), services.identity({ ...key }))
@@ -64,7 +66,7 @@ assert.deepEqual(lifecycle, ["enable"])
 await services.waitReady(key, 0)
 
 // Subscriptions are future-only: joining after enable does not replay it.
-const lateLifecycle = []
+const lateLifecycle: unknown[] = []
 services.follow(key, "lifecycle", null, event => lateLifecycle.push(event))
 assert.deepEqual(lateLifecycle, [])
 

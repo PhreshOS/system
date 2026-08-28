@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { join } from "node:path"
-import gatewayAddress from "../source/server/view/gateway/address.ts"
+import gatewayAddress from "@server/view/gateway/address"
 
 const first = gatewayAddress("C:\\Users\\Person\\.phreshos", "win32")
 

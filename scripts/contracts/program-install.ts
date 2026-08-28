@@ -2,8 +2,9 @@ import assert from "node:assert/strict"
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import Program from "../source/server/core/link-manager/auth-manager/program-manager/program.ts"
-import { copyProgram } from "../source/server/core/link-manager/auth-manager/program-manager/program-manager.ts"
+import Program from "@server/core/link-manager/auth-manager/program-manager/program"
+import { copyProgram } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import type { ProgramCommandChunk } from "@phreshos/core"
 
 const temporary = mkdtempSync(join(tmpdir(), "phresh-program-install-"))
 const source = join(temporary, "source")
@@ -42,15 +43,16 @@ try {
     assert.deepEqual(declaration.categories, ["Development"])
     assert.deepEqual(declaration.keywords, ["example"])
     assert.equal(declaration.website, "https://example.test/program")
+    assert(program.config.server)
     assert.equal(declaration.server.uninstallCommand, program.config.server.uninstallCommand)
     assert.equal(readFileSync(join(installed, "agent.md"), "utf8"), "Program operating knowledge")
 
     const installedProgram = new Program(join(installed, "program.json"))
-    const installation = []
-    const uninstallation = []
+    const installation: ProgramCommandChunk[] = []
+    const uninstallation: ProgramCommandChunk[] = []
 
-    await installedProgram.installServer(chunk => installation.push(chunk))
-    await installedProgram.uninstallServer(chunk => uninstallation.push(chunk))
+    await installedProgram.installServer(chunk => { installation.push(chunk) })
+    await installedProgram.uninstallServer(chunk => { uninstallation.push(chunk) })
 
     assert.deepEqual(Object.fromEntries(installation.map(chunk => [chunk.stream, chunk.text])), {
         stdout: "install-out",

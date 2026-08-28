@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import FileArea from "../source/libs/file-area.ts"
+import FileArea from "@libs/file-area"
 
 const fixture = mkdtempSync(join(tmpdir(), "phreshos-storage-"))
 const root = join(fixture, "configured")

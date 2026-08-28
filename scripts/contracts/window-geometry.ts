@@ -1,7 +1,8 @@
 import assert from "node:assert/strict"
-import ClientWindow from "../source/client/core/link-manager/auth-manager/process-manager/window.ts"
-import ProcessManager from "../source/server/core/link-manager/auth-manager/process-manager/process-manager.ts"
-import ServerWindow from "../source/server/core/link-manager/auth-manager/process-manager/window.ts"
+import ClientWindow from "@client/core/link-manager/auth-manager/process-manager/window"
+import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
+import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
+import type ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 
 const initial = {
     position: { x: 10, y: 20 },
@@ -27,24 +28,25 @@ const next = {
     position: { x: "1/4", y: 30 },
     size: { width: "1/2", height: 240 }
 }
-const events = []
-const echoes = []
+const events: unknown[][] = []
+const echoes: unknown[][] = []
 const manager = {
     $outbound: {
-        publish(...echo) {
+        async publish(...echo: unknown[]) {
             echoes.push(echo)
+            return []
         }
     },
-    mutableWindowOf(identity) {
+    mutableWindowOf(identity: string) {
         assert.equal(identity, "process")
         return authority
     },
-    said(...event) {
+    said(...event: unknown[]) {
         events.push(event)
     }
 }
 
-const echo = await ProcessManager.prototype.setGeometry.call(manager, "process", next)
+const echo = await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", next)
 
 assert.deepEqual(authority.position, next.position)
 assert.deepEqual(authority.size, next.size)
@@ -57,9 +59,9 @@ assert.deepEqual(echoes, [["/geometry", { identity: "process", window: authority
 assert.equal(echo.identity, "process")
 assert.equal(echo.window, authority)
 
-const publications = []
+const publications: unknown[][] = []
 const counterpart = new ClientWindow(
-    { $outbound: { publish: (...publication) => publications.push(publication) } },
+    { $outbound: { async publish(...publication: unknown[]) { publications.push(publication); return [] } } } as unknown as ClientProcessManager,
     "process",
     authority.toJSON()
 )
