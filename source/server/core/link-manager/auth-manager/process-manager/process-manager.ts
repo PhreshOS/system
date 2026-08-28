@@ -1,5 +1,5 @@
 import { Connect, Subscribe } from "@libs/the-link/decorators/escript"
-import { serveLimit } from "@server/core/served-file-manager"
+import { uploadLimit } from "@server/core/upload-manager"
 import { ChildProcess } from "node:child_process"
 import { type Launch, type LaunchClient, type Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
@@ -1918,14 +1918,17 @@ export default class ProcessManager extends TheLink {
             return [programManager.databaseOf(program).query(String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
 
-        // A server half writes served values locally, as it does its program
-        // areas. The SDK asks for the one managed root and canonical limit;
-        // neither becomes a separate public capability.
-        if (word === "serve") {
+        // A Server Endpoint performs upload byte I/O locally. The SDK receives
+        // the managed root only for stream and write operations; upload keys
+        // remain flat and validated by both sides.
+        if (word === "uploads") {
 
-            const { servedFiles } = this.authManager.linkManager.application
+            const { uploads } = this.authManager.linkManager.application
 
-            return [servedFiles.fileManager.path, serveLimit]
+            if (rest[0] === "access") return [uploads.fileManager.path, uploadLimit]
+            if (rest[0] === "stat") return [uploads.stat(String(rest[1]))]
+
+            throw new Error(`The uploads capability does not know the operation "${String(rest[0])}"`)
         }
 
         // A program's own persistent key-value store. A Program handle names

@@ -1,8 +1,9 @@
 import { serveStatic } from "@hono/node-server/serve-static"
-import { MissingServedValueError, ServedValueTooLargeError, serveLimit } from "@server/core/served-file-manager"
+import { MissingUploadValueError, UploadTooLargeError, uploadLimit } from "@server/core/upload-manager"
 import Application from "@server/core/application"
 import doors from "./doors"
 import { Hono } from "hono"
+import { isUploadFile } from "@phreshos/core"
 
 /**
  * The door bytes come through, and the one they go back out of.
@@ -10,7 +11,7 @@ import { Hono } from "hono"
  * Transport only: making a value public is an authorized operation on the
  * auth manager. Reading the completed file needs no authorization.
  *
- * The request body remains a stream all the way into ServedFileManager. Declared
+ * The request body remains a stream all the way into UploadManager. Declared
  * oversize bodies are refused before reading; undeclared ones are counted as
  * they arrive, with incomplete temporary files removed on every failure.
  */
@@ -34,43 +35,68 @@ export default function (application: Application) {
             return context.text(exception instanceof Error ? exception.message : "Unauthorized", 401)
         }
 
-        if (Number(context.req.header("content-length")) > serveLimit) return context.text(new ServedValueTooLargeError().message, 413)
+        if (Number(context.req.header("content-length")) > uploadLimit) return context.text(new UploadTooLargeError().message, 413)
 
         try {
 
-            const type = context.req.header("content-type") ?? null
-
-            const served = await authManager.serve(
+            const upload = await authManager.upload(
 
                 authorization,
 
                 context.req.raw.body,
 
-                type,
-
-                extension(filename(context.req.header("content-disposition"))) ?? typeExtension(type),
+                extension(filename(context.req.header("content-disposition"))) ?? typeExtension(context.req.header("content-type") ?? null),
 
                 context.req.raw.signal
             )
 
-            return context.json(served)
+            return context.json(upload)
         }
 
         catch (exception) {
 
-            if (exception instanceof MissingServedValueError) return context.text(exception.message, 400)
+            if (exception instanceof MissingUploadValueError) return context.text(exception.message, 400)
 
-            if (exception instanceof ServedValueTooLargeError) return context.text(exception.message, 413)
+            if (exception instanceof UploadTooLargeError) return context.text(exception.message, 413)
 
             if (exception instanceof Error && exception.message === "Unauthorized") return context.text(exception.message, 401)
 
             console.error(exception)
 
-            return context.text("The value could not be served", 500)
+            return context.text("The value could not be uploaded", 500)
+        }
+    })
+
+    uploads.get("/:file/stat", function (context) {
+
+        try {
+
+            const upload = application.uploads.stat(context.req.param("file"))
+
+            return upload ? context.json(upload) : context.body(null, 404)
+        }
+
+        catch (error) {
+
+            return context.text(error instanceof Error ? error.message : "Invalid upload", 400)
         }
     })
 
     uploads.use("/:file", async function (context, next) {
+
+        const file = context.req.param("file")
+
+        if (!isUploadFile(file)) return context.text("That is not an upload file", 400)
+
+        try {
+
+            if (!application.uploads.stat(file)) return context.body(null, 404)
+        }
+
+        catch (error) {
+
+            return context.text(error instanceof Error ? error.message : "Invalid upload", 400)
+        }
 
         await next()
 
@@ -79,7 +105,7 @@ export default function (application: Application) {
 
     uploads.use("/:file", serveStatic({
 
-        root: application.servedFiles.fileManager.path,
+        root: application.uploads.fileManager.path,
 
         rewriteRequestPath: path => path.slice(doors.uploads.length + 1)
     }))

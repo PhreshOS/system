@@ -1,11 +1,11 @@
 import { type Launch } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
-import { type ClientBody, type ProxiedResponse, type ServedValue } from "@client/core/application"
+import { type ClientBody, type ProxiedResponse, type UploadValue } from "@client/core/application"
 import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, type ProgramIconSize } from "@phreshos/core"
+import { isPermissionName, isServiceKey, isUploadFile, type ProgramIconSize } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -718,28 +718,64 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [pointer.position()]
         }
 
-        // A pane normalizes any writable value before it reaches the frame wall:
-        // finite bytes retain their native Blob and an open stream is transferred.
-        // The desktop sends either through its authorized uploads door and returns
-        // only the served file's description.
-        if (word === "serve") {
+        // Uploads are one flat public collection. A pane may provide bytes or
+        // one opaque file key; it never receives a filesystem path or route.
+        if (word === "uploads") {
 
-            if (!clientBody(args[0])) throw new Error("Serving takes bytes")
+            const operation = args[0]
 
-            const description = args[1] as Partial<ServedValue> | null
+            if (operation === "stat") {
+
+                if (!isUploadFile(args[1])) throw new Error("Uploads stat takes one upload file")
+
+                return [await authManager.linkManager.application.uploadStat(args[1])]
+            }
+
+            if (operation === "stream") {
+
+                if (!isUploadFile(args[1])) throw new Error("Uploads stream takes one upload file")
+
+                const { control, controller } = cancellation(args[2], "uploads stream")
+
+                try {
+
+                    const body = controlled(
+
+                        await authManager.linkManager.application.uploadStream(args[1], controller.signal),
+
+                        controller,
+
+                        control
+                    )
+
+                    return new TransferredAnswer([body], [body])
+                }
+
+                catch (exception) {
+
+                    control.close()
+
+                    throw exception
+                }
+            }
+
+            if (operation !== "write") throw new Error(`Uploads does not know the operation "${String(operation)}"`)
+            if (!clientBody(args[1])) throw new Error("Uploads write takes bytes")
+
+            const description = args[2] as Partial<UploadValue> | null
 
             if (!description || typeof description.type !== "string" || typeof description.extension !== "string" || !/^[a-z0-9]+$/.test(description.extension)) {
 
-                throw new Error("Serving takes a value description")
+                throw new Error("Uploads write takes a value description")
             }
 
-            const { control, controller } = cancellation(args[2], "serve")
+            const { control, controller } = cancellation(args[3], "uploads write")
 
             try {
 
-                const served = await authManager.linkManager.application.serve(
+                const upload = await authManager.linkManager.application.uploadWrite(
 
-                    args[0],
+                    args[1],
 
                     { extension: description.extension, type: description.type },
 
@@ -750,7 +786,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 control.close()
 
-                return [served]
+                return [upload]
             }
 
             catch (exception) {

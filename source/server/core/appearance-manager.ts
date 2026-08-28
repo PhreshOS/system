@@ -8,7 +8,7 @@ import {
     type Appearance,
     type AppearanceRange
 } from "@phreshos/core"
-import ServedFileManager from "./served-file-manager"
+import UploadManager from "./upload-manager"
 
 const servedFileSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$/)
 const wallpaperSchema = servedFileSchema.nullable()
@@ -44,11 +44,11 @@ const properties = Object.keys(standardAppearance) as (keyof Appearance)[]
 export default class AppearanceManager {
     private constructor(
         private readonly store: Keyv,
-        private readonly servedFiles: ServedFileManager,
+        private readonly uploads: UploadManager,
         private current: Appearance
     ) { }
 
-    public static async open(store: Keyv, servedFiles: ServedFileManager) {
+    public static async open(store: Keyv, uploads: UploadManager) {
         const entries = await Promise.all(properties.map(async property => ({
             property,
             value: await store.get(`appearance:${property}`)
@@ -63,7 +63,7 @@ export default class AppearanceManager {
             .filter(({ value }) => value === undefined)
             .map(({ property }) => store.set(`appearance:${property}`, appearance[property])))
 
-        return new AppearanceManager(store, servedFiles, appearance)
+        return new AppearanceManager(store, uploads, appearance)
     }
 
     public get value() { return this.current }
@@ -85,7 +85,7 @@ export default class AppearanceManager {
     private validateWallpaper(file: string | null) {
         if (file === null) return
         if (!wallpaperExtensions.has(extname(file).slice(1))) throw new Error("A wallpaper must be an image file")
-        this.servedFiles.describe(file)
+        if (!this.uploads.stat(file)) throw new Error("The wallpaper upload does not exist")
     }
 }
 

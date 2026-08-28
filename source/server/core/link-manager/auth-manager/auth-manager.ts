@@ -1,5 +1,5 @@
 import { Connect, Forward, Intercept, Subscribe } from "@libs/the-link/decorators/escript"
-import ServedFileManager from "@server/core/served-file-manager"
+import UploadManager from "@server/core/upload-manager"
 import DialogManager from "@server/core/dialog-manager"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
@@ -35,9 +35,9 @@ export default class AuthManager extends TheLink {
         this.subscribeTo(this.linkManager, "/auth")
     }
 
-    private get servedFiles(): ServedFileManager {
+    private get uploads(): UploadManager {
 
-        return this.linkManager.application.servedFiles
+        return this.linkManager.application.uploads
     }
 
     // What being authorized means, decided once. Every road in asks
@@ -58,15 +58,15 @@ export default class AuthManager extends TheLink {
         return values
     }
 
-    // Making a value public is authorized here; the uploads door is only the
-    // client transport that brings its bytes to this operation.
-    public async serve(authorization: unknown, content: ReadableStream<Uint8Array> | null, type: string | null, extension: string, signal?: AbortSignal) {
+    // Writing a public value is authorized here; the uploads door is only the
+    // Client transport that brings its bytes to this operation.
+    public async upload(authorization: unknown, content: ReadableStream<Uint8Array> | null, extension: string, signal?: AbortSignal) {
 
         this.verify(authorization)
 
-        const file = await this.servedFiles.write(extension, content, signal)
+        const file = await this.uploads.write(extension, content, signal)
 
-        return { ...this.servedFiles.describe(file), type }
+        return this.uploads.stat(file)!
     }
 
     /** Perform a server-side request after the desktop door proves authorization. */
@@ -158,14 +158,3 @@ export default class AuthManager extends TheLink {
 }
 
 export type TransmittedAuthManager = Transmitted<AuthManager>
-
-export interface ServedFile {
-
-    file: string
-
-    type: string | null
-
-    size: number
-
-    time: number
-}

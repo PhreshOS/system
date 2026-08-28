@@ -2,7 +2,7 @@ import LinkManager from "./link-manager/link-manager"
 import Authentication from "./authentication/authentication"
 import FileManager from "@libs/file-manager"
 import Encryptor from "@libs/encryptor"
-import ServedFileManager from "./served-file-manager"
+import UploadManager from "./upload-manager"
 import DialogManager from "./dialog-manager"
 import AppearanceManager from "./appearance-manager"
 import openStore from "./open-store"
@@ -34,7 +34,7 @@ export default class Application {
 
     public readonly authentication: Authentication
 
-    public readonly servedFiles: ServedFileManager
+    public readonly uploads: UploadManager
 
     public readonly dialogManager: DialogManager
 
@@ -64,7 +64,7 @@ export default class Application {
 
         this.authentication = payload.authentication
 
-        this.servedFiles = payload.servedFiles
+        this.uploads = payload.uploads
 
         this.appearanceManager = payload.appearanceManager
 
@@ -87,11 +87,11 @@ export default class Application {
 
         const authentication = await Authentication.open(storage.join("credentials.json"), store)
 
-        const servedFiles = new ServedFileManager(storage.navigateTo("uploads"))
+        const uploads = new UploadManager(storage.navigateTo("uploads"))
 
-        const appearanceManager = await AppearanceManager.open(store, servedFiles)
+        const appearanceManager = await AppearanceManager.open(store, uploads)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, servedFiles })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, uploads })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -121,5 +121,5 @@ interface ApplicationPayload {
 
     appearanceManager: AppearanceManager
 
-    servedFiles: ServedFileManager
+    uploads: UploadManager
 }

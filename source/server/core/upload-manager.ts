@@ -1,14 +1,15 @@
-import { createWriteStream, mkdirSync, statSync } from "node:fs"
+import { createWriteStream, lstatSync, mkdirSync } from "node:fs"
 import FileManager from "@libs/file-manager"
 import { rename, rm } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { type ReadableStream as NodeReadableStream } from "node:stream/web"
+import { isUploadFile, type Upload } from "@phreshos/core"
 
-export const serveLimit = 1024 * 1024 * 1024
+export const uploadLimit = 1024 * 1024 * 1024
 
-export class MissingServedValueError extends Error {
+export class MissingUploadValueError extends Error {
 
     public constructor() {
 
@@ -16,11 +17,11 @@ export class MissingServedValueError extends Error {
     }
 }
 
-export class ServedValueTooLargeError extends Error {
+export class UploadTooLargeError extends Error {
 
     public constructor() {
 
-        super(`The served value exceeds ${serveLimit / 1024 / 1024 / 1024} GB`)
+        super(`The upload exceeds ${uploadLimit / 1024 / 1024 / 1024} GB`)
     }
 }
 
@@ -32,9 +33,7 @@ export class ServedValueTooLargeError extends Error {
  * Only a complete value at or below the limit is renamed into public reach;
  * interruption and refusal remove the temporary file.
  */
-const shape = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$/
-
-export default class ServedFileManager {
+export default class UploadManager {
 
     public readonly fileManager: FileManager
 
@@ -47,22 +46,22 @@ export default class ServedFileManager {
 
     public path(file: string) {
 
-        if (!shape.test(file)) throw new Error("That is not a served file")
+        if (!isUploadFile(file)) throw new Error("That is not an upload file")
 
         return this.fileManager.join(file)
     }
 
     public async write(extension: string, content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
 
-        if (!/^[a-z0-9]+$/.test(extension)) throw new Error("A served file needs a valid extension")
+        if (!/^[a-z0-9]+$/.test(extension)) throw new Error("An upload needs a valid extension")
 
-        if (!content) throw new MissingServedValueError()
+        if (!content) throw new MissingUploadValueError()
 
         const uuid = randomUUID()
 
         const file = `${uuid}.${extension}`
 
-        const temporary = this.fileManager.join(`.${uuid}.serving`)
+        const temporary = this.fileManager.join(`.${uuid}.uploading`)
 
         let size = 0
 
@@ -78,7 +77,7 @@ export default class ServedFileManager {
 
                         size += chunk.byteLength
 
-                        if (size > serveLimit) throw new ServedValueTooLargeError()
+                        if (size > uploadLimit) throw new UploadTooLargeError()
 
                         yield chunk
                     }
@@ -102,11 +101,49 @@ export default class ServedFileManager {
         return file
     }
 
-    public describe(file: string) {
+    public stat(file: string): Upload | null {
 
-        const stat = statSync(this.path(file))
+        let stat
 
-        return { file, size: stat.size, time: Math.round(stat.mtimeMs) }
+        try { stat = lstatSync(this.path(file)) }
+        catch (error) {
+
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
+            throw error
+        }
+
+        if (!stat.isFile()) throw new Error("That upload key does not identify a file")
+
+        return { file, type: mediaType(file), size: stat.size, time: Math.round(stat.mtimeMs) }
     }
 
+}
+
+function mediaType(file: string) {
+
+    return types[file.slice(file.lastIndexOf(".") + 1)] ?? null
+}
+
+const types: Readonly<Record<string, string>> = {
+    avif: "image/avif",
+    bin: "application/octet-stream",
+    bmp: "image/bmp",
+    css: "text/css",
+    csv: "text/csv",
+    gif: "image/gif",
+    gz: "application/gzip",
+    html: "text/html",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    js: "text/javascript",
+    json: "application/json",
+    mp3: "audio/mpeg",
+    mp4: "video/mp4",
+    pdf: "application/pdf",
+    png: "image/png",
+    svg: "image/svg+xml",
+    txt: "text/plain",
+    wasm: "application/wasm",
+    webp: "image/webp",
+    zip: "application/zip"
 }

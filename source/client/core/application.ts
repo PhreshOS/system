@@ -3,6 +3,7 @@ import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaTyp
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
 import messagepack from "@libs/messagepack"
+import type { Upload } from "@phreshos/core"
 
 export default class Application {
 
@@ -38,7 +39,7 @@ export default class Application {
     // browsers refuse unknown-length streaming requests over HTTP/1 before the
     // server ever sees them. Authorization belongs to the desktop and is added
     // here, never exposed to the pane.
-    public async serve(content: ClientBody, description: ServedValue, authorization: string, signal?: AbortSignal): Promise<ServedFile> {
+    public async uploadWrite(content: ClientBody, description: UploadValue, authorization: string, signal?: AbortSignal): Promise<Upload> {
 
         const headers: Record<string, string> = {
 
@@ -51,6 +52,25 @@ export default class Application {
 
         const response = await this.post(this.doors.uploads, content, headers, signal)
 
+        if (!response.ok) throw new Error(await response.text())
+
+        return await response.json()
+    }
+
+    public async uploadStream(file: string, signal?: AbortSignal) {
+
+        const response = await fetch(`${this.doors.uploads}/${encodeURIComponent(file)}`, { signal })
+
+        if (!response.ok || !response.body) throw new Error(response.ok ? "The upload response has no body" : `The upload could not be read (${response.status})`)
+
+        return response.body
+    }
+
+    public async uploadStat(file: string): Promise<Upload | null> {
+
+        const response = await fetch(`${this.doors.uploads}/${encodeURIComponent(file)}/stat`)
+
+        if (response.status === 404) return null
         if (!response.ok) throw new Error(await response.text())
 
         return await response.json()
@@ -213,18 +233,7 @@ interface PreparedBody {
     remove: () => Promise<void>
 }
 
-export interface ServedFile {
-
-    file: string
-
-    type: string | null
-
-    size: number
-
-    time: number
-}
-
-export interface ServedValue {
+export interface UploadValue {
 
     extension: string
 
