@@ -1,7 +1,7 @@
 # Contributing
 
 The system repository owns the authoritative PhreshOS runtime: server state,
-the desktop that represents it, local Program intake, persistence boundaries,
+the desktop that represents it, owner-local gateway, persistence boundaries,
 and Process management.
 
 ## Development

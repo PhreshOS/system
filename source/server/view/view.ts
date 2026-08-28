@@ -3,10 +3,8 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import { serve } from "@hono/node-server"
 import { WebSocketServer } from "ws"
 import doors from "./doors"
-import intake from "./intake"
-import intakeAddress from "./intake-address"
-import control from "./control"
-import controlAddress from "./control-address"
+import gateway from "./gateway/gateway"
+import gatewayAddress from "./gateway/address"
 import program from "./program"
 import proxy from "./proxy"
 import storage from "./storage"
@@ -30,7 +28,7 @@ export default async function (config: Config) {
         font: "simple"
     })
 
-    const application = await Application.initialize(config.name, config.displayName, config.version, config.storage, resolve("assets/default-icon.png"))
+    const application = await Application.initialize(config.name, config.displayName, config.version, config.home, resolve("assets/default-icon.png"))
 
     // One server, five doors, each at its own name. A program's client
     // is still not the API — it is files a browser reads, with no link,
@@ -72,21 +70,13 @@ export default async function (config: Config) {
         }, resolve)
     })
 
-    // Local program intake beside the way the network reaches the system.
-    // Not HTTP: it is a filesystem socket reachable only from this machine,
-    // for installing or running the one program a local project declares.
-    const [intakeSocket, controlSocket] = await Promise.all([
-        intake(application, intakeAddress(application.storage.path)),
-        control(application, controlAddress(application.storage.path))
-    ])
+    const localGateway = await gateway(application, gatewayAddress(application.storage.path))
 
     const origin = `http://localhost:${port}`
 
     if (config.assets) console.log(`  ➜  ${styleText("bold", "Desktop:")} ${origin}`)
 
-    console.log(`  ➜  ${styleText("bold", "Intake:")} ${intakeSocket}`)
-
-    console.log(`  ➜  ${styleText("bold", "Control:")} ${controlSocket}`)
+    console.log(`  ➜  ${styleText("bold", "Gateway:")} ${localGateway.path}`)
 
     return { origin }
 }
@@ -101,8 +91,8 @@ export interface Config {
 
     mode: "development" | "production"
 
-    /** Explicit instance storage. Omission selects the real user installation. */
-    storage?: string
+    /** Absolute authoritative state root selected by Main. */
+    home: string
 
     assets?: string
 
@@ -129,7 +119,7 @@ export function environmentPort(name: string, variables: NodeJS.ProcessEnv) {
     return port
 }
 
-/** Read an optional absolute home for an isolated development instance. */
+/** Read the optional absolute authoritative home selected by Main's environment. */
 export function environmentHome(name: string, variables: NodeJS.ProcessEnv) {
 
     const selected = environment(name, "HOME", variables)
@@ -140,5 +130,5 @@ export function environmentHome(name: string, variables: NodeJS.ProcessEnv) {
 
     if (!isAbsolute(value)) throw new Error(`${selected.key} must be an absolute filesystem path`)
 
-    return value
+    return resolve(value)
 }

@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, rmSync } from "node:fs"
 import { connect, createServer, type Socket } from "node:net"
 import { dirname } from "node:path"
 
-/** Open an owner-only local socket and safely recover a stale POSIX address. */
+/** Open Gateway's owner-only local socket and safely recover a stale POSIX address. */
 export default function localServer(path: string, receive: (socket: Socket) => void) {
 
     const namedPipe = process.platform === "win32"
@@ -10,7 +10,7 @@ export default function localServer(path: string, receive: (socket: Socket) => v
 
     if (!namedPipe) mkdirSync(dirname(path), { recursive: true })
 
-    return new Promise<string>(function (resolve, reject) {
+    return new Promise<LocalServer>(function (resolve, reject) {
 
         const listen = (recovered: boolean) => {
 
@@ -29,11 +29,20 @@ export default function localServer(path: string, receive: (socket: Socket) => v
                 }, reject)
             })
 
-            server.listen({ path, readableAll: false, writableAll: false }, () => resolve(secured(path, namedPipe)))
+            server.listen({ path, readableAll: false, writableAll: false }, () => resolve({
+                path: secured(path, namedPipe),
+                close: () => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+            }))
         }
 
         listen(false)
     })
+}
+
+export interface LocalServer {
+
+    path: string
+    close(): Promise<void>
 }
 
 function secured(path: string, namedPipe: boolean) {

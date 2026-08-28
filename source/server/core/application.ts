@@ -75,9 +75,9 @@ export default class Application {
         this.systemControl = new SystemControl(this)
     }
 
-    public static async initialize(name: string, displayName: string, version: string, storagePath: string | undefined, defaultProgramIcon: string) {
+    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string) {
 
-        const storage = storagePath ? new FileManager(storagePath) : FileManager.forApp(name)
+        const storage = new FileManager(homePath)
 
         const home = new FileArea(homedir(), "the native home directory")
 

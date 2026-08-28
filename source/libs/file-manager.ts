@@ -29,9 +29,9 @@
  * const configPath = appManager.join("config", "settings.json");
  * ```
  */
-import { existsSync, mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 
 /**
  * Application directory management system providing automatic directory creation
@@ -70,12 +70,14 @@ export default class FileManager {
         /**
          * Combine all path segments into normalized absolute path.
          */
-        this.path = join(...paths)
+        const path = resolve(join(...paths))
 
         /**
          * Ensure target directory exists with recursive creation.
          */
-        if (!existsSync(this.path)) mkdirSync(this.path, { recursive: true })
+        if (!existsSync(path)) mkdirSync(path, { recursive: true })
+
+        this.path = realpathSync(path)
     }
 
     /**

@@ -4,9 +4,9 @@ import view, { environmentHome, environmentPort } from "@server/view/view"
 import { createServer } from "vite"
 import { fileURLToPath } from "node:url"
 
-const storage = environmentHome(name, process.env) ?? fileURLToPath(new URL("../storage", import.meta.url))
+const home = environmentHome(name, process.env) ?? fileURLToPath(new URL("../storage", import.meta.url))
 
-const host = await view({ name, displayName, version, mode: "development", hostname: "localhost", storage })
+const host = await view({ name, displayName, version, mode: "development", hostname: "localhost", home })
 
 const port = environmentPort(name, process.env)
 

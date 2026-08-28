@@ -682,7 +682,7 @@ export default class ProgramManager extends TheLink {
         }
     }
 
-    /** Run a durable Program independently of the local intake connection. */
+    /** Run a durable Program independently of a local gateway connection. */
     public async runInstalled(program: Program, launch: Launch = {}) {
 
         if (!this.installed(program)) throw new Error("Only an installed program can run independently")

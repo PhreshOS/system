@@ -18,7 +18,7 @@ Host operating system
     ├── Server runtime
     │   ├── Programs → Processes → Endpoints
     │   ├── Authentication and persistence
-    │   └── Local Program intake
+    │   └── Owner-local gateway
     └── Web desktop
         └── Browser representation of server truth
 ```
@@ -43,13 +43,13 @@ representation: windows, focus, layering, taskbar, and interaction. Programs
 remain isolated from one another and reach shared system capabilities only
 through the contracts exposed to their Endpoints.
 
-Local Program operations enter through an owner-restricted intake address. On
+Local Program operations enter through an owner-restricted gateway address. On
 POSIX systems this is a Unix domain socket with mode `0600`; on Windows it is an
 owner-created named pipe. It opens no network port and requires no token beyond
 the operating-system account that owns it.
 
 `phresh dev` and `phresh start` run an attached Program whose lifetime follows
-the intake connection. `phresh install` creates the persistent installed form,
+the gateway connection. `phresh install` creates the persistent installed form,
 and `phresh uninstall` removes it through the same local boundary.
 
 ## Install and operate
@@ -89,12 +89,13 @@ the first stable release.
 
 Production keeps System state beneath the owner's `~/.phreshos` directory.
 This includes credentials and private material, the System database, installed
-Programs and their storage, uploaded files, and the local intake address while
+Programs and their storage, uploaded files, and the local gateway address while
 the service is running.
 
-Development uses the repository's `storage/` directory by default.
-`PHRESHOS_HOME` may name another absolute directory for an isolated development
-instance; production does not consume this development override.
+Direct project execution uses the repository's `storage/` directory by default.
+`PHRESHOS_HOME` may select another absolute state root in either direct or
+CLI-launched execution. The CLI otherwise selects `~/.phreshos` and passes that
+absolute home to the System it launches.
 
 `PHRESHOS_PORT` optionally selects the public desktop port. Production defaults
 to `4300`. Neither environment variable is required.
