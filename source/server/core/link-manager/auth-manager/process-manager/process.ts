@@ -1,7 +1,6 @@
 import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
-import { ChildProcess } from "node:child_process"
 import { Transmitted } from "@libs/messagepack"
 import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
@@ -9,6 +8,7 @@ import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
 import { type Layer, type PermissionName } from "@phreshos/core"
 import Tunnel from "@libs/the-link/tunnel"
+import type { ServerRuntime } from "./server-runtime"
 
 /**
  * One live execution of a Program.
@@ -22,9 +22,9 @@ import Tunnel from "@libs/the-link/tunnel"
  * owns. The Process remains the stable aggregate around those incarnations
  * and must always have at least one live endpoint.
  *
- * The child handle lives here beside the transmitted values and is left
- * out of toJSON: what crosses is declared, so a host-only handle needs no
- * second structure to hide in.
+ * The Server runtime boundary lives here beside the transmitted values and is
+ * left out of toJSON: what crosses is declared, so a host-only execution
+ * mechanism needs no second structure to hide in.
  */
 export default class Process {
 
@@ -112,13 +112,13 @@ export default class Process {
         this.hostTraffic = hostTraffic
     }
 
-    public startServer(child: ChildProcess, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
+    public startServer(runtime: ServerRuntime, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
 
         if (this.server) return this.server
 
         let boundary!: ServerProcessBoundary
 
-        boundary = new ServerProcessBoundary(child, this.program.client !== null, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
+        boundary = new ServerProcessBoundary(runtime, this.program.client !== null, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
 
         this.server = boundary
 
@@ -247,11 +247,11 @@ export default class Process {
         }
     }
 
-    // Said once, however many ways it could be said: a child's exit
+    // Said once, however many ways it could be said: a Server runtime's exit
     // removes the record, and removing the record is itself an ending.
     // The result remains terminal state rather than becoming lost history:
     // process creation announces externally before every internal owner has
-    // finished attaching, and a fast child can exit during that announcement.
+    // finished attaching, and a fast runtime can exit during that announcement.
     public ended(code: number | null, signal: NodeJS.Signals | null) {
 
         if (this.ending) return

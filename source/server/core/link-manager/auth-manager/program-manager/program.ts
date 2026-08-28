@@ -1,6 +1,6 @@
 import { ClientConfig, isValue, kebab, layers, Position, ProgramConfig, ServerConfig, Size } from "./config"
-import { existsSync, readFileSync, statSync } from "node:fs"
-import { dirname, isAbsolute, resolve } from "node:path"
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
@@ -158,6 +158,13 @@ export default class Program {
         return this.config.server ? this.place(this.config.server.location) : null
     }
 
+    public get serverEntryPath() {
+
+        const entry = this.config.server?.entryFile
+
+        return entry && this.serverPath ? resolve(this.serverPath, entry) : null
+    }
+
     public get clientPath() {
 
         return this.config.client && !this.clientUrl ? this.place(this.config.client.location) : null
@@ -251,6 +258,12 @@ export default class Program {
         const server = this.serverPath
 
         if (server && !directory(server)) throw new Error(`The server directory is not there: ${server}`)
+
+        const entry = this.serverEntryPath
+
+        if (entry && !file(entry)) throw new Error(`The server worker entry file is not there: ${entry}`)
+
+        if (server && entry && !contained(server, entry)) throw new Error("The server worker entry file leaves its Server directory")
 
         const client = this.clientPath
 
@@ -359,7 +372,7 @@ function coherent(config: ProgramConfig) {
 
     if (!(config.server && (config.server.start ?? true)) && !(config.client && (config.client.start ?? true))) throw new Error("A Program's default Process must start a server endpoint, a client endpoint, or both")
 
-    if (config.server && (typeof config.server.startCommand !== "string" || config.server.startCommand.length === 0)) throw new Error("A server half must declare a start command")
+    if (config.server) execution(config.server)
 
     if (config.server?.installCommand !== undefined && typeof config.server.installCommand !== "string") throw new Error("A server half's install command must be text")
 
@@ -388,8 +401,35 @@ function coherent(config: ProgramConfig) {
     return config
 }
 
-type Resolved<Half extends { start?: boolean }> = Omit<Half, "start"> & {
-    start: boolean
+type Resolved<Half extends { start?: boolean }> = Half extends unknown ? Omit<Half, "start"> & { start: boolean } : never
+
+function execution(server: { startCommand?: unknown, entryFile?: unknown }) {
+
+    if ((server.startCommand === undefined) === (server.entryFile === undefined)) throw new Error("A server half must declare exactly one startCommand or entryFile")
+
+    if (server.startCommand !== undefined && (typeof server.startCommand !== "string" || server.startCommand.trim().length === 0)) throw new Error("A server half's startCommand must be non-empty text")
+
+    if (server.entryFile !== undefined && (typeof server.entryFile !== "string" || server.entryFile.trim().length === 0 || !containedEntry(server.entryFile))) throw new Error("A server half's entryFile must be a non-empty path inside its Server directory")
+}
+
+function containedEntry(entry: string) {
+
+    if (isAbsolute(entry)) return false
+
+    const path = normalize(entry)
+
+    return path !== ".." && !path.startsWith(`..${sep}`)
+}
+
+function contained(root: string, path: string) {
+
+    const from = realpathSync(root)
+
+    const to = realpathSync(path)
+
+    const relationship = relative(from, to)
+
+    return relationship !== ".." && !relationship.startsWith(`..${sep}`) && !isAbsolute(relationship)
 }
 
 function directory(path: string) {

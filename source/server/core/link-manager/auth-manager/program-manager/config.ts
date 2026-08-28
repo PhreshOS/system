@@ -53,7 +53,7 @@ interface Described {
     storage?: string
 }
 
-export interface ServerConfig {
+interface ServerDescription {
 
     // Where this half is. Empty names the program's own root.
     location: string
@@ -67,9 +67,22 @@ export interface ServerConfig {
     // Run while uninstalling, before the installed files are removed.
     uninstallCommand?: string
 
-    // Run to start a process, in that directory.
-    startCommand: string
 }
+
+export type ServerConfig = ServerDescription & ({
+
+    // Run an isolated operating-system process through the shell.
+    startCommand: string
+
+    entryFile?: never
+
+} | {
+
+    startCommand?: never
+
+    // Load this module as a worker owned by the System.
+    entryFile: string
+})
 
 export interface ClientConfig {
 

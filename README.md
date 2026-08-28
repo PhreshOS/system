@@ -27,7 +27,8 @@ A Program is the stable unit installed or attached to the System. A Process is
 one running incarnation of that Program. Its Endpoints are the places where its
 code participates in the system:
 
-- A Server Endpoint runs Node.js code on the host.
+- A Server Endpoint runs JavaScript on the host, either in its own
+  operating-system process tree or in a Worker owned by the System.
 - A Client Endpoint runs in a sandboxed iframe on the desktop and owns its
   Window.
 - Every Endpoint communicates through explicit Traffic.
@@ -35,6 +36,14 @@ code participates in the system:
 Endpoints are silent by default. Data, events, permissions, and host state do
 not enter an Endpoint merely because it exists; Program code must explicitly
 request or subscribe to what it needs.
+
+A Program selects exactly one Server execution mode. `startCommand` preserves
+an arbitrary shell command and its independently supervised process tree.
+`entryFile` resolves a module inside the Program's Server files and runs it in a
+System-owned Worker, avoiding a separate Node.js process. Both modes expose the
+same Process and Server SDK contracts. A Worker has no independent working
+directory and is not a security boundary; a catastrophic Worker or native
+module failure can affect the System process.
 
 ## System boundaries
 

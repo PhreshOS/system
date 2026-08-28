@@ -1,6 +1,4 @@
-import ProcessLink from "@libs/the-link/plugins/process-link/process-link"
-import ProcessTree from "@libs/process-tree"
-import { type ChildProcess } from "node:child_process"
+import TheLink from "@libs/the-link/the-link"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import HostTraffic from "./host-traffic"
 import EndpointEvents from "./endpoint-events"
@@ -8,15 +6,16 @@ import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceKey } from "@phreshos/core"
 import Tunnel from "@libs/the-link/tunnel"
 import messagepack from "@libs/messagepack"
+import type { ServerRuntime, Stream } from "./server-runtime"
 
 /**
  * The boundary around one server execution endpoint.
  *
- * The child speaks only here. Application events cross only when its SDK has
+ * The Server runtime speaks only here. Application events cross only when its SDK has
  * registered an interest. Readiness travels out of the endpoint; the boundary
  * never injects startup state into it.
  */
-export default class ServerProcessBoundary extends ProcessLink {
+export default class ServerProcessBoundary extends TheLink {
 
     public ready = false
 
@@ -47,9 +46,7 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     private stopAppearance: (() => void) | null = null
 
-    private readonly child: ChildProcess
-
-    private readonly tree: ProcessTree
+    private readonly runtime: ServerRuntime
 
     private readonly hostTraffic: HostTraffic
 
@@ -59,24 +56,31 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
 
-    public constructor(child: ChildProcess, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
+    public constructor(runtime: ServerRuntime, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
 
-        super(child, messagepack.serialize, messagepack.deserialize)
+        super()
 
         this.clientDeclared = clientDeclared
 
-        this.child = child
+        this.runtime = runtime
+
+        runtime.onMessage(message => { this.receive(message).catch(() => undefined) })
+
+        this.$outbound.forwardTo((event, ...values) => {
+
+            runtime.send(messagepack.serialize([event, ...values]))
+        })
 
         let finish!: (ending: { code: number | null, signal: NodeJS.Signals | null }) => void
 
         this.finished = new Promise(resolve => { finish = resolve })
 
-        this.tree = new ProcessTree(child, async (code, signal) => {
+        runtime.finished.then(async ({ code, signal }) => {
 
             try { await ended(code, signal) }
 
             finally { finish({ code, signal }) }
-        })
+        }).catch(() => undefined)
 
         this.hostTraffic = hostTraffic
 
@@ -84,9 +88,23 @@ export default class ServerProcessBoundary extends ProcessLink {
 
         this.unanswered = unanswered
 
-        child.on("error", () => undefined)
-
         this.$inbound.subscribe("boundary", (...values) => this.control(values))
+    }
+
+    /** Admit one binary envelope from this exact Server runtime. */
+    private async receive(message: unknown) {
+
+        let decoded: unknown
+
+        try { decoded = messagepack.deserialize(receiveBytes(message)) }
+
+        catch { return }
+
+        if (!Array.isArray(decoded) || typeof decoded[0] !== "string") return
+
+        const [event, ...values] = decoded as [string, ...unknown[]]
+
+        await this.$inbound.publish(event, ...values)
     }
 
     /** Deliver one routed envelope only when this endpoint requested it. */
@@ -287,14 +305,12 @@ export default class ServerProcessBoundary extends ProcessLink {
 
     public stop() {
 
-        this.tree.stop()
+        this.runtime.stop()
     }
 
     public onOutput(listener: (stream: Stream, text: string) => void) {
 
-        this.child.stdout?.on("data", chunk => listener("out", String(chunk)))
-
-        this.child.stderr?.on("data", chunk => listener("err", String(chunk)))
+        this.runtime.onOutput(listener)
     }
 
     private control(values: unknown[]) {
@@ -499,6 +515,17 @@ interface WaitingQuestion {
     question: string
 }
 
-export type Stream = "out" | "err"
+export type { Stream } from "./server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
+
+function receiveBytes(value: unknown) {
+
+    if (value instanceof Uint8Array) return Uint8Array.from(value)
+
+    if (value instanceof ArrayBuffer) return new Uint8Array(value)
+
+    if (ArrayBuffer.isView(value)) return Uint8Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))
+
+    throw new TypeError("The server process message is not binary")
+}

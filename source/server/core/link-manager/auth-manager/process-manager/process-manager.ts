@@ -1,6 +1,5 @@
 import { Connect, Subscribe } from "@libs/the-link/decorators/escript"
 import { uploadLimit } from "@server/core/upload-manager"
-import { ChildProcess } from "node:child_process"
 import { type Launch, type LaunchClient, type Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import { Layer } from "../program-manager/config"
@@ -8,7 +7,6 @@ import Window, { Position, Size } from "./window"
 import TheLink from "@libs/the-link/the-link"
 import { Transmitted } from "@libs/messagepack"
 import AuthManager from "../auth-manager"
-import { signalProcessTree } from "@libs/process-tree"
 import Process, { type HostedProcess, type ProcessLaunch } from "./process"
 import ServerProcessBoundary from "./server-process-boundary"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
@@ -20,6 +18,7 @@ import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
 import { isPermissionName, isServiceKey, type PermissionName, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import type { ServerRuntime } from "./server-runtime"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
@@ -220,8 +219,7 @@ export default class ProcessManager extends TheLink {
         ))
     }
 
-    // A server runtime is a ProcessLink. Speaking through its outbound
-    // tunnel keeps IPC as a transport detail and leaves a stopped child as
+    // The boundary owns its server runtime transport. A stopped child remains
     // fire-and-forget: there is no receiver to promise once it has gone.
     private say(server: ServerProcessBoundary | null | undefined, event: string, ...values: unknown[]) {
 
@@ -718,9 +716,9 @@ export default class ProcessManager extends TheLink {
         else await this.transition(process, finish).catch(() => undefined)
     }
 
-    private activateServer(process: Process, child: ChildProcess) {
+    private activateServer(process: Process, runtime: ServerRuntime) {
 
-        const server = process.startServer(child,
+        const server = process.startServer(runtime,
 
             (boundary, code, signal) => this.serverEnded(process, boundary, code, signal),
 
@@ -741,18 +739,18 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
 
-    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, child: ChildProcess | null, client: boolean, shape: Shape | null, parent: Process | null, configure?: (process: Process) => void) {
+    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, configure?: (process: Process) => void) {
 
         if (this.processes.has(identity)) {
 
-            if (child) signalProcessTree(child, "SIGKILL")
+            runtime?.stop()
 
             throw new Error("The host already knows this process identity")
         }
 
         if (name !== null && [...this.processes.values()].some(process => process.program === program && process.name === name)) {
 
-            if (child) signalProcessTree(child, "SIGKILL")
+            runtime?.stop()
 
             throw new Error("This program already has a process with that name")
         }
@@ -782,7 +780,7 @@ export default class ProcessManager extends TheLink {
 
             if (client && window) process.startClient(window)
 
-            if (child) this.activateServer(process, child)
+            if (runtime) this.activateServer(process, runtime)
 
             // The subject first, which is what scopes a listener without
             // anything being checked: a kit's `Events` refuses a value whose
@@ -894,13 +892,13 @@ export default class ProcessManager extends TheLink {
 
             await process.program.validate()
 
-            const child = this.authManager.programManager.spawnServer(process.program)
+            const runtime = this.authManager.programManager.serverRuntime(process.program)
 
-            try { this.activateServer(process, child) }
+            try { this.activateServer(process, runtime) }
 
             catch (error) {
 
-                signalProcessTree(child, "SIGKILL")
+                runtime.stop()
 
                 throw error
             }

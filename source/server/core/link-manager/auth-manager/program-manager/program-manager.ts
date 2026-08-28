@@ -1,6 +1,5 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { Connect } from "@libs/the-link/decorators/escript"
-import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import TheLink from "@libs/the-link/the-link"
 import SqliteDatabase from "@libs/sqlite-database"
@@ -22,6 +21,7 @@ import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import { readStartup, removeStartup, writeStartup } from "./startup"
 import { readPermissions, writePermissions } from "./permissions"
+import { CommandServerRuntime, WorkerServerRuntime } from "../process-manager/server-runtime"
 
 const maximumProcessesPerProgram = 20
 
@@ -1232,12 +1232,12 @@ export default class ProgramManager extends TheLink {
         // server incarnation attaches to the same Process-level listeners.
         const logs = this.logsOf(program)
 
-        const child = server ? this.spawnServer(program) : null
+        const runtime = server ? this.serverRuntime(program) : null
 
         // Lifecycle consumers are attached before either initial endpoint is
         // activated, so even a server command that exits immediately has a
         // complete output and exit record.
-        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, child, client !== null, shape, parent, record => {
+        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, record => {
 
             record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
 
@@ -1256,55 +1256,18 @@ export default class ProgramManager extends TheLink {
         return identity
     }
 
-    /** Starts one fresh server endpoint incarnation for a Process. */
-    public spawnServer(program: Program) {
+    /** Creates one fresh execution runtime for a Server endpoint. */
+    public serverRuntime(program: Program) {
 
         const server = program.server
 
         if (!server) throw new Error("This program declared no server half")
 
-        return spawn(server.startCommand, {
+        return server.startCommand !== undefined
 
-            shell: true,
+            ? new CommandServerRuntime(server.startCommand, program.serverPath!)
 
-            // One Process owns everything its server command starts.
-            // A separate operating-system group makes that ownership real:
-            // closing the Process can end the whole tree instead of only the
-            // shell at its root.
-            detached: true,
-
-            cwd: program.serverPath!,
-
-            // Always piped, because the system is always the audience.
-            //
-            // This was piped only when somebody was listening: a pipe
-            // nobody reads fills at about 64 KB and the program stops
-            // mid-write, and `stdio` is decided here and once, so an
-            // audience arriving later heard nothing. Both halves of that
-            // stopped being true when the core began keeping what a
-            // program says — it reads, so the pipe drains, and a
-            // listener no longer has to have been there at the start.
-            //
-            // Which also ends the difference between the two ways of
-            // running one: an attached program's output is no longer a
-            // road of its own, it is the same drain with somebody else
-            // also watching.
-            stdio: ["ignore", "pipe", "pipe", "ipc"],
-
-            // MessagePack envelopes remain bytes across Node's IPC boundary.
-            serialization: "advanced",
-
-            // Only what the operating system needs to run a command.
-            // No program data travels this way: options and places are
-            // asked for over the channel, which is the one road a
-            // client half can walk too.
-            env: {
-
-                ...process.env,
-
-                PATH: `${join(process.cwd(), "node_modules", ".bin")}:${process.env.PATH}`
-            }
-        })
+            : new WorkerServerRuntime(program.serverEntryPath!)
     }
 
     /** Resolves and validates one client endpoint incarnation. */
