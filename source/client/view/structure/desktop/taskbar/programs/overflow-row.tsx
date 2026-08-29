@@ -112,7 +112,7 @@ function ScrollButton({ label, controls, direction, disabled, reducedMotion, onC
 
         onClick={onClick}
 
-        className={`grid size-7 shrink-0 place-items-center rounded-lg border border-white/45 bg-white/55 text-slate-700 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-35 ${reducedMotion ? "" : "transition-colors hover:bg-white/80 active:scale-95"}`}
+        className={`grid size-7 shrink-0 place-items-center rounded-lg border border-white/45 bg-white/55 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-35 ${reducedMotion ? "" : "transition-colors hover:bg-white/80 active:scale-95"}`}
 
     >
 

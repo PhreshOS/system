@@ -25,7 +25,11 @@ export default function Workspace() {
 
     const authManager = AuthManagerContext.useValue()
 
-    const desktopWallpaper = useResolveTheme(useAppearance().desktopWallpaper)
+    const appearance = useAppearance()
+
+    const desktopWallpaper = useResolveTheme(appearance.desktopWallpaper)
+
+    const foreground = useResolveTheme(appearance.foreground)
 
     const theme = useTheme()
 
@@ -214,7 +218,7 @@ export default function Workspace() {
 
     const wallpaper = <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
-    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none">
+    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none" style={{ color: foreground }}>
 
         <ProgramAccessProbe door={application.doors.program} setAccess={setProgramAccess} />
 

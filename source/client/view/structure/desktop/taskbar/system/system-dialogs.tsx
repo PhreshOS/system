@@ -99,13 +99,13 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
 
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-sky-600/25 bg-sky-500/15 text-sm font-medium text-sky-800">?</span>
+            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-sky-600/25 bg-sky-500/15 text-sm font-medium">?</span>
 
             <div className="grid gap-1">
 
-                <h3 className="text-base font-medium text-slate-900">{dialog.program.name} needs permission</h3>
+                <h3 className="text-base font-medium">{dialog.program.name} needs permission</h3>
 
-                <p id={description} className="text-sm leading-6 text-slate-600">{permissionDescription(dialog)}</p>
+                <p id={description} className="text-sm leading-6 opacity-60">{permissionDescription(dialog)}</p>
 
             </div>
 
@@ -136,13 +136,13 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
 
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
 
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium text-rose-700">!</span>
+            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium">!</span>
 
             <div className="grid gap-1">
 
-                <h3 className="text-base font-medium text-slate-900">Server endpoint crashed</h3>
+                <h3 className="text-base font-medium">Server endpoint crashed</h3>
 
-                <p id={description} className="text-sm leading-6 text-slate-600">{crashDescription(dialog)}</p>
+                <p id={description} className="text-sm leading-6 opacity-60">{crashDescription(dialog)}</p>
 
             </div>
 

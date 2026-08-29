@@ -10,9 +10,9 @@ export default function ({ active = false, icon, children, className, ...props }
 
     const surface = active
 
-        ? "border-white/75 bg-gradient-to-b from-white/70 to-white/40 text-slate-900 shadow-taskbar-item-active"
+        ? "border-white/75 bg-gradient-to-b from-white/70 to-white/40 shadow-taskbar-item-active"
 
-        : "border-white/35 bg-white/20 text-slate-800 shadow-taskbar-item hover:border-white/55 hover:bg-white/40"
+        : "border-white/35 bg-white/20 shadow-taskbar-item hover:border-white/55 hover:bg-white/40"
 
     return <button
 
@@ -26,7 +26,7 @@ export default function ({ active = false, icon, children, className, ...props }
 
         <img src={icon} alt="" draggable={false} className="size-4 shrink-0 rounded-sm object-contain" />
 
-        <span className="truncate">{children}</span>
+        <span className={`truncate ${active ? "" : "opacity-80"}`}>{children}</span>
 
         {active && <span aria-hidden="true" className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-sky-500 shadow-taskbar-indicator" />}
 

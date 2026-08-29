@@ -34,7 +34,7 @@ export default function ProgramsSection({ onChoose }: ProgramsSectionProps) {
 
             />)
 
-            : <p className="px-3 py-8 text-center text-sm text-slate-600">No installed programs</p>}
+            : <p className="px-3 py-8 text-center text-sm opacity-60">No installed programs</p>}
 
     </div>
 }

@@ -175,7 +175,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
             ordinary Window UI, with no backdrop or Surface behind it. */}
         {!bare && frameLoading && !stopping && !closing && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
 
-            <Spinner className="m-auto size-6 text-slate-700">
+            <Spinner className="m-auto size-6">
 
                 <span className="sr-only">Loading</span>
 
@@ -187,7 +187,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
             only termination progress remains, without painting a backdrop. */}
         {!bare && (stopping || closing) && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
 
-            <Spinner className="m-auto size-6 text-slate-700">
+            <Spinner className="m-auto size-6">
 
                 <span className="sr-only">Closing</span>
 

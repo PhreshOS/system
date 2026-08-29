@@ -7,11 +7,6 @@ const control = {
     danger: { borderColor: "rgba(253, 164, 175, 0.7)", backgroundColor: "#f43f5e", color: "#ffffff", scale: 1 }
 }
 
-const focus = {
-    active: { opacity: 1, color: "#1e293b" },
-    inactive: { opacity: 0.6, color: "#64748b" }
-}
-
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
 
@@ -26,14 +21,13 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
         if (!icon || !title || renderedActive === active) return
 
-        const target = active ? focus.active : focus.inactive
+        const opacity = active ? 1 : 0.6
 
         gsap.killTweensOf([icon, title])
 
         if (reducedMotion) {
 
-            gsap.set(icon, { opacity: target.opacity })
-            gsap.set(title, { color: target.color })
+            gsap.set([icon, title], { opacity })
             setRenderedActive(active)
 
             return
@@ -48,8 +42,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
             onComplete: () => setRenderedActive(active)
         })
 
-        timeline.to(icon, { opacity: target.opacity }, 0)
-        timeline.to(title, { color: target.color }, 0)
+        timeline.to([icon, title], { opacity }, 0)
 
         return () => { timeline.kill() }
 
@@ -88,7 +81,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
             <span
                 ref={titleElement}
                 className="truncate text-window-title font-medium"
-                style={{ color: renderedActive ? "#1e293b" : "#64748b" }}
+                style={{ opacity: renderedActive ? 1 : 0.6 }}
             >{title}</span>
 
         </div>
@@ -214,7 +207,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
             if (event.detail === 0) onClick?.()
         }}
 
-        className="grid size-6 place-items-center rounded-md border border-transparent bg-white/15 text-slate-600 outline-none shadow-sm disabled:pointer-events-none disabled:opacity-40 focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-sky-500"
+        className="grid size-6 place-items-center rounded-md border border-transparent bg-white/15 outline-none shadow-sm disabled:pointer-events-none disabled:opacity-40 focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-sky-500"
 
     >
 

@@ -13,7 +13,7 @@ export default function ({ icon, label, description, children, className, ...pro
 
     >
 
-        <span className="grid size-9 place-items-center overflow-hidden rounded-xl border border-white/55 bg-white/25 text-base font-semibold text-slate-700 shadow-launcher-icon">
+        <span className="grid size-9 place-items-center overflow-hidden rounded-xl border border-white/55 bg-white/25 text-base font-semibold shadow-launcher-icon">
 
             <img src={icon} alt="" draggable={false} className="size-full object-contain p-1" />
 
@@ -23,7 +23,7 @@ export default function ({ icon, label, description, children, className, ...pro
 
             <span className="block truncate text-sm font-medium">{children}</span>
 
-            {description && <span className="block truncate text-xs text-slate-600/80">{description}</span>}
+            {description && <span className="block truncate text-xs opacity-60">{description}</span>}
 
         </span>
 
