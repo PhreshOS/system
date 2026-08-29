@@ -29,9 +29,13 @@
 
     --shadow-launcher-icon: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 6px 14px -8px rgba(12, 46, 88, 0.55);
 
-    --shadow-window-active: 0 24px 48px rgba(12, 30, 60, 0.2), 0 8px 20px -8px rgba(56, 189, 248, 0.175);
+    --shadow-window-active:
+        0 24px 48px light-dark(rgba(12, 30, 60, 0.2), rgba(12, 30, 60, 0.1)),
+        0 8px 20px -8px light-dark(rgba(56, 189, 248, 0.175), rgba(56, 189, 248, 0.0875));
 
-    --shadow-window-inactive: 0 14px 28px rgba(12, 30, 60, 0.14), 0 8px 20px -8px rgba(56, 189, 248, 0);
+    --shadow-window-inactive:
+        0 14px 28px light-dark(rgba(12, 30, 60, 0.14), rgba(12, 30, 60, 0.07)),
+        0 8px 20px -8px rgba(56, 189, 248, 0);
 
     --shadow-window-controls: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(12, 46, 88, 0.15);
 
