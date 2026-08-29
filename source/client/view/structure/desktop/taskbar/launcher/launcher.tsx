@@ -1,8 +1,7 @@
-import { ComponentProps, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
+import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
-import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
+import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarButton from "../taskbar-button"
 
 /**
@@ -13,7 +12,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
     const id = useId()
 
-    const surface = useRef<HTMLElement>(null)
+    const surface = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
 
@@ -70,7 +69,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         </TaskbarButton>
 
-        <section
+        <Surface
 
             {...props}
 
@@ -82,13 +81,15 @@ export default function ({ label, trigger, children, className, style, ...props 
 
             popover="auto"
 
-            aria-labelledby={`${id}-label`}
+            aria-label={label}
 
             tabIndex={-1}
 
+            opacity="small"
+
             style={{ ...style, borderRadius: radius }}
 
-            className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
+            className={`hidden open:block shadow-window-active outline-none ${className ?? ""}`}
 
             onBeforeToggle={event => {
 
@@ -116,18 +117,14 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         >
 
-            <TaskbarSurface label={label} labelId={`${id}-label`}>
+            {children(close)}
 
-                {children(close)}
-
-            </TaskbarSurface>
-
-        </section>
+        </Surface>
 
     </>
 }
 
-export interface LauncherProps extends Omit<ComponentProps<"section">, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
+export interface LauncherProps extends Omit<SurfaceProps, "children" | "id" | "onBeforeToggle" | "onToggle" | "opacity" | "popover"> {
 
     label: string
 
