@@ -72,7 +72,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             </div>
 
-            <div style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 grid gap-5 bg-white/25 p-5 shadow-window-content">
+            <Surface opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 grid gap-5 p-5">
 
                 <div className="grid gap-4">
 
@@ -154,7 +154,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                 </button>
 
-            </div>
+            </Surface>
 
         </form>
 
