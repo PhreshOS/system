@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.40",
+  "version": "0.1.41",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -59,8 +59,8 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@babel/plugin-proposal-decorators": "^7.29.7",
-    "@phreshos/core": "^0.1.21",
-    "@phreshos/react-ui": "^0.1.10",
+    "@phreshos/core": "^0.1.22",
+    "@phreshos/react-ui": "^0.1.11",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.3",
     "@types/adm-zip": "^0.5.8",
