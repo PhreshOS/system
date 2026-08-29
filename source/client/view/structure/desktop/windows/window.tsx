@@ -1,6 +1,6 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
-import { animateSurfaceTransform, enterSurface, prepareSurfaceEntrance, restSurface, setSurfaceTransform } from "../../../appearance/surface-presence"
+import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../appearance/surface-presence"
 import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
@@ -8,15 +8,14 @@ import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
 import { type LocalAnimation, type LocalSurfaceState } from "../../../components/desktop-host/local-window"
 import { type LocalGeometryReader } from "../../../components/window-manager/local-windows"
-import { animate, type AnimationPlaybackControlsWithThen } from "motion"
-import { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import { windowPaintInset } from "../geometry"
 
 /**
  * A window: a pure function of the record it is given. Every render
  * declares the whole target geometry from props — a float as left/top
- * pixels, a tile as its relative form. Motion interpolates only the local
+ * pixels, a tile as its relative form. GSAP interpolates only the local
  * representation between targets; the record remains the truth and a
  * refreshed page renders that truth directly.
  *
@@ -28,7 +27,7 @@ import { windowPaintInset } from "../geometry"
  * onSnap with the shares a zone names) and drops the gesture in the same
  * batch the record updates, so nothing jumps.
  *
- * Motion owns every structural interpolation: frame geometry, local Surface
+ * GSAP owns every structural interpolation: frame geometry, local Surface
  * replacement, and the scale and drift of presence. It never owns state.
  *
  * The chrome uses the shared system material and content sits on an inset
@@ -47,15 +46,17 @@ const edges: { edge: WindowEdge, className: string }[] = [
     { edge: "se", className: "bottom-0 right-0 size-4 cursor-nwse-resize" }
 ]
 
+const surfacePose = {
+    resting: { scale: 1, y: 0 },
+    minimized: { scale: 0.86, y: 28 },
+    closing: { scale: 0.86, y: 12 }
+}
+
 export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
     const frame = useRef<HTMLDivElement>(null)
 
     const surfaceElement = useRef<HTMLDivElement>(null)
-
-    const geometryMotion = useRef<AnimationPlaybackControlsWithThen | null>(null)
-
-    const entranceMotion = useRef<AnimationPlaybackControlsWithThen | null>(null)
 
     const reducedMotion = useReducedMotion()
 
@@ -134,7 +135,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         const transaction = geometryAnimation?.transaction
         const duration = transaction?.duration ?? motionDurations.geometry
 
-        geometryMotion.current?.stop()
+        gsap.killTweensOf(element)
 
         const complete = function () {
 
@@ -145,7 +146,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (bare || reducedMotion || duration === 0 || sameRegion(current, target)) {
 
-            setRegion(element, target)
+            gsap.set(element, { left: target.x, top: target.y, width: target.width, height: target.height, transform: "none" })
             complete()
 
             return
@@ -154,48 +155,48 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // Lay out the authoritative target once, then animate only the visual
         // difference. Reflowing an iframe-sized box on every animation frame
         // causes the small hitch this transition is meant to hide.
-        setRegion(element, target)
-        element.style.transformOrigin = "0 0"
+        gsap.set(element, {
+            left: target.x,
+            top: target.y,
+            width: target.width,
+            height: target.height,
+            transformOrigin: "0 0"
+        })
 
-        // Motion resolves independent transform values after this layout
-        // effect. Seed and animate the composed transform itself so laying
-        // out the target can never expose it before the inverse is installed.
-        const inverse = windowTransform(
-            current.x - target.x,
-            current.y - target.y,
-            current.width / target.width,
-            current.height / target.height
-        )
-
-        element.style.transform = inverse
-
-        const animation = animate(element, {
-            transform: [inverse, windowTransform(0, 0, 1, 1)]
+        const animation = gsap.fromTo(element, {
+            x: current.x - target.x,
+            y: current.y - target.y,
+            scaleX: current.width / target.width,
+            scaleY: current.height / target.height
         }, {
+            x: 0,
+            y: 0,
+            scaleX: 1,
+            scaleY: 1,
             duration: motionDuration(duration),
             ease: transaction ? motionEase(transaction.easing) : motionEase([0.33, 1, 0.68, 1]),
+            force3D: true,
+            overwrite: "auto",
             onComplete: function () {
-                element.style.transform = "none"
-                element.style.transformOrigin = ""
-                geometryMotion.current = null
+
+                gsap.set(element, { transform: "none", transformOrigin: "" })
                 complete()
             }
         })
-
-        geometryMotion.current = animation
 
         return function () {
 
             const held = element.getBoundingClientRect()
             const bounds = parent.getBoundingClientRect()
 
-            animation.stop()
-            if (geometryMotion.current === animation) geometryMotion.current = null
-            setRegion(element, {
-                x: held.left - bounds.left,
-                y: held.top - bounds.top,
+            animation.kill()
+
+            gsap.set(element, {
+                left: held.left - bounds.left,
+                top: held.top - bounds.top,
                 width: held.width,
-                height: held.height
+                height: held.height,
+                transform: "none"
             })
         }
 
@@ -208,17 +209,22 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (!element || !from || gesture?.morph == null || reducedMotion) return
 
-        const animation = animate(element, {
-            left: [from.x, gesture.origin.x],
-            top: [from.y, gesture.origin.y],
-            width: [from.width, gesture.current.width],
-            height: [from.height, gesture.current.height]
+        const animation = gsap.fromTo(element, {
+            left: from.x,
+            top: from.y,
+            width: from.width,
+            height: from.height
         }, {
+            left: gesture.origin.x,
+            top: gesture.origin.y,
+            width: gesture.current.width,
+            height: gesture.current.height,
             duration: motionDuration(motionDurations.morph),
-            ease: motionEase([0.33, 1, 0.68, 1])
+            ease: motionEase([0.33, 1, 0.68, 1]),
+            overwrite: "auto"
         })
 
-        return () => { animation.stop() }
+        return () => { animation.kill() }
 
     }, [gesture?.morph, reducedMotion])
 
@@ -231,21 +237,25 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         const property = active ? "--shadow-window-active" : "--shadow-window-inactive"
         const target = getComputedStyle(element).getPropertyValue(property).trim() || "none"
 
+        gsap.killTweensOf(element, "boxShadow")
+
         if (reducedMotion) {
 
-            element.style.boxShadow = target
+            gsap.set(element, { boxShadow: target })
             setRenderedActive(active)
 
             return
         }
 
-        const animation = animate(element, { boxShadow: target }, {
+        const animation = gsap.to(element, {
+            boxShadow: target,
             duration: motionDuration(motionDurations.feedback),
             ease: motionEase("ease-out"),
+            overwrite: "auto",
             onComplete: () => setRenderedActive(active)
         })
 
-        return () => { animation.stop() }
+        return () => { animation.kill() }
 
     }, [active, reducedMotion, renderedActive])
 
@@ -286,7 +296,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (minimized) {
 
-            setSurface(surfaceElement.current, reducedMotion ? 1 : 0.86, reducedMotion ? 0 : 28, "hidden")
+            gsap.set(surfaceElement.current, { scale: reducedMotion ? 1 : 0.86, y: reducedMotion ? 0 : 28, visibility: "hidden" })
 
             return
         }
@@ -295,23 +305,18 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
             restSurface(surfaceElement.current)
 
-            setVisibility(surfaceElement.current, "visible")
+            gsap.set(surfaceElement.current, { visibility: "visible" })
 
             return
         }
 
         prepareSurfaceEntrance(surfaceElement.current, reducedMotion)
 
-        setVisibility(surfaceElement.current, "visible")
+        gsap.set(surfaceElement.current, { visibility: "visible" })
 
         const animation = enterSurface(surfaceElement.current, reducedMotion)
 
-        entranceMotion.current = animation
-
-        return () => {
-            animation?.stop()
-            if (entranceMotion.current === animation) entranceMotion.current = null
-        }
+        return () => { animation?.kill() }
 
         // Presence at birth reads the mount's own values once.
     }, [])
@@ -327,15 +332,14 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // restore will animate from if the preference has been relaxed.
         if (!reducedMotion) {
 
-            if (minimized) setSurface(surfaceElement.current, 0.86, 28, "hidden")
+            if (minimized) gsap.set(surfaceElement.current, { ...surfacePose.minimized, visibility: "hidden" })
 
             return
         }
 
-        entranceMotion.current?.stop()
-        entranceMotion.current = null
+        gsap.killTweensOf(surfaceElement.current)
 
-        setSurface(surfaceElement.current, 1, 0, minimized || closing ? "hidden" : "visible")
+        gsap.set(surfaceElement.current, { ...surfacePose.resting, visibility: minimized || closing ? "hidden" : "visible" })
 
         if (closing) {
 
@@ -370,7 +374,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // would be motion toward nowhere.
         if (bare || reducedMotion) {
 
-            setSurface(surfaceElement.current, 1, 0, minimized ? "hidden" : "visible")
+            gsap.set(surfaceElement.current, { ...surfacePose.resting, visibility: minimized ? "hidden" : "visible" })
 
             return
         }
@@ -378,17 +382,17 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // Presence is scale and drift, never opacity, so the material and its
         // content remain visually stable throughout the movement. Going away
         // is a departure toward the taskbar; hiding happens only at the end.
-        if (!minimized) setVisibility(surfaceElement.current, "visible")
+        if (!minimized) gsap.set(surfaceElement.current, { visibility: "visible" })
 
         const animation = minimized
 
-            ? animateSurfaceTransform(surfaceElement.current, 0.86, 28, { duration: motionDuration(motionDurations.minimize), ease: motionEase("ease-in"), onComplete: () => setVisibility(surfaceElement.current, "hidden") })
+            ? gsap.to(surfaceElement.current, { ...surfacePose.minimized, duration: motionDuration(motionDurations.minimize), ease: "power3.in", overwrite: "auto", onComplete: () => gsap.set(surfaceElement.current, { visibility: "hidden" }) })
 
-            : animateSurfaceTransform(surfaceElement.current, 1, 0, { duration: motionDuration(motionDurations.restore), ease: motionEase("ease-out") })
+            : gsap.to(surfaceElement.current, { ...surfacePose.resting, duration: motionDuration(motionDurations.restore), ease: "power3.out", overwrite: "auto" })
 
-        return () => { animation?.stop() }
+        return () => { animation.kill() }
 
-    }, [minimized, bare, reducedMotion])
+    }, [minimized])
 
     // Closing is a handshake: the exit plays, onClosed reports the
     // element may be unmounted.
@@ -408,15 +412,17 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        const animation = animateSurfaceTransform(surfaceElement.current, 0.86, 12, {
+        const animation = gsap.to(surfaceElement.current, {
+            ...surfacePose.closing,
             duration: motionDuration(motionDurations.close),
-            ease: motionEase("ease-in"),
+            ease: "power2.in",
+            overwrite: "auto",
             onComplete: completeClosure
         })
 
-        return () => { animation?.stop() }
+        return () => { animation.kill() }
 
-    }, [closing, bare, reducedMotion])
+    }, [closing])
 
     function grab(event: ReactPointerEvent<HTMLElement>, edge: WindowEdge | null) {
 
@@ -443,9 +449,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         let current: WindowRegion = { ...origin }
 
-        geometryMotion.current?.stop()
-        geometryMotion.current = null
-        setRegion(frame.current, origin)
+        gsap.killTweensOf(frame.current)
+
+        gsap.set(frame.current, { left: origin.x, top: origin.y, width: origin.width, height: origin.height, transform: "none" })
 
         setRenderedGeometry({
             position: { x: origin.x, y: origin.y },
@@ -671,7 +677,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     // The geometry, declared whole every render: the gesture's rectangle
     // while one runs — movement as a transform above the grabbed origin,
-    // otherwise the last settled representation. Motion moves that stable
+    // otherwise the last settled representation. GSAP moves that stable
     // representation to each new authoritative target.
     const geometry = gesture
 
@@ -903,29 +909,6 @@ interface Gesture {
     shown: Snap | null
 
     morph: number | null
-}
-
-function setRegion(element: HTMLElement, region: WindowRegion) {
-    element.style.left = `${region.x}px`
-    element.style.top = `${region.y}px`
-    element.style.width = `${region.width}px`
-    element.style.height = `${region.height}px`
-    element.style.transform = "none"
-    element.style.transformOrigin = ""
-}
-
-function windowTransform(x: number, y: number, scaleX: number, scaleY: number) {
-    return `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`
-}
-
-function setSurface(element: HTMLElement | null, scale: number, y: number, visibility: "hidden" | "visible") {
-    if (!element) return
-    setSurfaceTransform(element, scale, y)
-    element.style.visibility = visibility
-}
-
-function setVisibility(element: HTMLElement | null, visibility: "hidden" | "visible") {
-    if (element) element.style.visibility = visibility
 }
 
 function sameGeometry(left: WindowGeometry, right: WindowGeometry) {

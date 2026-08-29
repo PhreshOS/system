@@ -1,17 +1,16 @@
-import { type CSSProperties, useLayoutEffect, useRef } from "react"
-import { animate } from "motion"
-import { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import { type CSSProperties, useLayoutEffect, useRef, useState } from "react"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
 import { Surface } from "@phreshos/react-ui"
 
-/** Animated preview of the placement currently offered by a drag. */
+/** GSAP-owned preview of the placement currently offered by a drag. */
 export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, radius, reducedMotion, zIndex }: SnapPreviewProps) {
 
     const element = useRef<HTMLDivElement>(null)
     const firstRender = useRef(true)
-    const initial = useRef(shown)
+    const [rendered, setRendered] = useState(shown)
 
     useLayoutEffect(function () {
 
@@ -21,37 +20,47 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
         if (!preview || !parent) return
 
         const parentBounds = parent.getBoundingClientRect()
-        const currentBounds = preview.getBoundingClientRect()
+        const shownBounds = preview.getBoundingClientRect()
         const current = {
-            x: currentBounds.left - parentBounds.left,
-            y: currentBounds.top - parentBounds.top,
-            width: currentBounds.width,
-            height: currentBounds.height
+            x: shownBounds.left - parentBounds.left,
+            y: shownBounds.top - parentBounds.top,
+            width: shownBounds.width,
+            height: shownBounds.height
         }
         const target = resolveWindowGeometry(shown.position, shown.size, parentBounds)
         const fromOpacity = firstRender.current ? 0 : Number(getComputedStyle(preview).opacity)
 
         firstRender.current = false
 
+        gsap.killTweensOf(preview)
+
         if (reducedMotion) {
 
-            setPreview(preview, target, visible ? 1 : 0)
+            gsap.set(preview, { left: target.x, top: target.y, width: target.width, height: target.height, opacity: visible ? 1 : 0 })
+            setRendered(shown)
 
             return
         }
 
-        const animation = animate(preview, {
-            left: [current.x, target.x],
-            top: [current.y, target.y],
-            width: [current.width, target.width],
-            height: [current.height, target.height],
-            opacity: [fromOpacity, visible ? 1 : 0]
+        const animation = gsap.fromTo(preview, {
+            left: current.x,
+            top: current.y,
+            width: current.width,
+            height: current.height,
+            opacity: fromOpacity
         }, {
+            left: target.x,
+            top: target.y,
+            width: target.width,
+            height: target.height,
+            opacity: visible ? 1 : 0,
             duration: motionDuration(motionDurations.snap),
-            ease: motionEase([0.33, 1, 0.68, 1])
+            ease: motionEase([0.33, 1, 0.68, 1]),
+            overwrite: "auto",
+            onComplete: () => setRendered(shown)
         })
 
-        return () => { animation.stop() }
+        return () => { animation.kill() }
 
     }, [shown.position.x, shown.position.y, shown.size.width, shown.size.height, visible, reducedMotion])
 
@@ -59,11 +68,11 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
         ref={element}
         className="pointer-events-none absolute"
         style={{
-            left: resolveWindowValue(initial.current.position.x),
-            top: resolveWindowValue(initial.current.position.y),
-            width: resolveWindowValue(initial.current.size.width),
-            height: resolveWindowValue(initial.current.size.height),
-            opacity: 0,
+            left: resolveWindowValue(rendered.position.x),
+            top: resolveWindowValue(rendered.position.y),
+            width: resolveWindowValue(rendered.size.width),
+            height: resolveWindowValue(rendered.size.height),
+            opacity: visible ? 1 : 0,
             zIndex
         }}
     >
@@ -74,14 +83,6 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
             style={bare ? undefined : { ...windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset), borderRadius: radius }}
         />
     </div>
-}
-
-function setPreview(element: HTMLElement, region: ReturnType<typeof resolveWindowGeometry>, opacity: number) {
-    element.style.left = `${region.x}px`
-    element.style.top = `${region.y}px`
-    element.style.width = `${region.width}px`
-    element.style.height = `${region.height}px`
-    element.style.opacity = String(opacity)
 }
 
 export interface SnapTarget {

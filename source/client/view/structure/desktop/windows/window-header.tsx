@@ -1,14 +1,59 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode } from "react"
-import { motion } from "motion/react"
-import { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
+import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+
+const control = {
+    base: { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 },
+    hover: { borderColor: "rgba(255, 255, 255, 0.7)", backgroundColor: "rgba(255, 255, 255, 0.65)", color: "#0f172a", scale: 1 },
+    danger: { borderColor: "rgba(253, 164, 175, 0.7)", backgroundColor: "#f43f5e", color: "#ffffff", scale: 1 }
+}
+
+const focus = {
+    active: { opacity: 1, color: "#1e293b" },
+    inactive: { opacity: 0.6, color: "#64748b" }
+}
 
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
 
-    const feedback = {
-        duration: reducedMotion ? 0 : motionDuration(motionDurations.feedback),
-        ease: motionEase("ease-out")
-    }
+    const iconElement = useRef<HTMLImageElement>(null)
+    const titleElement = useRef<HTMLSpanElement>(null)
+    const [renderedActive, setRenderedActive] = useState(active)
+
+    useLayoutEffect(function () {
+
+        const icon = iconElement.current
+        const title = titleElement.current
+
+        if (!icon || !title || renderedActive === active) return
+
+        const target = active ? focus.active : focus.inactive
+
+        gsap.killTweensOf([icon, title])
+
+        if (reducedMotion) {
+
+            gsap.set(icon, { opacity: target.opacity })
+            gsap.set(title, { color: target.color })
+            setRenderedActive(active)
+
+            return
+        }
+
+        const timeline = gsap.timeline({
+            defaults: {
+                duration: motionDuration(motionDurations.feedback),
+                ease: motionEase("ease-out"),
+                overwrite: "auto"
+            },
+            onComplete: () => setRenderedActive(active)
+        })
+
+        timeline.to(icon, { opacity: target.opacity }, 0)
+        timeline.to(title, { color: target.color }, 0)
+
+        return () => { timeline.kill() }
+
+    }, [active, reducedMotion, renderedActive])
 
     return <header
 
@@ -22,7 +67,9 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
 
-            <motion.img
+            <img
+
+                ref={iconElement}
 
                 src={icon}
 
@@ -32,22 +79,17 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
                 className="size-4 rounded-sm object-contain"
 
-                initial={false}
-
-                animate={{ opacity: active ? 1 : 0.6 }}
-
-                transition={feedback}
+                style={{ opacity: renderedActive ? 1 : 0.6 }}
 
             />
 
             {/* Focus is said on the chrome and nowhere else. Content stays
                 equally legible when another window owns the keyboard. */}
-            <motion.span
+            <span
+                ref={titleElement}
                 className="truncate text-window-title font-medium"
-                initial={false}
-                animate={{ color: active ? "#1e293b" : "#64748b" }}
-                transition={feedback}
-            >{title}</motion.span>
+                style={{ color: renderedActive ? "#1e293b" : "#64748b" }}
+            >{title}</span>
 
         </div>
 
@@ -85,33 +127,53 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 // assistive technology still use the button's native click activation.
 function Control({ label, danger = false, focusOnPointerDown = true, reducedMotion, children, onClick, ...props }: ControlProps) {
 
-    const base = { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 }
+    const element = useRef<HTMLButtonElement>(null)
+    const hovering = useRef(false)
 
-    const hover = danger
+    const hover = danger ? control.danger : control.hover
 
-        ? { borderColor: "rgba(253, 164, 175, 0.7)", backgroundColor: "#f43f5e", color: "#ffffff", scale: 1 }
+    const pressed = {
+        ...hover,
+        backgroundColor: danger ? "#e11d48" : "rgba(255, 255, 255, 0.8)",
+        scale: 0.95
+    }
 
-        : { borderColor: "rgba(255, 255, 255, 0.7)", backgroundColor: "rgba(255, 255, 255, 0.65)", color: "#0f172a", scale: 1 }
+    function react(values: typeof control.base) {
 
-    const pressed = { ...hover, backgroundColor: danger ? "#e11d48" : "rgba(255, 255, 255, 0.8)", scale: 0.95 }
+        const button = element.current
 
-    return <motion.button
+        if (!button) return
+
+        gsap.killTweensOf(button)
+
+        if (reducedMotion) gsap.set(button, values)
+
+        else gsap.to(button, {
+            ...values,
+            duration: motionDuration(motionDurations.control),
+            ease: motionEase("ease-out"),
+            overwrite: "auto"
+        })
+    }
+
+    return <button
 
         {...props}
 
+        ref={element}
+
         aria-label={label}
 
-        initial={false}
+        onPointerEnter={() => {
 
-        animate={base}
+            hovering.current = true
+            react(hover)
+        }}
 
-        whileHover={hover}
+        onPointerLeave={() => {
 
-        whileTap={pressed}
-
-        transition={{
-            duration: reducedMotion ? 0 : motionDuration(motionDurations.control),
-            ease: motionEase("ease-out")
+            hovering.current = false
+            react(control.base)
         }}
 
         onPointerDown={event => {
@@ -120,6 +182,8 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
             if (event.button !== 0) return
 
+            react(pressed)
+
             if (focusOnPointerDown) event.currentTarget.focus({ preventScroll: true })
 
             // Minimise and close act without focusing their window. Preventing
@@ -127,6 +191,20 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
             else event.preventDefault()
 
             onClick?.()
+        }}
+
+        onPointerUp={() => react(hovering.current ? hover : control.base)}
+
+        onPointerCancel={() => react(hovering.current ? hover : control.base)}
+
+        onKeyDown={event => {
+
+            if (event.key === "Enter" || event.key === " ") react(pressed)
+        }}
+
+        onKeyUp={event => {
+
+            if (event.key === "Enter" || event.key === " ") react(hovering.current ? hover : control.base)
         }}
 
         onClick={event => {
@@ -146,7 +224,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
         </svg>
 
-    </motion.button>
+    </button>
 }
 
 interface WindowHeaderProps {
@@ -172,11 +250,9 @@ interface WindowHeaderProps {
     onClose?: () => void
 }
 
-interface ControlProps extends Omit<ComponentProps<typeof motion.button>, "children" | "onClick"> {
+interface ControlProps extends Omit<ComponentProps<"button">, "onClick"> {
 
     label: string
-
-    children: ReactNode
 
     danger?: boolean
 

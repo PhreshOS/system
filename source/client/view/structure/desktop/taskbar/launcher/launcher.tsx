@@ -1,6 +1,5 @@
 import { ComponentProps, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
-import { enterSurface, exitSurface, prepareSurfaceEntrance } from "../../../../appearance/surface-presence"
-import { motionDurations } from "../../../../appearance/motion"
+import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
@@ -87,21 +86,13 @@ export default function ({ label, trigger, children, className, style, ...props 
 
             tabIndex={-1}
 
-            style={{
-                ...style,
-                borderRadius: radius,
-                transitionBehavior: "allow-discrete",
-                transitionDuration: reducedMotion ? "0s" : `${motionDurations.dismiss}ms`,
-                transitionProperty: "display, overlay"
-            }}
+            style={{ ...style, borderRadius: radius }}
 
             className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
 
             onBeforeToggle={event => {
 
                 if (event.newState === "open") prepareSurfaceEntrance(event.currentTarget, reducedMotion)
-
-                else exitSurface(event.currentTarget, reducedMotion)
             }}
 
             onToggle={event => {
@@ -118,6 +109,8 @@ export default function ({ label, trigger, children, className, style, ...props 
 
                     focusTarget.focus()
                 }
+
+                else restSurface(event.currentTarget)
 
             }}
 
