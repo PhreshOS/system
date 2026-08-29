@@ -808,7 +808,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                     </div>
 
-                    : <Surface data-window-content opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px shadow-window-content">
+                    : <Surface data-window-content opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px">
 
                         {children}
 

@@ -4,7 +4,7 @@ import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } 
 /** The window-material shell shared by surfaces opened from the taskbar. */
 export const taskbarSurfaceClassName = "m-0 isolate border-0 bg-transparent p-0 shadow-window-active outline-none"
 
-export default forwardRef<HTMLDivElement, TaskbarSurfaceProps>(function TaskbarSurface({ label, labelId, contentClassName = "shadow-window-content", className, children, ...props }, ref) {
+export default forwardRef<HTMLDivElement, TaskbarSurfaceProps>(function TaskbarSurface({ label, labelId, contentClassName = "", className, children, ...props }, ref) {
 
     const contentRadius = useScale(useResolveTheme(useAppearance().radius)).medium
 
