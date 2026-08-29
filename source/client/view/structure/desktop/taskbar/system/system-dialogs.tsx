@@ -95,23 +95,19 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
     const decision = usePromise(decide)
 
-    return <div className="grid gap-5 p-4">
+    return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5 p-4">
 
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-sky-600/25 bg-sky-500/15 text-sm font-medium">?</span>
 
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-sky-600/25 bg-sky-500/15 text-sm font-medium">?</span>
+        <div className="grid gap-1">
 
-            <div className="grid gap-1">
+            <h3 className="text-base font-medium">{dialog.program.name} needs permission</h3>
 
-                <h3 className="text-base font-medium">{dialog.program.name} needs permission</h3>
-
-                <p id={description} className="text-sm leading-6 opacity-60">{permissionDescription(dialog)}</p>
-
-            </div>
+            <p id={description} className="text-sm leading-6 opacity-60">{permissionDescription(dialog)}</p>
 
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="col-span-full flex flex-wrap justify-end gap-2">
 
             <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute(false)}>Deny</TaskbarButton>
 
@@ -123,7 +119,7 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
         </div>
 
-        {decision.exception && <Alert className="text-sm">{String(decision.exception.current)}</Alert>}
+        {decision.exception && <Alert className="col-span-full text-sm">{String(decision.exception.current)}</Alert>}
 
     </div>
 }
@@ -132,45 +128,37 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
 
     const acknowledgment = usePromise(acknowledge)
 
-    return <div className="grid gap-5 p-4">
+    return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5 p-4">
 
-        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
+        <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium">!</span>
 
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium">!</span>
+        <div className="grid gap-1">
 
-            <div className="grid gap-1">
+            <h3 className="text-base font-medium">Server endpoint crashed</h3>
 
-                <h3 className="text-base font-medium">Server endpoint crashed</h3>
-
-                <p id={description} className="text-sm leading-6 opacity-60">{crashDescription(dialog)}</p>
-
-            </div>
+            <p id={description} className="text-sm leading-6 opacity-60">{crashDescription(dialog)}</p>
 
         </div>
 
-        <div className="grid justify-end">
+        <TaskbarButton
 
-            <TaskbarButton
+            small
 
-                small
+            autoFocus
 
-                autoFocus
+            disabled={acknowledgment.isPending}
 
-                disabled={acknowledgment.isPending}
+            onClick={() => acknowledgment.safeExecute()}
 
-                onClick={() => acknowledgment.safeExecute()}
+            className="col-span-full justify-self-end font-medium"
 
-                className="font-medium"
+        >
 
-            >
+            I understand
 
-                I understand
+        </TaskbarButton>
 
-            </TaskbarButton>
-
-        </div>
-
-        {acknowledgment.exception && <Alert className="text-sm">{String(acknowledgment.exception.current)}</Alert>}
+        {acknowledgment.exception && <Alert className="col-span-full text-sm">{String(acknowledgment.exception.current)}</Alert>}
 
     </div>
 }

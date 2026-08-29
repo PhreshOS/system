@@ -18,7 +18,7 @@ export default function ProgramsSection({ onChoose }: ProgramsSectionProps) {
 
     const programs = usePrograms()
 
-    return <div role="group" aria-label="Programs" className="grid gap-1">
+    return <div data-start-menu-scroll role="group" aria-label="Programs" className="grid min-h-0 max-h-full gap-1 overflow-y-auto p-2 scrollbar-gutter-stable">
 
         {programs.length
 

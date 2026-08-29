@@ -86,6 +86,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
+    const progress = !bare && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
+
     return <Window
 
         title={title}
@@ -171,25 +173,13 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
         />}
 
-        {/* Loading keeps the iframe completely transparent. The spinner is
-            ordinary Window UI, with no backdrop or Surface behind it. */}
-        {!bare && frameLoading && !stopping && !closing && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
+        {/* Loading and closing are mutually exclusive states of the same
+            progress layer. Neither paints a backdrop or Surface. */}
+        {progress && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
 
             <Spinner className="m-auto size-6">
 
-                <span className="sr-only">Loading</span>
-
-            </Spinner>
-
-        </div>}
-
-        {/* Closing is not document loading. The iframe is already absent;
-            only termination progress remains, without painting a backdrop. */}
-        {!bare && (stopping || closing) && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
-
-            <Spinner className="m-auto size-6">
-
-                <span className="sr-only">Closing</span>
+                <span className="sr-only">{progress}</span>
 
             </Spinner>
 

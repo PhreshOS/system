@@ -48,43 +48,39 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
     }, [active, reducedMotion, renderedActive])
 
-    return <header
+    return <div
 
         onPointerDown={onGrab}
 
         onDoubleClick={onMaximize}
 
-        className="relative grid h-10 shrink-0 touch-none cursor-grab grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3.5 select-none active:cursor-grabbing"
+        className="relative grid h-10 shrink-0 touch-none cursor-grab grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3.5 select-none active:cursor-grabbing"
 
     >
 
-        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+        <img
 
-            <img
+            ref={iconElement}
 
-                ref={iconElement}
+            src={icon}
 
-                src={icon}
+            alt=""
 
-                alt=""
+            draggable={false}
 
-                draggable={false}
+            className="size-4 rounded-sm object-contain"
 
-                className="size-4 rounded-sm object-contain"
+            style={{ opacity: renderedActive ? 1 : 0.6 }}
 
-                style={{ opacity: renderedActive ? 1 : 0.6 }}
+        />
 
-            />
-
-            {/* Focus is said on the chrome and nowhere else. Content stays
-                equally legible when another window owns the keyboard. */}
-            <span
-                ref={titleElement}
-                className="truncate text-window-title font-medium"
-                style={{ opacity: renderedActive ? 1 : 0.6 }}
-            >{title}</span>
-
-        </div>
+        {/* Focus is said on the chrome and nowhere else. Content stays
+            equally legible when another window owns the keyboard. */}
+        <span
+            ref={titleElement}
+            className="truncate text-window-title font-medium"
+            style={{ opacity: renderedActive ? 1 : 0.6 }}
+        >{title}</span>
 
         <div className="grid shrink-0 grid-flow-col auto-cols-max gap-1" onPointerDown={event => event.stopPropagation()}>
 
@@ -112,7 +108,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
         </div>
 
-    </header>
+    </div>
 }
 
 // A pointer control acts on the press: click waits for the release, and that

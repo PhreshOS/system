@@ -12,7 +12,7 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
 
     return <Surface
 
-        className={`relative isolate h-taskbar shadow-taskbar [anchor-name:--desktop-taskbar] ${className ?? ""}`}
+        className={`relative isolate grid h-taskbar min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 p-1.5 shadow-taskbar [anchor-name:--desktop-taskbar] ${className ?? ""}`}
 
         style={{ ...style, borderRadius: radius }}
 
@@ -20,19 +20,15 @@ export default function Taskbar({ leading, trailing, dialogs, className, style, 
 
     >
 
-        <div className="relative grid h-full min-w-0 grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 p-1.5">
+        {leading}
 
-            {leading}
+        <TaskbarSeparator />
 
-            <TaskbarSeparator />
+        {children}
 
-            {children}
+        <TaskbarSeparator />
 
-            <TaskbarSeparator />
-
-            {trailing}
-
-        </div>
+        {trailing}
 
         {dialogs}
 
