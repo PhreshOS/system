@@ -9,7 +9,7 @@ import TaskbarButton from "../taskbar-button"
  * A button and the dismissible surface it opens. Placement, contents and
  * what selecting an item means belong to the caller.
  */
-export default function ({ label, trigger, children, className, style, ...props }: LauncherProps) {
+export default function ({ label, trigger, children, surfaceClassName, className, style, ...props }: LauncherProps) {
 
     const id = useId()
 
@@ -94,7 +94,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
             style={{ ...style, borderRadius: radius }}
 
-            className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
+            className={`${taskbarSurfaceClassName} hidden open:block ${surfaceClassName ?? ""} ${className ?? ""}`}
 
             onBeforeToggle={event => {
 
@@ -122,7 +122,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         >
 
-            <Surface opacity="small" className="min-h-0 max-h-[inherit] rounded-[inherit]">
+            <Surface opacity="small" className={`min-h-0 max-h-[inherit] rounded-[inherit] ${surfaceClassName ?? ""}`}>
 
                 {children(close)}
 
@@ -138,6 +138,8 @@ export interface LauncherProps extends Omit<SurfaceProps, "children" | "id" | "o
     label: string
 
     trigger: ReactNode
+
+    surfaceClassName?: string
 
     children: (close: () => void) => ReactNode
 }
