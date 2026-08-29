@@ -14,7 +14,8 @@ export default defineConfig({
         babel({ presets: [reactCompilerPreset()] })
     ],
     resolve: {
-        tsconfigPaths: true
+        tsconfigPaths: true,
+        dedupe: ["react", "react-dom"]
     },
     build: {
         emptyOutDir: true,
