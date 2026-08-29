@@ -1,6 +1,6 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../appearance/surface-presence"
+import { animateSurfaceTransform, enterSurface, prepareSurfaceEntrance, restSurface, setSurfaceTransform } from "../../../appearance/surface-presence"
 import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
@@ -157,11 +157,20 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         setRegion(element, target)
         element.style.transformOrigin = "0 0"
 
+        // Motion resolves independent transform values after this layout
+        // effect. Seed and animate the composed transform itself so laying
+        // out the target can never expose it before the inverse is installed.
+        const inverse = windowTransform(
+            current.x - target.x,
+            current.y - target.y,
+            current.width / target.width,
+            current.height / target.height
+        )
+
+        element.style.transform = inverse
+
         const animation = animate(element, {
-            x: [current.x - target.x, 0],
-            y: [current.y - target.y, 0],
-            scaleX: [current.width / target.width, 1],
-            scaleY: [current.height / target.height, 1]
+            transform: [inverse, windowTransform(0, 0, 1, 1)]
         }, {
             duration: motionDuration(duration),
             ease: transaction ? motionEase(transaction.easing) : motionEase([0.33, 1, 0.68, 1]),
@@ -373,11 +382,11 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         const animation = minimized
 
-            ? animate(surfaceElement.current, { scale: 0.86, y: 28 }, { duration: motionDuration(motionDurations.minimize), ease: motionEase("ease-in"), onComplete: () => setVisibility(surfaceElement.current, "hidden") })
+            ? animateSurfaceTransform(surfaceElement.current, 0.86, 28, { duration: motionDuration(motionDurations.minimize), ease: motionEase("ease-in"), onComplete: () => setVisibility(surfaceElement.current, "hidden") })
 
-            : animate(surfaceElement.current, { scale: 1, y: 0 }, { duration: motionDuration(motionDurations.restore), ease: motionEase("ease-out") })
+            : animateSurfaceTransform(surfaceElement.current, 1, 0, { duration: motionDuration(motionDurations.restore), ease: motionEase("ease-out") })
 
-        return () => { animation.stop() }
+        return () => { animation?.stop() }
 
     }, [minimized, bare, reducedMotion])
 
@@ -399,13 +408,13 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             return
         }
 
-        const animation = animate(surfaceElement.current, { scale: 0.86, y: 12 }, {
+        const animation = animateSurfaceTransform(surfaceElement.current, 0.86, 12, {
             duration: motionDuration(motionDurations.close),
             ease: motionEase("ease-in"),
             onComplete: completeClosure
         })
 
-        return () => { animation.stop() }
+        return () => { animation?.stop() }
 
     }, [closing, bare, reducedMotion])
 
@@ -905,9 +914,13 @@ function setRegion(element: HTMLElement, region: WindowRegion) {
     element.style.transformOrigin = ""
 }
 
+function windowTransform(x: number, y: number, scaleX: number, scaleY: number) {
+    return `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`
+}
+
 function setSurface(element: HTMLElement | null, scale: number, y: number, visibility: "hidden" | "visible") {
     if (!element) return
-    element.style.transform = scale === 1 && y === 0 ? "" : `translateY(${y}px) scale(${scale})`
+    setSurfaceTransform(element, scale, y)
     element.style.visibility = visibility
 }
 

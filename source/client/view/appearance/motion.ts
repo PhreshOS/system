@@ -13,11 +13,12 @@ const curves: Record<Exclude<SystemEasing, readonly number[]>, Easing> = {
 export const motionDurations = Object.freeze({
     control: 100,
     minimize: 110,
+    dismiss: 140,
     close: 160,
     snap: 180,
+    presence: 180,
     feedback: 200,
     morph: 220,
-    presence: 240,
     restore: 240,
     geometry: 300
 })
