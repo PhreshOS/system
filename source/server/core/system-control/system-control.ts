@@ -399,6 +399,7 @@ function processSnapshot(process: Process) {
     const owner = process.program.record()
 
     return Object.freeze({
+        reference: process.reference,
         identity: process.identity,
         name: process.name,
         program: process.program.identity,
@@ -439,6 +440,7 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
     }
 
     return Object.freeze({
+        reference: process.reference,
         identity: record.identity,
         name: record.name,
         program: record.program.identity,

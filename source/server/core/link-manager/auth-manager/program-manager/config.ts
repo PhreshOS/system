@@ -3,17 +3,17 @@ import { type Layer, type Position, type Size } from "@phreshos/core"
 /**
  * What a program says it is.
  *
- * A description, and nothing that acts. It arrives either as a
+ * A definition, and nothing that acts. It arrives either as a
  * `program.json` beside the things it names, or as an object built in
  * code — a program the system owns has no file to be read from.
  *
  * The union is the contract's one hard rule wearing a type: a program
- * has a server half, a client half, or both, and a description with
+ * has a server half, a client half, or both, and a definition with
  * neither cannot be written down.
  */
-export type ProgramConfig = (Described & { server: ServerConfig, client?: ClientConfig }) | (Described & { server?: ServerConfig, client: ClientConfig })
+export type ProgramConfig = (ProgramConfigBase & { server: ServerConfig, client?: ClientConfig }) | (ProgramConfigBase & { server?: ServerConfig, client: ClientConfig })
 
-interface Described {
+interface ProgramConfigBase {
 
     // What addresses it. Kebab-case, because it is also the name of the
     // directory the system lays the program out in — so it is a path
@@ -53,7 +53,7 @@ interface Described {
     storage?: string
 }
 
-interface ServerDescription {
+interface ServerConfigBase {
 
     // Where this half is. Empty names the program's own root.
     location: string
@@ -69,7 +69,7 @@ interface ServerDescription {
 
 }
 
-export type ServerConfig = ServerDescription & ({
+export type ServerConfig = ServerConfigBase & ({
 
     // Run an isolated operating-system process through the shell.
     startCommand: string
@@ -120,7 +120,7 @@ export interface ClientConfig {
     // rise above it. The taskbar is above all three.
     //
     // Absent means `window`, said as an absence rather than written down
-    // twice: what a description leaves unsaid, the system decides.
+    // twice: what a definition leaves unsaid, the system decides.
     layer?: Layer
 
     // Whether its window opens hidden. Absent means shown.

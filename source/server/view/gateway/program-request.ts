@@ -29,7 +29,7 @@ export default async function programRequest(application: Application, socket: S
 
     if (asked.word === "create") {
 
-        if (!asked.program) throw new Error("Creating needs a Program description")
+        if (!asked.program) throw new Error("Creating needs a Program definition")
 
         const program = await programManager.create(asked.program)
         const entry = programManager.find(program.identity)
@@ -40,7 +40,7 @@ export default async function programRequest(application: Application, socket: S
 
     if (asked.word === "force-create") {
 
-        if (!asked.program) throw new Error("Creating needs a Program description")
+        if (!asked.program) throw new Error("Creating needs a Program definition")
 
         const program = await programManager.forceCreate(asked.program)
         const entry = programManager.find(program.identity)
