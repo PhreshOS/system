@@ -630,13 +630,18 @@ export default class ProcessManager extends TheLink {
         this.returnAnswer(null, ["answer", values[1], values[2], values[3], failed(new Error(reason))])
     }
 
-    private transition(process: Process, change: () => Promise<void> | void) {
+    private transition(process: Process, change: () => Promise<void> | void, whenGone: "reject" | "complete" = "reject") {
 
         const before = this.transitions.get(process.identity) ?? Promise.resolve()
 
         const next = before.catch(() => undefined).then(async () => {
 
-            if (this.processes.get(process.identity) !== process) throw new Error("The process no longer exists")
+            if (this.processes.get(process.identity) !== process) {
+
+                if (whenGone === "complete") return
+
+                throw new Error("The process no longer exists")
+            }
 
             await change()
         })
@@ -1044,9 +1049,11 @@ export default class ProcessManager extends TheLink {
         await this.endpointEvent("endpointStop", process, "client")
     }
 
-    private async exitProcess(identity: string) {
+    private async exitProcess(identity: string, whenGone: "reject" | "complete" = "reject") {
 
-        const process = this.find(identity)
+        const process = whenGone === "complete" ? this.processes.get(identity) : this.find(identity)
+
+        if (!process) return identity
 
         await this.transition(process, async () => {
 
@@ -1067,8 +1074,8 @@ export default class ProcessManager extends TheLink {
 
             if (process.client) await this.deactivateClient(process)
 
-            if (this.processes.get(identity) === process) await this.remove(identity)
-        })
+            if (this.processes.get(process.identity) === process) await this.remove(process.identity)
+        }, whenGone)
 
         return identity
     }
@@ -1086,7 +1093,9 @@ export default class ProcessManager extends TheLink {
 
         const ended = [...this.processes.values()].filter(entry => entry.program === owner).map(entry => entry.identity)
 
-        for (const identity of [...ended.filter(identity => identity !== asker), ...ended.filter(identity => identity === asker)]) await this.exit(identity)
+        // Exit-all converges with another owner already ending one of these
+        // Processes. A direct exit keeps the strict default above.
+        for (const identity of [...ended.filter(identity => identity !== asker), ...ended.filter(identity => identity === asker)]) await this.exitProcess(identity, "complete")
 
         return ended
     }
