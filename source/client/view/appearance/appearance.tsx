@@ -1,6 +1,6 @@
 import DesktopPreferencesProvider, { useDesktopPreferences } from "./desktop-preferences"
 import { standardAppearance } from "@phreshos/core"
-import ReducedMotion from "@libs/react-motion"
+import { MotionConfig } from "motion/react"
 import { PropsWithChildren } from "react"
 import "./appearance.css"
 
@@ -17,7 +17,7 @@ function AppearanceRoot({ children }: PropsWithChildren) {
     const { preferences } = useDesktopPreferences()
     const background = standardAppearance.background[preferences.theme]
 
-    return <ReducedMotion reduced={!preferences.animations}>
+    return <MotionConfig reducedMotion={preferences.animations ? "never" : "always"}>
 
         <div className="relative isolate grid h-dvh overflow-hidden font-roboto" style={{ backgroundColor: background }}>
 
@@ -25,5 +25,5 @@ function AppearanceRoot({ children }: PropsWithChildren) {
 
         </div>
 
-    </ReducedMotion>
+    </MotionConfig>
 }

@@ -1,8 +1,9 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef } from "react"
+import { animate } from "motion"
 import { type LocalSurfaceState } from "../../../components/desktop-host/local-window"
-import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
 
 const paintSelector = "[data-surface-backdrop], [data-surface-border], [data-surface-material]"
 
@@ -27,7 +28,7 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         if (!surface) return
 
-        const layers = [...surface.querySelectorAll(paintSelector)]
+        const layers = [...surface.querySelectorAll<HTMLElement>(paintSelector)]
 
         for (const layer of layers) {
 
@@ -35,8 +36,6 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
         }
 
         const revision = transition?.revision ?? null
-
-        const changed = revision !== null
 
         const initial = firstRender.current
 
@@ -46,33 +45,34 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         const duration = transaction?.duration ?? motionDurations.presence
 
-        gsap.killTweensOf(layers)
+        if (!transaction || revision === null || reducedMotion || duration === 0) {
 
-        if (!transaction || !changed || reducedMotion || duration === 0) {
+            for (const layer of layers) layer.style.opacity = String(visible ? visibleOpacity.current.get(layer) : 0)
 
-            for (const layer of layers) gsap.set(layer, { opacity: visible ? visibleOpacity.current.get(layer) : 0 })
-
-            if (transaction && changed) onComplete(revision!)
+            if (transaction && revision !== null) onComplete(revision)
 
             return
         }
 
-        const animation = gsap.timeline({
-            onComplete: () => onComplete(revision!)
+        const animations = layers.map(layer => animate(layer, {
+            opacity: [
+                initial && visible ? 0 : Number(getComputedStyle(layer).opacity),
+                visible ? visibleOpacity.current.get(layer) ?? 1 : 0
+            ]
+        }, {
+            duration: motionDuration(duration),
+            ease: motionEase(transaction.easing)
+        }))
+
+        let active = true
+
+        void Promise.all(animations).then(() => {
+            if (active) onComplete(revision)
         })
 
-        for (const layer of layers) animation.fromTo(layer, {
-            opacity: initial && visible ? 0 : Number(getComputedStyle(layer).opacity)
-        }, {
-            opacity: visible ? visibleOpacity.current.get(layer) : 0,
-            duration: motionDuration(duration),
-            ease: motionEase(transaction.easing),
-            overwrite: "auto"
-        }, 0)
-
         return function () {
-
-            animation.kill()
+            active = false
+            for (const animation of animations) animation.stop()
         }
 
     }, [reducedMotion, transition?.revision, visible])

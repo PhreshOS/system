@@ -28,7 +28,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         return () => {
 
-            entrance?.kill()
+            entrance?.stop()
 
             restSurface(surface.current)
         }

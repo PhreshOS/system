@@ -1,18 +1,13 @@
-import { type Easing } from "@phreshos/core"
-import gsap from "gsap"
-import { CustomEase } from "gsap/CustomEase"
+import { type Easing as SystemEasing } from "@phreshos/core"
+import { type Easing } from "motion"
 
-gsap.registerPlugin(CustomEase)
-
-const curves: Record<Exclude<Easing, readonly number[]>, readonly [number, number, number, number]> = {
-    linear: [0, 0, 1, 1],
+const curves: Record<Exclude<SystemEasing, readonly number[]>, Easing> = {
+    linear: "linear",
     ease: [0.25, 0.1, 0.25, 1],
-    "ease-in": [0.42, 0, 1, 1],
-    "ease-out": [0, 0, 0.58, 1],
-    "ease-in-out": [0.42, 0, 0.58, 1]
+    "ease-in": "easeIn",
+    "ease-out": "easeOut",
+    "ease-in-out": "easeInOut"
 }
-
-const registered = new Map<string, gsap.EaseFunction>()
 
 /** Shared interaction timings in the same millisecond unit as public transactions. */
 export const motionDurations = Object.freeze({
@@ -27,26 +22,15 @@ export const motionDurations = Object.freeze({
     geometry: 300
 })
 
-/** Preserves public CSS timing curves while GSAP owns their interpolation. */
-export function motionEase(value: Easing | undefined, fallback: Easing = "ease-out") {
+/** Converts a public CSS timing curve into Motion's equivalent easing. */
+export function motionEase(value: SystemEasing | undefined, fallback: SystemEasing = "ease-out"): Easing {
 
     const selected = value ?? fallback
-    const points = typeof selected === "string" ? curves[selected] : selected
-    const key = points.join(",")
-    const existing = registered.get(key)
 
-    if (existing) return existing
-
-    const easing = CustomEase.create(`phresh-${registered.size}`, key)
-
-    registered.set(key, easing)
-
-    return easing
+    return typeof selected === "string" ? curves[selected] : selected
 }
 
 export function motionDuration(milliseconds: number) {
 
     return milliseconds / 1_000
 }
-
-export default gsap
