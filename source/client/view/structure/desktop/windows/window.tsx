@@ -800,11 +800,19 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 {/* Where the program is. Bare, it is the whole of the
                     box and wears none of the system's own edges. */}
-                <div data-window-content style={bare ? undefined : { borderRadius: innerRadius }} className={bare ? "relative min-h-0" : "relative m-1.5 mt-0 min-h-0 overflow-hidden bg-white/25 shadow-window-content"}>
+                {bare
 
-                    {children}
+                    ? <div data-window-content className="relative min-h-0">
 
-                </div>
+                        {children}
+
+                    </div>
+
+                    : <Surface data-window-content opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px shadow-window-content">
+
+                        {children}
+
+                    </Surface>}
 
             </div>
 

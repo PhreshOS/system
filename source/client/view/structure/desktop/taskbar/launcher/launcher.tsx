@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
+import { useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -124,11 +124,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         >
 
-            <Surface opacity="small" className="min-h-0 max-h-[inherit] rounded-[inherit]">
-
-                {children(close)}
-
-            </Surface>
+            {children(close)}
 
         </TaskbarSurface>
 
