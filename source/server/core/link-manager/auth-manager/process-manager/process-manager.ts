@@ -677,19 +677,19 @@ export default class ProcessManager extends TheLink {
 
                 if (values[0] === "stream" && typeof values[1] === "string") {
 
-                    this.endHostStream(process, values[1], values.slice(2)).catch(() => undefined)
+                    this.endHostStream(process, server, values[1], values.slice(2)).catch(() => undefined)
 
                     return
                 }
 
                 if (values[0] === "wait" && typeof values[1] === "string") {
 
-                    this.endHostWait(process, values[1], values.slice(2)).catch(() => undefined)
+                    this.endHostWait(process, server, values[1], values.slice(2)).catch(() => undefined)
 
                     return
                 }
 
-                this.endHost(process, values).catch(() => undefined)
+                this.endHost(process, server, values).catch(() => undefined)
             }
         })
 
@@ -734,27 +734,40 @@ export default class ProcessManager extends TheLink {
 
         const finish = async () => {
 
-            if (!process.serverStopped(boundary, code, signal)) return
+            if (process.server !== boundary) return
 
-            await this.services.release(process, "server")
+            await completeEvery("The server endpoint ended with incomplete cleanup", [
 
-            boundary.release()
+                () => { process.serverStopped(boundary, code, signal) },
 
-            await this.$outbound.publish("/server-stop", process.identity, process.hosted(), code, signal)
+                () => this.services.release(process, "server"),
 
-            await this.endpointEvent("endpointStop", process, "server")
+                () => { boundary.release() },
 
-            // A server crash invalidates the complete execution. Only the
-            // explicit server.stop() road may intentionally leave the client
-            // state alive without its server counterpart.
-            if (!explicitlyStopped) {
+                () => this.$outbound.publish("/server-stop", process.identity, process.hosted(), code, signal),
 
-                await this.authManager.linkManager.application.dialogManager.serverCrashed(process, code, signal)
+                () => this.endpointEvent("endpointStop", process, "server"),
 
-                if (process.client) await this.deactivateClient(process)
-            }
+                // A server crash invalidates the complete execution. Only the
+                // explicit server.stop() road may intentionally leave the client
+                // state alive without its server counterpart.
+                async () => {
 
-            if (!process.live) await this.remove(process.identity, code, signal)
+                    if (explicitlyStopped) return
+
+                    await this.authManager.linkManager.application.dialogManager.serverCrashed(process, code, signal)
+                },
+
+                async () => {
+
+                    if (!explicitlyStopped && process.client) await this.deactivateClient(process)
+                },
+
+                async () => {
+
+                    if (!process.live) await this.remove(process.identity, code, signal)
+                }
+            ])
         }
 
         if (explicitlyStopped) await finish()
@@ -817,40 +830,57 @@ export default class ProcessManager extends TheLink {
 
         process.onExit((code, signal) => { this.remove(identity, code, signal).catch(() => undefined) })
 
-        configure?.(process)
+        try {
 
-        // Initial activation is one endpoint transition too. A server that
-        // exits immediately is queued behind it, preserving the only coherent
-        // order: Process creation, endpoint start, endpoint stop, Process exit.
-        await this.transition(process, async () => {
+            configure?.(process)
 
-            if (client && window) process.startClient(window)
+            // Initial activation is one endpoint transition too. A server that
+            // exits immediately is queued behind it, preserving the only coherent
+            // order: Process creation, endpoint start, endpoint stop, Process exit.
+            await this.transition(process, async () => {
 
-            if (runtime) this.activateServer(process, runtime)
+                if (client && window) process.startClient(window)
 
-            // The subject first, which is what scopes a listener without
-            // anything being checked: a kit's `Events` refuses a value whose
-            // first item is not the subject it was built for, so a program's
-            // listener hears only its own program's news by the shape of the
-            // message rather than by a rule somewhere reading it.
-            //
-            // An unscoped listener — `host` — is built for no subject and so
-            // receives the subject as its first value.
-            await this.announce("process", "create", program.identity, program.reference, processReference(process))
+                if (runtime) this.activateServer(process, runtime)
 
-            await this.$outbound.publish("/created", process.hosted())
+                // The subject first, which is what scopes a listener without
+                // anything being checked: a kit's `Events` refuses a value whose
+                // first item is not the subject it was built for, so a program's
+                // listener hears only its own program's news by the shape of the
+                // message rather than by a rule somewhere reading it.
+                //
+                // An unscoped listener — `host` — is built for no subject and so
+                // receives the subject as its first value.
+                await this.announce("process", "create", program.identity, program.reference, processReference(process))
 
-            if (window) this.settleFront(window.layer, front)
+                await this.$outbound.publish("/created", process.hosted())
 
-            if (process.server) await this.serverStarted(process)
+                if (window) this.settleFront(window.layer, front)
 
-            if (process.client) {
+                if (process.server) await this.serverStarted(process)
 
-                await this.$outbound.publish("/client-start", process.identity, process.hosted())
+                if (process.client) {
 
-                await this.endpointEvent("endpointStart", process, "client")
-            }
-        })
+                    await this.$outbound.publish("/client-start", process.identity, process.hosted())
+
+                    await this.endpointEvent("endpointStart", process, "client")
+                }
+            })
+        }
+
+        catch (error) {
+
+            // A runtime that failed before becoming this Process's boundary has
+            // no lifecycle callback through which it can be stopped.
+            if (!process.server) runtime?.stop()
+
+            // Registration is transactional from the registry's perspective.
+            // Normal teardown retracts every endpoint and announcement that may
+            // already have crossed before the failing step.
+            await this.exitProcess(identity, "complete").catch(() => undefined)
+
+            throw error
+        }
 
         return process
     }
@@ -868,62 +898,70 @@ export default class ProcessManager extends TheLink {
 
         const front = layer && this.front(layer)
 
-        await Promise.all([
+        const failures = await settleEvery([
 
-            this.services.release(process, "server"),
+            () => this.services.release(process, "server"),
 
-            this.services.release(process, "client")
+            () => this.services.release(process, "client")
         ])
 
-        if (!this.processes.delete(identity)) return
+        // Another converging teardown may have completed while services were
+        // releasing. Only the teardown that removes this exact entity emits its
+        // terminal facts.
+        if (this.processes.get(identity) !== process) {
 
-        process.server?.release("The process ended before answering")
+            throwFailures("The process ended with incomplete cleanup", failures)
 
-        for (const [key, boundary] of this.clientForwarders) {
-
-            if (boundary.pane !== identity) continue
-
-            boundary.release()
-
-            this.clientForwarders.delete(key)
+            return
         }
 
-        // Dropping the record is an ending, and for a program with no
-        // server half it is the only one there will ever be.
-        process.ended(code, signal)
+        this.processes.delete(identity)
 
-        // The subject leads so that narrowing is the shape of the
-        // message, and what follows is the thing the event is about —
-        // the process, whole, not an identity a listener would have to look
-        // up. It is already gone, which is what `exited()` answers and
-        // why holding it is legitimate.
-        await this.announce("process", "exit", process.program.identity, process.program.reference, processReference(process), code, signal)
+        failures.push(...await settleEvery([
 
-        // The same ending, said to whoever holds this one process rather
-        // than to whoever watches the program. A launcher wants the
-        // second; a program managing its instances wants the first.
-        await this.hostTraffic.emitSubject("process", "exit", process.reference, code, signal)
+            () => { process.server?.release("The process ended before answering") },
 
-        // The window that had it is gone, so nobody is told they lost
-        // it — only whoever inherits it is told they have it.
-        if (layer) this.settleFront(layer, front)
+            () => { this.releaseClientForwarders(identity) },
 
-        // Whose it was, said rather than looked up. A session holds the
-        // record too and drops it on this same event, so anything that
-        // needed to know the program would be racing the handler that
-        // removes it — and which of them ran first would decide whether
-        // the answer existed.
-        // And when it started, because the record is gone by the time a
-        // session reads this and that is the one thing an ending cannot
-        // recover — a listener handed a process must be handed the whole
-        // of one, or the shape a handle promises is not the shape it has.
-        await this.$outbound.publish("/exited", process.hosted(), code, signal)
+            // Dropping the record is an ending, and for a program with no
+            // server half it is the only one there will ever be.
+            () => { process.ended(code, signal) },
 
-        await this.traffic.end(process.reference, "The process ended — no further events are possible")
+            // The subject leads so that narrowing is the shape of the
+            // message, and what follows is the thing the event is about —
+            // the process, whole, not an identity a listener would have to look
+            // up. It is already gone, which is what `exited()` answers and
+            // why holding it is legitimate.
+            () => this.announce("process", "exit", process.program.identity, process.program.reference, processReference(process), code, signal),
 
-        await this.endpointEvents.end(process.reference, "The process ended — no further events are possible")
+            // The same ending, said to whoever holds this one process rather
+            // than to whoever watches the program. A launcher wants the
+            // second; a program managing its instances wants the first.
+            () => this.hostTraffic.emitSubject("process", "exit", process.reference, code, signal),
 
-        this.transitions.delete(identity)
+            // The window that had it is gone, so nobody is told they lost
+            // it — only whoever inherits it is told they have it.
+            () => { if (layer) this.settleFront(layer, front) },
+
+            // Whose it was, said rather than looked up. A session holds the
+            // record too and drops it on this same event, so anything that
+            // needed to know the program would be racing the handler that
+            // removes it — and which of them ran first would decide whether
+            // the answer existed.
+            // And when it started, because the record is gone by the time a
+            // session reads this and that is the one thing an ending cannot
+            // recover — a listener handed a process must be handed the whole
+            // of one, or the shape a handle promises is not the shape it has.
+            () => this.$outbound.publish("/exited", process.hosted(), code, signal),
+
+            () => this.traffic.end(process.reference, "The process ended — no further events are possible"),
+
+            () => this.endpointEvents.end(process.reference, "The process ended — no further events are possible"),
+
+            () => { this.transitions.delete(identity) }
+        ]))
+
+        throwFailures("The process ended with incomplete cleanup", failures)
     }
 
     public async startServer(identity: string) {
@@ -940,16 +978,35 @@ export default class ProcessManager extends TheLink {
 
             const runtime = this.authManager.programManager.serverRuntime(process.program)
 
-            try { this.activateServer(process, runtime) }
+            try {
+
+                this.activateServer(process, runtime)
+
+                await this.serverStarted(process)
+            }
 
             catch (error) {
 
-                runtime.stop()
+                // activateServer mutates Process state across a method boundary,
+                // which TypeScript cannot infer after the precondition above.
+                const boundary = process.server as ServerProcessBoundary | null
+
+                if (boundary) {
+
+                    this.stoppingServers.add(boundary)
+
+                    boundary.stop()
+
+                    // Do not await here. A runtime may already have ended and
+                    // queued its natural cleanup behind this transition; waiting
+                    // for it from inside the transition would deadlock both.
+                    boundary.finished.finally(() => { this.stoppingServers.delete(boundary) }).catch(() => undefined)
+                }
+
+                else runtime.stop()
 
                 throw error
             }
-
-            await this.serverStarted(process)
         })
 
         return identity
@@ -997,11 +1054,21 @@ export default class ProcessManager extends TheLink {
 
             process.startClient(window)
 
-            await this.$outbound.publish("/client-start", process.identity, process.hosted())
+            try {
 
-            this.settleFront(window.layer, before)
+                await this.$outbound.publish("/client-start", process.identity, process.hosted())
 
-            await this.endpointEvent("endpointStart", process, "client")
+                this.settleFront(window.layer, before)
+
+                await this.endpointEvent("endpointStart", process, "client")
+            }
+
+            catch (error) {
+
+                await this.deactivateClient(process).catch(() => undefined)
+
+                throw error
+            }
         })
 
         return identity
@@ -1029,24 +1096,38 @@ export default class ProcessManager extends TheLink {
 
         const before = layer ? this.front(layer) : null
 
-        await this.services.release(process, "client")
+        await completeEvery("The client endpoint stopped with incomplete cleanup", [
 
-        process.stopClient()
+            () => this.services.release(process, "client"),
+
+            () => { process.stopClient() },
+
+            () => { this.releaseClientForwarders(process.identity) },
+
+            () => this.$outbound.publish("/client-stop", process.identity, process.hosted()),
+
+            () => { if (layer) this.settleFront(layer, before) },
+
+            () => this.endpointEvent("endpointStop", process, "client")
+        ])
+    }
+
+    private releaseClientForwarders(identity: string) {
+
+        const failures: unknown[] = []
 
         for (const [key, boundary] of this.clientForwarders) {
 
-            if (boundary.pane !== process.identity) continue
+            if (boundary.pane !== identity) continue
 
-            boundary.release()
+            try { boundary.release() }
+
+            catch (error) { failures.push(error) }
 
             this.clientForwarders.delete(key)
         }
 
-        await this.$outbound.publish("/client-stop", process.identity, process.hosted())
-
-        if (layer) this.settleFront(layer, before)
-
-        await this.endpointEvent("endpointStop", process, "client")
+        throwFailures("The client boundary ended with incomplete cleanup", failures)
     }
 
     private async exitProcess(identity: string, whenGone: "reject" | "complete" = "reject") {
@@ -1059,22 +1140,33 @@ export default class ProcessManager extends TheLink {
 
             const server = process.server
 
-            // Classify and stop the child before awaiting any other teardown.
-            // Otherwise a natural child exit during an awaited client
-            // announcement could queue behind this transition while this
-            // transition waits for that same child's completion.
-            if (server) {
+            await completeEvery("The process exited with incomplete cleanup", [
 
-                this.stoppingServers.add(server)
+                // Classify and stop the child before awaiting any other teardown.
+                // Otherwise a natural child exit during an awaited client
+                // announcement could queue behind this transition while this
+                // transition waits for that same child's completion.
+                async () => {
 
-                server.stop()
+                    if (!server) return
 
-                await server.finished
-            }
+                    this.stoppingServers.add(server)
 
-            if (process.client) await this.deactivateClient(process)
+                    server.stop()
 
-            if (this.processes.get(process.identity) === process) await this.remove(process.identity)
+                    await server.finished
+                },
+
+                async () => {
+
+                    if (process.client) await this.deactivateClient(process)
+                },
+
+                async () => {
+
+                    if (this.processes.get(process.identity) === process) await this.remove(process.identity)
+                }
+            ])
         }, whenGone)
 
         return identity
@@ -1389,7 +1481,7 @@ export default class ProcessManager extends TheLink {
     // environment. Predefined and finite: the kits' named operations
     // compile to exactly these. Unknown words are refused, so a
     // misspelling fails loudly instead of vanishing.
-    protected async endHost(process: Process, args: unknown[]): Promise<unknown[]> {
+    protected async endHost(process: Process, server: ServerProcessBoundary, args: unknown[]): Promise<unknown[]> {
 
         const [word, ...rest] = args
 
@@ -1659,14 +1751,14 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            process.server?.followService(this.services, subscription, key, scope, event)
+            server.followService(this.services, subscription, key, scope, event)
 
             return []
         }
 
         if (word === "service-unfollow") {
 
-            process.server?.unfollowService(String(rest[0]))
+            server.unfollowService(String(rest[0]))
 
             return []
         }
@@ -1704,7 +1796,7 @@ export default class ProcessManager extends TheLink {
                 return []
             }
 
-            process.server?.retain(question, () => binding.process.server?.forget(question))
+            server.retain(question, () => binding.process.server?.forget(question))
 
             this.asked(process.identity, "server", binding.process.identity, [question, publicQuestion, event, payload])
 
@@ -1915,7 +2007,7 @@ export default class ProcessManager extends TheLink {
                 return []
             }
 
-            process.server?.retain(question, () => target.forget(question))
+            server.retain(question, () => target.forget(question))
 
             this.asked(process.identity, "server", targetProcess.identity, rest.slice(2))
 
@@ -2006,7 +2098,7 @@ export default class ProcessManager extends TheLink {
         throw new Error(`The host does not know the word "${String(word)}"`)
     }
 
-    private async endHostWait(process: Process, question: string, args: unknown[]) {
+    private async endHostWait(process: Process, server: ServerProcessBoundary, question: string, args: unknown[]) {
 
         try {
 
@@ -2022,7 +2114,7 @@ export default class ProcessManager extends TheLink {
 
                 if (target.server?.ready) {
 
-                    this.say(process.server, "host-end", "answer", question, succeeded([]))
+                    this.say(server, "host-end", "answer", question, succeeded([]))
 
                     return
                 }
@@ -2031,43 +2123,48 @@ export default class ProcessManager extends TheLink {
 
                 const incarnation = requireCurrentIncarnation ? target.server : null
 
-                const ready = target.waitReady(() => {
+                let stopReady: () => void = () => undefined
+                let stopExit: () => void = () => undefined
+
+                const finish = (outcome?: Outcome<unknown[]>) => {
 
                     if (!active) return
 
                     active = false
 
-                    this.say(process.server, "host-end", "answer", question, succeeded([]))
-                })
+                    stopReady()
 
-                target.onExit(() => {
+                    stopExit()
 
-                    if (!active) return
+                    if (outcome) this.say(server, "host-end", "answer", question, outcome)
+                }
 
-                    active = false
+                stopReady = target.waitReady(() => finish(succeeded([])))
 
-                    ready()
+                // waitReady may answer synchronously.
+                if (!active) {
 
-                    this.say(process.server, "host-end", "answer", question, failed(new Error("The process ended before its server became ready")))
-                })
+                    stopReady()
+
+                    return
+                }
+
+                stopExit = target.onExit(() => finish(failed(new Error("The process ended before its server became ready"))))
+
+                // onExit may answer synchronously for an already-ending target.
+                if (!active) {
+
+                    stopExit()
+
+                    return
+                }
 
                 incarnation?.finished.then(() => {
 
-                    if (!active) return
-
-                    active = false
-
-                    ready()
-
-                    this.say(process.server, "host-end", "answer", question, failed(new Error("The server endpoint stopped before becoming ready")))
+                    finish(failed(new Error("The server endpoint stopped before becoming ready")))
                 }).catch(() => undefined)
 
-                process.server?.retain(question, () => {
-
-                    active = false
-
-                    ready()
-                })
+                server.retain(question, () => finish())
 
                 return
             }
@@ -2076,26 +2173,26 @@ export default class ProcessManager extends TheLink {
             // wire carries one value, so the list is that value. A
             // program's own endpoint answers a value directly; these are
             // the two shapes and they meet here.
-            const result = await this.endHost(process, args)
+            const result = await this.endHost(process, server, args)
 
-            this.say(process.server, "host-end", "answer", question, succeeded(result))
+            this.say(server, "host-end", "answer", question, succeeded(result))
         }
 
         catch (exception) {
 
-            this.say(process.server, "host-end", "answer", question, failed(exception))
+            this.say(server, "host-end", "answer", question, failed(exception))
         }
     }
 
-    private async endHostStream(process: Process, question: string, args: unknown[]) {
+    private async endHostStream(process: Process, server: ServerProcessBoundary, question: string, args: unknown[]) {
 
         let active = true
         let cancel = () => { active = false }
         const programManager = this.authManager.programManager
 
-        process.server?.retain(question, () => cancel())
+        server.retain(question, () => cancel())
 
-        await this.say(process.server, "host-end", "stream", question, "open")
+        await this.say(server, "host-end", "stream", question, "open")
 
         try {
 
@@ -2113,7 +2210,7 @@ export default class ProcessManager extends TheLink {
 
                     if (!active) return
 
-                    sending = sending.then(() => this.say(process.server, "host-end", "stream", question, "data", value))
+                    sending = sending.then(() => this.say(server, "host-end", "stream", question, "data", value))
                 }
 
                 cancel = () => {
@@ -2149,7 +2246,7 @@ export default class ProcessManager extends TheLink {
                 await completion
                 await sending
 
-                if (active) await this.say(process.server, "host-end", "stream", question, "answer", succeeded(undefined))
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
 
                 return
             }
@@ -2166,15 +2263,15 @@ export default class ProcessManager extends TheLink {
 
                 if (!active) return
 
-                await this.say(process.server, "host-end", "stream", question, "data", chunk)
+                await this.say(server, "host-end", "stream", question, "data", chunk)
             }
 
-            if (active) await this.say(process.server, "host-end", "stream", question, "answer", succeeded(undefined))
+            if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
         }
 
         catch (exception) {
 
-            if (active) await this.say(process.server, "host-end", "stream", question, "answer", failed(exception))
+            if (active) await this.say(server, "host-end", "stream", question, "answer", failed(exception))
         }
     }
 
@@ -2518,6 +2615,35 @@ function isHandleAddress(value: unknown): value is HandleAddress {
 
     return typeof value === "object" && value !== null && "identity" in value && "reference" in value
         && typeof value.identity === "string" && typeof value.reference === "string"
+}
+
+type Completion = () => unknown | PromiseLike<unknown>
+
+/** Run every teardown step, preserving all failures until cleanup is complete. */
+async function settleEvery(steps: Completion[]) {
+
+    const failures: unknown[] = []
+
+    for (const step of steps) {
+
+        try { await step() }
+
+        catch (error) { failures.push(error) }
+    }
+
+    return failures
+}
+
+async function completeEvery(message: string, steps: Completion[]) {
+
+    throwFailures(message, await settleEvery(steps))
+}
+
+function throwFailures(message: string, failures: unknown[]): void {
+
+    if (failures.length === 1) throw failures[0]
+
+    if (failures.length > 1) throw new AggregateError(failures, message)
 }
 
 // What a launch resolved to, before a window exists to hold it.
