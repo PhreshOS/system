@@ -181,6 +181,19 @@ export default class ProgramManager extends TheLink {
         return this.programs.get(identity)?.program ?? null
     }
 
+    /** Resolve an exact runtime Program handle without retargeting a replacement. */
+    public held(value: unknown) {
+
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A Program handle is required")
+
+        const address = value as { identity?: unknown, reference?: unknown }
+        const program = typeof address.identity === "string" ? this.reach(address.identity) : null
+
+        if (!program || program.reference !== address.reference) throw new Error("The Program represented by this handle does not exist")
+
+        return program
+    }
+
     // Resolve the browser-only hosting address. This is intentionally a
     // separate lookup from public identity: stable program identities
     // must never become stable asset routes.
@@ -203,17 +216,63 @@ export default class ProgramManager extends TheLink {
     // absolute itself.
     public async create(source: ProgramConfig | string) {
 
+        const entry = await this.register(this.runtimeProgram(source), false)
+
+        await this.created(entry)
+
+        return entry.program
+    }
+
+    /** Atomically replace the runtime occupant of one Program identity. */
+    public async forceCreate(source: ProgramConfig | string, asker: string | null = null) {
+
+        const program = this.runtimeProgram(source)
+
+        const restoreInstalled = existsSync(this.fileManager.join(program.identity, "program.json"))
+
+        // Refuse an invalid replacement before disturbing the coherent entity
+        // that currently owns this public identity.
+        await program.validate()
+
+        return await this.change(program.identity, async () => {
+
+            const existing = this.programs.get(program.identity)
+
+            if (existing) {
+
+                await this.authManager.processManager.exitAll(existing.identity, asker)
+
+                await this.forgetEntry(existing, false)
+            }
+
+            const entry = this.remember(program, false, true, restoreInstalled)
+
+            try {
+
+                await this.created(entry)
+
+                return entry.program
+            }
+
+            catch (exception) {
+
+                if (this.programs.get(entry.identity) === entry) await this.forgetEntry(entry)
+
+                throw exception
+            }
+        })
+    }
+
+    /** Resolve one external runtime source without consulting System cwd. */
+    private runtimeProgram(source: ProgramConfig | string) {
+
         if (typeof source === "string") {
 
             if (!isAbsolute(source)) throw new Error("A program is created from an absolute path — the system's working directory is not the caller's")
 
             const path = statSync(source, { throwIfNoEntry: false })?.isDirectory() ? join(source, "program.json") : source
 
-            const entry = await this.register(new Program(path), false)
-
-            await this.created(entry)
-
-            return entry.program
+            return new Program(path)
         }
 
         // Storage is where what it keeps outlives its processes, and
@@ -233,11 +292,7 @@ export default class ProgramManager extends TheLink {
 
         if (client !== undefined && !/^https?:\/\//i.test(client) && !isAbsolute(client)) throw new Error("A created program's client must be an absolute filesystem path or an HTTP(S) URL")
 
-        const entry = await this.register(new Program(source), false)
-
-        await this.created(entry)
-
-        return entry.program
+        return new Program(source)
     }
 
     public async fork(program: Program, identity: string) {
@@ -253,6 +308,12 @@ export default class ProgramManager extends TheLink {
 
         await program.validate()
 
+        return this.remember(program, installed, transitionOwnsIdentity)
+    }
+
+    /** Commit one already validated Program to the authoritative registry. */
+    private remember(program: Program, installed: boolean, transitionOwnsIdentity = false, restoreInstalled = false) {
+
         // The runtime map is the live registry, while an installed
         // declaration is the durable reservation reconstructed on boot.
         // Forgetting an installed Program removes the former but cannot
@@ -261,7 +322,7 @@ export default class ProgramManager extends TheLink {
         // that deliberately owns this identity across both representations.
         if (this.programs.has(program.identity) || (!transitionOwnsIdentity && (this.changing.has(program.identity) || existsSync(this.fileManager.join(program.identity, "program.json"))))) throw new Error("The system already knows this program identity")
 
-        const entry = new Entry(program, installed)
+        const entry = new Entry(program, installed, restoreInstalled)
 
         this.programs.set(entry.identity, entry)
 
@@ -587,38 +648,6 @@ export default class ProgramManager extends TheLink {
         return program.identity
     }
 
-    // A local project addresses the durable installation, not a handle it
-    // already holds. Attached use may have replaced or forgotten the runtime
-    // entry while the installed declaration still exists, so this resolves
-    // from the installed area first and reconstructs the runtime counterpart
-    // only when the operation needs one.
-    public async uninstallInstalled(identity: string, everything = false, asker: string | null = null, output: CommandOutput = () => undefined) {
-
-        return await this.change(identity, async () => {
-
-            const declaration = this.fileManager.join(identity, "program.json")
-
-            if (!existsSync(declaration)) throw new Error("This program is not installed — there is nothing here to remove")
-
-            let entry = this.programs.get(identity)
-
-            if (!entry) {
-
-                entry = await this.register(new Program(declaration), true, true)
-
-                await this.created(entry)
-            }
-
-            return await this.uninstallEntry(entry, everything, asker, output)
-        })
-    }
-
-    /** Uninstall an installed Program while exposing cleanup command output. */
-    public uninstallInstalledStreaming(identity: string, everything = false, asker: string | null = null) {
-
-        return this.commandStreaming(output => this.uninstallInstalled(identity, everything, asker, output))
-    }
-
     @Connect("/forget-program")
     public async forgetNamed(identity: string, asker: string | null = null) {
 
@@ -627,67 +656,6 @@ export default class ProgramManager extends TheLink {
         if (!program) throw new Error("The system does not know this program")
 
         return await this.forget(program, asker)
-    }
-
-    /**
-     * Install one external Program description and coordinate every requested
-     * follow-up as one Core operation. Each yielded stage lets a View represent
-     * progress without taking ownership of the workflow.
-     */
-    public async *installSource(source: ProgramConfig, options: InstallSourceOptions = {}): AsyncGenerator<InstallSourceStage> {
-
-        const program = new Program(source)
-
-        await program.validate()
-
-        // A runtime Program may have been forgotten while its installed
-        // declaration remains. Replacement is therefore a fact about the
-        // durable files, not the current registry entry's installed flag.
-        const replaced = existsSync(this.fileManager.join(program.identity, "program.json"))
-
-        const installation = this.installStreaming(program)
-
-        let entry: Entry
-
-        while (true) {
-
-            const next = await installation.next()
-
-            if (next.done) {
-
-                entry = next.value
-
-                break
-            }
-
-            yield { stage: "output", chunk: next.value }
-        }
-
-        yield { stage: "installed", entry, replaced }
-
-        const launch = {}
-
-        if (options.startup) {
-
-            await this.startup(entry.program, "enable", launch)
-
-            yield { stage: "startup-enabled" }
-        }
-
-        if (options.run) {
-
-            const process = await this.runInstalled(entry.program, launch)
-
-            yield { stage: "running", process }
-        }
-    }
-
-    /** Run a durable Program independently of a local gateway connection. */
-    public async runInstalled(program: Program, launch: Launch = {}) {
-
-        if (!this.installed(program)) throw new Error("Only an installed program can run independently")
-
-        return await this.start(program, launch)
     }
 
     /** Install while exposing command output with consumer-driven backpressure. */
@@ -844,6 +812,8 @@ export default class ProgramManager extends TheLink {
                     entry.program.replace(installed)
 
                     entry.installed = true
+
+                    entry.restoreInstalled = false
                 }
 
                 else {
@@ -958,7 +928,7 @@ export default class ProgramManager extends TheLink {
         })
     }
 
-    private async forgetEntry(entry: Entry) {
+    private async forgetEntry(entry: Entry, restore = true) {
 
         if (this.programs.get(entry.identity) !== entry) throw new Error("The system no longer knows this program")
 
@@ -971,6 +941,18 @@ export default class ProgramManager extends TheLink {
         await this.authManager.processManager.announceSubject("program", "forget", entry.program.reference)
 
         await this.$outbound.publish("/forget", entry.identity)
+
+        if (restore && entry.restoreInstalled) {
+
+            const declaration = this.fileManager.join(entry.identity, "program.json")
+
+            if (existsSync(declaration)) {
+
+                const installed = await this.register(new Program(declaration), true, true)
+
+                await this.created(installed)
+            }
+        }
 
         return entry.identity
     }
@@ -1012,14 +994,29 @@ export default class ProgramManager extends TheLink {
         })
     }
 
+    /** Create one Process whose output and ending are observed before startup. */
+    public async runProcess(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null) {
+
+        return await this.serializeCreation(program.identity, async () => {
+
+            if (this.reach(program.identity) !== program) throw new Error("The Program represented by this handle does not exist")
+
+            return await this.start(program, launch, watching, parent)
+        })
+    }
+
     @Connect("/find-or-create-process")
-    public async findOrCreateProcess(identity: string, launch: Launch & { name: string }, parent: Process | string | null = null) {
+    public async findOrCreateProcess(subject: string | Program, launch: Launch & { name: string }, parent: Process | string | null = null) {
+
+        const identity = typeof subject === "string" ? subject : subject.identity
 
         return await this.serializeCreation(identity, async () => {
 
             const program = this.reach(identity)
 
             if (!program) throw new Error("The system does not know this program")
+
+            if (typeof subject !== "string" && program !== subject) throw new Error("The Program represented by this handle does not exist")
 
             const resolved = this.resolveLaunch(program, launch)
 
@@ -1040,92 +1037,6 @@ export default class ProgramManager extends TheLink {
 
             return await this.start(program, launch, undefined, creator ?? null, false, resolved)
         })
-    }
-
-    // An attached launch is the local project's authoritative runtime use of
-    // its declared identity. Replacement is one transition: every old process
-    // exits, the old Program is forgotten with its ordinary announcements,
-    // and only then does the new uninstalled Program become reachable. The
-    // installed files, if any, are deliberately untouched and may be installed
-    // over later or reconstructed on the next system start.
-    public async launchAttached(source: ProgramConfig, options: Options, watching: Watching) {
-
-        // Unlike an installed Program, an attached one has no canonical
-        // system-owned directory from which an omitted storage path can be
-        // derived. The authoring tool supplies the project storage explicitly.
-        if (typeof source.storage !== "string") throw new Error("An attached program names its storage")
-
-        if (!isAbsolute(source.storage)) throw new Error("An attached program's storage must be an absolute filesystem path")
-
-        const program = new Program(source)
-
-        // Refuse a bad incoming declaration before taking a coherent existing
-        // Program down. `start` asks again immediately before spawning because
-        // files can move between these two moments.
-        await program.validate()
-
-        return await this.change(program.identity, async () => {
-
-            const existing = this.programs.get(program.identity)
-
-            if (existing) {
-
-                await this.authManager.processManager.exitAll(existing.identity)
-
-                await this.forgetEntry(existing)
-            }
-
-            // This transition owns the identity. In particular, an installed
-            // declaration may still reserve it on disk after its runtime
-            // Program was forgotten; attached use is explicitly allowed to
-            // stand there without deleting or changing that installation.
-            const entry = await this.register(program, false, true)
-
-            try {
-
-                await this.created(entry)
-
-                return await this.start(program, { options }, {
-
-                    output: watching.output,
-
-                    exited: (code, signal) => {
-
-                        // The launcher hears the ending only after the attached
-                        // Program has left the registry. Otherwise a command
-                        // started immediately afterwards can collide with a life
-                        // whose process has already ended.
-                        this.finishAttached(program).then(
-
-                            () => watching.exited(code, signal),
-
-                            () => watching.exited(code, signal)
-                        )
-                    }
-                }, null, true)
-            }
-
-            catch (exception) {
-
-                if (this.programs.get(program.identity) === entry) {
-
-                    await this.authManager.processManager.exitAll(program.identity)
-
-                    await this.forgetEntry(entry)
-                }
-
-                throw exception
-            }
-        })
-    }
-
-    private async finishAttached(program: Program) {
-
-        const changing = this.changing.get(program.identity)
-
-        if (changing) await changing
-
-        if (this.programs.get(program.identity)?.program === program) await this.forget(program)
     }
 
     // One interpretation of a Process launch, used both when it is created now
@@ -1247,6 +1158,8 @@ export default class ProgramManager extends TheLink {
 
             if (watching) {
 
+                watching.started?.(record)
+
                 record.onServerStart(server => server.onOutput(watching.output))
 
                 record.onExit(watching.exited)
@@ -1327,23 +1240,6 @@ export default class ProgramManager extends TheLink {
 
 export type TransmittedProgramManager = Transmitted<ProgramManager>
 
-export interface InstallSourceOptions {
-
-    run?: boolean
-
-    startup?: boolean
-}
-
-export type InstallSourceStage =
-
-    | { stage: "output", chunk: ProgramCommandChunk }
-
-    | { stage: "installed", entry: Entry, replaced: boolean }
-
-    | { stage: "startup-enabled" }
-
-    | { stage: "running", process: string }
-
 // Which of a half's own pages a launch asked for.
 //
 // A launch location is rooted in the client half's declared place,
@@ -1419,6 +1315,8 @@ export type Area = "data" | "cache"
 // because that is when the child's pipes are decided, and they cannot be
 // decided twice.
 export interface Watching {
+
+    started?: (process: Process) => void
 
     output: (stream: Stream, text: string) => void
 

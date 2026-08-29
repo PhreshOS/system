@@ -375,6 +375,7 @@ function programSnapshot(entry: Entry) {
     const program = entry.program
 
     return Object.freeze({
+        reference: program.reference,
         identity: program.identity,
         name: program.name,
         version: program.config.version ?? null,
@@ -402,6 +403,7 @@ function processSnapshot(process: Process) {
         name: process.name,
         program: process.program.identity,
         programSnapshot: Object.freeze({
+            reference: owner.reference,
             identity: owner.identity,
             name: owner.name,
             version: owner.version,
@@ -422,6 +424,7 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
         identity: string
         name: string | null
         program: {
+            reference: string
             identity: string
             name: string
             version: string | null
@@ -440,6 +443,7 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
         name: record.name,
         program: record.program.identity,
         programSnapshot: Object.freeze({
+            reference: record.program.reference,
             identity: record.program.identity,
             name: record.program.name,
             version: record.program.version,

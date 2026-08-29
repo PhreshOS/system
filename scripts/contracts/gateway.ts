@@ -19,16 +19,28 @@ const application = {
                 async exit() {}
             },
             programManager: {
-                async *installSource(program: { identity: string, name: string, version: string }) {
-                    yield {
-                        stage: "installed",
-                        replaced: false,
-                        entry: {
-                            identity: program.identity,
-                            program: { name: program.name, config: { version: program.version } }
+                async forceCreate() { return { identity: "example" } },
+                find() {
+                    return {
+                        record() {
+                            return {
+                                reference: "example-reference",
+                                identity: "example",
+                                name: "Example",
+                                version: "1.0.0",
+                                description: null,
+                                hasAgent: false,
+                                server: null,
+                                client: { start: true }
+                            }
                         }
                     }
-                }
+                },
+                held(handle: { identity?: string, reference?: string }) {
+                    assert.deepEqual(handle, { identity: "example", reference: "example-reference" })
+                    return { identity: "example" }
+                },
+                async *installStreaming() {}
             }
         }
     }
@@ -41,15 +53,33 @@ try {
 
     assert.deepEqual(system, [{ success: true, result: { received: { capability: "program", operation: "list", input: {} } } }])
 
-    const program = await exchange(path, {
+    const created = await exchange(path, {
         target: "program",
-        request: { word: "install", program: { identity: "example", name: "Example", version: "1.0.0" } }
+        request: { word: "force-create", program: { identity: "example", storage: "/tmp/example", client: { location: "/tmp/client" } } }
     })
 
-    assert.deepEqual(program, [{
+    assert.deepEqual(created, [{
+        event: "created",
+        program: {
+            reference: "example-reference",
+            identity: "example",
+            name: "Example",
+            version: "1.0.0",
+            description: null,
+            hasAgent: false,
+            server: null,
+            client: { start: true }
+        }
+    }])
+
+    const installed = await exchange(path, {
+        target: "program",
+        request: { word: "install-existing", handle: { identity: "example", reference: "example-reference" } }
+    })
+
+    assert.deepEqual(installed, [{
         event: "installed",
-        replaced: false,
-        program: { identity: "example", name: "Example", version: "1.0.0" }
+        identity: "example"
     }])
 } finally {
     await server.close()

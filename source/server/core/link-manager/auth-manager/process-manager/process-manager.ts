@@ -1477,6 +1477,17 @@ export default class ProcessManager extends TheLink {
             return [programManager.find(created.identity)]
         }
 
+        if (word === "host-program-force-create") {
+
+            const source = rest[0]
+
+            if (typeof source !== "string" && (typeof source !== "object" || source === null)) throw new Error("A program is created from a config or a path")
+
+            const created = await programManager.forceCreate(source as Parameters<typeof programManager.forceCreate>[0], process.identity)
+
+            return [programManager.find(created.identity)]
+        }
+
         if (word === "appearance") return [this.authManager.linkManager.appearance.value]
 
         if (word === "update-appearance") {
@@ -2070,8 +2081,10 @@ export default class ProcessManager extends TheLink {
     private async endHostStream(process: Process, question: string, args: unknown[]) {
 
         let active = true
+        let cancel = () => { active = false }
+        const programManager = this.authManager.programManager
 
-        process.server?.retain(question, () => { active = false })
+        process.server?.retain(question, () => cancel())
 
         await this.say(process.server, "host-end", "stream", question, "open")
 
@@ -2079,6 +2092,59 @@ export default class ProcessManager extends TheLink {
 
             const operation = args[0]
             const program = this.heldProgram(args[1])
+
+            if (operation === "run") {
+
+                let running: Process | null = null
+                let settled = false
+                let finish!: () => void
+                const completion = new Promise<void>(resolve => { finish = resolve })
+                let sending = Promise.resolve()
+                const emit = (value: unknown) => {
+
+                    if (!active) return
+
+                    sending = sending.then(() => this.say(process.server, "host-end", "stream", question, "data", value))
+                }
+
+                cancel = () => {
+
+                    active = false
+
+                    if (running) this.exit(running.identity).catch(() => undefined)
+                }
+
+                const identity = await programManager.runProcess(program, args[2] as Launch ?? {}, {
+                    started: created => {
+
+                        running = created
+                        emit({ event: "started", process: processReference(created) })
+                    },
+                    output: (stream, text) => emit({ event: "output", stream: stream === "err" ? "stderr" : "stdout", text }),
+                    exited: (code, signal) => {
+
+                        if (settled) return
+
+                        settled = true
+                        emit({
+                            event: "exited",
+                            process: running && processReference(running),
+                            exit: { status: signal ? "signaled" : "exited", code, signal }
+                        })
+                        finish()
+                    }
+                }, process)
+
+                if (!active) await this.exit(identity)
+
+                await completion
+                await sending
+
+                if (active) await this.say(process.server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
             const stream = operation === "install"
                 ? this.authManager.programManager.installStreaming(program, process.identity)
                 : operation === "uninstall"

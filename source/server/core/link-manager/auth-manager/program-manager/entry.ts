@@ -11,11 +11,16 @@ export default class Entry {
 
     public installed: boolean
 
-    public constructor(program: Program, installed = true) {
+    /** Restore the durable installed Program when this runtime overlay ends. */
+    public restoreInstalled: boolean
+
+    public constructor(program: Program, installed = true, restoreInstalled = false) {
 
         this.program = program
 
         this.installed = installed
+
+        this.restoreInstalled = restoreInstalled
     }
 
     public get identity() {
