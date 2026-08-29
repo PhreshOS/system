@@ -1,7 +1,7 @@
-import { ComponentProps, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
+import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -13,7 +13,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
     const id = useId()
 
-    const surface = useRef<HTMLElement>(null)
+    const surface = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
 
@@ -70,7 +70,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         </TaskbarButton>
 
-        <section
+        <TaskbarSurface
 
             {...props}
 
@@ -83,6 +83,12 @@ export default function ({ label, trigger, children, className, style, ...props 
             popover="auto"
 
             aria-labelledby={`${id}-label`}
+
+            label={label}
+
+            labelId={`${id}-label`}
+
+            contentClassName=""
 
             tabIndex={-1}
 
@@ -116,22 +122,18 @@ export default function ({ label, trigger, children, className, style, ...props 
 
         >
 
-            <TaskbarSurface label={label} labelId={`${id}-label`} contentClassName="">
+            <Surface opacity="small" className="min-h-0 max-h-[inherit] rounded-[inherit]">
 
-                <Surface opacity="small" className="min-h-0 max-h-[inherit] rounded-[inherit]">
+                {children(close)}
 
-                    {children(close)}
+            </Surface>
 
-                </Surface>
-
-            </TaskbarSurface>
-
-        </section>
+        </TaskbarSurface>
 
     </>
 }
 
-export interface LauncherProps extends Omit<ComponentProps<"section">, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
+export interface LauncherProps extends Omit<SurfaceProps, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
 
     label: string
 
