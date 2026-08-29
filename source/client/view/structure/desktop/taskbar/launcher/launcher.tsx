@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface, useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
+import { Surface, useAppearance, useColor, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -9,7 +9,7 @@ import TaskbarButton from "../taskbar-button"
  * A button and the dismissible surface it opens. Placement, contents and
  * what selecting an item means belong to the caller.
  */
-export default function ({ label, trigger, children, surfaceClassName, className, style, ...props }: LauncherProps) {
+export default function ({ label, trigger, children, className, style, ...props }: LauncherProps) {
 
     const id = useId()
 
@@ -17,7 +17,11 @@ export default function ({ label, trigger, children, surfaceClassName, className
 
     const reducedMotion = useReducedMotion()
 
-    const radius = useScale(useResolveTheme(useAppearance().radius)).large
+    const appearance = useAppearance()
+
+    const foreground = useColor(useResolveTheme(appearance.foreground))
+
+    const radius = useScale(useResolveTheme(appearance.radius)).large
 
     const [open, setOpen] = useState(false)
 
@@ -94,7 +98,7 @@ export default function ({ label, trigger, children, surfaceClassName, className
 
             style={{ ...style, borderRadius: radius }}
 
-            className={`${taskbarSurfaceClassName} hidden open:block ${surfaceClassName ?? ""} ${className ?? ""}`}
+            className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
 
             onBeforeToggle={event => {
 
@@ -122,7 +126,7 @@ export default function ({ label, trigger, children, surfaceClassName, className
 
         >
 
-            <Surface opacity="small" className={`min-h-0 max-h-[inherit] rounded-[inherit] ${surfaceClassName ?? ""}`}>
+            <Surface opacity="small" className="min-h-0 max-h-[inherit] rounded-[inherit]" style={{ borderColor: foreground.subtle }}>
 
                 {children(close)}
 
@@ -138,8 +142,6 @@ export interface LauncherProps extends Omit<SurfaceProps, "children" | "id" | "o
     label: string
 
     trigger: ReactNode
-
-    surfaceClassName?: string
 
     children: (close: () => void) => ReactNode
 }

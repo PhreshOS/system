@@ -39,11 +39,6 @@
 
 }
 
-.border-light-foreground {
-
-    border-color: color-mix(in oklch, currentColor 25%, white) !important;
-}
-
 [data-start-menu-scroll] {
 
     scrollbar-color: color-mix(in oklch, currentColor 28%, transparent) transparent;
