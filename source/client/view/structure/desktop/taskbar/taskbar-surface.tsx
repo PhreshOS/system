@@ -4,7 +4,7 @@ import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/rea
 /** The window-material shell shared by surfaces opened from the taskbar. */
 export const taskbarSurfaceClassName = "m-0 isolate border-0 bg-transparent p-0 shadow-window-active outline-none"
 
-export default function TaskbarSurface({ label, labelId, children }: TaskbarSurfaceProps) {
+export default function TaskbarSurface({ label, labelId, contentClassName = "bg-white/25 shadow-window-content", children }: TaskbarSurfaceProps) {
 
     const contentRadius = useScale(useResolveTheme(useAppearance().radius)).medium
 
@@ -12,7 +12,7 @@ export default function TaskbarSurface({ label, labelId, children }: TaskbarSurf
 
         <h2 id={labelId} className="relative grid h-10 items-center px-3.5 text-window-title font-medium select-none">{label}</h2>
 
-        <div style={{ borderRadius: contentRadius }} className="relative m-1.5 mt-0 min-h-0 overflow-hidden bg-white/25 shadow-window-content">
+        <div style={{ borderRadius: contentRadius }} className={`relative m-1.5 mt-0 min-h-0 overflow-hidden ${contentClassName}`}>
 
             {children}
 
@@ -26,6 +26,8 @@ interface TaskbarSurfaceProps {
     label: string
 
     labelId: string
+
+    contentClassName?: string
 
     children: ReactNode
 }
