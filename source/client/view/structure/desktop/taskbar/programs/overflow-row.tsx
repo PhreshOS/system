@@ -83,7 +83,7 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
         {edges.overflowing && <ScrollButton label={backwardLabel} controls={viewportId} direction="backward" disabled={edges.start} reducedMotion={reducedMotion} onClick={() => scroll(-1)} />}
 
-        <div id={viewportId} ref={viewport} className="-m-2 min-w-0 flex-1 overflow-x-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div id={viewportId} ref={viewport} className="-m-2 min-w-0 flex-1 overflow-x-auto p-2">
 
             <div ref={content} className="flex w-max min-w-full items-center gap-1.5">
 

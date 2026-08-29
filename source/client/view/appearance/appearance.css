@@ -38,26 +38,3 @@
     --shadow-window-content: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
 
 }
-
-[data-start-menu-scroll] {
-
-    scrollbar-color: color-mix(in oklch, currentColor 28%, transparent) transparent;
-
-    scrollbar-width: thin;
-}
-
-[data-start-menu-scroll]::-webkit-scrollbar {
-
-    width: 0.5rem;
-}
-
-[data-start-menu-scroll]::-webkit-scrollbar-thumb {
-
-    background: color-mix(in oklch, currentColor 28%, transparent);
-
-    background-clip: padding-box;
-
-    border: 0.125rem solid transparent;
-
-    border-radius: 999px;
-}
