@@ -1,8 +1,10 @@
-import bundledWallpaper from "@/assets/bundled/wallpaper.jpg"
+import darkWallpaper from "@/assets/bundled/dark-wallpaper.png"
+import lightWallpaper from "@/assets/bundled/light-wallpaper.png"
 import { ApplicationContext } from "../../../contexts"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Loading from "../../../components/loading"
 import { useReady } from "@libs/readiness/main"
+import { useTheme } from "@phreshos/react-ui"
 
 type WallpaperSource = Readonly<{
     key: string
@@ -12,22 +14,28 @@ type WallpaperSource = Readonly<{
 /**
  * Displays only a completely loaded wallpaper source.
  *
- * A filename asks for a served image and `null` selects the bundled wallpaper.
- * The previous loaded source stays visible until its replacement is ready.
+ * A filename asks for a served image and `null` selects the effective Theme's
+ * bundled wallpaper. The previous loaded source stays visible until its
+ * replacement is ready.
  */
 export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps) {
 
     const application = ApplicationContext.useValue()
 
+    const theme = useTheme()
+
     const desired = useMemo<WallpaperSource>(() => {
         return file === null
-            ? { key: "bundled", source: bundledWallpaper }
+            ? {
+                key: `bundled:${theme}`,
+                source: theme === "dark" ? darkWallpaper : lightWallpaper
+            }
             : {
                 key: `file:${file}`,
                 source: `${application.doors.uploads}/${encodeURIComponent(file)}`
             }
 
-    }, [application.doors.uploads, file])
+    }, [application.doors.uploads, file, theme])
 
     const [displayed, setDisplayed] = useState<WallpaperSource | null>(null)
     const [previous, setPrevious] = useState<WallpaperSource | null>(null)
