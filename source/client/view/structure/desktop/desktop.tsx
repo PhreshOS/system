@@ -17,7 +17,7 @@ import useWindows from "../../components/window-manager/window-manager"
 import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness/main"
-import { useAppearance, useResolveTheme } from "@phreshos/react-ui"
+import { useAppearance, useResolveTheme, useTheme } from "@phreshos/react-ui"
 
 export default function Workspace() {
 
@@ -26,6 +26,8 @@ export default function Workspace() {
     const authManager = AuthManagerContext.useValue()
 
     const desktopWallpaper = useResolveTheme(useAppearance().desktopWallpaper)
+
+    const theme = useTheme()
 
     const windows = useWindows(authManager)
 
@@ -139,6 +141,8 @@ export default function Workspace() {
             door={application.doors.program}
 
             programAccess={programAccess}
+
+            theme={theme}
 
             onFrame={frame}
 

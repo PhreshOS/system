@@ -4,7 +4,7 @@ import { type WindowSurfaceSize } from "../../../components/window-manager/windo
 import { type LocalAnimation, type LocalSurfaceState } from "../../../components/desktop-host/local-window"
 import { type LocalGeometryReader } from "../../../components/window-manager/local-windows"
 import { type ProgramAccess } from "../../../components/program-access"
-import { type Position, type Size } from "@phreshos/core"
+import { type Position, type Size, type Theme } from "@phreshos/core"
 import Spinner from "../../../components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "../../../components/program-frame"
@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -161,6 +161,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
             access={programAccess}
 
+            theme={theme}
+
             className={`size-full border-0 ${frameLoading ? "opacity-0" : ""}`}
 
             onFrame={onFrame}
@@ -244,6 +246,8 @@ interface ProcessWindowProps {
     door: string
 
     programAccess: ProgramAccess
+
+    theme: Theme
 
     onFrame: (identity: string, element: HTMLIFrameElement | null) => void
 
