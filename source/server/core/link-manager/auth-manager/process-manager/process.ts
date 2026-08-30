@@ -266,7 +266,7 @@ export default class Process {
     }
 
     // The process value every road carries. Parentage is deliberately
-    // absent: it is asked through `current.parent()`, so a client gate
+    // absent: it is asked through `context.parent()`, so a client gate
     // can hide a cross-program parent without first exposing it here.
     public record() {
 

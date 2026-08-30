@@ -426,9 +426,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         }
 
         // What a launch said. An explicit subject is a held sibling; the
-        // empty subject used by `current.option()` is this frame's Process.
+        // empty subject used by `context.option()` is this frame's Process.
         // The latter is resolved here rather than named by program code,
-        // exactly like every other `current` operation on this side.
+        // exactly like every other `context` operation on this side.
         if (word === "option") {
 
             const found = args[0] === undefined ? process() : scope.sibling(args[0])

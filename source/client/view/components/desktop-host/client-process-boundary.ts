@@ -155,8 +155,8 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        // The SDK reconstructs `current` from this boundary's own Process so
-        // `current.server` is the exact handle at `current.process().server`.
+        // The SDK reconstructs `context` from this boundary's own Process so
+        // `context.server` is the exact handle at `context.process().server`.
         // A module may request that essential self-description before its
         // document reaches the iframe load event that establishes a forwarding
         // lease. It is safe to answer here: this boundary already owns `pane`,
