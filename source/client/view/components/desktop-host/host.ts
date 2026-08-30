@@ -183,7 +183,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (typeof subscription !== "string" || !isServiceKey(key)) return []
 
-            if (scope !== "lifecycle" && scope !== "channel") return []
+            if (scope !== "lifecycle" && scope !== "events") return []
 
             if (event !== null && typeof event !== "string") return []
 

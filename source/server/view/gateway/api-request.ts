@@ -84,7 +84,7 @@ function number(value: unknown) {
 
 function waitForService(manager: ReturnType<typeof processes>, key: unknown, scope: string, event: string | null, signal: AbortSignal) {
 
-    if (scope !== "lifecycle" && scope !== "channel") throw new Error("A Service wait scope must be lifecycle or channel")
+    if (scope !== "lifecycle" && scope !== "events") throw new Error("A Service wait scope must be lifecycle or events")
 
     return new Promise((resolve, reject) => {
 

@@ -82,7 +82,7 @@ export default class ClientProcessForwarder {
         this.observations.delete(subscription)
     }
 
-    /** Retain one live inbound Channel publication interest for this exact client lease. */
+    /** Retains one live inbound Context publication interest for this exact client lease. */
     public subscribe(subscription: string, event: string | null) {
 
         this.subscriptions.set(subscription, event)

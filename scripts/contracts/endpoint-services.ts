@@ -73,7 +73,7 @@ assert.deepEqual(lateLifecycle, [])
 await assert.rejects(() => services.enable(provider, "server", "other"), /already exposes/)
 await assert.rejects(() => services.enable(conflicting, "server", "counter"), /already enabled/)
 
-services.follow(key, "channel", "change", (_event, payload) => publications.push(payload))
+services.follow(key, "events", "change", (_event, payload) => publications.push(payload))
 
 await services.emit(provider, "server", "ignored", 1)
 await services.emit(provider, "server", "change", 2)

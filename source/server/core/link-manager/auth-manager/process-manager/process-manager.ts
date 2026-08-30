@@ -255,7 +255,7 @@ export default class ProcessManager extends TheLink {
         return this.askFromOutside(binding.process.identity, event, payload, timeout, signal)
     }
 
-    public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "channel", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
+    public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
 
         return this.services.follow(key, scope, event, subscriber)
     }
@@ -1346,7 +1346,7 @@ export default class ProcessManager extends TheLink {
 
         if (boundary?.owner !== owner || typeof subscription !== "string" || !isServiceKey(key)) return
 
-        if (scope !== "lifecycle" && scope !== "channel") return
+        if (scope !== "lifecycle" && scope !== "events") return
 
         if (event !== null && typeof event !== "string") return
 
@@ -1747,7 +1747,7 @@ export default class ProcessManager extends TheLink {
 
             if (typeof subscription !== "string" || !isServiceKey(key)) return []
 
-            if (scope !== "lifecycle" && scope !== "channel") return []
+            if (scope !== "lifecycle" && scope !== "events") return []
 
             if (event !== null && typeof event !== "string") return []
 

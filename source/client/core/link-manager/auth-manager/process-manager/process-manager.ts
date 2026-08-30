@@ -83,7 +83,7 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/emit", source, event, payload)
     }
 
-    /** Changes the service exposed by the structurally identified Client Channel. */
+    /** Changes the service exposed by the structurally identified Client Context. */
     public async enableService(source: string, definition: unknown) {
 
         await this.$outbound.publishFirst("/service/enable", source, definition)
@@ -157,7 +157,7 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/frame/release", pane, owner)
     }
 
-    /** Register one live Channel interest for this exact frame document. */
+    /** Registers one live Context interest for this exact frame document. */
     public subscribeFrame(pane: string, owner: string, subscription: string, kind: TrafficKind, event: string | null) {
 
         return this.$outbound.publish("/frame/subscribe", pane, owner, subscription, kind, event)

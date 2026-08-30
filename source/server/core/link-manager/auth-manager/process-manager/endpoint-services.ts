@@ -126,14 +126,14 @@ export default class EndpointServices extends TheLink {
 
         if (!key) return Promise.resolve([])
 
-        return this.$inbound.publish(this.event(key, "channel", event), event, payload)
+        return this.$inbound.publish(this.event(key, "events", event), event, payload)
     }
 
     public follow(key: unknown, scope: Scope, event: string | null, subscriber: Subscriber) {
 
         const resolved = this.key(key)
 
-        if (scope !== "lifecycle" && scope !== "channel") throw new Error("A service subscription scope is invalid")
+        if (scope !== "lifecycle" && scope !== "events") throw new Error("A service subscription scope is invalid")
 
         const prefix = this.prefix(resolved, scope)
 
@@ -205,7 +205,7 @@ export type ServiceScope = Scope
 
 export type ServiceBinding = Binding
 
-type Scope = "lifecycle" | "channel"
+type Scope = "lifecycle" | "events"
 
 type Binding = Readonly<{
 
