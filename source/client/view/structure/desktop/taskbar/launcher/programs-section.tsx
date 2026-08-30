@@ -1,10 +1,10 @@
 import LauncherItem from "./launcher-item"
 import programIcon from "../../programs/program-icon"
 import usePrograms from "../../programs/programs"
-import { ApplicationContext } from "../../../../contexts"
+import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"
-import Alert from "../../../../components/alert"
+import Alert from "@client/view/components/alert"
 
 interface ProgramsSectionProps {
 

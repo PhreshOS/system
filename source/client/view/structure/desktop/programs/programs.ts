@@ -1,5 +1,5 @@
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
-import { AuthManagerContext } from "../../../contexts"
+import { AuthManagerContext } from "@client/view/contexts"
 
 /**
  * The authorized view's programs: the list the peer re-emits on its

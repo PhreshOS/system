@@ -1,5 +1,5 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
 
 const control = {
     base: { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 },

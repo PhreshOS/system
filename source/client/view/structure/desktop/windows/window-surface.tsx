@@ -1,8 +1,8 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef } from "react"
-import { type LocalSurfaceState } from "../../../components/desktop-host/local-window"
-import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
+import { type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
+import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
 
 const paintSelector = "[data-surface-backdrop], [data-surface-border], [data-surface-material]"
 

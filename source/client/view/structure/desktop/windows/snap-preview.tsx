@@ -1,6 +1,6 @@
 import { type CSSProperties, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionDuration, motionDurations, motionEase } from "../../../appearance/motion"
-import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "../../../components/window-manager/window-geometry"
+import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
+import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
 import { Surface } from "@phreshos/react-ui"

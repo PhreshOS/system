@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
+import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"

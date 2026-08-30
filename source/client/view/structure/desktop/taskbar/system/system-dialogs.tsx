@@ -1,14 +1,14 @@
 import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } from "@server/core/dialog-manager"
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../../../appearance/surface-presence"
+import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { useEffect, useId, useRef } from "react"
-import { AuthManagerContext } from "../../../../contexts"
+import { AuthManagerContext } from "@client/view/contexts"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 import usePromise from "@libs/react-promise"
-import Alert from "../../../../components/alert"
+import Alert from "@client/view/components/alert"
 
 /** Taskbar-owned presentation of the system's authoritative dialog queue. */
 export default function SystemDialogs() {
