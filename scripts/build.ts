@@ -1,7 +1,10 @@
 import { externalDependencies } from "@/vite.config"
 import { rm, writeFile } from "node:fs/promises"
 import packageConfig from "@/package.json"
-import { build } from "vite"
+
+process.env.NODE_ENV = "production"
+
+const { build } = await import("vite")
 
 const dependencies: Partial<typeof packageConfig.dependencies> = {}
 
