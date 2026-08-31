@@ -11,8 +11,8 @@ import AuthManager from "../auth-manager"
 import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
-import { isValue, layers, type Layer, type Position, type ProgramConfig, type Size } from "./config"
-import { type PermissionName, type ProgramCommandChunk } from "@phreshos/core"
+import { isValue, layers, type ProgramConfig } from "./config"
+import { type ClientLaunch, type Launch, type PermissionName, type ProgramCommandChunk } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
@@ -1056,17 +1056,24 @@ export default class ProgramManager extends TheLink {
 
         const options = Object.fromEntries(Object.entries(suppliedOptions).sort(([left], [right]) => left.localeCompare(right)))
 
-        if (launch.server !== undefined && typeof launch.server !== "boolean") throw new Error("A launch's server must be true or false")
+        if (launch.server !== undefined && typeof launch.server !== "boolean" && (typeof launch.server !== "object" || launch.server === null || Array.isArray(launch.server))) throw new Error("A launch's server must be true, false, or a server shape")
 
         if (launch.client !== undefined && typeof launch.client !== "boolean" && (typeof launch.client !== "object" || launch.client === null || Array.isArray(launch.client))) throw new Error("A launch's client must be true, false, or a client shape")
 
-        const asked = typeof launch.client === "object" ? launch.client : {}
+        const askedServer = typeof launch.server === "object" ? launch.server : {}
+        const askedClient = typeof launch.client === "object" ? launch.client : {}
 
-        if (launch.server === true && !program.server) throw new Error("This program declared no server half — a launch cannot add one")
+        if (askedServer.service !== undefined && typeof askedServer.service !== "boolean") throw new Error("A launch server's service role must be true or false")
+
+        if (askedClient.service !== undefined && typeof askedClient.service !== "boolean") throw new Error("A launch client's service role must be true or false")
+
+        if ((launch.server === true || typeof launch.server === "object") && !program.server) throw new Error("This program declared no server half — a launch cannot add one")
 
         if ((launch.client === true || typeof launch.client === "object") && !program.client) throw new Error("This program declared no client half — a launch cannot add one")
 
-        const server = program.server && (launch.server ?? program.server.start) ? program.server : null
+        const serverSelected = typeof launch.server === "object" || (launch.server ?? program.server?.start ?? false)
+
+        const server = program.server && serverSelected ? program.server : null
 
         const clientSelected = typeof launch.client === "object" || (launch.client ?? program.client?.start ?? false)
 
@@ -1077,19 +1084,21 @@ export default class ProgramManager extends TheLink {
         // Resolving the Window here validates the same launch grammar even when
         // the launch is being stored for a later boot. Only the original launch
         // is persisted; system defaults are derived again when it actually runs.
-        const shape = client ? this.clientShape(program, asked) : null
+        const shape = client ? this.clientShape(program, askedClient) : null
 
         const intent: ProcessLaunch = {
 
-            server: server !== null,
+            server: server ? { service: askedServer.service ?? server.service ?? false } : null,
 
             client: shape ? {
 
                 ...shape,
 
-                position: asked.position ?? program.client?.position ?? null,
+                service: askedClient.service ?? client?.service ?? false,
 
-                size: asked.size ?? program.client?.size ?? null
+                position: askedClient.position ?? program.client?.position ?? null,
+
+                size: askedClient.size ?? program.client?.size ?? null
             } : null,
 
             options
@@ -1184,13 +1193,15 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Resolves and validates one client endpoint incarnation. */
-    public clientShape(program: Program, asked: LaunchClient = {}): StandardShape {
+    public clientShape(program: Program, asked: ClientLaunch = {}): StandardShape {
 
         const client = program.client
 
         if (!client) throw new Error("This program declared no client half")
 
         if (typeof asked !== "object" || asked === null || Array.isArray(asked)) throw new Error("A client launch must be a named shape")
+
+        if (asked.service !== undefined && typeof asked.service !== "boolean") throw new Error("A launch client's service role must be true or false")
 
         if (asked.title !== undefined && typeof asked.title !== "string") throw new Error("A launch client's title must be text")
 
@@ -1265,46 +1276,6 @@ function page(said: string | undefined, fallback: string) {
 // an option must mean one thing however the process was started, and
 // the command line can only hand over text.
 export type Options = Record<string, string>
-
-// What a launch says in named parts: which declared halves this process
-// has, what it is told, and how this one instance is shown. Ordered
-// arguments would have been invisible at the place they are written,
-// and two anonymous bags in a row is the shape that grows a third.
-export interface Launch {
-
-    // Optional and unique among this program's living processes. It is
-    // a meaningful address; the process identity remains random.
-    name?: string
-
-    // Omitted uses the declaration's default. True starts the declared server
-    // endpoint; false leaves it stopped. Neither can declare a new endpoint.
-    server?: boolean
-
-    // An object starts the declared client endpoint and resolves its Window.
-    client?: boolean | LaunchClient
-
-    options?: Options
-}
-
-// The declaration's own words, all optional, overriding one Process's initial
-// or restarted client endpoint. Not `location` as a place to serve from — the declared
-// client root stays fixed — but as which page beneath it the frame
-// opens on. And not `icon`, which is the program's identity rather
-// than a fact about a launch.
-export interface LaunchClient {
-
-    title?: string
-
-    size?: Size
-
-    position?: Position
-
-    layer?: Layer
-
-    location?: string
-
-    minimize?: boolean
-}
 
 // The two places a program keeps things. One survives an update and one
 // may be emptied at any moment; both are the program's, shared by every

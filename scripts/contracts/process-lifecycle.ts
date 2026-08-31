@@ -7,7 +7,7 @@ import type Process from "@server/core/link-manager/auth-manager/process-manager
 import type ServerProcessBoundary from "@server/core/link-manager/auth-manager/process-manager/server-process-boundary"
 import type { ServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
 
-const launch = { server: false, client: null, options: {} } as const
+const launch = { server: null, client: null, options: {} } as const
 
 function processManager() {
 
@@ -64,7 +64,7 @@ async function register(manager: ProcessManager, identity: string) {
         null,
         client,
         {},
-        { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", location: "/", minimize: false } },
+        { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", location: "/", minimize: false, service: false } },
         null,
         true,
         { title: "Partial", position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", location: "/", minimize: false },

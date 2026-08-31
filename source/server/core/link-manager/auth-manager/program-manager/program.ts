@@ -98,7 +98,8 @@ export default class Program {
 
         return this.config.server ? {
             ...this.config.server,
-            start: this.config.server.start ?? true
+            start: this.config.server.start ?? true,
+            service: this.config.server.service ?? false
         } : null
     }
 
@@ -106,7 +107,8 @@ export default class Program {
 
         return this.config.client ? {
             ...this.config.client,
-            start: this.config.client.start ?? true
+            start: this.config.client.start ?? true,
+            service: this.config.client.service ?? false
         } : null
     }
 
@@ -220,12 +222,16 @@ export default class Program {
 
             server: server && {
 
-                start: server.start
+                start: server.start,
+
+                service: server.service
             },
 
             client: client && {
 
                 start: client.start,
+
+                service: client.service,
 
                 title: client.title ?? null,
 
@@ -361,6 +367,8 @@ function coherent(config: ProgramConfig) {
 
         if (declared.start !== undefined && typeof declared.start !== "boolean") throw new Error(`A declared ${half} endpoint's start default must be true or false`)
 
+        if (declared.service !== undefined && typeof declared.service !== "boolean") throw new Error(`A declared ${half} endpoint's service default must be true or false`)
+
     }
 
     if (config.client && /^https?:\/\//i.test(config.client.location)) {
@@ -401,7 +409,9 @@ function coherent(config: ProgramConfig) {
     return config
 }
 
-type Resolved<Half extends { start?: boolean }> = Half extends unknown ? Omit<Half, "start"> & { start: boolean } : never
+type Resolved<Half extends { start?: boolean, service?: boolean }> = Half extends unknown
+    ? Omit<Half, "start" | "service"> & { start: boolean, service: boolean }
+    : never
 
 function execution(server: { startCommand?: unknown, entryFile?: unknown }) {
 

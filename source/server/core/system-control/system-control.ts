@@ -169,8 +169,10 @@ export default class SystemControl {
         if (operation === "start" || operation === "stop") {
 
             if (operation === "start") {
-                if (input.endpoint === "server") await this.processes.startServer(process.identity)
-                else await this.processes.startClient(process.identity, (input as EndpointStartInput).client)
+                const request = input as EndpointStartInput
+
+                if (request.endpoint === "server") await this.processes.startServer(process.identity, request.launch)
+                else await this.processes.startClient(process.identity, request.launch)
             } else {
                 if (input.endpoint === "server") await this.processes.stopServer(process.identity)
                 else await this.processes.stopClient(process.identity)
@@ -398,9 +400,10 @@ function programSnapshot(entry: Entry) {
         description: program.config.description ?? null,
         installed: entry.installed,
         hasAgent: program.agentPath !== null,
-        server: program.server ? Object.freeze({ start: program.server.start }) : null,
+        server: program.server ? Object.freeze({ start: program.server.start, service: program.server.service }) : null,
         client: program.client ? Object.freeze({
             start: program.client.start,
+            service: program.client.service,
             title: program.client.title ?? null,
             size: program.client.size ?? null,
             position: program.client.position ?? null,
@@ -430,8 +433,8 @@ function processSnapshot(process: Process) {
             client: owner.client
         }),
         startedAt: process.startedAt.toISOString(),
-        server: Object.freeze({ declared: process.program.server !== null, running: process.server !== null }),
-        client: Object.freeze({ declared: process.program.client !== null, running: process.client !== null })
+        server: Object.freeze({ declared: process.program.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
+        client: Object.freeze({ declared: process.program.client !== null, running: process.client !== null, service: process.client?.service ?? false })
     })
 }
 
@@ -451,8 +454,8 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
             client: unknown
         }
         startedAt: Date | string
-        server: unknown
-        client: unknown
+        server: { service: boolean } | null
+        client: { service: boolean } | null
     }
 
     return Object.freeze({
@@ -471,8 +474,8 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
             client: record.program.client
         }),
         startedAt: new Date(record.startedAt).toISOString(),
-        server: Object.freeze({ declared: record.program.server !== null, running: record.server !== null }),
-        client: Object.freeze({ declared: record.program.client !== null, running: record.client !== null })
+        server: Object.freeze({ declared: record.program.server !== null, running: record.server !== null, service: record.server?.service ?? false }),
+        client: Object.freeze({ declared: record.program.client !== null, running: record.client !== null, service: record.client?.service ?? false })
     })
 }
 
@@ -483,7 +486,8 @@ function endpointSnapshot(process: Process, endpoint: "server" | "client") {
         program: process.program.identity,
         endpoint,
         declared: process.program[endpoint] !== null,
-        running: process[endpoint] !== null
+        running: process[endpoint] !== null,
+        service: process[endpoint]?.service ?? false
     })
 }
 

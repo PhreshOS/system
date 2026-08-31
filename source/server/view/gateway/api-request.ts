@@ -25,14 +25,14 @@ export default async function apiRequest(application: Application, value: unknow
         throw new Error(`The Uploads API does not know "${String(request.operation)}"`)
     }
 
-    if (request.capability === "endpoint" && request.operation === "service") {
+    if (request.capability === "endpoint" && request.operation === "isService") {
 
         if (typeof request.process !== "string" || request.endpoint !== "server" && request.endpoint !== "client") {
 
-            throw new Error("Reading an Endpoint Service needs a Process and Endpoint")
+            throw new Error("Reading an Endpoint service role needs a Process and Endpoint")
         }
 
-        return processes(application).serviceFromOutside(request.process, request.endpoint)
+        return processes(application).endpointIsServiceFromOutside(request.process, request.endpoint)
     }
 
     if (request.capability === "endpoint" && request.operation === "wait") {
@@ -51,7 +51,7 @@ export default async function apiRequest(application: Application, value: unknow
         const manager = processes(application)
         const key = request.key
 
-        if (request.operation === "enabled") return manager.serviceEnabledFromOutside(key)
+        if (request.operation === "exists") return manager.serviceExistsFromOutside(key)
         if (request.operation === "waitReady") return await manager.waitServiceReadyFromOutside(key, number(request.timeout))
 
         if (request.operation === "publish" || request.operation === "ask") {

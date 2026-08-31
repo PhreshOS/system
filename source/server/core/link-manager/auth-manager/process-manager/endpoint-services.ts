@@ -1,98 +1,33 @@
 import { isServiceKey, type ServiceKey } from "@phreshos/core"
 import TheLink from "@libs/the-link/the-link"
-import { createHash } from "node:crypto"
 import type Process from "./process"
 import type { Half } from "./process-traffic"
 
-/**
- * Authoritative runtime bindings for explicitly named public Endpoint services.
- *
- * A key survives absence conceptually, but a binding never does: it points to
- * one live Endpoint incarnation and is removed with that incarnation. Routes
- * retain no value and deliver only to exact live interests.
- */
+/** Routes live Endpoint services without owning their lifecycle or state. */
 export default class EndpointServices extends TheLink {
 
-    private readonly bindings = new Map<string, Binding>()
+    public constructor(private readonly resolve: (key: ServiceKey) => ServiceTarget | null) {
 
-    private readonly owners = new Map<string, string>()
-
-    public async enable(process: Process, endpoint: Half, value: unknown) {
-
-        const name = this.name(value)
-
-        if (!this.live(process, endpoint)) throw new Error(`The ${endpoint} endpoint is not running`)
-
-        const owner = this.owner(process, endpoint)
-
-        if (this.owners.has(owner)) throw new Error(`The ${endpoint} endpoint already exposes a service`)
-
-        const key = Object.freeze({ program: process.program.identity, endpoint, name }) satisfies ServiceKey
-
-        const identity = this.identity(key)
-
-        if (this.bindings.has(identity)) throw new Error(`The "${name}" ${endpoint} service is already enabled for this Program`)
-
-        this.bindings.set(identity, { key, process, endpoint })
-
-        this.owners.set(owner, identity)
-
-        await this.$inbound.publish(this.event(key, "lifecycle", "enable"), "enable", undefined)
-
-        return key
+        super()
     }
 
-    public async disable(process: Process, endpoint: Half) {
+    public exists(key: unknown) {
 
-        const disabled = await this.release(process, endpoint)
-
-        if (!disabled) throw new Error(`The ${endpoint} endpoint exposes no service`)
-    }
-
-    /** Removes a binding owned by one exact Endpoint without treating absence as an error. */
-    public async release(process: Process, endpoint: Half) {
-
-        const owner = this.owner(process, endpoint)
-
-        const identity = this.owners.get(owner)
-
-        if (!identity) return false
-
-        const binding = this.bindings.get(identity)
-
-        this.owners.delete(owner)
-
-        if (!binding || binding.process !== process || binding.endpoint !== endpoint) return false
-
-        this.bindings.delete(identity)
-
-        await this.$inbound.publish(this.event(binding.key, "lifecycle", "disable"), "disable", undefined)
-
-        return true
-    }
-
-    public service(process: Process, endpoint: Half) {
-
-        const identity = this.owners.get(this.owner(process, endpoint))
-
-        return identity ? this.bindings.get(identity)?.key ?? null : null
-    }
-
-    public enabled(key: unknown) {
-
-        return this.bindings.has(this.identity(this.key(key)))
+        return this.target(key) !== null
     }
 
     public async waitReady(key: unknown, timeout: unknown = 10_000) {
 
         const resolved = this.key(key)
-        const milliseconds = serviceTimeout(timeout)
 
-        if (this.enabled(resolved)) return
+        if (resolved.endpoint !== "server") throw new Error("Only a Server service becomes ready")
+
+        const milliseconds = serviceTimeout(timeout)
 
         await new Promise<void>((resolve, reject) => {
 
             let settled = false
+            let stopReady: () => void = () => undefined
 
             const finish = (complete: () => void) => {
 
@@ -100,33 +35,70 @@ export default class EndpointServices extends TheLink {
 
                 settled = true
                 clearTimeout(timer)
-                stop()
+                stopStart()
+                stopReady()
                 complete()
             }
-            const stop = this.$inbound.subscribe(this.event(resolved, "lifecycle", "enable"), () => finish(resolve))
+
+            const inspect = () => {
+
+                stopReady()
+                stopReady = () => undefined
+
+                const target = this.resolve(resolved)
+
+                if (!target?.process.server) return
+
+                if (target.process.server.ready) return finish(resolve)
+
+                stopReady = target.process.waitReady(() => finish(resolve))
+            }
+
+            const stopStart = this.$inbound.subscribe(this.event(resolved, "lifecycle", "start"), inspect)
             const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), milliseconds)
 
-            if (this.enabled(resolved)) finish(resolve)
+            inspect()
         })
     }
 
-    public binding(key: unknown, endpoint?: Half) {
+    public target(key: unknown, endpoint?: Half) {
 
-        const binding = this.bindings.get(this.identity(this.key(key))) ?? null
+        const resolved = this.key(key)
+        const target = this.resolve(resolved)
 
-        return binding && (!endpoint || binding.endpoint === endpoint) && this.live(binding.process, binding.endpoint)
-            ? binding
-            : null
+        if (!target || endpoint && target.endpoint !== endpoint) return null
+
+        return this.live(target.process, target.endpoint) ? target : null
     }
 
-    /** Mirrors one Endpoint emission into its service route only while enabled. */
-    public emit(process: Process, endpoint: Half, event: string, payload: unknown) {
+    /** Mirrors one service Endpoint emission into its identity and name routes. */
+    public async emit(process: Process, endpoint: Half, event: string, payload: unknown) {
 
-        const key = this.service(process, endpoint)
+        if (!this.configured(process, endpoint)) return []
 
-        if (!key) return Promise.resolve([])
+        return await Promise.all(this.keys(process, endpoint).map(key => (
+            this.$inbound.publish(this.event(key, "events", event), event, payload)
+        )))
+    }
 
-        return this.$inbound.publish(this.event(key, "events", event), event, payload)
+    /** Mirrors one service Endpoint start into its identity and name routes. */
+    public async started(process: Process, endpoint: Half) {
+
+        if (!this.configured(process, endpoint)) return []
+
+        return await Promise.all(this.keys(process, endpoint).map(key => (
+            this.$inbound.publish(this.event(key, "lifecycle", "start"), "start", undefined)
+        )))
+    }
+
+    /** Mirrors one service Endpoint stop into its identity and name routes. */
+    public async stopped(process: Process, endpoint: Half, service: boolean) {
+
+        if (!service) return []
+
+        return await Promise.all(this.keys(process, endpoint).map(key => (
+            this.$inbound.publish(this.event(key, "lifecycle", "stop"), "stop", undefined)
+        )))
     }
 
     public follow(key: unknown, scope: Scope, event: string | null, subscriber: Subscriber) {
@@ -152,11 +124,9 @@ export default class EndpointServices extends TheLink {
         return value
     }
 
-    private name(value: unknown) {
+    private configured(process: Process, endpoint: Half) {
 
-        if (typeof value !== "string" || value.length === 0) throw new Error("A service name must be a non-empty string")
-
-        return value
+        return endpoint === "server" ? process.server?.service === true : process.client?.service === true
     }
 
     private live(process: Process, endpoint: Half) {
@@ -164,31 +134,26 @@ export default class EndpointServices extends TheLink {
         return endpoint === "server" ? process.server !== null : process.client !== null
     }
 
-    private owner(process: Process, endpoint: Half) {
+    private keys(process: Process, endpoint: Half) {
 
-        return `${process.reference}:${endpoint}`
-    }
-
-    /** Stable internal identity of one exact Service coordinate tuple. */
-    public identity(value: unknown) {
-
-        const key = this.key(value)
-
-        return createHash("sha256")
-            .update(JSON.stringify([key.program, key.endpoint, key.name]))
-            .digest("hex")
+        return [
+            Object.freeze({ process: process.identity, endpoint }),
+            Object.freeze({ program: process.program.identity, process: process.identity, endpoint }),
+            ...process.name ? [Object.freeze({ program: process.program.identity, process: process.name, endpoint })] : []
+        ] satisfies ServiceKey[]
     }
 
     private prefix(key: ServiceKey, scope: Scope) {
 
-        return `${encodeURIComponent(key.program)}/${key.endpoint}/${encodeURIComponent(key.name)}/${scope}/`
+        return key.program === undefined
+            ? `process/${encodeURIComponent(key.process)}/${key.endpoint}/${scope}/`
+            : `program/${encodeURIComponent(key.program)}/${encodeURIComponent(key.process)}/${key.endpoint}/${scope}/`
     }
 
     private event(key: ServiceKey, scope: Scope, event: string) {
 
         return this.prefix(key, scope) + encodeURIComponent(event)
     }
-
 }
 
 export function serviceTimeout(value: unknown = 10_000) {
@@ -203,17 +168,11 @@ export function serviceTimeout(value: unknown = 10_000) {
 
 export type ServiceScope = Scope
 
-export type ServiceBinding = Binding
-
-type Scope = "lifecycle" | "events"
-
-type Binding = Readonly<{
-
-    key: ServiceKey
-
+type ServiceTarget = Readonly<{
     process: Process
-
     endpoint: Half
 }>
+
+type Scope = "lifecycle" | "events"
 
 type Subscriber = (event: string, payload: unknown) => unknown

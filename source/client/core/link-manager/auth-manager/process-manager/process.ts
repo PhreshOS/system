@@ -29,7 +29,7 @@ export default class Process {
     public readonly startedAt: Date
 
     // Current live endpoint state mirrored from the authoritative host.
-    public server: { ready: boolean } | null
+    public server: { ready: boolean, service: boolean } | null
 
     public client: ClientState | null
 
@@ -78,9 +78,9 @@ export default class Process {
         await this.processManager.$outbound.publish("/frame/end-end", this.identity, args)
     }
 
-    public serverStarted() {
+    public serverStarted(payload: TransmittedProcess) {
 
-        this.server = { ready: false }
+        if (payload.server) this.server = payload.server
     }
 
     public serverStopped() {
@@ -126,7 +126,7 @@ export interface ProcessRecord {
 
     readonly startedAt: Date
 
-    readonly server: Record<string, never> | null
+    readonly server: { service: boolean } | null
 
-    readonly client: Record<string, never> | null
+    readonly client: { service: boolean } | null
 }

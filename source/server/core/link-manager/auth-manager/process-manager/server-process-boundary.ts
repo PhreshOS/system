@@ -19,6 +19,8 @@ export default class ServerProcessBoundary extends TheLink {
 
     public ready = false
 
+    public readonly service: boolean
+
     private readonly clientDeclared: boolean
 
     private readonly subscriptions = new Map<string, EndpointSubscription>()
@@ -56,11 +58,13 @@ export default class ServerProcessBoundary extends TheLink {
 
     public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
 
-    public constructor(runtime: ServerRuntime, clientDeclared: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
+    public constructor(runtime: ServerRuntime, clientDeclared: boolean, service: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
 
         super()
 
         this.clientDeclared = clientDeclared
+
+        this.service = service
 
         this.runtime = runtime
 

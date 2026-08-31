@@ -6,7 +6,7 @@ import TheLink from "@libs/the-link/the-link"
 import AuthManager from "../auth-manager"
 import Process from "./process"
 import ProcessScope from "./process-scope"
-import { type LaunchClient } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { type ClientLaunch, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isPermissionName, type ServiceKey, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
@@ -83,26 +83,15 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/emit", source, event, payload)
     }
 
-    /** Changes the service exposed by the structurally identified Client Context. */
-    public async enableService(source: string, definition: unknown) {
+    public async endpointIsService(source: string, target: HandleAddress, endpoint: "server" | "client") {
 
-        await this.$outbound.publishFirst("/service/enable", source, definition)
+        return await this.$outbound.publishFirst("/endpoint/is-service", source, target, endpoint) as boolean
     }
 
-    public async disableService(source: string) {
+    /** Reads current Endpoint existence for one exact Service address. */
+    public async serviceExists(key: ServiceKey) {
 
-        await this.$outbound.publishFirst("/service/disable", source)
-    }
-
-    public async endpointService(source: string, target: HandleAddress, endpoint: "server" | "client") {
-
-        return await this.$outbound.publishFirst("/service/current", source, target, endpoint) as ServiceKey | null
-    }
-
-    /** Explicit snapshot for one exact service key. */
-    public async serviceEnabled(key: ServiceKey) {
-
-        return await this.$outbound.publishFirst("/service/enabled", key) as boolean
+        return await this.$outbound.publishFirst("/service/exists", key) as boolean
     }
 
     public async waitServiceReady(key: ServiceKey, timeout: number | undefined) {
@@ -121,7 +110,7 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/frame/service/unfollow", pane, owner, subscription)
     }
 
-    /** Sends to the live Server Endpoint behind one exact service key. */
+    /** Sends to the live Endpoint behind one exact service key. */
     public async sendService(source: string, key: ServiceKey, event: string, payload: unknown) {
 
         await this.$outbound.publish("/service/send", source, key, event, payload)
@@ -200,9 +189,9 @@ export default class ProcessManager extends TheLink {
         return await this.$outbound.publishFirst("/exit-all", program, asker) as string[]
     }
 
-    public async startEndpoint(identity: string, which: "server" | "client", overrides?: LaunchClient) {
+    public async startEndpoint(identity: string, which: "server" | "client", launch?: ServerLaunch | ClientLaunch) {
 
-        await this.$outbound.publish("/endpoint/start", identity, which, overrides)
+        await this.$outbound.publish("/endpoint/start", identity, which, launch)
     }
 
     public async stopEndpoint(identity: string, which: "server" | "client") {
@@ -266,11 +255,11 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/server-start")
     @Publish("/processes", "inbound")
-    protected async serverStartHandle(identity: string | null, _payload: TransmittedProcess | null) {
+    protected async serverStartHandle(identity: string | null, payload: TransmittedProcess | null) {
 
-        if (!identity) return
+        if (!identity || !payload) return
 
-        this.processes.get(identity)?.serverStarted()
+        this.processes.get(identity)?.serverStarted(payload)
 
         return this.list()
     }

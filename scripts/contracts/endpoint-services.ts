@@ -23,89 +23,97 @@ assert.throws(() => new Program({
     server: { location: ".", startCommand: "true" }
 }), /agent documentation/)
 
-function process(reference: string, program = "program") {
-    return {
-        reference,
-        program: { identity: program },
-        server: {},
-        client: {}
-    } as unknown as Process
-}
-
-const services = new EndpointServices()
-const provider = process("provider")
-const conflicting = process("conflicting")
-const independent = process("independent", "independent")
-const key = { program: "program", endpoint: "server", name: "counter" } satisfies ServiceKey
-const lifecycle: unknown[] = []
-const publications: unknown[] = []
-let disableTransportCompleted = false
-
-assert.equal(services.identity(key), services.identity({ ...key }))
-assert.notEqual(services.identity(key), services.identity({ ...key, endpoint: "client" }))
-assert.match(services.identity(key), /^[a-f0-9]{64}$/)
-await assert.rejects(() => services.waitReady(key, -1), /non-negative finite number/)
-
-assert.equal(services.enabled(key), false)
-assert.equal(services.service(provider, "server"), null)
-await services.enable(independent, "server", "independent")
-assert.equal(services.enabled({ program: "independent", endpoint: "server", name: "independent" }), true)
-await services.release(independent, "server")
-
-services.follow(key, "lifecycle", null, event => lifecycle.push(event))
-services.follow(key, "lifecycle", "disable", async () => {
-    await Promise.resolve()
-    disableTransportCompleted = true
+const program = new Program({
+    identity: "program",
+    server: { location: ".", startCommand: "true" },
+    client: { location: "." }
 })
 
-await services.enable(provider, "server", "counter")
+function process(identity: string, name: string | null, ready = true, service = true) {
+    const waiters = new Set<() => void>()
+    const server = { ready, service }
+    return {
+        identity,
+        name,
+        reference: `${identity}-reference`,
+        program,
+        launch: {
+            server: { service },
+            client: { service }
+        },
+        server,
+        client: { service },
+        waitReady(notify: () => void) {
+            if (server.ready) notify()
+            else waiters.add(notify)
+            return () => { waiters.delete(notify) }
+        },
+        becomeReady() {
+            server.ready = true
+            for (const notify of waiters) notify()
+            waiters.clear()
+        }
+    } as unknown as Process & { becomeReady(): void }
+}
 
-assert.deepEqual(services.service(provider, "server"), key)
-assert.equal(services.enabled(key), true)
-assert.deepEqual(lifecycle, ["enable"])
-await services.waitReady(key, 0)
+let provider = process("0b231437-513b-4907-8041-c497279c07fa", "main")
 
-// Subscriptions are future-only: joining after enable does not replay it.
-const lateLifecycle: unknown[] = []
-services.follow(key, "lifecycle", null, event => lateLifecycle.push(event))
-assert.deepEqual(lateLifecycle, [])
+const services = new EndpointServices(key => {
+    if (key.program !== undefined && key.program !== program.identity) return null
+    if (key.program === undefined && key.process !== provider.identity) return null
+    if (key.process !== provider.identity && key.process !== provider.name) return null
+    if ((key.endpoint === "server" ? provider.server?.service : provider.client?.service) !== true) return null
+    return { process: provider, endpoint: key.endpoint }
+})
 
-await assert.rejects(() => services.enable(provider, "server", "other"), /already exposes/)
-await assert.rejects(() => services.enable(conflicting, "server", "counter"), /already enabled/)
+const key = { program: "program", process: "main", endpoint: "server" } satisfies ServiceKey
+const exact = { ...key, process: provider.identity }
+const global = { process: provider.identity, endpoint: "server" } satisfies ServiceKey
+const lifecycle: string[] = []
+const publications: unknown[] = []
 
+await assert.rejects(() => services.waitReady(key, -1), /non-negative finite number/)
+
+services.follow(key, "lifecycle", null, event => lifecycle.push(event))
 services.follow(key, "events", "change", (_event, payload) => publications.push(payload))
+
+await services.started(provider, "server")
+assert.equal(services.exists(key), true)
+assert.equal(services.exists(global), true)
+assert.deepEqual(lifecycle, ["start"])
+await services.waitReady(key, 0)
 
 await services.emit(provider, "server", "ignored", 1)
 await services.emit(provider, "server", "change", 2)
-
 assert.deepEqual(publications, [2])
-
-await services.release(provider, "server")
-
-assert.equal(services.enabled(key), false)
-assert.deepEqual(lifecycle, ["enable", "disable"])
-assert.deepEqual(lateLifecycle, ["disable"])
-assert.equal(disableTransportCompleted, true)
-await assert.rejects(() => services.waitReady(key, 0), /timeout/)
-
-// Once disabled, endpoint output is no longer mirrored into the service.
-await services.emit(provider, "server", "change", 3)
-assert.deepEqual(publications, [2])
-
-// Exact readiness observation does not require a global Service registry.
-const ready = services.waitReady(key, 100)
-await services.enable(conflicting, "server", "counter")
-await ready
-assert.deepEqual(lifecycle, ["enable", "disable", "enable"])
-await services.release(conflicting, "server")
-
-// Server and Client are distinct coordinates even under one Program and name.
-await services.enable(provider, "client", "counter")
-assert.equal(services.enabled({ ...key, endpoint: "client" }), true)
-assert.equal(services.enabled(key), false)
-await services.release(provider, "client")
-
-await assert.rejects(() => services.enable(provider, "client", { name: "counter" }), /service name/)
 
 provider.server = null
-await assert.rejects(() => services.enable(provider, "server", "counter"), /not running/)
+await services.stopped(provider, "server", true)
+assert.equal(services.exists(key), false)
+assert.deepEqual(lifecycle, ["start", "stop"])
+await assert.rejects(() => services.waitReady(key, 0), /timeout/)
+
+// A name address follows a replacement, while an identity address does not.
+provider = process("234448b9-4661-4bda-8028-ae75438bf5be", "main", false)
+await services.started(provider, "server")
+assert.equal(services.exists(key), true)
+assert.equal(services.exists(exact), false)
+assert.equal(services.exists(global), false)
+
+const ready = services.waitReady(key, 100)
+provider.becomeReady()
+await ready
+
+// Server and Client remain distinct coordinates for the same Process.
+assert.equal(services.exists({ ...key, endpoint: "client" }), true)
+
+const unconfiguredProgram = new Program({
+    identity: "unconfigured",
+    server: { location: ".", startCommand: "true" }
+})
+assert.equal(unconfiguredProgram.server?.service, false)
+
+// One incarnation can override the Program default without changing the Program.
+provider = process("2c6f42b0-7847-4f80-8373-0cba3f48636b", "main", true, false)
+await services.started(provider, "server")
+assert.equal(services.exists(key), false)

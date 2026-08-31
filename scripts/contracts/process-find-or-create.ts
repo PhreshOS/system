@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
-import ProgramManager, { type Launch } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import type { Launch } from "@phreshos/core"
 import type Program from "@server/core/link-manager/auth-manager/program-manager/program"
 
 interface FixtureProcess {
@@ -11,7 +12,7 @@ interface FixtureProcess {
 
 interface FixtureManager {
   start(owner: Program, launch: Launch, watching?: unknown, parent?: unknown, transition?: boolean, prepared?: { intent: unknown }): Promise<`${string}-${string}-${string}-${string}-${string}`>
-  resolveLaunch(owner: Program, launch: Launch): { intent: { client: { position: unknown, size: unknown } | null } }
+  resolveLaunch(owner: Program, launch: Launch): { intent: { server: { service: boolean } | null, client: { position: unknown, size: unknown, service: boolean } | null } }
 }
 
 const processes = new Map<string, FixtureProcess>()
@@ -96,5 +97,15 @@ const explicit = fixture.resolveLaunch(program, {
 
 assert.deepEqual(omitted, explicit)
 assert(omitted.client)
+assert.deepEqual(omitted.server, { service: false })
+assert.equal(omitted.client.service, false)
 assert.equal(omitted.client.position, null)
 assert.equal(omitted.client.size, null)
+
+const activated = fixture.resolveLaunch(program, {
+  server: { service: true },
+  client: { service: true }
+}).intent
+
+assert.equal(activated.server?.service, true)
+assert.equal(activated.client?.service, true)

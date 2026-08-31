@@ -112,13 +112,13 @@ export default class Process {
         this.hostTraffic = hostTraffic
     }
 
-    public startServer(runtime: ServerRuntime, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
+    public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
 
         if (this.server) return this.server
 
         let boundary!: ServerProcessBoundary
 
-        boundary = new ServerProcessBoundary(runtime, this.program.client !== null, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
+        boundary = new ServerProcessBoundary(runtime, this.program.client !== null, service, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
 
         this.server = boundary
 
@@ -163,11 +163,11 @@ export default class Process {
         return () => { this.readyWaiters.delete(notify) }
     }
 
-    public startClient(window: Window) {
+    public startClient(window: Window, service: boolean) {
 
         if (this.client) return false
 
-        this.client = new ClientState(window)
+        this.client = new ClientState(window, service)
 
         return true
     }
@@ -286,9 +286,9 @@ export default class Process {
 
             // These are live endpoint snapshots. Program declarations answer
             // which endpoint kinds can be started.
-            server: this.server ? {} : null,
+            server: this.server ? { service: this.server.service } : null,
 
-            client: this.client ? {} : null
+            client: this.client ? { service: this.client.service } : null
         }
     }
 
@@ -300,7 +300,7 @@ export default class Process {
 
             // The trusted desktop counterpart keeps this essential fact
             // current. Framed program records are shaped separately.
-            server: this.server ? { ready: this.server.ready } : null,
+            server: this.server ? { ready: this.server.ready, service: this.server.service } : null,
 
             // The trusted desktop needs the relationship in order to
             // answer a pane locally after the parent has exited. The
@@ -342,7 +342,10 @@ export type { Stream } from "./server-process-boundary"
 /** Stable launch meaning, excluding mutable endpoint and Window state. */
 export interface ProcessLaunch {
 
-    readonly server: boolean
+    readonly server: Readonly<{
+
+        service: boolean
+    }> | null
 
     readonly client: Readonly<{
 
@@ -357,6 +360,8 @@ export interface ProcessLaunch {
         location: string
 
         minimize: boolean
+
+        service: boolean
     }> | null
 
     readonly options: Readonly<Record<string, string>>

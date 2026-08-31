@@ -1,4 +1,4 @@
-import { type Launch } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { type Launch } from "@phreshos/core"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { type ClientBody, type ProxiedResponse, type UploadValue } from "@client/core/application"
@@ -140,34 +140,21 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
-        if (word === "enable-service") {
+        if (word === "is-service") {
 
-            await processManager.enableService(pane, args[0])
+            const target = args[1] === undefined ? process() : scope.sibling(args[1])
+            const endpoint = args[0] ?? "client"
 
-            return []
+            if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
+
+            return [await processManager.endpointIsService(pane, address(target), endpoint)]
         }
 
-        if (word === "disable-service") {
-
-            await processManager.disableService(pane)
-
-            return []
-        }
-
-        if (word === "endpoint-service") {
-
-            const target = args[0] === null ? process() : scope.sibling(args[0])
-
-            if (args[1] !== "server" && args[1] !== "client") throw new Error("A service Endpoint must be server or client")
-
-            return [await processManager.endpointService(pane, address(target), args[1])]
-        }
-
-        if (word === "service-enabled") {
+        if (word === "service-exists") {
 
             if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
 
-            return [await processManager.serviceEnabled(args[0])]
+            return [await processManager.serviceExists(args[0])]
         }
 
         if (word === "service-wait-ready") {
@@ -205,7 +192,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-send") {
 
-            if (!isServiceKey(args[0]) || args[0].endpoint !== "server" || typeof args[1] !== "string") return []
+            if (!isServiceKey(args[0]) || typeof args[1] !== "string") return []
 
             await processManager.sendService(pane, args[0], args[1], args[2])
 

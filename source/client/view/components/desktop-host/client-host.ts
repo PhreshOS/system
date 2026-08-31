@@ -157,7 +157,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }, [sources, traffic]))
 
-    // Exact service lifecycle and channel events use their own route. They
+    // Exact Service lifecycle and application events use their own route. They
     // reach only the frame lease that registered the opaque subscription.
     inbound.useSubscribe("/service-event", useCallback((...results: unknown[]) => {
 

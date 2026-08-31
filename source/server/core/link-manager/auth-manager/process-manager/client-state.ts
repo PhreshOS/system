@@ -11,8 +11,12 @@ export default class ClientState {
 
     public readonly window: Window
 
-    public constructor(window: Window) {
+    public readonly service: boolean
+
+    public constructor(window: Window, service: boolean) {
 
         this.window = window
+
+        this.service = service
     }
 }

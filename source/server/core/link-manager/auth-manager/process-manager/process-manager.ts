@@ -1,6 +1,6 @@
 import { Connect, Subscribe } from "@libs/the-link/decorators/escript"
 import { uploadLimit } from "@server/core/upload-manager"
-import { type Launch, type LaunchClient, type Options } from "../program-manager/program-manager"
+import { type Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import { Layer } from "../program-manager/config"
 import Window, { Position, Size } from "./window"
@@ -17,7 +17,7 @@ import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
-import { isPermissionName, isServiceKey, type PermissionName, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { isPermissionName, isServiceKey, type ClientLaunch, type Launch, type PermissionName, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import type { ServerRuntime } from "./server-runtime"
 
 /**
@@ -46,9 +46,9 @@ export default class ProcessManager extends TheLink {
     // Endpoint speaks once; only boundaries following that Endpoint join.
     private readonly endpointEvents = new EndpointEvents()
 
-    // Public services retain only exact runtime bindings and exact interests.
-    // They neither enumerate service topology nor expose their backing Process.
-    private readonly services = new EndpointServices()
+    // Services route to live Endpoint incarnations. They own no registration state
+    // and never control the Process or Endpoint they address.
+    private readonly services: EndpointServices
 
     // Host facts use their own the-link routes. A server boundary joins only
     // the event and subject routes its endpoint explicitly requested.
@@ -79,6 +79,8 @@ export default class ProcessManager extends TheLink {
 
         this.authManager = authManager
 
+        this.services = new EndpointServices(key => this.resolveService(key))
+
         this.connectTo(this.authManager, "/process")
 
     }
@@ -90,6 +92,22 @@ export default class ProcessManager extends TheLink {
         if (!process) throw new Error("The host does not know this process")
 
         return process
+    }
+
+    private resolveService(key: ServiceKey) {
+
+        const exact = this.processes.get(key.process)
+        const program = key.program === undefined ? null : this.authManager.programManager.reach(key.program)
+        const process = key.program === undefined
+            ? exact
+            : program && exact?.program === program
+                ? exact
+                : program
+                    ? [...this.processes.values()].find(candidate => candidate.program === program && candidate.name === key.process)
+                    : null
+        const service = key.endpoint === "server" ? process?.server?.service : process?.client?.service
+
+        return process && service === true ? { process, endpoint: key.endpoint } : null
     }
 
     /** Resolve an SDK handle without ever letting an old handle retarget a replacement. */
@@ -219,15 +237,16 @@ export default class ProcessManager extends TheLink {
         ))
     }
 
-    /** Read one live Endpoint's public Service without inventing an external Endpoint identity. */
-    public serviceFromOutside(identity: string, endpoint: Half) {
+    public serviceExistsFromOutside(key: unknown) {
 
-        return this.services.service(this.find(identity), endpoint)
+        return this.services.exists(key)
     }
 
-    public serviceEnabledFromOutside(key: unknown) {
+    public endpointIsServiceFromOutside(identity: string, endpoint: Half) {
 
-        return this.services.enabled(key)
+        const process = this.find(identity)
+
+        return endpoint === "server" ? process.server?.service === true : process.client?.service === true
     }
 
     public waitServiceReadyFromOutside(key: unknown, timeout?: number) {
@@ -238,21 +257,21 @@ export default class ProcessManager extends TheLink {
     /** Publish through a Service from an owner boundary represented by `from: null`. */
     public async publishServiceFromOutside(key: unknown, event: string, payload: unknown) {
 
-        const binding = this.services.binding(key)
+        const target = this.services.target(key)
 
-        if (!binding) throw new Error("The service is disabled")
+        if (!target) throw new Error("The service endpoint does not exist")
 
-        await this.deliver(binding.process.identity, binding.endpoint, [event, { from: null, payload }])
+        await this.deliver(target.process.identity, target.endpoint, [event, { from: null, payload }])
     }
 
     /** Ask a Server Service from an owner boundary represented by `from: null`. */
     public askServiceFromOutside(key: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
 
-        const binding = this.services.binding(key, "server")
+        const target = this.services.target(key, "server")
 
-        if (!binding) return Promise.reject(new Error("The service is disabled"))
+        if (!target) return Promise.reject(new Error("The service endpoint does not exist"))
 
-        return this.askFromOutside(binding.process.identity, event, payload, timeout, signal)
+        return this.askFromOutside(target.process.identity, event, payload, timeout, signal)
     }
 
     public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
@@ -720,7 +739,10 @@ export default class ProcessManager extends TheLink {
         // incarnation exists.
         if (process.server?.ready) await this.$outbound.publish("/server-ready", process.identity)
 
-        await this.endpointEvent("endpointStart", process, "server")
+        await Promise.all([
+            this.endpointEvent("endpointStart", process, "server"),
+            this.services.started(process, "server")
+        ])
     }
 
     private async serverEnded(process: Process, boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) {
@@ -735,7 +757,7 @@ export default class ProcessManager extends TheLink {
 
                 () => { process.serverStopped(boundary, code, signal) },
 
-                () => this.services.release(process, "server"),
+                () => this.services.stopped(process, "server", boundary.service),
 
                 () => { boundary.release() },
 
@@ -770,9 +792,9 @@ export default class ProcessManager extends TheLink {
         else await this.transition(process, finish).catch(() => undefined)
     }
 
-    private activateServer(process: Process, runtime: ServerRuntime) {
+    private activateServer(process: Process, runtime: ServerRuntime, service: boolean) {
 
-        const server = process.startServer(runtime,
+        const server = process.startServer(runtime, service,
 
             (boundary, code, signal) => this.serverEnded(process, boundary, code, signal),
 
@@ -834,9 +856,9 @@ export default class ProcessManager extends TheLink {
             // order: Process creation, endpoint start, endpoint stop, Process exit.
             await this.transition(process, async () => {
 
-                if (client && window) process.startClient(window)
+                if (client && window) process.startClient(window, launch.client?.service ?? false)
 
-                if (runtime) this.activateServer(process, runtime)
+                if (runtime) this.activateServer(process, runtime, launch.server?.service ?? false)
 
                 // The subject first, which is what scopes a listener without
                 // anything being checked: a kit's `Events` refuses a value whose
@@ -858,7 +880,10 @@ export default class ProcessManager extends TheLink {
 
                     await this.$outbound.publish("/client-start", process.identity, process.hosted())
 
-                    await this.endpointEvent("endpointStart", process, "client")
+                    await Promise.all([
+                        this.endpointEvent("endpointStart", process, "client"),
+                        this.services.started(process, "client")
+                    ])
                 }
             })
         }
@@ -893,11 +918,14 @@ export default class ProcessManager extends TheLink {
 
         const front = layer && this.front(layer)
 
+        const serverWasLive = process.server !== null
+        const clientWasLive = process.client !== null
+        const serverWasService = process.server?.service === true
+        const clientWasService = process.client?.service === true
+
         const failures = await settleEvery([
-
-            () => this.services.release(process, "server"),
-
-            () => this.services.release(process, "client")
+            ...serverWasLive ? [() => this.services.stopped(process, "server", serverWasService)] : [],
+            ...clientWasLive ? [() => this.services.stopped(process, "client", clientWasService)] : []
         ])
 
         // Another converging teardown may have completed while services were
@@ -959,7 +987,7 @@ export default class ProcessManager extends TheLink {
         throwFailures("The process ended with incomplete cleanup", failures)
     }
 
-    public async startServer(identity: string) {
+    public async startServer(identity: string, launch: ServerLaunch = {}) {
 
         const process = this.find(identity)
 
@@ -969,13 +997,15 @@ export default class ProcessManager extends TheLink {
 
             if (process.server) throw new Error("The server endpoint is already running")
 
+            if (typeof launch !== "object" || launch === null || Array.isArray(launch) || launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A Server launch must contain an optional boolean service value")
+
             await process.program.validate()
 
             const runtime = this.authManager.programManager.serverRuntime(process.program)
 
             try {
 
-                this.activateServer(process, runtime)
+                this.activateServer(process, runtime, launch.service ?? process.program.server.service)
 
                 await this.serverStarted(process)
             }
@@ -1029,7 +1059,7 @@ export default class ProcessManager extends TheLink {
         return identity
     }
 
-    public async startClient(identity: string, overrides?: LaunchClient) {
+    public async startClient(identity: string, launch: ClientLaunch = {}) {
 
         const process = this.find(identity)
 
@@ -1041,13 +1071,13 @@ export default class ProcessManager extends TheLink {
 
             await process.program.validate()
 
-            const shape = this.authManager.programManager.clientShape(process.program, overrides)
+            const shape = this.authManager.programManager.clientShape(process.program, launch)
 
             const window = this.window(process.program, shape)
 
             const before = this.front(window.layer)
 
-            process.startClient(window)
+            process.startClient(window, launch.service ?? process.program.client.service)
 
             try {
 
@@ -1055,7 +1085,10 @@ export default class ProcessManager extends TheLink {
 
                 this.settleFront(window.layer, before)
 
-                await this.endpointEvent("endpointStart", process, "client")
+                await Promise.all([
+                    this.endpointEvent("endpointStart", process, "client"),
+                    this.services.started(process, "client")
+                ])
             }
 
             catch (error) {
@@ -1089,13 +1122,15 @@ export default class ProcessManager extends TheLink {
 
         const layer = process.client?.window.layer ?? null
 
+        const service = process.client?.service === true
+
         const before = layer ? this.front(layer) : null
 
         await completeEvery("The client endpoint stopped with incomplete cleanup", [
 
-            () => this.services.release(process, "client"),
-
             () => { process.stopClient() },
+
+            () => this.services.stopped(process, "client", service),
 
             () => { this.releaseClientForwarders(process.identity) },
 
@@ -1216,32 +1251,12 @@ export default class ProcessManager extends TheLink {
         ])
     }
 
-    @Connect("/service/enable")
-    protected async enableClientService(source: string, definition: unknown) {
+    @Connect("/endpoint/is-service")
+    protected async clientEndpointIsService(source: string, target: unknown, endpoint: unknown) {
 
         const process = this.find(source)
 
-        if (!process.client) throw new Error("The providing client endpoint is not running")
-
-        return await this.services.enable(process, "client", definition)
-    }
-
-    @Connect("/service/disable")
-    protected async disableClientService(source: string) {
-
-        const process = this.find(source)
-
-        if (!process.client) throw new Error("The providing client endpoint is not running")
-
-        await this.services.disable(process, "client")
-    }
-
-    @Connect("/service/current")
-    protected async clientEndpointService(source: string, target: unknown, endpoint: unknown) {
-
-        const process = this.find(source)
-
-        if (!process.client) throw new Error("The providing client endpoint is not running")
+        if (!process.client) throw new Error("The current client endpoint is not running")
 
         if (endpoint !== "server" && endpoint !== "client") throw new Error("A service Endpoint must be server or client")
 
@@ -1249,13 +1264,13 @@ export default class ProcessManager extends TheLink {
 
         if (held.program !== process.program) throw new Error("The desktop does not know this process")
 
-        return this.services.service(held, endpoint)
+        return endpoint === "server" ? held.server?.service === true : held.client?.service === true
     }
 
-    @Connect("/service/enabled")
-    protected async serviceEnabled(key: unknown) {
+    @Connect("/service/exists")
+    protected async serviceExists(key: unknown) {
 
-        return this.services.enabled(key)
+        return this.services.exists(key)
     }
 
     @Connect("/service/wait-ready")
@@ -1267,15 +1282,15 @@ export default class ProcessManager extends TheLink {
     @Subscribe("/service/send")
     protected async sendClientService(source: string, key: unknown, event: unknown, payload: unknown) {
 
-        if (!isServiceKey(key) || key.endpoint !== "server" || typeof event !== "string") return
+        if (!isServiceKey(key) || typeof event !== "string") return
 
         const process = this.find(source)
 
         if (!process.client) return
 
-        const binding = this.services.binding(key, "server")
+        const target = this.services.target(key)
 
-        if (binding) await this.publish(process.identity, "client", binding.process.identity, "server", [event, payload])
+        if (target) await this.publish(process.identity, "client", target.process.identity, target.endpoint, [event, payload])
     }
 
     @Subscribe("/frame/own")
@@ -1689,13 +1704,23 @@ export default class ProcessManager extends TheLink {
             throw new Error("A Process endpoint is server or client")
         }
 
+        if (word === "is-service") {
+
+            const target = this.heldProcess(rest[1], process)
+            const endpoint = rest[0] ?? "server"
+
+            if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
+
+            return [endpoint === "server" ? target.server?.service === true : target.client?.service === true]
+        }
+
         if (word === "start-endpoint") {
 
             const target = this.heldProcess(rest[0], process)
 
-            if (rest[1] === "server") return [await this.startServer(target.identity)]
+            if (rest[1] === "server") return [await this.startServer(target.identity, rest[2] as ServerLaunch | undefined)]
 
-            if (rest[1] === "client") return [await this.startClient(target.identity, rest[2] as LaunchClient | undefined)]
+            if (rest[1] === "client") return [await this.startClient(target.identity, rest[2] as ClientLaunch | undefined)]
 
             throw new Error("A Process endpoint is server or client")
         }
@@ -1713,26 +1738,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.stopServer(process.identity)]
 
-        if (word === "enable-service") {
-
-            return [await this.services.enable(process, "server", rest[0])]
-        }
-
-        if (word === "disable-service") {
-
-            return [await this.services.disable(process, "server")]
-        }
-
-        if (word === "endpoint-service") {
-
-            if (rest[1] !== "server" && rest[1] !== "client") throw new Error("A service Endpoint must be server or client")
-
-            const endpoint = this.heldProcess(rest[0], process)
-
-            return [this.services.service(endpoint, rest[1])]
-        }
-
-        if (word === "service-enabled") return [this.services.enabled(rest[0])]
+        if (word === "service-exists") return [this.services.exists(rest[0])]
 
         if (word === "service-wait-ready") return [await this.services.waitReady(rest[0], rest[1])]
 
@@ -1762,11 +1768,11 @@ export default class ProcessManager extends TheLink {
 
             const [key, event, payload] = rest
 
-            if (!isServiceKey(key) || key.endpoint !== "server" || typeof event !== "string") return []
+            if (!isServiceKey(key) || typeof event !== "string") return []
 
-            const binding = this.services.binding(key, "server")
+            const target = this.services.target(key)
 
-            if (binding) await this.publish(process.identity, "server", binding.process.identity, "server", [event, payload])
+            if (target) await this.publish(process.identity, "server", target.process.identity, target.endpoint, [event, payload])
 
             return []
         }
@@ -1782,18 +1788,18 @@ export default class ProcessManager extends TheLink {
                 return []
             }
 
-            const binding = this.services.binding(key, "server")
+            const target = this.services.target(key, "server")
 
-            if (!binding?.process.server) {
+            if (!target?.process.server) {
 
-                this.rejectQuestion(["wait", question, publicQuestion, event, payload], "The service is disabled")
+                this.rejectQuestion(["wait", question, publicQuestion, event, payload], "The service endpoint does not exist")
 
                 return []
             }
 
-            server.retain(question, () => binding.process.server?.forget(question))
+            server.retain(question, () => target.process.server?.forget(question))
 
-            this.asked(process.identity, "server", binding.process.identity, [question, publicQuestion, event, payload])
+            this.asked(process.identity, "server", target.process.identity, [question, publicQuestion, event, payload])
 
             return []
         }
@@ -2299,16 +2305,16 @@ export default class ProcessManager extends TheLink {
             return
         }
 
-        const binding = this.services.binding(key, "server")
+        const target = this.services.target(key, "server")
 
-        if (!binding || !this.retainClientQuestion(connection, source, values[0], binding.process.identity)) {
+        if (!target || !this.retainClientQuestion(connection, source, values[0], target.process.identity)) {
 
-            this.rejectClientQuestion(connection, source, ["wait", ...values], "The service is disabled")
+            this.rejectClientQuestion(connection, source, ["wait", ...values], "The service endpoint does not exist")
 
             return
         }
 
-        this.asked(source, "client", binding.process.identity, values)
+        this.asked(source, "client", target.process.identity, values)
     }
 
     @Subscribe("/frame/cancel")
@@ -2379,11 +2385,11 @@ export default class ProcessManager extends TheLink {
     }
 
     @Connect("/endpoint/start")
-    protected async startEndpoint(identity: string, which: string, overrides?: LaunchClient) {
+    protected async startEndpoint(identity: string, which: string, launch?: ServerLaunch | ClientLaunch) {
 
-        if (which === "server") return await this.startServer(identity)
+        if (which === "server") return await this.startServer(identity, launch as ServerLaunch | undefined)
 
-        if (which === "client") return await this.startClient(identity, overrides)
+        if (which === "client") return await this.startClient(identity, launch as ClientLaunch | undefined)
 
         throw new Error("A Process endpoint is server or client")
     }

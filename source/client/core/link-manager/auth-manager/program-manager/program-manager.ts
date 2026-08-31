@@ -1,10 +1,10 @@
-import { Launch, TransmittedProgramManager } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { TransmittedProgramManager } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { Publish, Subscribe } from "@libs/the-link/decorators/escript"
 import TheLink from "@libs/the-link/the-link"
 import AuthManager from "../auth-manager"
 import Program from "./program"
-import { type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
+import { type Launch, type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
 
 /**
  * The peer of the core's programs: born holding them from the

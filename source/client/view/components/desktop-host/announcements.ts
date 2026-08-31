@@ -197,7 +197,7 @@ export function uninstalled(panes: readonly (readonly [string, string | undefine
     return panes.filter(([, shown]) => shown === program.identity).map(([pane]) => [pane, "program-host", "uninstall", program.reference, everything])
 }
 
-type ExitedProcess = { reference: string, identity: string, program: string, startedAt: Date, name: string | null, options: Record<string, string>, server: { ready: boolean } | null, client: { window: unknown } | null }
+type ExitedProcess = { reference: string, identity: string, program: string, startedAt: Date, name: string | null, options: Record<string, string>, server: { ready: boolean, service: boolean } | null, client: { window: unknown, service: boolean } | null }
 
 type EndpointEvent = "endpointStart" | "endpointStop"
 

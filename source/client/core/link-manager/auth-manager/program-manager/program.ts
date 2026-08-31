@@ -1,5 +1,5 @@
 import { HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
-import { Launch } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { type Launch } from "@phreshos/core"
 import ProgramManager from "./program-manager"
 
 /**
