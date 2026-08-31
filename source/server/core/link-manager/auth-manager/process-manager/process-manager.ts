@@ -110,47 +110,9 @@ export default class ProcessManager extends TheLink {
         return process && service === true ? { process, endpoint: key.endpoint } : null
     }
 
-    /** Resolve an SDK handle without ever letting an old handle retarget a replacement. */
-    private heldProcess(value: unknown, fallback?: Process) {
-
-        if (value === undefined || value === null) {
-
-            if (fallback) return fallback
-
-            throw new Error("A Process handle is required")
-        }
-
-        if (!isHandleAddress(value)) throw new Error("The boundary returned an invalid Process handle")
-
-        const process = this.processes.get(value.identity)
-
-        if (!process || process.reference !== value.reference) throw new Error("The Process represented by this handle does not exist")
-
-        return process
-    }
-
-    /** Resolve the exact runtime Program entity addressed by an SDK handle. */
-    private heldProgram(value: unknown, fallback?: Program) {
-
-        if (value === undefined || value === null) {
-
-            if (fallback) return fallback
-
-            throw new Error("A Program handle is required")
-        }
-
-        if (!isHandleAddress(value)) throw new Error("The boundary returned an invalid Program handle")
-
-        const program = this.authManager.programManager.reach(value.identity)
-
-        if (!program || program.reference !== value.reference) throw new Error("The Program represented by this handle does not exist")
-
-        return program
-    }
-
     private heldWindow(value: unknown, fallback: Process) {
 
-        const process = this.heldProcess(value, fallback)
+        const process = this.system.holdProcess(value, fallback)
 
         const window = process.client?.window
 
@@ -174,6 +136,8 @@ export default class ProcessManager extends TheLink {
 
         return window
     }
+
+    private get system() { return this.authManager.linkManager.application.system }
 
     /** Complete public Window state, shared by every representation. */
     public windowSnapshot(identity: string) {
@@ -206,6 +170,16 @@ export default class ProcessManager extends TheLink {
         if (half === "server" ? !process.server : !process.client) throw new Error(`This process has no live ${half} endpoint`)
 
         return this.endpointEvents.follow(process.reference, half, event, (word, payload) => subscriber(payload, word), impossible)
+    }
+
+    /** Observe directed application traffic originating from one Endpoint. */
+    public observeTrafficFromOutside(identity: string, half: Half, kind: TrafficKind, event: string | null, subscriber: (event: string, ...values: unknown[]) => void, impossible?: (reason: string) => void) {
+
+        const process = this.find(identity)
+
+        if (!process.program[half]) throw new Error(`This program declared no ${half} endpoint`)
+
+        return this.traffic.observe(process.reference, half, kind, event, subscriber, impossible)
     }
 
     /** Publish from a trusted execution boundary whose identity is not a Program Endpoint. */
@@ -380,7 +354,7 @@ export default class ProcessManager extends TheLink {
 
         try {
 
-            observed = this.heldProcess(target)
+            observed = this.system.holdProcess(target)
 
             if (observed.program !== this.find(pane).program) throw new Error("The desktop does not know this process")
         }
@@ -447,7 +421,7 @@ export default class ProcessManager extends TheLink {
 
         try {
 
-            observed = this.heldProcess(target)
+            observed = this.system.holdProcess(target)
 
             if (observed.program !== this.find(pane).program) throw new Error("The desktop does not know this process")
         }
@@ -1260,7 +1234,7 @@ export default class ProcessManager extends TheLink {
 
         if (endpoint !== "server" && endpoint !== "client") throw new Error("A service Endpoint must be server or client")
 
-        const held = this.heldProcess(target)
+        const held = this.system.holdProcess(target)
 
         if (held.program !== process.program) throw new Error("The desktop does not know this process")
 
@@ -1495,64 +1469,62 @@ export default class ProcessManager extends TheLink {
 
         const [word, ...rest] = args
 
-        const programManager = this.authManager.programManager
-
-        if (word === "host-program-list") return [[...programManager.programs.values()].filter(entry => rest[0] !== true || entry.installed)]
+        if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true)]
 
         if (word === "host-program-find") {
 
             const identity = String(rest[0])
 
-            return [programManager.programs.get(identity) ?? null]
+            return [this.system.findProgram(identity)]
         }
 
-        if (word === "current-program") return [programManager.find(process.program.identity)]
+        if (word === "current-program") return [this.system.requireProgram(process.program.identity)]
 
         if (word === "program-agent") {
 
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
 
-            return [await programManager.agent(program.identity)]
+            return [await this.system.programAgent(program)]
         }
 
         if (word === "current-process") return [processReference(process)]
 
         if (word === "icon") {
 
-            return [await programManager.icon(this.heldProgram(rest[0], process.program).identity, rest[1])]
+            return [await this.system.programIcon(this.system.holdProgram(rest[0], process.program), rest[1])]
         }
 
         if (word === "startup") {
 
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
 
-            return [await programManager.startup(program, String(rest[1]), rest[2])]
+            return [await this.system.programStartup(program, String(rest[1]), rest[2])]
         }
 
         if (word === "program-permission") {
 
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
             const operation = rest[1]
             const name = rest[2]
 
-            if (operation === "getAll") return [programManager.permissions(program)]
+            if (operation === "getAll") return [this.system.programPermissions(program)]
 
             if (!isPermissionName(name)) throw new Error(`The system does not know the permission "${String(name)}"`)
 
-            if (operation === "get") return [programManager.permission(program, name)]
+            if (operation === "get") return [this.system.programPermission(program, name)]
 
             if (operation === "set") {
 
                 if (typeof rest[3] !== "boolean") throw new Error("A permission decision must be boolean")
 
-                programManager.setPermission(program, name, rest[3])
+                this.system.setProgramPermission(program, name, rest[3])
 
                 return []
             }
 
             if (operation === "delete") {
 
-                programManager.deletePermission(program, name)
+                this.system.deleteProgramPermission(program, name)
 
                 return []
             }
@@ -1565,7 +1537,7 @@ export default class ProcessManager extends TheLink {
         // once the parent disappears that retained handle no longer resolves.
         if (word === "parent") {
 
-            const target = this.heldProcess(rest[0], process)
+            const target = this.system.holdProcess(rest[0], process)
 
             if (!target.parent) return [null]
 
@@ -1583,9 +1555,9 @@ export default class ProcessManager extends TheLink {
 
             if (typeof source !== "string" && (typeof source !== "object" || source === null)) throw new Error("A program is created from a config or a path")
 
-            const created = await programManager.create(source as Parameters<typeof programManager.create>[0])
+            const created = await this.system.createProgram(source as Parameters<(typeof this.system)["createProgram"]>[0])
 
-            return [programManager.find(created.identity)]
+            return [this.system.requireProgram(created.identity)]
         }
 
         if (word === "host-program-force-create") {
@@ -1594,64 +1566,64 @@ export default class ProcessManager extends TheLink {
 
             if (typeof source !== "string" && (typeof source !== "object" || source === null)) throw new Error("A program is created from a config or a path")
 
-            const created = await programManager.forceCreate(source as Parameters<typeof programManager.forceCreate>[0], process.identity)
+            const created = await this.system.forceCreateProgram(source as Parameters<(typeof this.system)["forceCreateProgram"]>[0], process.identity)
 
-            return [programManager.find(created.identity)]
+            return [this.system.requireProgram(created.identity)]
         }
 
-        if (word === "appearance") return [this.authManager.linkManager.appearance.value]
+        if (word === "appearance") return [this.system.appearance]
 
         if (word === "update-appearance") {
 
-            await this.authManager.updateAppearance(rest[0])
+            await this.system.updateAppearance(rest[0])
 
             return []
         }
 
         if (word === "fork") {
 
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
-            const forked = await programManager.fork(program, String(rest[1]))
+            const forked = await this.system.forkProgram(program, String(rest[1]))
 
-            return [programManager.find(forked.identity)]
+            return [this.system.requireProgram(forked.identity)]
         }
 
         if (word === "installed") {
 
-            return [programManager.installed(this.heldProgram(rest[0]))]
+            return [this.system.programInstalled(this.system.holdProgram(rest[0]))]
         }
 
         if (word === "forget") {
 
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
-            return [await programManager.forget(program, process.identity)]
+            return [await this.system.forgetProgram(program, process.identity)]
         }
 
         if (word === "program-process-create") {
 
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
             // The whole record, not the identity alone: the kit builds a
             // Process from this answer, and a record invented at the
             // other end — identity and program, nothing else — was how every
             // process held by its launcher had no startedAt while every
             // other road's did.
-            return [processReference(this.find(await programManager.createProcess(program.identity, rest[1] as Launch, process)))]
+            return [processReference(this.system.requireProcess(await this.system.createProcess(program, rest[1] as Launch, process)))]
         }
 
         if (word === "program-process-find-or-create") {
 
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
-            return [processReference(this.find(await programManager.findOrCreateProcess(program.identity, rest[1] as Launch & { name: string }, process)))]
+            return [processReference(this.system.requireProcess(await this.system.findOrCreateProcess(program, rest[1] as Launch & { name: string }, process)))]
         }
 
         // Named, only that program's instances; unnamed, every one.
         if (word === "host-process-list" || word === "program-process-list") {
 
-            const living = [...this.processes.values()]
+            const living = this.system.listProcesses()
 
             if (word === "host-process-list") return [living.map(processReference)]
 
@@ -1661,22 +1633,18 @@ export default class ProcessManager extends TheLink {
             // from *there is no such program* — every other act on one
             // refuses, and a word that answers falsely where its
             // neighbours refuse is worse than either.
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
-            return [living.filter(entry => entry.program === program).map(processReference)]
+            return [this.system.listProcesses(program).map(processReference)]
         }
 
         if (word === "program-process-find") {
 
-            const program = this.heldProgram(rest[0])
+            const program = this.system.holdProgram(rest[0])
 
             const wanted = String(rest[1])
 
-            const identified = this.processes.get(wanted)
-
-            if (identified?.program === program) return [processReference(identified)]
-
-            const found = [...this.processes.values()].find(entry => entry.program === program && entry.name === wanted)
+            const found = this.system.findProcess(wanted, program)
 
             return [found ? processReference(found) : null]
         }
@@ -1685,7 +1653,7 @@ export default class ProcessManager extends TheLink {
 
             if (typeof rest[0] === "string") {
 
-                const target = this.processes.get(rest[0])
+                const target = this.system.findProcess(rest[0])
 
                 return [target ? processReference(target) : null]
             }
@@ -1695,7 +1663,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "exists") {
 
-            const target = this.heldProcess(rest[1], process)
+            const target = this.system.holdProcess(rest[1], process)
 
             if (rest[0] === "server") return [target.server !== null]
 
@@ -1706,7 +1674,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "is-service") {
 
-            const target = this.heldProcess(rest[1], process)
+            const target = this.system.holdProcess(rest[1], process)
             const endpoint = rest[0] ?? "server"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
@@ -1716,27 +1684,27 @@ export default class ProcessManager extends TheLink {
 
         if (word === "start-endpoint") {
 
-            const target = this.heldProcess(rest[0], process)
+            const target = this.system.holdProcess(rest[0], process)
 
-            if (rest[1] === "server") return [await this.startServer(target.identity, rest[2] as ServerLaunch | undefined)]
+            if (rest[1] === "server") return [await this.system.startEndpoint(target, "server", rest[2] as ServerLaunch | undefined)]
 
-            if (rest[1] === "client") return [await this.startClient(target.identity, rest[2] as ClientLaunch | undefined)]
+            if (rest[1] === "client") return [await this.system.startEndpoint(target, "client", rest[2] as ClientLaunch | undefined)]
 
             throw new Error("A Process endpoint is server or client")
         }
 
         if (word === "stop-endpoint") {
 
-            const target = this.heldProcess(rest[0], process)
+            const target = this.system.holdProcess(rest[0], process)
 
-            if (rest[1] === "server") return [await this.stopServer(target.identity)]
+            if (rest[1] === "server") return [await this.system.stopEndpoint(target, "server")]
 
-            if (rest[1] === "client") return [await this.stopClient(target.identity)]
+            if (rest[1] === "client") return [await this.system.stopEndpoint(target, "client")]
 
             throw new Error("A Process endpoint is server or client")
         }
 
-        if (word === "stop-current") return [await this.stopServer(process.identity)]
+        if (word === "stop-current") return [await this.system.stopEndpoint(process, "server")]
 
         if (word === "service-exists") return [this.services.exists(rest[0])]
 
@@ -1828,73 +1796,73 @@ export default class ProcessManager extends TheLink {
 
             const target = this.heldWindow(rest[0], process).process
 
-            return [this.windowSnapshot(target.identity)]
+            return [this.system.windowSnapshot(target)]
         }
 
         if (word === "move") {
 
-            const target = this.heldWindow(rest[0], process).process.identity
+            const target = this.heldWindow(rest[0], process).process
 
-            await this.move(target, rest[1] as Position)
-
-            return [target]
-        }
-
-        if (word === "resize") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.resize(target, rest[1] as Size)
-
-            return [target]
-        }
-
-        if (word === "setGeometry") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.setGeometry(target, rest[1] as WindowGeometry)
-
-            return [target]
-        }
-
-        if (word === "changeTitle") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.changeTitle(target, String(rest[1] ?? ""))
-
-            return [target]
-        }
-
-        if (word === "raise") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.raise(target)
-
-            return [target]
-        }
-
-        if (word === "minimize") {
-
-            const target = this.heldWindow(rest[0], process).process.identity
-
-            await this.minimize(target, rest[1] !== false)
-
-            return [target]
-        }
-
-        if (word === "exit") {
-
-            const target = this.heldProcess(rest[0], process)
-
-            await this.exit(target.identity)
+            await this.system.moveWindow(target, rest[1] as Position)
 
             return [target.identity]
         }
 
-        if (word === "program-process-exit-all") return [await this.exitAll(this.heldProgram(rest[0]).identity, process.identity)]
+        if (word === "resize") {
+
+            const target = this.heldWindow(rest[0], process).process
+
+            await this.system.resizeWindow(target, rest[1] as Size)
+
+            return [target.identity]
+        }
+
+        if (word === "setGeometry") {
+
+            const target = this.heldWindow(rest[0], process).process
+
+            await this.system.setWindowGeometry(target, rest[1] as WindowGeometry)
+
+            return [target.identity]
+        }
+
+        if (word === "changeTitle") {
+
+            const target = this.heldWindow(rest[0], process).process
+
+            await this.system.changeWindowTitle(target, String(rest[1] ?? ""))
+
+            return [target.identity]
+        }
+
+        if (word === "raise") {
+
+            const target = this.heldWindow(rest[0], process).process
+
+            await this.system.raiseWindow(target)
+
+            return [target.identity]
+        }
+
+        if (word === "minimize") {
+
+            const target = this.heldWindow(rest[0], process).process
+
+            await this.system.minimizeWindow(target, rest[1] !== false)
+
+            return [target.identity]
+        }
+
+        if (word === "exit") {
+
+            const target = this.system.holdProcess(rest[0], process)
+
+            await this.system.exitProcess(target)
+
+            return [target.identity]
+        }
+
+        if (word === "program-process-exit-all") return [await this.system.exitProgramProcesses(this.system.holdProgram(rest[0]), process.identity)]
 
         if (word === "observe") {
 
@@ -1908,7 +1876,7 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            const target = this.heldProcess(rest[1], process)
+            const target = this.system.holdProcess(rest[1], process)
 
             this.observeServer(process, String(rest[0]), target, String(rest[2]), kind, event, reportImpossible)
 
@@ -1928,7 +1896,7 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            const target = this.heldProcess(rest[1], process)
+            const target = this.system.holdProcess(rest[1], process)
 
             this.followServer(process, String(rest[0]), target, String(rest[2]), event, rest[4] === true)
 
@@ -1972,7 +1940,7 @@ export default class ProcessManager extends TheLink {
 
             if (half !== "server" && half !== "client") throw new Error(`A process has no "${String(half)}" end`)
 
-            const target = this.heldProcess(rest[0])
+            const target = this.system.holdProcess(rest[0])
 
             await this.publish(process.identity, "server", target.identity, half, rest.slice(2))
 
@@ -1997,7 +1965,7 @@ export default class ProcessManager extends TheLink {
 
             if (typeof rest[3] !== "string" || typeof rest[4] !== "string") throw new Error("A question needs a public id and an event name")
 
-            const targetProcess = this.heldProcess(rest[0])
+            const targetProcess = this.system.holdProcess(rest[0])
 
             const target = targetProcess.server
 
@@ -2018,7 +1986,7 @@ export default class ProcessManager extends TheLink {
         // What a launch said, carried by the process it launched.
         if (word === "option") {
 
-            const asked = this.heldProcess(rest[0], process)
+            const asked = this.system.holdProcess(rest[0], process)
 
             return [asked.options[String(rest[1])]]
         }
@@ -2032,11 +2000,11 @@ export default class ProcessManager extends TheLink {
             // The one registry is the authority for every program,
             // installed or not. Naming the current program explicitly
             // must therefore be equivalent to leaving the subject empty.
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
 
             if (rest[1] !== "path") throw new Error("A server half asks the host only for an area path")
 
-            return [programManager.operate(program, word, "path", [])]
+            return [this.system.programArea(program, word, "path", [])]
         }
 
         // Native filesystem work remains local to the Server SDK. The System
@@ -2046,7 +2014,7 @@ export default class ProcessManager extends TheLink {
 
             if (rest[0] !== "path") throw new Error("A server half asks the host only for its Storage path")
 
-            return [this.authManager.linkManager.application.home.path]
+            return [this.system.storagePath]
         }
 
         // What a program has said, asked for and never told. The
@@ -2055,9 +2023,9 @@ export default class ProcessManager extends TheLink {
         // anything here deciding what a query means.
         if (word === "logs") {
 
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
 
-            return [programManager.logsOf(program).query(String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
+            return [this.system.programQuery(program, "logs", String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
 
         // A program's own database. Written as well as read, unlike the
@@ -2065,9 +2033,9 @@ export default class ProcessManager extends TheLink {
         // is the program's own, which is why they are two files.
         if (word === "database") {
 
-            const program = this.heldProgram(rest[0], process.program)
+            const program = this.system.holdProgram(rest[0], process.program)
 
-            return [programManager.databaseOf(program).query(String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
+            return [this.system.programQuery(program, "database", String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
 
         // A Server Endpoint performs upload byte I/O locally. The SDK receives
@@ -2075,7 +2043,7 @@ export default class ProcessManager extends TheLink {
         // remain flat and validated by both sides.
         if (word === "uploads") {
 
-            const { uploads } = this.authManager.linkManager.application
+            const { uploads } = this.system
 
             if (rest[0] === "access") return [uploads.fileManager.path, uploadLimit]
             if (rest[0] === "stat") return [uploads.stat(String(rest[1]))]
@@ -2091,9 +2059,9 @@ export default class ProcessManager extends TheLink {
 
             const [operation, key, value, ttl] = rest.slice(1) as [string, string, unknown, number | undefined]
 
-            const whose = this.heldProgram(rest[0], process.program).identity
+            const whose = this.system.holdProgram(rest[0], process.program)
 
-            return [await programManager.store(whose, operation, key, value, ttl)]
+            return [await this.system.programStore(whose, operation, key, value, ttl)]
         }
 
         throw new Error(`The host does not know the word "${String(word)}"`)
@@ -2105,7 +2073,7 @@ export default class ProcessManager extends TheLink {
 
             if (args[0] === "wait-ready") {
 
-                const target = this.heldProcess(args[1], process)
+                const target = this.system.holdProcess(args[1], process)
 
                 const requireCurrentIncarnation = args[2] === true
 
@@ -2189,8 +2157,6 @@ export default class ProcessManager extends TheLink {
 
         let active = true
         let cancel = () => { active = false }
-        const programManager = this.authManager.programManager
-
         server.retain(question, () => cancel())
 
         await this.say(server, "host-end", "stream", question, "open")
@@ -2198,7 +2164,7 @@ export default class ProcessManager extends TheLink {
         try {
 
             const operation = args[0]
-            const program = this.heldProgram(args[1])
+            const program = this.system.holdProgram(args[1])
 
             if (operation === "run") {
 
@@ -2218,10 +2184,10 @@ export default class ProcessManager extends TheLink {
 
                     active = false
 
-                    if (running) this.exit(running.identity).catch(() => undefined)
+                    if (running) this.system.exitProcess(running).catch(() => undefined)
                 }
 
-                const identity = await programManager.runProcess(program, args[2] as Launch ?? {}, {
+                const identity = await this.system.runProcess(program, args[2] as Launch ?? {}, {
                     started: created => {
 
                         running = created
@@ -2242,7 +2208,7 @@ export default class ProcessManager extends TheLink {
                     }
                 }, process)
 
-                if (!active) await this.exit(identity)
+                if (!active) await this.system.exitProcess(this.system.requireProcess(identity))
 
                 await completion
                 await sending
@@ -2253,9 +2219,9 @@ export default class ProcessManager extends TheLink {
             }
 
             const stream = operation === "install"
-                ? this.authManager.programManager.installStreaming(program, process.identity)
+                ? this.system.installProgram(program, process.identity)
                 : operation === "uninstall"
-                    ? this.authManager.programManager.uninstallStreaming(program, args[2] === true, process.identity)
+                    ? this.system.uninstallProgram(program, args[2] === true, process.identity)
                     : null
 
             if (!stream) throw new Error(`The host does not know the stream operation "${String(operation)}"`)

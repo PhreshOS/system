@@ -8,9 +8,34 @@ import type Application from "@server/core/application"
 
 const directory = await mkdtemp(resolve(".verify-gateway-"))
 const path = gatewayAddress(directory)
+const entry = {
+    installed: false,
+    program: { identity: "example" }
+}
+const programSnapshot = {
+    reference: "example-reference",
+    identity: "example",
+    name: "Example",
+    version: "1.0.0",
+    description: null,
+    installed: false,
+    hasAgent: false,
+    server: null,
+    client: { start: true }
+}
 const application = {
-    systemControl: {
-        async execute(request: unknown) { return { received: request } }
+    system: {
+        listPrograms() { return [] },
+        async forceCreateProgram() { return entry.program },
+        requireProgram() { return entry },
+        programSnapshot() { return programSnapshot },
+        holdProgram(handle: { identity?: string, reference?: string }) {
+
+            assert.deepEqual(handle, { identity: "example", reference: "example-reference" })
+            return entry.program
+        },
+        async *installProgram() {},
+        findProcess() { return null }
     },
     linkManager: {
         authManager: {
@@ -18,30 +43,7 @@ const application = {
                 processes: new Map(),
                 async exit() {}
             },
-            programManager: {
-                async forceCreate() { return { identity: "example" } },
-                find() {
-                    return {
-                        record() {
-                            return {
-                                reference: "example-reference",
-                                identity: "example",
-                                name: "Example",
-                                version: "1.0.0",
-                                description: null,
-                                hasAgent: false,
-                                server: null,
-                                client: { start: true }
-                            }
-                        }
-                    }
-                },
-                held(handle: { identity?: string, reference?: string }) {
-                    assert.deepEqual(handle, { identity: "example", reference: "example-reference" })
-                    return { identity: "example" }
-                },
-                async *installStreaming() {}
-            }
+            programManager: {}
         }
     }
 }
@@ -51,7 +53,7 @@ const server = await gateway(application as unknown as Application, path)
 try {
     const system = await exchange(path, { target: "system", request: { capability: "program", operation: "list", input: {} } })
 
-    assert.deepEqual(system, [{ success: true, result: { received: { capability: "program", operation: "list", input: {} } } }])
+    assert.deepEqual(system, [{ success: true, result: { data: [], total: 0, truncated: false } }])
 
     const created = await exchange(path, {
         target: "program",
@@ -66,6 +68,7 @@ try {
             name: "Example",
             version: "1.0.0",
             description: null,
+            installed: false,
             hasAgent: false,
             server: null,
             client: { start: true }
@@ -87,7 +90,9 @@ try {
 }
 
 async function exchange(path: string, request: unknown): Promise<unknown[]> {
+
     return await new Promise<unknown[]>((resolve, reject) => {
+
         const socket = connect(path)
         let buffer = ""
 

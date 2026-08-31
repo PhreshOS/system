@@ -22,9 +22,9 @@ import {
     type WindowWaitInput
 } from "@phreshos/core"
 import { z } from "zod"
-import type Application from "../application"
-import type Entry from "../link-manager/auth-manager/program-manager/entry"
-import type Process from "../link-manager/auth-manager/process-manager/process"
+import type System from "@server/core/system"
+import type Entry from "@server/core/link-manager/auth-manager/program-manager/entry"
+import type Process from "@server/core/link-manager/auth-manager/process-manager/process"
 
 const envelope = z.object({
     capability: z.string(),
@@ -34,10 +34,10 @@ const envelope = z.object({
 
 const inputs = new WeakMap<SystemControlOperation, z.ZodType>()
 
-/** Executes the shared System-control contract against authoritative Core state. */
+/** Owner-Gateway adapter for the neutral serialized System operation contract. */
 export default class SystemControl {
 
-    public constructor(private readonly application: Application) {}
+    public constructor(private readonly system: System) {}
 
     public async execute(value: unknown, signal?: AbortSignal) {
 
@@ -69,24 +69,21 @@ export default class SystemControl {
 
     private async program(operation: string, input: ProgramListInput | ProgramInput | ProgramWaitInput, signal?: AbortSignal) {
 
-        const manager = this.programs
-
         if (operation === "list") {
 
             const request = input as ProgramListInput
             const installedOnly = request.installedOnly ?? true
             const query = request.search?.toLocaleLowerCase()
-            const found = [...manager.programs.values()].filter(entry => (
-                (!installedOnly || entry.installed)
-                && (!query || [entry.identity, entry.program.name, entry.program.config.description]
+            const found = this.system.listPrograms(installedOnly).filter(entry => (
+                !query || [entry.identity, entry.program.name, entry.program.config.description]
                     .some(value => value?.toLocaleLowerCase().includes(query)))
-            ))
+            )
             const selected = found
                 .sort((left, right) => left.identity.localeCompare(right.identity))
                 .slice(request.offset ?? 0, (request.offset ?? 0) + (request.limit ?? 30))
 
             return Object.freeze({
-                data: Object.freeze(selected.map(programSnapshot)),
+                data: Object.freeze(selected.map(entry => this.system.programSnapshot(entry))),
                 total: found.length,
                 truncated: (request.offset ?? 0) + selected.length < found.length
             })
@@ -94,11 +91,11 @@ export default class SystemControl {
 
         if (operation === "wait") return this.waitProgram(input as ProgramWaitInput, signal)
 
-        const entry = requiredProgram(manager.programs, (input as ProgramInput).program)
+        const entry = this.system.requireProgram((input as ProgramInput).program)
 
-        if (operation === "inspect") return programSnapshot(entry)
+        if (operation === "inspect") return this.system.programSnapshot(entry)
 
-        const content = entry.program.agent()
+        const content = await this.system.programAgent(entry.program)
 
         if (content === null) throw new Error(`Program "${entry.identity}" has no agent documentation`)
 
@@ -110,19 +107,18 @@ export default class SystemControl {
         if (operation === "list") {
 
             const request = input as ProcessListInput
-            const owner = request.program ? requiredProgram(this.programs.programs, request.program).program : null
+            const owner = request.program ? this.system.requireProgram(request.program).program : null
             const query = request.search?.toLocaleLowerCase()
-            const found = [...this.processes.processes.values()].filter(process => (
-                (!owner || process.program === owner)
-                && (!query || [process.identity, process.name, process.program.identity]
+            const found = this.system.listProcesses(owner ?? undefined).filter(process => (
+                !query || [process.identity, process.name, process.program.identity]
                     .some(value => value?.toLocaleLowerCase().includes(query)))
-            ))
+            )
             const selected = found
                 .sort((left, right) => right.startedAt.getTime() - left.startedAt.getTime())
                 .slice(request.offset ?? 0, (request.offset ?? 0) + (request.limit ?? 30))
 
             return Object.freeze({
-                data: Object.freeze(selected.map(processSnapshot)),
+                data: Object.freeze(selected.map(process => this.system.processSnapshot(process))),
                 total: found.length,
                 truncated: (request.offset ?? 0) + selected.length < found.length
             })
@@ -134,22 +130,22 @@ export default class SystemControl {
 
             const request = input as ProcessCreateInput | ProcessFindOrCreateInput
             const identity = operation === "create"
-                ? await this.programs.createProcess(request.program, request.launch)
-                : await this.programs.findOrCreateProcess(
+                ? await this.system.createProcess(request.program, request.launch)
+                : await this.system.findOrCreateProcess(
                     request.program,
                     (request as ProcessFindOrCreateInput).launch
                 )
 
-            return processSnapshot(requiredProcess(this.processes.processes, identity))
+            return this.system.processSnapshot(this.system.requireProcess(identity))
         }
 
         const request = input as ProcessInput
-        const process = resolveProcess(this.processes.processes, this.programs.programs, request)
-        const snapshot = processSnapshot(process)
+        const process = this.system.resolveProcess(request)
+        const snapshot = this.system.processSnapshot(process)
 
         if (operation === "exit") {
 
-            await this.processes.exit(process.identity)
+            await this.system.exitProcess(process)
 
             return Object.freeze({ ...snapshot, exited: true })
         }
@@ -159,33 +155,33 @@ export default class SystemControl {
 
     private async endpoint(operation: string, input: EndpointInput | EndpointStartInput | EndpointWaitReadyInput | EndpointWaitLifecycleInput | EndpointAskInput | EndpointPublishInput | EndpointWaitInput, signal?: AbortSignal) {
 
-        const process = resolveProcess(this.processes.processes, this.programs.programs, input)
+        const process = this.system.resolveProcess(input)
         const declaration = process.program[input.endpoint]
 
         if (!declaration) throw new Error(`Program "${process.program.identity}" does not declare a ${input.endpoint} Endpoint`)
 
-        if (operation === "inspect") return endpointSnapshot(process, input.endpoint)
+        if (operation === "inspect") return this.system.endpointSnapshot(process, input.endpoint)
 
         if (operation === "start" || operation === "stop") {
 
             if (operation === "start") {
+
                 const request = input as EndpointStartInput
 
-                if (request.endpoint === "server") await this.processes.startServer(process.identity, request.launch)
-                else await this.processes.startClient(process.identity, request.launch)
+                if (request.endpoint === "server") await this.system.startEndpoint(process, "server", request.launch)
+                else await this.system.startEndpoint(process, "client", request.launch)
             } else {
-                if (input.endpoint === "server") await this.processes.stopServer(process.identity)
-                else await this.processes.stopClient(process.identity)
+                await this.system.stopEndpoint(process, input.endpoint)
             }
 
-            return endpointSnapshot(process, input.endpoint)
+            return this.system.endpointSnapshot(process, input.endpoint)
         }
 
         if (operation === "waitReady") {
 
             await waitReady(process, (input as EndpointWaitReadyInput).timeout, signal)
 
-            return endpointSnapshot(process, "server")
+            return this.system.endpointSnapshot(process, "server")
         }
 
         if (operation === "waitLifecycle") {
@@ -193,7 +189,7 @@ export default class SystemControl {
             const request = input as EndpointWaitLifecycleInput
             const internalEvent = request.event === "start" ? "endpointStart" : "endpointStop"
 
-            await waitFor<void>(resolve => this.processes.observeHost(
+            await waitFor<void>(resolve => this.system.observe(
                 "process",
                 internalEvent,
                 process.reference,
@@ -213,8 +209,8 @@ export default class SystemControl {
 
             const request = input as EndpointAskInput
 
-            return this.processes.askFromOutside(
-                process.identity,
+            return this.system.askEndpoint(
+                process,
                 request.event,
                 request.payload,
                 request.timeout,
@@ -226,15 +222,15 @@ export default class SystemControl {
 
             const request = input as EndpointPublishInput
 
-            await this.processes.publishFromOutside(process.identity, request.endpoint, request.event, request.payload)
+            await this.system.publishEndpoint(process, request.endpoint, request.event, request.payload)
 
-            return Object.freeze({ ...endpointSnapshot(process, request.endpoint), event: request.event, published: true })
+            return Object.freeze({ ...this.system.endpointSnapshot(process, request.endpoint), event: request.event, published: true })
         }
 
         const request = input as EndpointWaitInput
         const payload = await waitFor(
-            (resolve, reject) => this.processes.observeEndpoint(
-                process.identity,
+            (resolve, reject) => this.system.observeEndpoint(
+                process,
                 request.endpoint,
                 request.event,
                 resolve,
@@ -255,7 +251,7 @@ export default class SystemControl {
 
     private async window(operation: string, input: WindowInput | WindowWaitInput | (WindowInput & Record<string, unknown>), signal?: AbortSignal) {
 
-        const process = resolveProcess(this.processes.processes, this.programs.programs, input)
+        const process = this.system.resolveProcess(input)
         const request = input as WindowInput & Record<string, unknown>
 
         if (!process.client) throw new Error(`Process "${process.identity}" has no running Client Endpoint`)
@@ -266,7 +262,7 @@ export default class SystemControl {
             const payload = await waitFor(
                 (resolve, reject) => {
 
-                    const stopObservation = this.processes.observeHost("window", waiting.event, process.reference, (_event, _subject, value) => resolve(value))
+                    const stopObservation = this.system.observe("window", waiting.event, process.reference, (_event, _subject, value) => resolve(value))
                     const stopProcess = process.onExit(() => reject(new Error(`Process "${process.identity}" exited while waiting for its Window`)))
                     const stopClient = process.onClientStop(() => reject(new Error(`The Client Endpoint stopped while waiting for Process "${process.identity}" Window`)))
 
@@ -279,25 +275,25 @@ export default class SystemControl {
             return Object.freeze({ scope: "window", process: process.identity, event: waiting.event, payload })
         }
 
-        if (operation === "move") await this.processes.move(process.identity, request.position as never)
-        else if (operation === "resize") await this.processes.resize(process.identity, request.size as never)
-        else if (operation === "setGeometry") await this.processes.setGeometry(process.identity, {
+        if (operation === "move") await this.system.moveWindow(process, request.position as never)
+        else if (operation === "resize") await this.system.resizeWindow(process, request.size as never)
+        else if (operation === "setGeometry") await this.system.setWindowGeometry(process, {
             position: request.position as never,
             size: request.size as never
         })
-        else if (operation === "minimize") await this.processes.minimize(process.identity, request.minimized !== false)
-        else if (operation === "changeTitle") await this.processes.changeTitle(process.identity, String(request.title))
-        else if (operation === "raise") await this.processes.raise(process.identity)
+        else if (operation === "minimize") await this.system.minimizeWindow(process, request.minimized !== false)
+        else if (operation === "changeTitle") await this.system.changeWindowTitle(process, String(request.title))
+        else if (operation === "raise") await this.system.raiseWindow(process)
 
-        return Object.freeze({ process: process.identity, ...this.processes.windowSnapshot(process.identity) })
+        return Object.freeze({ process: process.identity, ...this.system.windowSnapshot(process) })
     }
 
     private async waitProgram(request: ProgramWaitInput, signal?: AbortSignal) {
 
-        const entry = request.program ? requiredProgram(this.programs.programs, request.program) : null
+        const entry = request.program ? this.system.requireProgram(request.program) : null
         const subject = entry?.program.reference ?? null
         const values = await waitFor<unknown[]>(
-            resolve => this.processes.observeHost("program", request.event, subject, (_event, ...payload) => resolve(payload)),
+            resolve => this.system.observe("program", request.event, subject, (_event, ...payload) => resolve(payload)),
             request.timeout,
             signal
         )
@@ -307,28 +303,28 @@ export default class SystemControl {
 
         return Object.freeze({
             scope: entry ? "program" : "host",
-            ...(entry ? { program: programSnapshot(entry) } : {}),
+            ...(entry ? { program: this.system.programSnapshot(entry) } : {}),
             event: request.event,
             payload: request.event === "uninstall"
                 ? Object.freeze({
-                    ...(affected ? { program: programSnapshot(affected) } : {}),
+                    ...(affected ? { program: this.system.programSnapshot(affected) } : {}),
                     everything: values.at(-1) === true
                 })
-                : affected ? programSnapshot(affected) : values
+                : affected ? this.system.programSnapshot(affected) : values
         })
     }
 
     private async waitProcess(request: ProcessWaitInput, signal?: AbortSignal) {
 
         const process = request.process
-            ? resolveProcess(this.processes.processes, this.programs.programs, request as ProcessInput)
+            ? this.system.resolveProcess(request as ProcessInput)
             : null
         const program = !process && request.program
-            ? requiredProgram(this.programs.programs, request.program)
+            ? this.system.requireProgram(request.program)
             : null
         const subject = process?.reference ?? program?.program.reference ?? null
         const values = await waitFor<unknown[]>(
-            resolve => this.processes.observeHost("process", request.event, subject, (_event, ...payload) => resolve(payload)),
+            resolve => this.system.observe("process", request.event, subject, (_event, ...payload) => resolve(payload)),
             request.timeout,
             signal
         )
@@ -351,91 +347,6 @@ export default class SystemControl {
         })
     }
 
-    private get programs() { return this.application.linkManager.authManager.programManager }
-    private get processes() { return this.application.linkManager.authManager.processManager }
-}
-
-function requiredProgram(programs: ReadonlyMap<string, Entry>, identity: string) {
-
-    const program = programs.get(identity)
-
-    if (!program) throw new Error(`Unknown Program "${identity}"`)
-
-    return program
-}
-
-function requiredProcess(processes: ReadonlyMap<string, Process>, identity: string) {
-
-    const process = processes.get(identity)
-
-    if (!process) throw new Error(`Unknown Process "${identity}"`)
-
-    return process
-}
-
-function resolveProcess(processes: ReadonlyMap<string, Process>, programs: ReadonlyMap<string, Entry>, input: ProcessInput) {
-
-    if (!input.program) return requiredProcess(processes, input.process)
-
-    const owner = requiredProgram(programs, input.program).program
-    const process = [...processes.values()].find(candidate => (
-        candidate.program === owner
-        && (candidate.identity === input.process || candidate.name === input.process)
-    ))
-
-    if (!process) throw new Error(`Unknown Process "${input.process}" in Program "${input.program}"`)
-
-    return process
-}
-
-function programSnapshot(entry: Entry) {
-
-    const program = entry.program
-
-    return Object.freeze({
-        reference: program.reference,
-        identity: program.identity,
-        name: program.name,
-        version: program.config.version ?? null,
-        description: program.config.description ?? null,
-        installed: entry.installed,
-        hasAgent: program.agentPath !== null,
-        server: program.server ? Object.freeze({ start: program.server.start, service: program.server.service }) : null,
-        client: program.client ? Object.freeze({
-            start: program.client.start,
-            service: program.client.service,
-            title: program.client.title ?? null,
-            size: program.client.size ?? null,
-            position: program.client.position ?? null,
-            layer: program.client.layer ?? null,
-            minimize: program.client.minimize ?? null
-        }) : null
-    })
-}
-
-function processSnapshot(process: Process) {
-
-    const owner = process.program.record()
-
-    return Object.freeze({
-        reference: process.reference,
-        identity: process.identity,
-        name: process.name,
-        program: process.program.identity,
-        programSnapshot: Object.freeze({
-            reference: owner.reference,
-            identity: owner.identity,
-            name: owner.name,
-            version: owner.version,
-            description: owner.description,
-            hasAgent: owner.hasAgent,
-            server: owner.server,
-            client: owner.client
-        }),
-        startedAt: process.startedAt.toISOString(),
-        server: Object.freeze({ declared: process.program.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
-        client: Object.freeze({ declared: process.program.client !== null, running: process.client !== null, service: process.client?.service ?? false })
-    })
 }
 
 function processRecordSnapshot(process: ReturnType<Process["record"]>) {
@@ -473,23 +384,14 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
             server: record.program.server,
             client: record.program.client
         }),
+        parent: null,
+        options: Object.freeze({ ...process.options }),
         startedAt: new Date(record.startedAt).toISOString(),
         server: Object.freeze({ declared: record.program.server !== null, running: record.server !== null, service: record.server?.service ?? false }),
         client: Object.freeze({ declared: record.program.client !== null, running: record.client !== null, service: record.client?.service ?? false })
     })
 }
 
-function endpointSnapshot(process: Process, endpoint: "server" | "client") {
-
-    return Object.freeze({
-        process: process.identity,
-        program: process.program.identity,
-        endpoint,
-        declared: process.program[endpoint] !== null,
-        running: process[endpoint] !== null,
-        service: process[endpoint]?.service ?? false
-    })
-}
 
 function waitReady(process: Process, timeout = 10_000, signal?: AbortSignal) {
 

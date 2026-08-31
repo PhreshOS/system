@@ -11,7 +11,31 @@ const launch = { server: null, client: null, options: {} } as const
 
 function processManager() {
 
-    return new ProcessManager(new TheLink() as unknown as AuthManager)
+    const authManager = new TheLink() as unknown as AuthManager
+    const manager = new ProcessManager(authManager)
+
+    Object.assign(authManager, {
+        linkManager: {
+            application: {
+                system: {
+                    holdProcess(value: unknown, fallback?: Process) {
+
+                        if (value === undefined || value === null) return fallback
+                        if (typeof value !== "object" || value === null) throw new Error("Invalid Process handle")
+
+                        const handle = value as { identity?: string, reference?: string }
+                        const process = handle.identity ? manager.processes.get(handle.identity) : null
+
+                        if (!process || process.reference !== handle.reference) throw new Error("The Process represented by this handle does not exist")
+
+                        return process
+                    }
+                }
+            }
+        }
+    })
+
+    return manager
 }
 
 function program(identity: string) {

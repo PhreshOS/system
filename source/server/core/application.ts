@@ -9,7 +9,7 @@ import openStore from "./open-store"
 import Keyv from "keyv"
 import FileArea from "@libs/file-area"
 import { homedir } from "node:os"
-import SystemControl from "./system-control/system-control"
+import System from "./system"
 
 export default class Application {
 
@@ -42,7 +42,8 @@ export default class Application {
 
     public readonly linkManager: LinkManager
 
-    public readonly systemControl: SystemControl
+    /** One authoritative System domain shared by every trusted adapter. */
+    public readonly system: System
 
     private constructor(payload: ApplicationPayload) {
 
@@ -72,7 +73,7 @@ export default class Application {
 
         this.linkManager = new LinkManager(this)
 
-        this.systemControl = new SystemControl(this)
+        this.system = new System(this)
     }
 
     public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string) {
