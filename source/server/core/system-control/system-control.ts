@@ -3,6 +3,7 @@ import {
     systemControlOperation,
     type EndpointAskInput,
     type EndpointInput,
+    type EndpointWaitLifecycleInput,
     type EndpointPublishInput,
     type EndpointStartInput,
     type EndpointWaitInput,
@@ -156,7 +157,7 @@ export default class SystemControl {
         return snapshot
     }
 
-    private async endpoint(operation: string, input: EndpointInput | EndpointStartInput | EndpointWaitReadyInput | EndpointAskInput | EndpointPublishInput | EndpointWaitInput, signal?: AbortSignal) {
+    private async endpoint(operation: string, input: EndpointInput | EndpointStartInput | EndpointWaitReadyInput | EndpointWaitLifecycleInput | EndpointAskInput | EndpointPublishInput | EndpointWaitInput, signal?: AbortSignal) {
 
         const process = resolveProcess(this.processes.processes, this.programs.programs, input)
         const declaration = process.program[input.endpoint]
@@ -183,6 +184,27 @@ export default class SystemControl {
             await waitReady(process, (input as EndpointWaitReadyInput).timeout, signal)
 
             return endpointSnapshot(process, "server")
+        }
+
+        if (operation === "waitLifecycle") {
+
+            const request = input as EndpointWaitLifecycleInput
+            const internalEvent = request.event === "start" ? "endpointStart" : "endpointStop"
+
+            await waitFor<void>(resolve => this.processes.observeHost(
+                "process",
+                internalEvent,
+                process.reference,
+                (_event, _record, endpoint) => { if (endpoint === request.endpoint) resolve() }
+            ), request.timeout, signal)
+
+            return Object.freeze({
+                scope: "endpoint.lifecycle",
+                process: process.identity,
+                endpoint: request.endpoint,
+                event: request.event,
+                payload: undefined
+            })
         }
 
         if (operation === "ask") {
@@ -288,7 +310,7 @@ export default class SystemControl {
             payload: request.event === "uninstall"
                 ? Object.freeze({
                     ...(affected ? { program: programSnapshot(affected) } : {}),
-                    everythingRemoved: values.at(-1) === true
+                    everything: values.at(-1) === true
                 })
                 : affected ? programSnapshot(affected) : values
         })
@@ -323,13 +345,7 @@ export default class SystemControl {
                     code: values.at(-2) ?? null,
                     signal: values.at(-1) ?? null
                 })
-                : request.event === "endpointStart" || request.event === "endpointStop"
-                    ? Object.freeze({
-                        process: record?.identity ?? process?.identity ?? null,
-                        ...(record ? { processSnapshot: processRecordSnapshot(record) } : {}),
-                        endpoint: values.at(-1)
-                    })
-                    : record ? processRecordSnapshot(record) : values
+                : record ? processRecordSnapshot(record) : values
         })
     }
 

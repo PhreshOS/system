@@ -8,6 +8,8 @@
         "@fontsource/roboto": "^5.3.0",
         "@hono/node-server": "^2.1.1",
         "@msgpack/msgpack": "^3.1.3",
+        "@phreshos/client": "^0.1.27",
+        "@phreshos/server": "^0.1.28",
         "cfonts": "^3.3.1",
         "get-port": "^7.2.0",
         "gsap": "^3.15.0",
@@ -24,7 +26,7 @@
       "devDependencies": {
         "@babel/core": "^7.29.7",
         "@babel/plugin-proposal-decorators": "^7.29.7",
-        "@phreshos/core": "^0.1.26",
+        "@phreshos/core": "^0.1.28",
         "@phreshos/react-ui": "^0.1.12",
         "@rolldown/plugin-babel": "^0.2.3",
         "@tailwindcss/vite": "^4.3.3",
@@ -232,9 +234,13 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.26", "", {}, "sha512-AelOw8LmWpgC5tXkORG10z32FJQufN63Pl3pdqGyN+oDfNWWRg4nAj13BsuisCdzD7ckzKPZzZUJeFvBhImK2w=="],
+    "@phreshos/client": ["@phreshos/client@0.1.27", "", { "dependencies": { "@msgpack/msgpack": "^3.1.3" }, "peerDependencies": { "@phreshos/core": "^0.1.27" } }, "sha512-5eUYFei9JnswalN3/Vgp+Rl8xVOAyFlh908e9SRrsWrAUeSKlVGlNhnVkil5gTvdx9lCEJaDhQTbYpIM4cVYxQ=="],
+
+    "@phreshos/core": ["@phreshos/core@0.1.28", "", {}, "sha512-leqXoxdC+xLQs2lEs0fj7T96ammpw9WNRiUpsBS75C2wgnhg8Zwv9u+48LUablW2Yb/1eEvtIOfxFpyWEwjGmQ=="],
 
     "@phreshos/react-ui": ["@phreshos/react-ui@0.1.12", "", { "dependencies": { "react-aria-components": "^1.20.0" }, "peerDependencies": { "@phreshos/core": "^0.1.22", "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-vD5jfhW09HHE/POJ1pc9LZaq3AjkmA82qyXpg6o5yBII9NKI1Grdd8H0KoMhmPl5XdtMawuwK0N33OTkPd4pzw=="],
+
+    "@phreshos/server": ["@phreshos/server@0.1.28", "", { "dependencies": { "@msgpack/msgpack": "^3.1.3" }, "peerDependencies": { "@phreshos/core": "^0.1.27" } }, "sha512-X8nkFm3uax6P0ZMR5o0QnrOoVIdSoU8mFCjZKNoazIs4swznqfQRfkF6rfASQI3y+6/iyiINPDohZfoi71V3EQ=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 

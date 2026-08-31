@@ -707,12 +707,7 @@ export default class ProcessManager extends TheLink {
 
         const record = processReference(process)
 
-        await Promise.all([
-
-            this.announce("process", event, process.program.identity, process.program.reference, record, endpoint),
-
-            this.hostTraffic.emitSubject("process", event, process.reference, record, endpoint)
-        ])
+        await this.hostTraffic.emitSubject("process", event, process.reference, record, endpoint)
     }
 
     private async serverStarted(process: Process) {

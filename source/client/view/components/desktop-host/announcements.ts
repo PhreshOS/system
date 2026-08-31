@@ -92,9 +92,9 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     // is no longer on the machine.
     programs.useSubscribe("/uninstall", useCallback((...results: unknown[]) => {
 
-        const [program, everythingRemoved] = results as [HostedEntry, boolean]
+        const [program, everything] = results as [HostedEntry, boolean]
 
-        post(uninstalled(whose(authManager, panes), program, everythingRemoved === true))
+        post(uninstalled(whose(authManager, panes), program, everything === true))
 
     }, [post, authManager, panes]))
 
@@ -171,13 +171,9 @@ export function endpoint(authManager: AuthManager, panes: readonly (readonly [st
 
     const processRecord = record(authManager, process)
 
-    return panes.filter(([, shown]) => shown === process.program).flatMap(([pane]) => [
-
-        [pane, "program-process", event, owner(authManager, process).reference, processRecord, endpointKind],
-
-        [pane, "process-host", event, process.reference, processRecord, endpointKind]
-
-    ] as Offer[])
+    return panes
+        .filter(([, shown]) => shown === process.program)
+        .map(([pane]) => [pane, "process-host", event, process.reference, processRecord, endpointKind])
 }
 
 function record(authManager: AuthManager, process: ExitedProcess) {
@@ -196,9 +192,9 @@ function owner(authManager: AuthManager, process: ExitedProcess) {
 
 // A program left the installed state, routed to its panes and no others.
 // What comes with it is whether everything the system owned went too.
-export function uninstalled(panes: readonly (readonly [string, string | undefined])[], program: { identity: string, reference: string }, everythingRemoved: boolean): Offer[] {
+export function uninstalled(panes: readonly (readonly [string, string | undefined])[], program: { identity: string, reference: string }, everything: boolean): Offer[] {
 
-    return panes.filter(([, shown]) => shown === program.identity).map(([pane]) => [pane, "program-host", "uninstall", program.reference, everythingRemoved])
+    return panes.filter(([, shown]) => shown === program.identity).map(([pane]) => [pane, "program-host", "uninstall", program.reference, everything])
 }
 
 type ExitedProcess = { reference: string, identity: string, program: string, startedAt: Date, name: string | null, options: Record<string, string>, server: { ready: boolean } | null, client: { window: unknown } | null }
