@@ -51,6 +51,19 @@ export default async function programRequest(application: Application, socket: S
         return done()
     }
 
+    if (asked.word === "fork") {
+
+        const program = system.holdProgram(asked.handle)
+
+        if (typeof asked.identity !== "string") throw new Error("Forking needs a Program identity")
+
+        const forked = await system.forkProgram(program, asked.identity)
+        const entry = system.requireProgram(forked.identity)
+
+        say({ event: "created", program: system.programSnapshot(entry) })
+        return done()
+    }
+
     if (asked.word === "run-process") {
 
         const program = system.holdProgram(asked.handle)
@@ -181,6 +194,7 @@ interface Asked {
     word?: string
     everything?: boolean
     handle?: unknown
+    identity?: string
     operation?: string
     launch?: Parameters<Application["system"]["runProcess"]>[1]
     program?: Parameters<Application["system"]["forceCreateProgram"]>[0]

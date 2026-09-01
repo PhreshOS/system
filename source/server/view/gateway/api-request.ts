@@ -1,5 +1,6 @@
 import type Application from "@server/core/application"
 import { uploadLimit } from "@server/core/upload-manager"
+import { isPermissionName } from "@phreshos/core"
 
 /** Execute one operation belonging to the shared System SDK contract. */
 export default async function apiRequest(application: Application, value: unknown, signal: AbortSignal) {
@@ -28,9 +29,7 @@ export default async function apiRequest(application: Application, value: unknow
 
     if (request.capability === "program") {
 
-        if (typeof request.program !== "string") throw new Error("A Program API request needs a Program identity")
-
-        const program = system.requireProgram(request.program).program
+        const program = system.holdProgram(request.handle)
 
         if (request.operation === "storagePath") {
 
@@ -43,6 +42,8 @@ export default async function apiRequest(application: Application, value: unknow
             if (request.size !== "small" && request.size !== "medium" && request.size !== "large") throw new Error("A Program icon size is small, medium, or large")
             return Array.from(await system.programIcon(program, request.size))
         }
+
+        if (request.operation === "agent") return system.programAgent(program)
 
         if (request.operation === "store") {
 
@@ -57,7 +58,71 @@ export default async function apiRequest(application: Application, value: unknow
             return system.programQuery(program, request.database, request.statement, request.values)
         }
 
+        if (request.operation === "permission") {
+
+            const operation = request.permissionOperation
+
+            if (operation === "getAll") return system.programPermissions(program)
+            if (!isPermissionName(request.name)) throw new Error(`The system does not know the permission "${String(request.name)}"`)
+            if (operation === "get") return system.programPermission(program, request.name)
+
+            if (operation === "set") {
+
+                if (typeof request.value !== "boolean") throw new Error("A permission decision must be boolean")
+
+                system.setProgramPermission(program, request.name, request.value)
+
+                return
+            }
+
+            if (operation === "delete") {
+
+                system.deleteProgramPermission(program, request.name)
+
+                return
+            }
+
+            throw new Error(`The Program permission API does not know "${String(operation)}"`)
+        }
+
+        if (request.operation === "wait") {
+
+            if (request.event !== "forget" && request.event !== "uninstall") throw new Error("A Program event is forget or uninstall")
+
+            const values = await waitForHost(system, "program", request.event, program.reference, timed(signal, request.timeout))
+
+            return request.event === "uninstall" ? values[0] === true : undefined
+        }
+
         throw new Error(`The Program API does not know "${String(request.operation)}"`)
+    }
+
+    if (request.capability === "programProcess") {
+
+        const program = system.holdProgram(request.handle)
+
+        if (request.operation === "list") return system.listProcesses(program).map(process => system.processSnapshot(process))
+
+        if (request.operation === "wait") {
+
+            if (request.event !== "create" && request.event !== "exit") throw new Error("A Program Process event is create or exit")
+
+            const values = await waitForHost(system, "process", request.event, program.reference, timed(signal, request.timeout))
+            const process = system.processSnapshotFromReference(values[0] as Parameters<typeof system.processSnapshotFromReference>[0])
+
+            if (request.event === "create") return process
+
+            const namedSignal = typeof values[2] === "string" ? values[2] : null
+
+            return Object.freeze({
+                process,
+                status: namedSignal === null ? "exited" : "signaled",
+                code: typeof values[1] === "number" ? values[1] : null,
+                signal: namedSignal
+            })
+        }
+
+        throw new Error(`The Program Process API does not know "${String(request.operation)}"`)
     }
 
     if (request.capability === "endpoint" && request.operation === "isService") {
@@ -163,6 +228,37 @@ function waitForService(system: Application["system"], key: unknown, scope: stri
 function timed(signal: AbortSignal, value: unknown) {
 
     return AbortSignal.any([signal, AbortSignal.timeout(number(value) ?? 10_000)])
+}
+
+function waitForHost(
+    system: Application["system"],
+    domain: "program" | "process",
+    event: string,
+    subject: string,
+    signal: AbortSignal
+) {
+
+    return new Promise<unknown[]>((resolve, reject) => {
+
+        const stop = system.observe(domain, event, subject, (_event, ...values) => {
+
+            cleanup()
+            resolve(values)
+        })
+        const abort = () => {
+
+            cleanup()
+            reject(signal.reason instanceof Error ? signal.reason : new Error("The System wait was cancelled"))
+        }
+        const cleanup = () => {
+
+            stop()
+            signal.removeEventListener("abort", abort)
+        }
+
+        if (signal.aborted) abort()
+        else signal.addEventListener("abort", abort, { once: true })
+    })
 }
 
 function waitForEndpoint(system: Application["system"], process: Parameters<Application["system"]["observeEndpoint"]>[0], endpoint: "server" | "client", event: string | null, signal: AbortSignal) {

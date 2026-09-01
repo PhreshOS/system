@@ -4,6 +4,7 @@ import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
 import type { ClientLaunch, Launch, PermissionName, Position, ServerLaunch, Size, WindowGeometry } from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
+import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
 
 type Endpoint = "server" | "client"
@@ -286,13 +287,23 @@ export default class System {
 
     public processSnapshot(process: Process) {
 
-        const owner = process.program.record()
+        return this.describeProcess(processReference(process), process.parent?.identity ?? null)
+    }
+
+    public processSnapshotFromReference(process: ProcessReference) {
+
+        return this.describeProcess(process, null)
+    }
+
+    private describeProcess(process: ProcessReference, parent: string | null) {
+
+        const owner = process.program
 
         return Object.freeze({
             reference: process.reference,
             identity: process.identity,
             name: process.name,
-            program: process.program.identity,
+            program: owner.identity,
             programSnapshot: Object.freeze({
                 reference: owner.reference,
                 identity: owner.identity,
@@ -303,11 +314,11 @@ export default class System {
                 server: owner.server,
                 client: owner.client
             }),
-            parent: process.parent?.identity ?? null,
+            parent,
             options: Object.freeze({ ...process.options }),
             startedAt: process.startedAt.toISOString(),
-            server: Object.freeze({ declared: process.program.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
-            client: Object.freeze({ declared: process.program.client !== null, running: process.client !== null, service: process.client?.service ?? false })
+            server: Object.freeze({ declared: owner.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
+            client: Object.freeze({ declared: owner.client !== null, running: process.client !== null, service: process.client?.service ?? false })
         })
     }
 

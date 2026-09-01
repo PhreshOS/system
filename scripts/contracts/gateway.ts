@@ -12,6 +12,10 @@ const entry = {
     installed: false,
     program: { identity: "example" }
 }
+const forkedEntry = {
+    installed: false,
+    program: { identity: "forked" }
+}
 const programSnapshot = {
     reference: "example-reference",
     identity: "example",
@@ -40,12 +44,19 @@ const application = {
     system: {
         listPrograms() { return [] },
         async forceCreateProgram() { return entry.program },
-        requireProgram() { return entry },
-        programSnapshot() { return programSnapshot },
+        requireProgram(identity: string) { return identity === forkedEntry.program.identity ? forkedEntry : entry },
+        programSnapshot(selected: typeof entry) { return { ...programSnapshot, identity: selected.program.identity } },
         holdProgram(handle: { identity?: string, reference?: string }) {
 
             assert.deepEqual(handle, { identity: "example", reference: "example-reference" })
             return entry.program
+        },
+        forkProgram(owner: unknown, identity: string) {
+
+            assert.equal(owner, entry.program)
+            assert.equal(identity, forkedEntry.program.identity)
+
+            return forkedEntry.program
         },
         async *installProgram() {},
         findProcess() { return null },
@@ -105,6 +116,20 @@ try {
             server: null,
             client: { start: true }
         }
+    }])
+
+    const forked = await exchange(path, {
+        target: "program",
+        request: {
+            word: "fork",
+            handle: { identity: "example", reference: "example-reference" },
+            identity: "forked"
+        }
+    })
+
+    assert.deepEqual(forked, [{
+        event: "created",
+        program: { ...programSnapshot, identity: "forked" }
     }])
 
     const installed = await exchange(path, {

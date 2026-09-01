@@ -330,7 +330,7 @@ export default class SystemControl {
             request.timeout,
             signal
         )
-        const record = values.find(value => value && typeof value === "object" && "identity" in value) as ReturnType<Process["record"]> | undefined
+        const record = values.find(value => value && typeof value === "object" && "identity" in value) as Parameters<System["processSnapshotFromReference"]>[0] | undefined
 
         return Object.freeze({
             scope: process ? "process" : program ? "program" : "host",
@@ -340,58 +340,15 @@ export default class SystemControl {
             payload: request.event === "exit"
                 ? Object.freeze({
                     process: record?.identity ?? process?.identity ?? null,
-                    ...(record ? { processSnapshot: processRecordSnapshot(record) } : {}),
+                    ...(record ? { processSnapshot: this.system.processSnapshotFromReference(record) } : {}),
                     status: values.at(-1) ? "signaled" : "exited",
                     code: values.at(-2) ?? null,
                     signal: values.at(-1) ?? null
                 })
-                : record ? processRecordSnapshot(record) : values
+                : record ? this.system.processSnapshotFromReference(record) : values
         })
     }
 
-}
-
-function processRecordSnapshot(process: ReturnType<Process["record"]>) {
-
-    const record = process as unknown as {
-        identity: string
-        name: string | null
-        program: {
-            reference: string
-            identity: string
-            name: string
-            version: string | null
-            description: string | null
-            hasAgent: boolean
-            server: unknown
-            client: unknown
-        }
-        startedAt: Date | string
-        server: { service: boolean } | null
-        client: { service: boolean } | null
-    }
-
-    return Object.freeze({
-        reference: process.reference,
-        identity: record.identity,
-        name: record.name,
-        program: record.program.identity,
-        programSnapshot: Object.freeze({
-            reference: record.program.reference,
-            identity: record.program.identity,
-            name: record.program.name,
-            version: record.program.version,
-            description: record.program.description,
-            hasAgent: record.program.hasAgent,
-            server: record.program.server,
-            client: record.program.client
-        }),
-        parent: null,
-        options: Object.freeze({ ...process.options }),
-        startedAt: new Date(record.startedAt).toISOString(),
-        server: Object.freeze({ declared: record.program.server !== null, running: record.server !== null, service: record.server?.service ?? false }),
-        client: Object.freeze({ declared: record.program.client !== null, running: record.client !== null, service: record.client?.service ?? false })
-    })
 }
 
 
