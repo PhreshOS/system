@@ -1,5 +1,5 @@
 import { type RefObject } from "react"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import { type DesktopPointerPosition, type DesktopPointerSnapshot } from "@phreshos/core"
 
 /**

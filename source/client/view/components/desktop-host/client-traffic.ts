@@ -1,4 +1,4 @@
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 
 /** Desktop-local traffic routed only to subscribed client Process boundaries. */

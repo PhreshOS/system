@@ -1,10 +1,10 @@
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import HostTraffic from "./host-traffic"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceKey } from "@phreshos/core"
-import Tunnel from "@libs/the-link/tunnel"
+import { Tunnel } from "@the-link/core"
 import messagepack from "@libs/messagepack"
 import type { ServerRuntime, Stream } from "./server-runtime"
 

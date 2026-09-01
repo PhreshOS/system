@@ -1,4 +1,4 @@
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 
 /** Host announcements routed only into Process boundaries that requested them. */
 export default class HostTraffic extends TheLink {

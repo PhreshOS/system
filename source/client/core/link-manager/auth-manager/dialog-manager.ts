@@ -1,6 +1,6 @@
 import { type PermissionChoice, type SystemDialog, type TransmittedDialogManager } from "@server/core/dialog-manager"
-import { Publish, Subscribe } from "@libs/the-link/decorators/escript"
-import TheLink from "@libs/the-link/the-link"
+import { Publish, Subscribe } from "@the-link/core/decorators"
+import { TheLink } from "@the-link/core"
 import AuthManager from "./auth-manager"
 
 /** Synchronized desktop counterpart of the authoritative system-dialog queue. */

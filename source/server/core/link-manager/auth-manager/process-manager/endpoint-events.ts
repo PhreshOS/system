@@ -1,4 +1,4 @@
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import { type Half } from "./process-traffic"
 
 /**

@@ -1,10 +1,10 @@
-import { Connect, Forward, Intercept, Subscribe } from "@libs/the-link/decorators/escript"
+import { Connect, Forward, Intercept, Subscribe } from "@the-link/core/decorators"
 import UploadManager from "@server/core/upload-manager"
 import DialogManager from "@server/core/dialog-manager"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
 import { Transmitted } from "@libs/messagepack"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { isPermissionName } from "@phreshos/core"
 

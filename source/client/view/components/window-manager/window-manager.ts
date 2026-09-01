@@ -1,6 +1,6 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
+import { ReactTunnel } from "@the-link/react"
 import { Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
 import { type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"

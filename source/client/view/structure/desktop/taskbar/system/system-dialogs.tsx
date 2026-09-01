@@ -1,5 +1,5 @@
 import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } from "@server/core/dialog-manager"
-import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
+import { ReactTunnel } from "@the-link/react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"

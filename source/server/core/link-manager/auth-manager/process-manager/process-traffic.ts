@@ -1,4 +1,4 @@
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 
 /**
  * Application traffic spoken by one Process endpoint.

@@ -16,7 +16,7 @@ import ProcessWindow from "./windows/process-window"
 import useWindows from "../../components/window-manager/window-manager"
 import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
 import Loading from "../../components/loading"
-import { useRequirement } from "@libs/readiness/main"
+import { useRequirement } from "@libs/readiness"
 import { useAppearance, useResolveTheme, useTheme } from "@phreshos/react-ui"
 
 export default function Workspace() {

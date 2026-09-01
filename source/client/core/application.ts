@@ -1,4 +1,4 @@
-import ClientLink from "@libs/the-link/plugins/client-link/client-link"
+import { ClientLink } from "@the-link/client"
 import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaType } from "@server/core/protocol/proxy"
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"

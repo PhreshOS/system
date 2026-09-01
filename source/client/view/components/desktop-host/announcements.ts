@@ -1,6 +1,6 @@
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
-import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
+import { ReactTunnel } from "@the-link/react"
 import { useCallback } from "react"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"

@@ -1,5 +1,5 @@
 import { isServiceKey, type ServiceKey } from "@phreshos/core"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import type Process from "./process"
 import type { Half } from "./process-traffic"
 

@@ -1,9 +1,9 @@
 import { TransmittedAuthManager } from "@server/core/link-manager/auth-manager/auth-manager"
-import { Intercept } from "@libs/the-link/decorators/escript"
+import { Intercept } from "@the-link/core/decorators"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
 import DialogManager from "./dialog-manager"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { type PermissionDecision, type PermissionName } from "@phreshos/core"
 

@@ -1,4 +1,4 @@
-import ServerLink from "@libs/the-link/plugins/server-link/server-link"
+import { ServerLink } from "@the-link/server"
 import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
 import messagepack from "@libs/messagepack"

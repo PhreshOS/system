@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import type AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"

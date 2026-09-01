@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import { renderToStaticMarkup } from "react-dom/server"
-import Readiness from "@libs/readiness/main"
-import ReadinessState from "@libs/readiness/state"
+import Readiness, { ReadinessState } from "@libs/readiness"
 
 const startup = ReadinessState.start(["connection", "session", "wallpaper"])
 

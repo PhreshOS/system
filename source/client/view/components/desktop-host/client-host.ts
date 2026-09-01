@@ -1,4 +1,4 @@
-import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
+import { ReactTunnel } from "@the-link/react"
 import { isPermissionName, type DesktopSize, type DesktopSurfaceSnapshot } from "@phreshos/core"
 import useAnnouncements from "./announcements"
 import DesktopPointer from "./pointer"

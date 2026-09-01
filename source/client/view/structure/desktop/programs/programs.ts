@@ -1,4 +1,4 @@
-import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
+import { ReactTunnel } from "@the-link/react"
 import { AuthManagerContext } from "@client/view/contexts"
 
 /**

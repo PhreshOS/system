@@ -3,7 +3,7 @@ import lightWallpaper from "@/assets/bundled/light-wallpaper.png"
 import { ApplicationContext } from "@client/view/contexts"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Loading from "@client/view/components/loading"
-import { useReady } from "@libs/readiness/main"
+import { useReady } from "@libs/readiness"
 import { useTheme } from "@phreshos/react-ui"
 
 type WallpaperSource = Readonly<{

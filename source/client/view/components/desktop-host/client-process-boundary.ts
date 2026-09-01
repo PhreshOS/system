@@ -1,5 +1,5 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
-import TheLink from "@libs/the-link/the-link"
+import { TheLink } from "@the-link/core"
 import host, { TransferredAnswer } from "./host"
 import { type PointerHost } from "./pointer"
 import ClientTraffic from "./client-traffic"

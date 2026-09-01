@@ -7,7 +7,7 @@ import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
 import { type Layer, type PermissionName } from "@phreshos/core"
-import Tunnel from "@libs/the-link/tunnel"
+import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "./server-runtime"
 
 /**

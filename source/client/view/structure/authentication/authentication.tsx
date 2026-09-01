@@ -10,7 +10,7 @@ import Register from "./register"
 import { useState, type ReactNode } from "react"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { WallpaperStage } from "../desktop/wallpaper/wallpaper"
-import { useReady } from "@libs/readiness/main"
+import { useReady } from "@libs/readiness"
 import { useAppearance, useResolveTheme } from "@phreshos/react-ui"
 
 export default function () {
