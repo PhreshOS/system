@@ -1,158 +1,128 @@
 # PhreshOS System
 
-The authoritative PhreshOS runtime and the web desktop that represents it.
+The authoritative runtime and the web desktop that represents it.
 
-PhreshOS runs as a per-user service on Windows, Linux, and macOS. The server
-owns the system's truth: Programs, Processes, authentication, persistence, and
-the boundaries through which code reaches the machine. The desktop presents
-that truth in the browser; it does not become a second source of system state.
+PhreshOS is an open-source, server-authoritative operating system for running
+and managing web-based programs in a unified web desktop environment, with
+native agent access through shared APIs.
 
-PhreshOS is single-user and self-hosted. Its runtime state remains on the
-machine that runs it, and the System adds no telemetry.
+It is self-hosted and single-user. One owner runs it on a machine they control,
+and the System keeps its authoritative state there.
 
-## Mental model
+## System
+
+The System owns Program and Process lifecycle, routing, authentication,
+persistence, and the boundaries through which code reaches host resources. The
+web desktop turns that truth into a direct graphical interface.
 
 ```text
 Host operating system
 └── PhreshOS System
     ├── Server runtime
-    │   ├── Programs → Processes → Endpoints
-    │   ├── Authentication and persistence
-    │   └── Owner-local gateway
+    │   └── Programs → Processes → Server and Client Endpoints
     └── Web desktop
-        └── Browser representation of server truth
+        └── Windows, taskbar, dialogs, and Client representations
 ```
 
-A Program is the stable unit installed or attached to the System. A Process is
-one running incarnation of that Program. Its Endpoints are the places where its
-code participates in the system:
+The browser is the machine's display, not its authority. The Server owns the
+truth about Programs, Processes, authentication, persistence, and access to
+host resources. A desktop connection represents that truth and provides the
+local environment needed to interact with it.
 
-- A Server Endpoint runs JavaScript on the host, either in its own
-  operating-system process tree or in a Worker owned by the System.
-- A Client Endpoint runs in a sandboxed iframe on the desktop and owns its
-  Window.
-- Every Endpoint communicates through explicit Traffic.
+## Runtime
 
-Endpoints are silent by default. Data, events, permissions, and host state do
-not enter an Endpoint merely because it exists; Program code must explicitly
-request or subscribe to what it needs.
+A Program is the stable software identity known by the System. A Process is one
+live execution aggregate of a Program and owns permanent Server and Client
+handles.
 
-A Program selects exactly one Server execution mode. `startCommand` preserves
-an arbitrary shell command and its independently supervised process tree.
-`entryFile` resolves a module inside the Program's Server files and runs it in a
-System-owned Worker, avoiding a separate Node.js process. Both modes expose the
-same Process and Server SDK contracts. A Worker has no independent working
-directory and is not a security boundary; a catastrophic Worker or native
-module failure can affect the System process.
+A Server Endpoint executes host-side JavaScript. A Client Endpoint executes in
+a sandboxed iframe inside the desktop and owns one Window. Both are Endpoints in
+the same domain model.
 
-## System boundaries
+Endpoints communicate explicitly. Starting an Endpoint does not push
+application data or System state into it.
 
-The server owns authoritative state and Process lifecycle. The desktop owns its
-representation: windows, focus, layering, taskbar, and interaction. Programs
-remain isolated from one another and reach shared system capabilities only
-through the contracts exposed to their Endpoints.
+## Gateway
 
-Local Program operations enter through an owner-restricted gateway address. On
-POSIX systems this is a Unix domain socket with mode `0600`; on Windows it is an
-owner-created named pipe. It opens no network port and requires no token beyond
-the operating-system account that owns it.
+External Node tools and the CLI reach the running System through an owner-local
+gateway: a Unix-domain socket with owner-only permissions on POSIX systems or an
+owner-created named pipe on Windows. It opens no network port.
 
-`phresh dev` and `phresh start` run an attached Program whose lifetime follows
-the gateway connection. `phresh install` creates the persistent installed form,
-and `phresh uninstall` removes it through the same local boundary.
+The gateway is a connection mechanism, not a separate public model. Consumers
+use ordinary System handles and add only `disconnect()` when they own the
+connection.
 
-## Install and operate
+## Installation
 
-On Linux and macOS:
+The current System requires Node.js `24.15.0` or newer on macOS, Linux, or
+Windows.
+
+Install the CLI with a package manager:
+
+| Package manager | Command |
+| --- | --- |
+| npm | `npm install --global @phreshos/cli` |
+| pnpm | `pnpm add --global @phreshos/cli` |
+| Bun | `bun add --global @phreshos/cli` |
+| Yarn Classic | `yarn global add @phreshos/cli` |
+
+Then install and control the System:
 
 ```sh
-curl -fsSL https://install.phreshos.com/sh | bash
-```
-
-On Windows PowerShell:
-
-```powershell
-irm https://install.phreshos.com/ps1 | iex
-```
-
-The bootstrap installs the official `phresh` CLI, which acquires a compatible
-System release and registers the native per-user service. The CLI remains the
-owner of installation and service lifecycle:
-
-```sh
+phresh system install
 phresh system status
 phresh system start
 phresh system stop
-phresh system uninstall
+phresh system enable
+phresh system disable
 ```
 
-System releases are verified production archives published through the
-official [`PhreshOS/system`](https://github.com/PhreshOS/system) GitHub
-Releases. They are not npm packages or source checkouts. Production runs on
-Node.js and does not require Bun, TypeScript, or Vite.
+The CLI verifies the official release archive, installs its production
+dependencies, selects the release, and configures a native per-user service.
 
-The `0.x` release line is pre-stable. Public runtime contracts may change before
-the first stable release.
+## Storage
 
-## Persistence
+Production state lives beneath `~/.phreshos` by default. Set
+`PHRESHOS_HOME` to an absolute path to operate another System home.
 
-Production keeps System state beneath the owner's `~/.phreshos` directory.
-This includes credentials and private material, the System database, installed
-Programs and their storage, uploaded files, and the local gateway address while
-the service is running.
+Persistent state includes owner credentials, the System database, installed
+Program files, Program resources, public uploads, logs, and the local gateway
+address while the System is running.
 
-Direct project execution uses the repository's `storage/` directory by default.
-`PHRESHOS_HOME` may select another absolute state root in either direct or
-CLI-launched execution. The CLI otherwise selects `~/.phreshos` and passes that
-absolute home to the System it launches.
+## Development
 
-`PHRESHOS_PORT` optionally selects the public desktop port. Production defaults
-to `4300`. Neither environment variable is required.
-
-Runtime state must never enter the repository or a release archive.
-
-## Develop the System
-
-Install the pinned development dependencies and run the complete verification:
+Install the pinned dependencies and run the repository verification:
 
 ```sh
 bun install --frozen-lockfile
 bun run verify
 ```
 
-Start an isolated development instance:
+Start the development System:
 
 ```sh
 bun run dev
 ```
 
-The repository's release operations are:
+Build or package the production release:
 
 ```sh
 bun run build
 bun run pack
-bun run verify
 ```
 
-`build` produces the Node.js server and static desktop under `dist/`. `pack`
-creates `phreshos@<version>.zip` and its SHA-256 checksum. `verify` type-checks
-the source, exercises the runtime contracts, creates and extracts the actual
-distribution archive, installs only its declared production dependencies, and
-validates its Node.js entrypoint. CI additionally boots the clean installation
-and requests the desktop.
+`build` produces the Server and desktop in `dist/`. `pack` creates the
+versioned release archive and its SHA-256 checksum. `verify` checks the source
+contracts and validates the packed System from a clean installation.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository workflow and
 [SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## Repository boundary
 
-This repository owns the System runtime and its desktop representation. Shared
-domain contracts come from the published `@phreshos/core` package, and shared
-visual primitives come from published `@phreshos/react-ui` releases.
-
-The CLI owns acquisition, installation, updates, and operating-system service
-integration. SDK repositories own Program-facing contracts. This repository
-does not import sibling source or depend on the enclosing local workspace.
+This repository owns the authoritative runtime and its web desktop. Other
+PhreshOS components enter through their published releases rather than sibling
+source paths or assumptions about an enclosing workspace.
 
 ## License
 
