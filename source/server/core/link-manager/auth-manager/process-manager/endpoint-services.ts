@@ -20,8 +20,6 @@ export default class EndpointServices extends TheLink {
 
         const resolved = this.key(key)
 
-        if (resolved.endpoint !== "server") throw new Error("Only a Server service becomes ready")
-
         const milliseconds = serviceTimeout(timeout)
 
         await new Promise<void>((resolve, reject) => {
@@ -47,11 +45,9 @@ export default class EndpointServices extends TheLink {
 
                 const target = this.resolve(resolved)
 
-                if (!target?.process.server) return
+                if (!target) return
 
-                if (target.process.server.ready) return finish(resolve)
-
-                stopReady = target.process.waitReady(() => finish(resolve))
+                stopReady = target.process.waitReady(resolved.endpoint, () => finish(resolve))
             }
 
             const stopStart = this.$inbound.subscribe(this.event(resolved, "lifecycle", "start"), inspect)

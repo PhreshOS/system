@@ -2075,13 +2075,17 @@ export default class ProcessManager extends TheLink {
 
                 const target = this.system.holdProcess(args[1], process)
 
-                const requireCurrentIncarnation = args[2] === true
+                const endpoint = args[2]
 
-                if (!target.program.server) throw new Error("This program declared no server half")
+                if (endpoint !== "server" && endpoint !== "client") throw new Error("Readiness needs an Endpoint")
 
-                if (requireCurrentIncarnation && !target.server) throw new Error("This process has no live server endpoint")
+                const requireCurrentIncarnation = args[3] === true
 
-                if (target.server?.ready) {
+                if (!target.program[endpoint]) throw new Error(`This program declared no ${endpoint} Endpoint`)
+
+                if (requireCurrentIncarnation && !target[endpoint]) throw new Error(`This process has no live ${endpoint} Endpoint`)
+
+                if (endpoint === "server" ? target.server?.ready : target.client) {
 
                     this.say(server, "host-end", "answer", question, succeeded([]))
 
@@ -2090,10 +2094,11 @@ export default class ProcessManager extends TheLink {
 
                 let active = true
 
-                const incarnation = requireCurrentIncarnation ? target.server : null
+                const incarnation = requireCurrentIncarnation ? target[endpoint] : null
 
                 let stopReady: () => void = () => undefined
                 let stopExit: () => void = () => undefined
+                let stopEndpoint: () => void = () => undefined
 
                 const finish = (outcome?: Outcome<unknown[]>) => {
 
@@ -2105,10 +2110,12 @@ export default class ProcessManager extends TheLink {
 
                     stopExit()
 
+                    stopEndpoint()
+
                     if (outcome) this.say(server, "host-end", "answer", question, outcome)
                 }
 
-                stopReady = target.waitReady(() => finish(succeeded([])))
+                stopReady = target.waitReady(endpoint, () => finish(succeeded([])))
 
                 // waitReady may answer synchronously.
                 if (!active) {
@@ -2118,7 +2125,7 @@ export default class ProcessManager extends TheLink {
                     return
                 }
 
-                stopExit = target.onExit(() => finish(failed(new Error("The process ended before its server became ready"))))
+                stopExit = target.onExit(() => finish(failed(new Error(`The process ended before its ${endpoint} Endpoint became ready`))))
 
                 // onExit may answer synchronously for an already-ending target.
                 if (!active) {
@@ -2128,10 +2135,16 @@ export default class ProcessManager extends TheLink {
                     return
                 }
 
-                incarnation?.finished.then(() => {
+                if (incarnation) {
 
-                    finish(failed(new Error("The server endpoint stopped before becoming ready")))
-                }).catch(() => undefined)
+                    const stopped = () => finish(failed(new Error(`The ${endpoint} Endpoint stopped before becoming ready`)))
+
+                    stopEndpoint = endpoint === "server"
+                        ? target.onServerStop(stopped)
+                        : target.onClientStop(stopped)
+
+                    if (target[endpoint] !== incarnation) stopped()
+                }
 
                 server.retain(question, () => finish())
 

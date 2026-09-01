@@ -28,6 +28,7 @@ const program = new Program({
     server: { location: ".", startCommand: "true" },
     client: { location: "." }
 })
+const waits: string[] = []
 
 function process(identity: string, name: string | null, ready = true, service = true) {
     const waiters = new Set<() => void>()
@@ -43,8 +44,10 @@ function process(identity: string, name: string | null, ready = true, service = 
         },
         server,
         client: { service },
-        waitReady(notify: () => void) {
-            if (server.ready) notify()
+        waitReady(endpoint: "server" | "client", notify: () => void) {
+
+            waits.push(endpoint)
+            if (endpoint === "client" || server.ready) notify()
             else waiters.add(notify)
             return () => { waiters.delete(notify) }
         },
@@ -67,6 +70,7 @@ const services = new EndpointServices(key => {
 })
 
 const key = { program: "program", process: "main", endpoint: "server" } satisfies ServiceKey
+const clientKey = { ...key, endpoint: "client" } satisfies ServiceKey
 const exact = { ...key, process: provider.identity }
 const global = { process: provider.identity, endpoint: "server" } satisfies ServiceKey
 const lifecycle: string[] = []
@@ -82,6 +86,8 @@ assert.equal(services.exists(key), true)
 assert.equal(services.exists(global), true)
 assert.deepEqual(lifecycle, ["start"])
 await services.waitReady(key, 0)
+await services.waitReady(clientKey, 0)
+assert.deepEqual(waits, ["server", "client"])
 
 await services.emit(provider, "server", "ignored", 1)
 await services.emit(provider, "server", "change", 2)
@@ -105,7 +111,7 @@ provider.becomeReady()
 await ready
 
 // Server and Client remain distinct coordinates for the same Process.
-assert.equal(services.exists({ ...key, endpoint: "client" }), true)
+assert.equal(services.exists(clientKey), true)
 
 const unconfiguredProgram = new Program({
     identity: "unconfigured",

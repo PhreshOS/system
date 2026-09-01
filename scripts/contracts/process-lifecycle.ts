@@ -181,7 +181,7 @@ type HostWait = {
     let exitListeners = 0
     let becomeReady: () => void = () => undefined
 
-    target.waitReady = notify => {
+    target.waitReady = (_endpoint, notify) => {
 
         let active = true
 
@@ -218,7 +218,7 @@ type HostWait = {
         requester,
         original.boundary,
         "ready",
-        ["wait-ready", { identity: target.identity, reference: target.reference }, false]
+        ["wait-ready", { identity: target.identity, reference: target.reference }, "server", false]
     )
 
     requester.server = replacement.boundary
@@ -233,7 +233,7 @@ type HostWait = {
         requester,
         original.boundary,
         "cancelled",
-        ["wait-ready", { identity: target.identity, reference: target.reference }, false]
+        ["wait-ready", { identity: target.identity, reference: target.reference }, "server", false]
     )
 
     assert.equal(readyListeners, 1)

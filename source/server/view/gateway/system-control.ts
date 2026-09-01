@@ -179,9 +179,11 @@ export default class SystemControl {
 
         if (operation === "waitReady") {
 
-            await waitReady(process, (input as EndpointWaitReadyInput).timeout, signal)
+            const request = input as EndpointWaitReadyInput
 
-            return this.system.endpointSnapshot(process, "server")
+            await waitReady(process, request.endpoint, request.timeout, signal)
+
+            return this.system.endpointSnapshot(process, request.endpoint)
         }
 
         if (operation === "waitLifecycle") {
@@ -393,15 +395,14 @@ function processRecordSnapshot(process: ReturnType<Process["record"]>) {
 }
 
 
-function waitReady(process: Process, timeout = 10_000, signal?: AbortSignal) {
+function waitReady(process: Process, endpoint: "server" | "client", timeout = 10_000, signal?: AbortSignal) {
 
     return waitFor<void>((resolve, reject) => {
 
-        const stopReady = process.waitReady(resolve)
-        const stopExit = process.onExit(() => reject(new Error(`Process "${process.identity}" exited before its Server became ready`)))
-        const stopServer = process.onServerStop(() => reject(new Error(`The Server Endpoint stopped before Process "${process.identity}" became ready`)))
+        const stopReady = process.waitReady(endpoint, resolve)
+        const stopExit = process.onExit(() => reject(new Error(`Process "${process.identity}" exited before its ${endpoint} Endpoint became ready`)))
 
-        return () => { stopReady(); stopExit(); stopServer() }
+        return () => { stopReady(); stopExit() }
     }, timeout, signal)
 }
 

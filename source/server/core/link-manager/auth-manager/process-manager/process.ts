@@ -87,7 +87,12 @@ export default class Process {
 
     private readonly clientStops: (() => void)[] = []
 
-    private readonly readyWaiters = new Set<() => void>()
+    private readonly readyWaiters = {
+
+        server: new Set<() => void>(),
+
+        client: new Set<() => void>()
+    }
 
     private readonly endings: Ending[] = []
 
@@ -142,25 +147,21 @@ export default class Process {
 
         if (this.server !== boundary || !boundary.ready) return
 
-        const waiters = [...this.readyWaiters]
-
-        this.readyWaiters.clear()
-
-        for (const waiter of waiters) waiter()
+        this.becameReady("server")
     }
 
-    public waitReady(notify: () => void) {
+    public waitReady(endpoint: "server" | "client", notify: () => void) {
 
-        if (this.server?.ready) {
+        if (endpoint === "server" ? this.server?.ready : this.client) {
 
             notify()
 
             return () => undefined
         }
 
-        this.readyWaiters.add(notify)
+        this.readyWaiters[endpoint].add(notify)
 
-        return () => { this.readyWaiters.delete(notify) }
+        return () => { this.readyWaiters[endpoint].delete(notify) }
     }
 
     public startClient(window: Window, service: boolean) {
@@ -168,6 +169,8 @@ export default class Process {
         if (this.client) return false
 
         this.client = new ClientState(window, service)
+
+        this.becameReady("client")
 
         return true
     }
@@ -186,6 +189,15 @@ export default class Process {
     public get live() {
 
         return this.server !== null || this.client !== null
+    }
+
+    private becameReady(endpoint: "server" | "client") {
+
+        const waiters = [...this.readyWaiters[endpoint]]
+
+        this.readyWaiters[endpoint].clear()
+
+        for (const waiter of waiters) waiter()
     }
 
     public onServerStart(listener: (server: ServerProcessBoundary) => void) {
@@ -258,7 +270,9 @@ export default class Process {
 
         this.ending = { code, signal }
 
-        this.readyWaiters.clear()
+        this.readyWaiters.server.clear()
+
+        this.readyWaiters.client.clear()
 
         const endings = this.endings.splice(0)
 

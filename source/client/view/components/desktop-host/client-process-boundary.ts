@@ -460,7 +460,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (args[0] === "wait-ready") {
 
-            this.waitReady(question, args[1], args[2] === true)
+            this.waitReady(question, args[1], args[2], args[3] === true)
 
             return
         }
@@ -572,7 +572,7 @@ export default class ClientProcessBoundary extends TheLink {
         })
     }
 
-    private waitReady(question: string, target: unknown, requireCurrentIncarnation: boolean) {
+    private waitReady(question: string, target: unknown, endpoint: unknown, requireCurrentIncarnation: boolean) {
 
         const mine = this.authManager.processManager.processes.get(this.pane)
 
@@ -589,23 +589,30 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
+        if (endpoint !== "server" && endpoint !== "client") {
+
+            this.deliver("host-end", "answer", question, failed(new Error("Readiness needs an Endpoint"))).catch(() => undefined)
+
+            return
+        }
+
         const program = this.authManager.programManager.programs.get(process.program)
 
-        if (!program?.server) {
+        if (!program?.[endpoint]) {
 
-            this.deliver("host-end", "answer", question, failed(new Error("This program declared no server half"))).catch(() => undefined)
-
-            return
-        }
-
-        if (requireCurrentIncarnation && !process.server) {
-
-            this.deliver("host-end", "answer", question, failed(new Error("This process has no live server endpoint"))).catch(() => undefined)
+            this.deliver("host-end", "answer", question, failed(new Error(`This program declared no ${endpoint} Endpoint`))).catch(() => undefined)
 
             return
         }
 
-        if (process.server?.ready) {
+        if (requireCurrentIncarnation && !process[endpoint]) {
+
+            this.deliver("host-end", "answer", question, failed(new Error(`This process has no live ${endpoint} Endpoint`))).catch(() => undefined)
+
+            return
+        }
+
+        if (endpoint === "server" ? process.server?.ready : process.client) {
 
             this.deliver("host-end", "answer", question, succeeded([])).catch(() => undefined)
 
@@ -613,8 +620,9 @@ export default class ClientProcessBoundary extends TheLink {
         }
 
         let active = true
+        const incarnation = requireCurrentIncarnation ? process[endpoint] : null
 
-        const stopReady = this.authManager.processManager.$inbound.subscribe("/server-ready", (identity: unknown) => {
+        const stopReady = this.authManager.processManager.$inbound.subscribe(endpoint === "server" ? "/server-ready" : "/client-start", (identity: unknown) => {
 
             if (!active || identity !== process.identity || this.authManager.processManager.processes.get(process.identity) !== process || !this.expected.has(question)) return
 
@@ -633,20 +641,22 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.requests.delete(question)
 
-            this.deliver("host-end", "answer", question, failed(new Error("The process ended before its server became ready"))).catch(() => undefined)
+            this.deliver("host-end", "answer", question, failed(new Error(`The process ended before its ${endpoint} Endpoint became ready`))).catch(() => undefined)
         })
 
-        const stopServer = requireCurrentIncarnation
-            ? this.authManager.processManager.$inbound.subscribe("/server-stop", (identity: unknown) => {
+        const endpointStopped = (identity: unknown) => {
 
-                if (!active || identity !== process.identity || this.authManager.processManager.processes.get(process.identity) !== process) return
+            if (!active || identity !== process.identity || this.authManager.processManager.processes.get(process.identity) !== process) return
 
-                stop()
+            stop()
 
-                this.requests.delete(question)
+            this.requests.delete(question)
 
-                this.deliver("host-end", "answer", question, failed(new Error("The server endpoint stopped before becoming ready"))).catch(() => undefined)
-            })
+            this.deliver("host-end", "answer", question, failed(new Error(`The ${endpoint} Endpoint stopped before becoming ready`))).catch(() => undefined)
+        }
+
+        const stopEndpoint = requireCurrentIncarnation
+            ? this.authManager.processManager.$inbound.subscribe(`/${endpoint}-stop`, endpointStopped)
             : () => undefined
 
         const stop = () => {
@@ -659,10 +669,12 @@ export default class ClientProcessBoundary extends TheLink {
 
             stopExit()
 
-            stopServer()
+            stopEndpoint()
         }
 
         this.requests.set(question, stop)
+
+        if (incarnation && process[endpoint] !== incarnation) endpointStopped(process.identity)
     }
 
     private accepts(kind: TrafficKind, route: string, event: string, payload: unknown[]) {

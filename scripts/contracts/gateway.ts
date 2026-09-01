@@ -23,6 +23,19 @@ const programSnapshot = {
     server: null,
     client: { start: true }
 }
+const process = {
+    reference: "process-reference",
+    identity: "process-identity",
+    program: { identity: entry.program.identity, client: {} },
+    waitReady(endpoint: "server" | "client", notify: () => void) {
+
+        assert.equal(endpoint, "client")
+        notify()
+
+        return () => undefined
+    },
+    onExit() { return () => undefined }
+}
 const application = {
     system: {
         listPrograms() { return [] },
@@ -35,7 +48,12 @@ const application = {
             return entry.program
         },
         async *installProgram() {},
-        findProcess() { return null }
+        findProcess() { return null },
+        resolveProcess() { return process },
+        endpointSnapshot(_process: unknown, endpoint: string) {
+
+            return { process: process.identity, endpoint, running: true }
+        }
     },
     linkManager: {
         authManager: {
@@ -54,6 +72,20 @@ try {
     const system = await exchange(path, { target: "system", request: { capability: "program", operation: "list", input: {} } })
 
     assert.deepEqual(system, [{ success: true, result: { data: [], total: 0, truncated: false } }])
+
+    const ready = await exchange(path, {
+        target: "system",
+        request: {
+            capability: "endpoint",
+            operation: "waitReady",
+            input: { process: process.identity, endpoint: "client" }
+        }
+    })
+
+    assert.deepEqual(ready, [{
+        success: true,
+        result: { process: process.identity, endpoint: "client", running: true }
+    }])
 
     const created = await exchange(path, {
         target: "program",
