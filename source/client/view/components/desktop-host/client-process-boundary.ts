@@ -1,11 +1,16 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import TheLink from "@libs/the-link/the-link"
-import host, { type DesktopSize, TransferredAnswer } from "./host"
+import host, { TransferredAnswer } from "./host"
 import { type PointerHost } from "./pointer"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName, type PermissionName } from "@phreshos/core"
+import {
+    isPermissionName,
+    type DesktopPointerPosition,
+    type DesktopSurfaceSnapshot,
+    type PermissionName
+} from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 
@@ -18,7 +23,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly authManager: AuthManager
 
-    private readonly desktop: () => DesktopSize
+    private readonly desktop: () => DesktopSurfaceSnapshot
 
     private readonly pointer: PointerHost
 
@@ -56,13 +61,13 @@ export default class ClientProcessBoundary extends TheLink {
 
     private pointerStop: (() => void) | null = null
 
-    private pointerPosition: { x: number, y: number } | null = null
+    private pointerPosition: DesktopPointerPosition | null = null
 
     private owner: string | null = null
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSize, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSurfaceSnapshot, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
         super()
 
@@ -899,7 +904,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (this.pointerStop) return
 
-        this.pointerPosition = this.pointer.position()
+        this.pointerPosition = this.pointer.snapshot().position
 
         this.pointerStop = this.pointer.$inbound.subscribe("move", (position: unknown) => {
 
@@ -907,7 +912,7 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.pointerPosition = position
 
-            this.deliver("host-pointer", "move", position).catch(() => undefined)
+            this.deliver("host-desktop-pointer", "move", { position }).catch(() => undefined)
         })
     }
 
@@ -924,7 +929,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.pointerPosition = next
 
-        this.deliver("host-pointer", "move", next).catch(() => undefined)
+        this.deliver("host-desktop-pointer", "move", { position: next }).catch(() => undefined)
     }
 }
 
@@ -998,7 +1003,7 @@ interface EndpointSubscription {
 
 function pointerSubscription(subscription: EndpointSubscription) {
 
-    return subscription.kind === "publish" && subscription.route === "host-pointer" && (subscription.event === null || subscription.event === "move")
+    return subscription.kind === "publish" && subscription.route === "host-desktop-pointer" && (subscription.event === null || subscription.event === "move")
 }
 
 function desktopPreferencesSubscription(subscription: EndpointSubscription) {

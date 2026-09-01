@@ -150,11 +150,14 @@ const processManager = {
 }
 const authManager = {
     processManager,
-    programManager: { programs: new Map() }
+    programManager: { programs: new Map() },
+    async permissionGranted() { return true }
 }
-const request = host(authManager as never, requester.identity, () => ({ width: 1, height: 1 }), () => "owner", {} as never, localWindow as never)
+const pointer = { snapshot: () => ({ position: { x: 12, y: 24 } }) }
+const request = host(authManager as never, requester.identity, () => ({ size: { width: 1, height: 1 } }), () => "owner", pointer as never, localWindow as never)
 
-assert.deepEqual(await request("desktop"), [{ width: 1, height: 1 }])
+assert.deepEqual(await request("desktopSurface"), [{ size: { width: 1, height: 1 } }])
+assert.deepEqual(await request("desktopPointer"), [{ position: { x: 12, y: 24 } }])
 const targetAddress = { identity: target.identity, reference: target.reference }
 assert.deepEqual(await request("windowLocal", targetAddress), [{ position: { x: 70, y: 80 } }])
 await request("windowLocalMove", targetAddress, { x: 70, y: 80 })
@@ -175,7 +178,7 @@ const boundary = new ClientProcessBoundary(
     "requester",
     { contentWindow: null } as unknown as HTMLIFrameElement,
     authManager as never,
-    () => ({ width: 1, height: 1 }),
+    () => ({ size: { width: 1, height: 1 } }),
     {} as never,
     {} as never,
     { release(identity: string) { lifecycle.push(identity) } } as never

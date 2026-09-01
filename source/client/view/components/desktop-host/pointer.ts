@@ -1,5 +1,6 @@
 import { type RefObject } from "react"
 import TheLink from "@libs/the-link/the-link"
+import { type DesktopPointerPosition, type DesktopPointerSnapshot } from "@phreshos/core"
 
 /**
  * Pointer state belongs to one desktop session. Programs may observe it,
@@ -7,7 +8,7 @@ import TheLink from "@libs/the-link/the-link"
  */
 export default class DesktopPointer extends TheLink implements PointerHost {
 
-    private latest: PointerPosition | null = null
+    private latest: DesktopPointerPosition | null = null
 
     public constructor(private readonly desktop: RefObject<HTMLDivElement | null>) {
 
@@ -44,23 +45,16 @@ export default class DesktopPointer extends TheLink implements PointerHost {
         }
     }
 
-    public position() {
+    public snapshot(): DesktopPointerSnapshot {
 
-        return this.latest
+        return { position: this.latest }
     }
 
 }
 
-export interface PointerPosition {
-
-    x: number
-
-    y: number
-}
-
 export interface PointerHost {
 
-    position(): PointerPosition | null
+    snapshot(): DesktopPointerSnapshot
 
     readonly $inbound: TheLink["$inbound"]
 }

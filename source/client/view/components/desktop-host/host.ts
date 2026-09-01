@@ -1,4 +1,7 @@
-import { type Launch } from "@phreshos/core"
+import {
+    type DesktopSurfaceSnapshot,
+    type Launch
+} from "@phreshos/core"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { type ClientBody, type ProxiedResponse, type UploadValue } from "@client/core/application"
@@ -19,14 +22,6 @@ import {
 export class TransferredAnswer {
 
     public constructor(public readonly result: unknown[], public readonly transfer: Transferable[]) { }
-}
-
-/** The complete measured desktop area in CSS pixels. */
-export interface DesktopSize {
-
-    width: number
-
-    height: number
 }
 
 /**
@@ -53,7 +48,7 @@ export interface DesktopSize {
  * browser capabilities travel only as explicit attachments, so every ordinary
  * word answers with data built here, never with an instance the desktop holds.
  */
-export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSize, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
+export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSurfaceSnapshot, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 
@@ -693,16 +688,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // One desktop can frame many Client layers, but its complete area is
         // one host fact. It is this desktop's answer rather than a machine
         // fact, and the gutter remains private desktop layout state.
-        if (word === "desktop") return [desktop()]
+        if (word === "desktopSurface") return [desktop()]
 
         // Coordinates use the same desktop display core as window geometry.
         // Before this session has observed a pointer movement there is no
         // position to invent, so the initial answer is null.
-        if (word === "pointer") {
+        if (word === "desktopPointer") {
 
             if (await authManager.permissionGranted(pane, "pointer") !== true) throw new Error("Permission \"pointer\" is not granted")
 
-            return [pointer.position()]
+            return [pointer.snapshot()]
         }
 
         // Uploads are one flat public collection. A pane may provide bytes or

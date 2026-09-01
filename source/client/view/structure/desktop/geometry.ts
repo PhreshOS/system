@@ -4,7 +4,7 @@ import { type CSSProperties } from "react"
  * The gap between adjacent painted windows, in pixels. Each window uses
  * half inside its own box; the ordinary workspace uses the other half
  * at its boundary. The gutter remains private desktop layout state and never
- * enters the layer-independent value returned by `system.desktop.size()`.
+ * enters the layer-independent `system.desktop.surface` snapshot.
  *
  * The visible window edge, taskbar edge and Start Menu geometry derive from
  * this value rather than restating its pixel or rem equivalent.

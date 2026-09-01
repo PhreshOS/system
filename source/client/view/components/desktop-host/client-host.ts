@@ -1,7 +1,6 @@
 import ReactTunnel from "@libs/the-link/plugins/react-helper/react-tunnel"
-import { isPermissionName } from "@phreshos/core"
+import { isPermissionName, type DesktopSize, type DesktopSurfaceSnapshot } from "@phreshos/core"
 import useAnnouncements from "./announcements"
-import { type DesktopSize } from "./host"
 import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
@@ -31,15 +30,15 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
 
-    const latestDesktopSize = useRef<DesktopSize>({ width: 0, height: 0 })
+    const latestDesktopSurface = useRef<DesktopSurfaceSnapshot>({ size: { width: 0, height: 0 } })
 
-    const desktopSize = useCallback(function (): DesktopSize {
+    const desktopSurface = useCallback(function (): DesktopSurfaceSnapshot {
 
         const bounds = desktop.current?.getBoundingClientRect()
 
         return bounds
-            ? { width: Math.round(bounds.width), height: Math.round(bounds.height) }
-            : latestDesktopSize.current
+            ? { size: { width: Math.round(bounds.width), height: Math.round(bounds.height) } }
+            : latestDesktopSurface.current
 
     }, [desktop])
 
@@ -52,19 +51,23 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
             return { width: Math.round(bounds.width), height: Math.round(bounds.height) }
         }
 
-        function announceDesktop(now: DesktopSize) {
+        function announceDesktop(size: DesktopSize) {
 
-            if (latestDesktopSize.current.width === now.width && latestDesktopSize.current.height === now.height) return
+            const previous = latestDesktopSurface.current.size
 
-            latestDesktopSize.current = now
+            if (previous.width === size.width && previous.height === size.height) return
+
+            const snapshot = { size }
+
+            latestDesktopSurface.current = snapshot
 
             // Announcements leave directly from the full desktop measurement.
             // Traffic carries them only to boundaries with a live interest.
-            if (!now.width) return
+            if (!size.width) return
 
             for (const identity of sources.keys()) {
 
-                traffic.emit(identity, "host-desktop", "resize", now).catch(() => undefined)
+                traffic.emit(identity, "host-desktop-surface", "resize", snapshot).catch(() => undefined)
             }
         }
 
@@ -75,7 +78,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         const initialDesktop = measure(desktop.current.getBoundingClientRect())
 
-        latestDesktopSize.current = initialDesktop
+        latestDesktopSurface.current = { size: initialDesktop }
 
         const initialWindowSurface = windowSurfaceRef.current.getBoundingClientRect()
 
@@ -215,7 +218,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopSize, pointer, traffic, localWindow))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopSurface, pointer, traffic, localWindow))
 
             return
         }
@@ -230,7 +233,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopSize, localWindow, pointer, sources, traffic])
+    }, [authManager, desktopSurface, localWindow, pointer, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
