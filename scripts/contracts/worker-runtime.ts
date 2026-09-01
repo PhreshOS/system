@@ -4,12 +4,13 @@ import { tmpdir } from "node:os"
 import { delimiter, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { decode, encode } from "@msgpack/msgpack"
-import { commandServerEnvironment, WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
+import { CommandServerRuntime, commandServerEnvironment, WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
 
 const directory = await mkdtemp(join(tmpdir(), "phresh-worker-runtime-"))
 const entry = join(directory, "server.mjs")
+const commandEntry = join(directory, "command.mjs")
 const codec = pathToFileURL(resolve("node_modules/@msgpack/msgpack/dist.esm/index.mjs")).href
 
 assert.equal(
@@ -27,6 +28,25 @@ parentPort.on("message", message => {
     const [event, value] = decode(message)
     if (event === "probe") parentPort.postMessage(encode(["probe-result", value]))
 })
+`)
+
+await writeFile(commandEntry, `
+import { decode, encode } from ${JSON.stringify(codec)}
+
+console.log("command output")
+process.send?.(encode(["boundary", "ready"]))
+process.on("message", message => {
+    const [event, value] = decode(bytes(message))
+    if (event === "probe") process.send?.(encode(["probe-result", value]))
+})
+
+function bytes(value) {
+    if (value instanceof Uint8Array) return value
+    const record = value
+    const result = new Uint8Array(Object.keys(record).length)
+    for (let index = 0; index < result.length; index++) result[index] = record[index]
+    return result
+}
 `)
 
 try {
@@ -65,6 +85,31 @@ try {
     const ending = await runtime.finished
 
     assert.equal(ending.signal, null)
+
+    const command = new CommandServerRuntime(`node ${JSON.stringify(commandEntry)}`, directory)
+    const commandMessages: unknown[][] = []
+    const commandOutput: ["out" | "err", string][] = []
+
+    command.onMessage(message => {
+        if (!(message instanceof Uint8Array)) throw new Error("The command response must be bytes")
+        const decoded = decode(message)
+        if (!Array.isArray(decoded)) throw new Error("The command response must be an array")
+        commandMessages.push(decoded)
+    })
+    command.onOutput((stream, text) => commandOutput.push([stream, text]))
+
+    await until(() => commandMessages.some(message => message[0] === "boundary" && message[1] === "ready"))
+
+    command.send(encode(["probe", 42]))
+
+    await until(() => commandMessages.some(message => message[0] === "probe-result"))
+    await until(() => commandOutput.some(([stream, text]) => stream === "out" && text.includes("command output")))
+
+    assert.deepEqual(commandMessages.find(message => message[0] === "probe-result"), ["probe-result", 42])
+
+    command.stop()
+
+    await command.finished
 } finally {
     await rm(directory, { recursive: true, force: true })
 }

@@ -52,7 +52,12 @@ export class CommandServerRuntime implements ServerRuntime {
 
         this.tree = new ProcessTree(this.child, (code, signal) => finish({ code, signal }))
 
-        this.child.on("message", message => this.inbox.receive(message))
+        this.child.on("message", message => {
+
+            const bytes = commandMessageBytes(message)
+
+            if (bytes) this.inbox.receive(bytes)
+        })
 
         this.child.on("error", () => undefined)
     }
@@ -189,3 +194,29 @@ type Ending = { code: number | null, signal: NodeJS.Signals | null }
 const maximumPendingMessages = 256
 
 const maximumPendingOutput = 256
+
+function commandMessageBytes(value: unknown) {
+
+    if (value instanceof Uint8Array) return Uint8Array.from(value)
+
+    if (value instanceof ArrayBuffer) return new Uint8Array(value)
+
+    if (ArrayBuffer.isView(value)) return Uint8Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))
+
+    if (value === null || typeof value !== "object") return null
+
+    const record = value as Record<string, unknown>
+
+    const bytes = new Uint8Array(Object.keys(record).length)
+
+    for (let index = 0; index < bytes.length; index++) {
+
+        const byte = record[String(index)]
+
+        if (typeof byte !== "number" || !Number.isInteger(byte) || byte < 0 || byte > 255) return null
+
+        bytes[index] = byte
+    }
+
+    return bytes
+}
