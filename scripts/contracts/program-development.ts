@@ -13,10 +13,10 @@ const target = developmentTarget(
 
     development,
 
-    "http://localhost:4300/program/example/assets/main.ts?direct"
+    `http://localhost:4300/program/${development.assetId}/assets/main.ts?direct`
 )
 
-assert.equal(target?.href, "http://localhost:5173/program/example/assets/main.ts?direct")
+assert.equal(target?.href, `http://localhost:5173/program/${development.assetId}/assets/main.ts?direct`)
 
 const production = new Program({
 
@@ -25,4 +25,4 @@ const production = new Program({
     client: { location: "dist/client" }
 })
 
-assert.equal(developmentTarget(production, "http://localhost:4300/program/example/assets/"), null)
+assert.equal(developmentTarget(production, `http://localhost:4300/program/${production.assetId}/assets/`), null)

@@ -17,6 +17,8 @@ export default class Program {
 
     public readonly identity: string
 
+    public readonly assetId: string
+
     /** Opaque identity of this runtime Program entity. */
     public readonly reference: string
 
@@ -39,6 +41,8 @@ export default class Program {
         this.programManager = programManager
 
         this.identity = payload.identity
+
+        this.assetId = payload.assetId
 
         this.reference = payload.reference
 

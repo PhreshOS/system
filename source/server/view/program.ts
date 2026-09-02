@@ -9,9 +9,9 @@ import { developmentResponse, developmentSocket, developmentTarget } from "./pro
 /**
  * The browser representation of one Program domain.
  *
- * Every Client document uses `/program/<identity>/assets`, independently of
+ * Every Client document uses `/program/<assetId>/assets`, independently of
  * whether its source is an installed directory or a live development server.
- * Icons use the same Program identity beneath `/program/<identity>/icons`.
+ * Icons use the same asset identity beneath `/program/<assetId>/icons`.
  */
 export default function (application: Application) {
 
@@ -36,15 +36,15 @@ export default function (application: Application) {
         return context.text("Program assets are available")
     })
 
-    program.get("/:identity/assets", context => context.redirect(`${new URL(context.req.url).pathname}/`))
+    program.get("/:assetId{[0-9a-f-]{36}}/assets", context => context.redirect(`${new URL(context.req.url).pathname}/`))
 
     // A development Client's WebSocket is the same asset source as its HTTP
     // documents. Bridging it here keeps HMR beneath the Program asset address.
-    program.use("/:identity/assets/:path{.*}", async (context, next) => {
+    program.use("/:assetId{[0-9a-f-]{36}}/assets/:path{.*}", async (context, next) => {
 
         if (context.req.header("upgrade")?.toLowerCase() !== "websocket") return await next()
 
-        const found = programManager.reach(context.req.param("identity"))
+        const found = programManager.fromAsset(context.req.param("assetId") ?? "")
 
         if (!found) return context.text("Unknown program", 404)
 
@@ -55,11 +55,11 @@ export default function (application: Application) {
         return developmentSocket(context, target)
     })
 
-    program.all("/:identity/assets/:path{.*}", async context => {
+    program.all("/:assetId{[0-9a-f-]{36}}/assets/:path{.*}", async context => {
 
-        const identity = context.req.param("identity")
+        const assetId = context.req.param("assetId") ?? ""
 
-        const found = programManager.reach(identity)
+        const found = programManager.fromAsset(assetId)
 
         if (!found) return context.text("Unknown program", 404)
 
@@ -76,14 +76,14 @@ export default function (application: Application) {
 
             root,
 
-            rewriteRequestPath: path => path.slice(`${doors.program}/${identity}/assets`.length)
+            rewriteRequestPath: path => path.slice(`${doors.program}/${assetId}/assets`.length)
 
         })(context, async () => undefined)
     })
 
-    program.get("/:identity/icons/:file", async context => {
+    program.get("/:assetId{[0-9a-f-]{36}}/icons/:file", async context => {
 
-        const found = programManager.reach(context.req.param("identity"))
+        const found = programManager.fromAsset(context.req.param("assetId") ?? "")
 
         if (!found) return context.text("Unknown program", 404)
 

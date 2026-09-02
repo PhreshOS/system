@@ -26,7 +26,7 @@ export default function ProgramsSection({ onChoose }: ProgramsSectionProps) {
 
                 key={record.identity}
 
-                icon={programIcon(application.doors.program, record.identity)}
+                icon={programIcon(application.doors.program, record.assetId)}
 
                 record={record}
 

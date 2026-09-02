@@ -19,6 +19,7 @@ const forkedEntry = {
 const programSnapshot = {
     reference: "example-reference",
     identity: "example",
+    assetId: "00000000-0000-4000-8000-000000000000",
     name: "Example",
     version: "1.0.0",
     description: null,
@@ -108,6 +109,7 @@ try {
         program: {
             reference: "example-reference",
             identity: "example",
+            assetId: "00000000-0000-4000-8000-000000000000",
             name: "Example",
             version: "1.0.0",
             description: null,

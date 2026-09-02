@@ -2,6 +2,7 @@ export interface SdkProgramSource {
 
     reference: string
     identity: string
+    assetId: string
     installed: boolean
     name: string
     version: string | null
@@ -38,6 +39,8 @@ export function sdkProgram(program: SdkProgramSource) {
         reference: program.reference,
 
         identity: program.identity,
+
+        assetId: program.assetId,
 
         installed: program.installed,
 

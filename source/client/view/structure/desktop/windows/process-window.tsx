@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -39,7 +39,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     const represent = useCallback((reader: LocalGeometryReader | null) => onLocalRepresentation(record.identity, reader), [onLocalRepresentation, record])
 
-    const frameSource = programFrameSource(record, client, door)
+    const frameSource = programFrameSource(assetId, client, door)
 
     const [loading, setLoading] = useState<LoadingState>({ source: null, phase: "loading" })
 
@@ -150,6 +150,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
             record={record}
 
+            assetId={assetId}
+
             client={client}
 
             title={title}
@@ -193,6 +195,8 @@ interface ProcessWindowProps {
     identity: string
 
     record: Process
+
+    assetId: string
 
     client: ClientState
 

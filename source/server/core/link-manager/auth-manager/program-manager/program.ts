@@ -25,9 +25,8 @@ import { permissionCatalog } from "@server/core/permissions"
  * question, asked when the system is told to rely on it, and asked
  * again by whatever uses it, because the world moves in between.
  *
- * Identity is the program's one public address, whether or not it is
- * installed. The browser asset view uses that same domain address rather
- * than inventing a second identity for the same Program.
+ * Identity is the program's stable public address, whether or not it is
+ * installed. Browser assets use a separate runtime identity.
  */
 export default class Program {
 
@@ -35,6 +34,9 @@ export default class Program {
 
     /** Opaque identity of this runtime Program entity. */
     public readonly reference = randomUUID()
+
+    /** Runtime identity of this Program's browser assets. */
+    public readonly assetId = randomUUID()
 
     /** Changes whenever this runtime Program is replaced in place. */
     public revision = 0
@@ -198,6 +200,8 @@ export default class Program {
             reference: this.reference,
 
             identity: this.identity,
+
+            assetId: this.assetId,
 
             name: this.name,
 

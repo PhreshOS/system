@@ -8,6 +8,7 @@ const record = { identity: "process", program: "program" } as Process
 const client = { sameOrigin: false, window: { location: "/" } } as ClientState
 const common = {
     record,
+    assetId: "00000000-0000-4000-8000-000000000000",
     client,
     title: "Program",
     door: "/program",
@@ -27,4 +28,4 @@ assert.match(dark, /style="color-scheme:dark"/)
 assert.match(light, /style="color-scheme:light"/)
 assert.match(dark, /sandbox="allow-scripts allow-forms"/)
 assert.match(fullAccess, /sandbox="allow-scripts allow-forms allow-same-origin"/)
-assert.match(fullAccess, /src="\/program\/program\/assets\/"/)
+assert.match(fullAccess, /src="\/program\/00000000-0000-4000-8000-000000000000\/assets\/"/)

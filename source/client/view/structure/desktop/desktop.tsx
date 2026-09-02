@@ -93,7 +93,16 @@ export default function Workspace() {
 
     function icon(record: { program: string }) {
 
-        return programIcon(application.doors.program, record.program)
+        return programIcon(application.doors.program, program(record.program).assetId)
+    }
+
+    function program(identity: string) {
+
+        const found = authManager.programManager.programs.get(identity)
+
+        if (!found) throw new Error(`The Program "${identity}" does not exist`)
+
+        return found
     }
 
     function renderWindows(layer: Layer) {
@@ -105,6 +114,8 @@ export default function Workspace() {
             identity={identity}
 
             record={record}
+
+            assetId={program(record.program).assetId}
 
             client={client}
 

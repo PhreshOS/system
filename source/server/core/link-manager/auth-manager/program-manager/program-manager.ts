@@ -252,6 +252,12 @@ export default class ProgramManager extends TheLink {
         return this.programs.get(identity)?.program ?? null
     }
 
+    /** Resolves the runtime Program that owns one browser asset address. */
+    public fromAsset(assetId: string) {
+
+        return [...this.programs.values()].find(entry => entry.program.assetId === assetId)?.program ?? null
+    }
+
     /** Resolve an exact runtime Program handle without retargeting a replacement. */
     public held(value: unknown) {
 

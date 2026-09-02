@@ -267,6 +267,7 @@ export default class System {
         return Object.freeze({
             reference: program.reference,
             identity: program.identity,
+            assetId: program.assetId,
             name: program.name,
             version: program.config.version ?? null,
             description: program.config.description ?? null,
@@ -308,6 +309,7 @@ export default class System {
             programSnapshot: Object.freeze({
                 reference: owner.reference,
                 identity: owner.identity,
+                assetId: owner.assetId,
                 name: owner.name,
                 version: owner.version,
                 description: owner.description,
