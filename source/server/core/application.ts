@@ -7,7 +7,7 @@ import DialogManager from "./dialog-manager"
 import AppearanceManager from "./appearance-manager"
 import openStore from "./open-store"
 import Keyv from "keyv"
-import FileArea from "@libs/file-area"
+import FileArea, { FileSystem } from "@libs/file-area"
 import { homedir } from "node:os"
 import System from "./system"
 
@@ -24,7 +24,7 @@ export default class Application {
 
     public readonly storage: FileManager
 
-    /** Native operating-system home exposed as the Server Host's Storage root. */
+    /** Native filesystem access entered from the operating-system user's home. */
     public readonly home: FileArea
 
     /** Internal application persistence, reached publicly through named methods. */
@@ -80,7 +80,7 @@ export default class Application {
 
         const storage = new FileManager(homePath)
 
-        const home = new FileArea(homedir(), "the native home directory")
+        const home = new FileSystem(homedir(), "the native filesystem")
 
         const store = openStore(storage.path)
 

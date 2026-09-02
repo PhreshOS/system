@@ -1953,8 +1953,8 @@ export default class ProcessManager extends TheLink {
         }
 
         // Native filesystem work remains local to the Server SDK. The System
-        // supplies only its authoritative home root; Storage confines every
-        // operation performed beneath it.
+        // supplies the user's home as the relative entry point; the
+        // SDK may resolve beyond it without turning the host into a file proxy.
         if (word === "host-storage") {
 
             if (rest[0] !== "path") throw new Error("A server half asks the host only for its Storage path")

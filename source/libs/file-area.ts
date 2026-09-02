@@ -1,6 +1,6 @@
 import { createReadStream, createWriteStream, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { dirname, isAbsolute, join, relative, sep } from "node:path"
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { rm } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
@@ -145,6 +145,15 @@ export default class FileArea {
 
             throw exception
         }
+    }
+}
+
+/** Native filesystem access resolved from one entry point without confinement. */
+export class FileSystem extends FileArea {
+
+    public override resolve(joins: string[]) {
+
+        return resolve(this.path, ...joins)
     }
 }
 

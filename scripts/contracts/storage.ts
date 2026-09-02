@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
-import FileArea from "@libs/file-area"
+import { join, resolve } from "node:path"
+import FileArea, { FileSystem } from "@libs/file-area"
 import AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 
 const fixture = mkdtempSync(join(tmpdir(), "phreshos-storage-"))
@@ -11,7 +11,7 @@ const outside = join(fixture, "outside")
 
 try {
     const storage = new FileArea(root)
-    const home = new FileArea(join(fixture, "home"))
+    const home = new FileSystem(resolve(fixture, "home"))
     const authManager = Object.assign(Object.create(AuthManager.prototype), {
         linkManager: { application: { home, storage: { path: root } } },
         $outbound: { async publish() {} }
@@ -21,6 +21,7 @@ try {
     }).storage
 
     assert.equal(await systemStorage.call(authManager, "path", []), home.path)
+    assert.equal(await systemStorage.call(authManager, "resolve", ["..", "outside"]), outside)
 
     mkdirSync(join(root, "kept"), { recursive: true })
     mkdirSync(join(root, "nested"), { recursive: true })
@@ -36,6 +37,10 @@ try {
     mkdirSync(outside, { recursive: true })
     writeFileSync(join(outside, "value.txt"), "outside")
     symlinkSync(outside, join(root, "escape"), "dir")
+    symlinkSync(outside, join(home.path, "escape"), "dir")
+
+    assert.equal(home.resolve(["escape", "value.txt"]), join(home.path, "escape", "value.txt"))
+    assert.equal(home.stat(["escape", "value.txt"])?.kind, "file")
 
     assert.throws(() => storage.stat(["escape", "value.txt"]), /symbolic link/)
     assert.throws(() => storage.list(["escape"]), /symbolic link/)
