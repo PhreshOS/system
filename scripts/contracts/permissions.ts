@@ -38,6 +38,8 @@ assert(catalog.grants(["read", "write"], ["write"]))
 assert(!catalog.grants(false, ["read"]))
 assert(!catalog.grants(null, []))
 assert(catalog.grants([], []))
+assert(catalog.allows("files", [], null, ["read", "write"]))
+assert(!catalog.allows("files", null, ["read"], ["write"]))
 assert.equal(catalog.combine("files", null, false), null)
 assert.deepEqual(catalog.combine("files", ["write"], ["read"]), ["read", "write"])
 assert.equal(catalog.effective("files", null, false), false)
@@ -64,17 +66,18 @@ assert.throws(() => new PermissionCatalog({
     }
 }), /invalid default/)
 
-assert.deepEqual(permissionCatalog.definition("system"), {
-    values: ["all"],
-    default: ["all"],
-    title: "System",
-    description: "Access every System capability."
+assert.deepEqual(permissionCatalog.definition("all"), {
+    values: [],
+    default: [],
+    title: "All permissions",
+    description: "Grant every available Client permission."
 })
-assert.deepEqual(permissionCatalog.resolve("system", true), ["all"])
-assert.deepEqual(permissionCatalog.declarations({ system: true }), { system: ["all"] })
-assert(permissionCatalog.grants(["all"], ["all"]))
-assert(!permissionCatalog.grants(null, ["all"]))
-assert(permissionCatalog.needReload("system", null, ["all"]))
-assert(permissionCatalog.needReload("system", ["all"], null))
-assert(!permissionCatalog.needReload("system", ["all"], ["all"]))
+assert.deepEqual(permissionCatalog.resolve("all", true), [])
+assert.deepEqual(permissionCatalog.declarations({ all: true }), { all: [] })
+assert(permissionCatalog.grants([], []))
+assert(permissionCatalog.granted([]))
+assert(!permissionCatalog.granted(null))
+assert(permissionCatalog.needReload("all", null, []))
+assert(permissionCatalog.needReload("all", [], null))
+assert(!permissionCatalog.needReload("all", [], []))
 assert.throws(() => permissionCatalog.definition("files"), /does not know/)

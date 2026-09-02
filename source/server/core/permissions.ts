@@ -106,6 +106,20 @@ export class PermissionCatalog {
         return Array.isArray(grant) && requested.every(value => grant.includes(value))
     }
 
+    /** Whether one value-less or valued permission is present at all. */
+    public granted(permission: PermissionGrant) {
+
+        return Array.isArray(permission)
+    }
+
+    /** Applies the value-less all grant before one permission's own values. */
+    public allows(name: string, all: PermissionGrant, permission: PermissionGrant, requested: readonly string[]) {
+
+        this.definition(name)
+
+        return this.granted(all) || this.grants(permission, requested)
+    }
+
     public combine(name: string, ...grants: PermissionGrant[]): Permission {
 
         const present = grants.filter((grant): grant is readonly string[] => Array.isArray(grant))
@@ -172,16 +186,11 @@ function unique(values: string[]) {
 
 /** The complete permission domain recognized by this System release. */
 export const permissionCatalog = new PermissionCatalog({
-    system: {
-        values: ["all"],
-        default: ["all"],
-        title: "System",
-        description: "Access every System capability.",
-        requiresReload: (before, permission) => grantsAll(before) !== grantsAll(permission)
+    all: {
+        values: [],
+        default: [],
+        title: "All permissions",
+        description: "Grant every available Client permission.",
+        requiresReload: (before, permission) => Array.isArray(before) !== Array.isArray(permission)
     }
 })
-
-function grantsAll(permission: Permission) {
-
-    return Array.isArray(permission) && permission.includes("all")
-}

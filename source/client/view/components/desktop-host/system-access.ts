@@ -21,7 +21,7 @@ export default class SystemAccess {
 
     public async all() {
 
-        return await this.authManager.grantsPermission(this.pane, "system", ["all"])
+        return await this.authManager.grantsPermission(this.pane, "all", [])
     }
 
     public async program(program: Program) {

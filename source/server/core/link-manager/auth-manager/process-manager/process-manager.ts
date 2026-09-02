@@ -803,14 +803,14 @@ export default class ProcessManager extends TheLink {
 
             this.hostTraffic,
 
-            permissionCatalog.grants(permissionCatalog.effective(
+            permissionCatalog.granted(permissionCatalog.effective(
 
-                "system",
+                "all",
 
-                program.clientPermissions.system ?? null,
+                program.clientPermissions.all ?? null,
 
-                this.authManager.programManager.permission(program, "system")
-            ), ["all"])
+                this.authManager.programManager.permission(program, "all")
+            ))
         )
 
         this.processes.set(identity, process)
@@ -1383,7 +1383,18 @@ export default class ProcessManager extends TheLink {
     /** Tests one concrete permission against this Process's effective grants. */
     public grants(identity: string, name: string, requested: readonly string[]) {
 
-        return permissionCatalog.grants(this.effectivePermission(this.find(identity), name), requested)
+        const process = this.find(identity)
+
+        return permissionCatalog.allows(
+
+            name,
+
+            this.effectivePermission(process, "all"),
+
+            this.effectivePermission(process, name),
+
+            requested
+        )
     }
 
     /** Resolves one permission request through declarations, grants, then the owner. */
@@ -1402,6 +1413,11 @@ export default class ProcessManager extends TheLink {
         const stored = this.authManager.programManager.permission(process.program, name)
         const effective = this.effectivePermission(process, name, stored)
 
+        if (name !== "all" && permissionCatalog.granted(this.effectivePermission(process, "all"))) {
+
+            return permissionChange([...permissionCatalog.definition(name).values], false)
+        }
+
         if (permissionCatalog.grants(effective, requested)) return permissionChange(effective, false)
         if (effective === false) return Object.freeze({ permission: false, needReload: false })
 
@@ -1418,7 +1434,7 @@ export default class ProcessManager extends TheLink {
 
             if (needReload) {
 
-                process.setClientSameOrigin(permissionCatalog.grants(next, ["all"]))
+                process.setClientSameOrigin(permissionCatalog.granted(next))
 
                 await this.$outbound.publish("/client-access", process.identity, process.hosted())
             }
@@ -1473,7 +1489,7 @@ export default class ProcessManager extends TheLink {
 
             needReload = true
 
-            process.setClientSameOrigin(permissionCatalog.grants(this.effectivePermission(process, "system", permission), ["all"]))
+            if (name === "all") process.setClientSameOrigin(permissionCatalog.granted(this.effectivePermission(process, name, permission)))
 
             await this.$outbound.publish("/client-access", process.identity, process.hosted())
         }

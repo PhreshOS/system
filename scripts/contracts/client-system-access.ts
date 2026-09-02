@@ -12,8 +12,8 @@ const authManager = {
     async grantsPermission(process: string, name: string, values: readonly string[]) {
 
         assert.equal(process, owner.identity)
-        assert.equal(name, "system")
-        assert.deepEqual(values, ["all"])
+        assert.equal(name, "all")
+        assert.deepEqual(values, [])
 
         return unrestricted
     }
