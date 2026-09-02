@@ -64,4 +64,16 @@ assert.throws(() => new PermissionCatalog({
     }
 }), /invalid default/)
 
+assert.deepEqual(permissionCatalog.definition("system"), {
+    values: ["all"],
+    default: ["all"],
+    title: "System",
+    description: "Access every System capability."
+})
+assert.deepEqual(permissionCatalog.resolve("system", true), ["all"])
+assert.deepEqual(permissionCatalog.declarations({ system: true }), { system: ["all"] })
+assert(permissionCatalog.grants(["all"], ["all"]))
+assert(!permissionCatalog.grants(null, ["all"]))
+assert(!permissionCatalog.needReload("system", null, ["all"]))
+assert(!permissionCatalog.needReload("system", ["all"], null))
 assert.throws(() => permissionCatalog.definition("files"), /does not know/)

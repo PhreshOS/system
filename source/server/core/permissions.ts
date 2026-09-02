@@ -171,4 +171,11 @@ function unique(values: string[]) {
 }
 
 /** The complete permission domain recognized by this System release. */
-export const permissionCatalog = new PermissionCatalog({})
+export const permissionCatalog = new PermissionCatalog({
+    system: {
+        values: ["all"],
+        default: ["all"],
+        title: "System",
+        description: "Access every System capability."
+    }
+})

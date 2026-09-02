@@ -8,6 +8,7 @@ import { type DesktopSurfaceSnapshot } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
+import SystemAccess from "./system-access"
 
 /** The desktop boundary around one iframe execution endpoint. */
 export default class ClientProcessBoundary extends TheLink {
@@ -24,6 +25,8 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly localWindow: LocalWindowHost
 
+    private readonly systemAccess: SystemAccess
+
     private readonly subscriptions = new Map<string, EndpointSubscription>()
 
     private readonly expected = new Set<string>()
@@ -33,6 +36,9 @@ export default class ClientProcessBoundary extends TheLink {
     private readonly waiting = new Map<string, WaitingQuestion[]>()
 
     private readonly trafficSubscriptions = new Map<string, TrafficSubscription>()
+
+    /** Program ownership of Endpoint subscriptions; `null` marks a Service. */
+    private readonly systemSubscriptions = new Map<string, string | null>()
 
     private readonly desktopPreferencesSubscriptions = new Set<string>()
 
@@ -69,6 +75,8 @@ export default class ClientProcessBoundary extends TheLink {
         this.traffic = traffic
 
         this.localWindow = localWindow
+
+        this.systemAccess = new SystemAccess(authManager, pane)
 
         this.$outbound.forwardTo((route, ...values) => {
 
@@ -223,6 +231,8 @@ export default class ClientProcessBoundary extends TheLink {
             })
         }
 
+        this.trackSystemSubscription(values)
+
         host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
@@ -239,11 +249,36 @@ export default class ClientProcessBoundary extends TheLink {
                 return
             }
 
+            if (values[0] === "service-follow" && typeof values[1] === "string" && values[5] === true) {
+
+                this.impossible(values[1], error.message)
+
+                return
+            }
+
+            if (values[0] === "ask" && typeof values[3] === "string") {
+
+                this.requests.delete(values[3])
+                this.deliver("end-end", "answer", values[3], values[4], values[5], failed(error)).catch(() => undefined)
+
+                return
+            }
+
+            if (values[0] === "service-ask" && typeof values[2] === "string") {
+
+                this.requests.delete(values[2])
+                this.deliver("end-end", "answer", values[2], values[3], values[4], failed(error)).catch(() => undefined)
+            }
+
         })
     }
 
     /** Deliver one routed envelope only when this endpoint requested it. */
     public async deliver(route: string, ...values: unknown[]) {
+
+        if (!await this.canDeliverSystemSubscription(route, values[0])) return
+
+        values = await this.visibleReferences(values)
 
         if (values[0] === "answer" && typeof values[1] === "string") {
 
@@ -305,6 +340,78 @@ export default class ClientProcessBoundary extends TheLink {
     public impossible(subscription: string, reason: string) {
 
         this.$outbound.publish("boundary", "impossible", subscription, reason).catch(() => undefined)
+    }
+
+    private trackSystemSubscription(values: unknown[]) {
+
+        const [operation, subscription, target] = values
+
+        if (typeof subscription !== "string") return
+
+        if (operation === "service-follow") {
+
+            this.systemSubscriptions.set(subscription, null)
+
+            return
+        }
+
+        if (operation === "observe" || operation === "follow") {
+
+            const process = target === null
+                ? this.authManager.processManager.processes.get(this.pane)
+                : isHandleAddress(target)
+                    ? this.authManager.processManager.processes.get(target.identity)
+                    : undefined
+
+            this.systemSubscriptions.set(subscription, process?.program ?? null)
+
+            return
+        }
+
+        if (operation === "service-unfollow" || operation === "unobserve" || operation === "unfollow") {
+
+            this.systemSubscriptions.delete(subscription)
+        }
+    }
+
+    private async canDeliverSystemSubscription(route: string, subscription: unknown) {
+
+        if (route !== "observed" && route !== "emitted" && route !== "service-event") return true
+        if (typeof subscription !== "string" || !this.systemSubscriptions.has(subscription)) return false
+
+        const program = this.systemSubscriptions.get(subscription)
+
+        return program !== null && program !== undefined && this.systemAccess.ownsProgram({ identity: program })
+            ? true
+            : await this.systemAccess.all()
+    }
+
+    private async visibleReferences(values: unknown[]) {
+
+        let unrestricted: Promise<boolean> | null = null
+
+        const visible = async (reference: EndpointReference) => {
+
+            const process = reference.process
+
+            if (this.systemAccess.ownsProgram(process.program)) return reference
+
+            unrestricted ??= this.systemAccess.all()
+
+            return await unrestricted ? reference : null
+        }
+
+        return await Promise.all(values.map(async value => {
+
+            if (!value || typeof value !== "object" || Array.isArray(value)) return value
+
+            const envelope = value as Record<string, unknown>
+
+            if (isEndpointReference(envelope.from)) return { ...envelope, from: await visible(envelope.from) }
+            if (isEndpointReference(envelope.to)) return { ...envelope, to: await visible(envelope.to) }
+
+            return value
+        }))
     }
 
     private control(values: unknown[]) {
@@ -495,6 +602,14 @@ export default class ClientProcessBoundary extends TheLink {
 
             if (args[0] !== "install" && args[0] !== "uninstall" && args[0] !== "run") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
 
+            if (!isHandleAddress(args[1])) throw new Error("A Program handle is required")
+
+            const program = this.authManager.programManager.programs.get(args[1].identity)
+
+            if (!program || program.reference !== args[1].reference) throw new Error("The Program represented by this handle does not exist")
+
+            await this.systemAccess.program(program)
+
             const operation = this.authManager.programManager.command(args[1], args[0], args[2], this.pane)
 
             iterator = operation[Symbol.asyncIterator]()
@@ -522,7 +637,7 @@ export default class ClientProcessBoundary extends TheLink {
         })
     }
 
-    private waitReady(question: string, target: unknown, endpoint: unknown, requireCurrentIncarnation: boolean) {
+    private async waitReady(question: string, target: unknown, endpoint: unknown, requireCurrentIncarnation: boolean) {
 
         const process = target === undefined || target === null
             ? this.authManager.processManager.processes.get(this.pane)
@@ -533,6 +648,15 @@ export default class ClientProcessBoundary extends TheLink {
         if (!process || (isHandleAddress(target) && process.reference !== target.reference)) {
 
             this.deliver("host-end", "answer", question, failed(new Error("The desktop does not know this process"))).catch(() => undefined)
+
+            return
+        }
+
+        try { await this.systemAccess.process(process) }
+
+        catch (error) {
+
+            this.deliver("host-end", "answer", question, failed(error)).catch(() => undefined)
 
             return
         }
@@ -793,6 +917,8 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.trafficSubscriptions.clear()
 
+        this.systemSubscriptions.clear()
+
         this.expected.clear()
 
         this.waiting.clear()
@@ -903,6 +1029,25 @@ function isHandleAddress(value: unknown): value is { identity: string, reference
 
     return typeof value === "object" && value !== null && "identity" in value && "reference" in value
         && typeof value.identity === "string" && typeof value.reference === "string"
+}
+
+type EndpointReference = Readonly<{
+    kind: "server" | "client"
+    process: Readonly<{ program: { identity: string } }>
+}>
+
+function isEndpointReference(value: unknown): value is EndpointReference {
+
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false
+
+    const reference = value as { kind?: unknown, process?: unknown }
+
+    if (reference.kind !== "server" && reference.kind !== "client") return false
+    if (!reference.process || typeof reference.process !== "object" || Array.isArray(reference.process)) return false
+
+    const program = (reference.process as { program?: unknown }).program
+
+    return !!program && typeof program === "object" && !Array.isArray(program) && typeof (program as { identity?: unknown }).identity === "string"
 }
 
 interface WaitingQuestion {

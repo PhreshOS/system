@@ -1356,6 +1356,12 @@ export default class ProcessManager extends TheLink {
         return this.authManager.programManager.permission(this.find(identity).program, name)
     }
 
+    /** Tests one concrete permission against this Process's effective grants. */
+    public grants(identity: string, name: string, requested: readonly string[]) {
+
+        return permissionCatalog.grants(this.effectivePermission(this.find(identity), name), requested)
+    }
+
     /** Resolves one permission request through declarations, grants, then the owner. */
     public async requestPermission(identity: string, request: string, name: string, input: PermissionRequest): Promise<PermissionChange> {
 
@@ -1370,7 +1376,7 @@ export default class ProcessManager extends TheLink {
         const declared = process.program.clientPermissions[name] ?? null
         const temporary = process.permissions.get(name) ?? null
         const stored = this.authManager.programManager.permission(process.program, name)
-        const effective = permissionCatalog.effective(name, declared, temporary, stored)
+        const effective = this.effectivePermission(process, name, stored)
 
         if (permissionCatalog.grants(effective, requested)) return permissionChange(effective, false)
         if (effective === false) return Object.freeze({ permission: false, needReload: false })
@@ -1398,6 +1404,16 @@ export default class ProcessManager extends TheLink {
         }
 
         return Object.freeze({ permission: choice, needReload: false })
+    }
+
+    private effectivePermission(process: Process, name: string, stored = this.authManager.programManager.permission(process.program, name)) {
+
+        return permissionCatalog.effective(
+            name,
+            process.program.clientPermissions[name] ?? null,
+            process.permissions.get(name) ?? null,
+            stored
+        )
     }
 
     public cancelPermission(identity: string, request: string) {

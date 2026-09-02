@@ -63,6 +63,11 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/permission/get", process, name)
     }
 
+    public async grantsPermission(process: string, name: string, requested: readonly string[]) {
+
+        return await this.$outbound.publishFirst("/permission/grants", process, name, requested) as boolean
+    }
+
     public async requestPermission(process: string, request: string, name: string, permission: PermissionRequest) {
 
         return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as PermissionChange

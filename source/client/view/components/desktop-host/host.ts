@@ -18,6 +18,7 @@ import {
     visualTransaction,
     type LocalWindowHost
 } from "./local-window"
+import SystemAccess from "./system-access"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -29,6 +30,8 @@ export class TransferredAnswer {
 export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSurfaceSnapshot, frameOwner: () => string | null, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
+
+    const access = new SystemAccess(authManager, pane)
 
     function process() {
 
@@ -79,6 +82,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         if (!found || found.reference !== value.reference) throw new Error("The Process represented by this handle does not exist")
 
         return found
+    }
+
+    function permittedProgram(value: unknown) {
+
+        return access.program(holdProgram(value))
+    }
+
+    function permittedProcess(value: unknown) {
+
+        return access.process(holdProcess(value))
     }
 
     function resolveProcess(value: unknown) {
@@ -133,16 +146,26 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // only because it was added on the other.
         if (word === "current-process") return [record(process())]
 
-        if (word === "host-program-list") return [[...programManager.programs.values()].filter(program => args[0] !== true || program.installed).map(sdkProgram)]
+        if (word === "host-program-list") {
+
+            const programs = [...programManager.programs.values()].filter(program => args[0] !== true || program.installed)
+            const visible = await access.all() ? programs : programs.filter(program => access.ownsProgram(program))
+
+            return [visible.map(sdkProgram)]
+        }
 
         if (word === "host-program-find") {
 
             const program = programManager.programs.get(String(args[0]))
 
+            if (program) await access.program(program)
+
             return [program ? sdkProgram(program) : null]
         }
 
         if (word === "host-program-create" || word === "host-program-force-create") {
+
+            await access.requireAll()
 
             const identity = word === "host-program-create"
                 ? await programManager.create(args[0])
@@ -151,11 +174,19 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [sdkProgram(requireProgram(identity))]
         }
 
-        if (word === "host-process-list") return [[...processManager.processes.values()].map(record)]
+        if (word === "host-process-list") {
+
+            const processes = [...processManager.processes.values()]
+            const visible = await access.all() ? processes : processes.filter(process => access.ownsProcess(process))
+
+            return [visible.map(record)]
+        }
 
         if (word === "host-process-find") {
 
             const found = processManager.processes.get(String(args[0]))
+
+            if (found) await access.process(found)
 
             return [found ? record(found) : null]
         }
@@ -163,6 +194,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         if (word === "appearance") return [authManager.linkManager.appearance.value]
 
         if (word === "updateAppearance") {
+
+            await access.requireAll()
 
             await authManager.updateAppearance(args[0])
 
@@ -182,7 +215,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "exists") {
 
-            const target = holdProcess(args[1])
+            const target = await permittedProcess(args[1])
 
             if (args[0] === "server") return [target.server !== null]
 
@@ -193,7 +226,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "start-endpoint") {
 
-            const target = holdProcess(args[0])
+            const target = await permittedProcess(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -204,7 +237,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "stop-endpoint") {
 
-            const target = holdProcess(args[0])
+            const target = await permittedProcess(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -222,7 +255,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "is-service") {
 
-            const target = holdProcess(args[1])
+            const target = await permittedProcess(args[1])
             const endpoint = args[0] ?? "client"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
@@ -232,6 +265,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-exists") {
 
+            await access.requireAll()
+
             if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
 
             return [await processManager.serviceExists(args[0])]
@@ -239,12 +274,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-wait-ready") {
 
+            await access.requireAll()
+
             if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
 
             return [await processManager.waitServiceReady(args[0], args[1] as number | undefined)]
         }
 
         if (word === "service-follow") {
+
+            await access.requireAll()
 
             const [subscription, key, scope, event] = args
 
@@ -272,6 +311,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-send") {
 
+            await access.requireAll()
+
             if (!isServiceKey(args[0]) || typeof args[1] !== "string") return []
 
             await processManager.sendService(pane, args[0], args[1], args[2])
@@ -280,6 +321,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         }
 
         if (word === "service-ask") {
+
+            await access.requireAll()
 
             if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
 
@@ -291,10 +334,12 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // A Process parent is resolved by its exact retained address.
         if (word === "parent") {
 
-            const target = holdProcess(args[0])
+            const target = await permittedProcess(args[0])
             const parent = target.parent ? resolveProcess(target.parent) : null
 
             if (target.parent && !parent) throw new Error("The parent Process no longer exists")
+
+            if (parent) await access.process(parent)
 
             return [parent ? record(parent) : null]
         }
@@ -304,15 +349,17 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (!isHandleAddress(args[0])) throw new Error("The boundary returned an invalid Process handle")
 
-            if (!isHandleAddress(args[0])) throw new Error("A Process handle is required")
+            const current = resolveProcess(args[0])
 
-            return [resolveProcess(args[0]) === null]
+            if (current) await access.process(current)
+
+            return [current === null]
         }
 
         // Every live Process belonging to one exact Program handle.
         if (word === "program-process-list") {
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
 
             return [[...processManager.processes.values()].filter(entry => entry.program === program.identity).map(record)]
         }
@@ -321,7 +368,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // living program-local name. An exact identity always wins.
         if (word === "program-process-find") {
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
             const wanted = String(args[1])
             const exact = processManager.processes.get(wanted)
             const found = exact?.program === program.identity
@@ -334,7 +381,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // Create another Process from one exact Program handle.
         if (word === "program-process-create") {
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
             const started = await programManager.createProcess(address(program), args[1] as Launch, process().identity)
 
             return [record(requireProcess(started))]
@@ -342,7 +389,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "program-process-find-or-create") {
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
             const launch = args[1] as Launch & { name: string }
 
             const found = await programManager.findOrCreateProcess(address(program), launch, process().identity)
@@ -352,7 +399,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         // Every instance ended, the asker last. One implementation on the
         // core serves this and a server half both.
-        if (word === "program-process-exit-all") return [await processManager.exitAll(holdProgram(args[0]).identity, pane)]
+        if (word === "program-process-exit-all") return [await processManager.exitAll((await permittedProgram(args[0])).identity, pane)]
 
         if (word === "observe") {
 
@@ -377,6 +424,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             if (!owner || !target) {
 
                 if (reportImpossible) throw new Error("The desktop does not know this process")
+
+                return []
+            }
+
+            if (!access.ownsProcess(target) && !await access.all()) {
+
+                if (reportImpossible) throw new Error("Execution is not permitted")
 
                 return []
             }
@@ -425,6 +479,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
+            if (!access.ownsProcess(target) && !await access.all()) {
+
+                if (reportImpossible) throw new Error("Execution is not permitted")
+
+                return []
+            }
+
             if (!programOf(target)[half]) {
 
                 if (reportImpossible) throw new Error(`This program declared no ${half} half`)
@@ -465,7 +526,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error(`A process has no "${String(args[1])}" end`)
 
-            await processManager.publish(pane, holdProcess(args[0]).identity, args[1], args.slice(2))
+            await processManager.publish(pane, (await permittedProcess(args[0])).identity, args[1], args.slice(2))
 
             return []
         }
@@ -477,7 +538,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (args[1] !== "server") throw new Error("Only a server end can be asked — a client end has no one answerer")
 
-            await processManager.askOf(pane, holdProcess(args[0]).identity, args.slice(2))
+            await processManager.askOf(pane, (await permittedProcess(args[0])).identity, args.slice(2))
 
             return []
         }
@@ -485,7 +546,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // What a launch said. An empty subject is this frame's Process.
         if (word === "option") {
 
-            const found = holdProcess(args[0])
+            const found = await permittedProcess(args[0])
 
             return [found.options[String(args[1])]]
         }
@@ -512,6 +573,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "program-permissions") {
 
+            await access.requireAll()
+
             const operation = args[1]
 
             if (operation !== "all" && operation !== "get" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
@@ -519,9 +582,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [await programManager.permissions(address(holdProgram(args[0])), operation, typeof args[2] === "string" ? args[2] : undefined, args[3] as never)]
         }
 
-        if (word === "startup") return [await programManager.startup(args[0], String(args[1]), args[2])]
+        if (word === "startup") {
+
+            const program = await permittedProgram(args[0])
+
+            return [await programManager.startup(address(program), String(args[1]), args[2])]
+        }
 
         if (word === "fork") {
+
+            await access.requireAll()
 
             const identity = await programManager.fork(args[0], String(args[1]))
             const program = programManager.programs.get(identity)
@@ -531,20 +601,20 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [sdkProgram(program)]
         }
 
-        if (word === "program-agent") return [await programManager.agent(address(holdProgram(args[0])))]
+        if (word === "program-agent") return [await programManager.agent(address(await permittedProgram(args[0])))]
 
         // Icon bytes are requested only when a concrete Program handle asks.
-        if (word === "icon") return [await programManager.icon(address(holdProgram(args[0])), args[1] as ProgramIconSize)]
+        if (word === "icon") return [await programManager.icon(address(await permittedProgram(args[0])), args[1] as ProgramIconSize)]
 
         // Installation state and lifecycle operations of one held Program.
         if (word === "installed") {
 
-            return [holdProgram(args[0]).installed === true]
+            return [(await permittedProgram(args[0])).installed === true]
         }
 
         if (word === "forget") {
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
 
             return [await program.forget(pane)]
         }
@@ -556,7 +626,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // was being used to ask.
         if (word === "window") {
 
-            const target = holdProcess(args[0])
+            const target = await permittedProcess(args[0])
             const shown = clientOf(target).window
 
             return [{
@@ -584,21 +654,21 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "move") {
 
-            await clientOf(holdProcess(args[0])).window.move(args[1] as never)
+            await clientOf(await permittedProcess(args[0])).window.move(args[1] as never)
 
             return [pane]
         }
 
         if (word === "resize") {
 
-            await clientOf(holdProcess(args[0])).window.resize(args[1] as never)
+            await clientOf(await permittedProcess(args[0])).window.resize(args[1] as never)
 
             return [pane]
         }
 
         if (word === "setGeometry") {
 
-            await clientOf(holdProcess(args[0])).window.setGeometry(args[1] as never)
+            await clientOf(await permittedProcess(args[0])).window.setGeometry(args[1] as never)
 
             return [pane]
         }
@@ -650,28 +720,28 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "changeTitle") {
 
-            await clientOf(holdProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
+            await clientOf(await permittedProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
 
             return [pane]
         }
 
         if (word === "raise") {
 
-            await clientOf(holdProcess(args[0])).window.raise()
+            await clientOf(await permittedProcess(args[0])).window.raise()
 
             return [pane]
         }
 
         if (word === "minimize") {
 
-            await clientOf(holdProcess(args[0])).window.minimize(args[1] !== false)
+            await clientOf(await permittedProcess(args[0])).window.minimize(args[1] !== false)
 
             return [pane]
         }
 
         if (word === "exit") {
 
-            await holdProcess(args[0]).exit()
+            await (await permittedProcess(args[0])).exit()
 
             return [pane]
         }
@@ -680,7 +750,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const [subject, operation, key, value, ttl] = args as [unknown, string, string, unknown, number | undefined]
 
-            return [await programManager.store(address(holdProgram(subject)), operation, key, value, ttl)]
+            return [await programManager.store(address(await permittedProgram(subject)), operation, key, value, ttl)]
         }
 
         // This program's places. Metadata operations remain ordinary values;
@@ -693,7 +763,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const operation = String(args[1])
 
-            const program = holdProgram(args[0])
+            const program = await permittedProgram(args[0])
 
             if (operation === "stream" || operation === "write") {
 
@@ -744,21 +814,25 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // Read-only logs belonging to one exact Program.
         if (word === "logs") {
 
-            return [await programManager.logs(address(holdProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+            return [await programManager.logs(address(await permittedProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
         }
 
         // Read and write one exact Program database.
         if (word === "database") {
 
-            return [await programManager.database(address(holdProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+            return [await programManager.database(address(await permittedProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
         }
 
         if (word === "host-storage") {
+
+            await access.requireAll()
 
             return [await authManager.storage(String(args[0]), args.slice(1).map(String))]
         }
 
         if (word === "host-storage-stream" || word === "host-storage-write") {
+
+            await access.requireAll()
 
             const path = args[0]
 
@@ -801,6 +875,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // Uploads are one flat public collection. A pane may provide bytes or
         // one opaque file key; it never receives a filesystem path or route.
         if (word === "uploads") {
+
+            await access.requireAll()
 
             const operation = args[0]
 
@@ -881,6 +957,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // The pane provides only the target request and its body; the desktop's
         // authorization is supplied here and never becomes a transmitted value.
         if (word === "fetch") {
+
+            await access.requireAll()
 
             const { control, controller } = cancellation(args[2], "fetch")
 

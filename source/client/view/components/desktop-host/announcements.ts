@@ -5,6 +5,7 @@ import { useCallback } from "react"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
+import SystemAccess from "./system-access"
 
 /** Projects authoritative System announcements into every Client frame. */
 export default function useAnnouncements(authManager: AuthManager, panes: Map<string, ClientProcessBoundary>, traffic: ClientTraffic) {
@@ -12,11 +13,20 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     const processes = ReactTunnel.useFactory(authManager.processManager.$inbound)
     const programs = ReactTunnel.useFactory(authManager.programManager.$inbound)
 
-    const post = useCallback(function (route: string, ...message: unknown[]) {
+    const post = useCallback(function (program: string, route: string, ...message: unknown[]) {
 
-        for (const pane of panes.keys()) traffic.emit(pane, route, ...message).catch(() => undefined)
+        for (const pane of panes.keys()) {
 
-    }, [panes, traffic])
+            const access = new SystemAccess(authManager, pane)
+
+            if (access.ownsProgram({ identity: program })) traffic.emit(pane, route, ...message).catch(() => undefined)
+            else access.all().then(granted => {
+
+                if (granted) return traffic.emit(pane, route, ...message)
+            }).catch(() => undefined)
+        }
+
+    }, [authManager, panes, traffic])
 
     processes.useSubscribe("/created", useCallback((payload: ProcessRecord | null) => {
 
@@ -24,8 +34,8 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
         const record = processRecord(authManager, payload)
 
-        post("host-process", "create", payload.program, record)
-        post("program-process", "create", program(authManager, payload.program).reference, record)
+        post(payload.program, "host-process", "create", payload.program, record)
+        post(payload.program, "program-process", "create", program(authManager, payload.program).reference, record)
 
     }, [authManager, post]))
 
@@ -35,9 +45,9 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
         const record = processRecord(authManager, payload)
 
-        post("host-process", "exit", payload.program, record, code, signal)
-        post("program-process", "exit", program(authManager, payload.program).reference, record, code, signal)
-        post("process-host", "exit", payload.reference, code, signal)
+        post(payload.program, "host-process", "exit", payload.program, record, code, signal)
+        post(payload.program, "program-process", "exit", program(authManager, payload.program).reference, record, code, signal)
+        post(payload.program, "process-host", "exit", payload.reference, code, signal)
 
     }, [authManager, post]))
 
@@ -45,7 +55,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
         if (!payload) return
 
-        post("process-host", event, payload.reference, processRecord(authManager, payload), endpoint)
+        post(payload.program, "process-host", event, payload.reference, processRecord(authManager, payload), endpoint)
 
     }, [authManager, post])
 
@@ -58,7 +68,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
         const target = authManager.processManager.processes.get(identity)
 
-        if (target) post("host-end", event, target.reference, value)
+        if (target) post(target.program, "host-end", event, target.reference, value)
 
     }, [authManager, post]))
 
@@ -68,10 +78,10 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
         const record = sdkProgram(entry)
 
-        post("host-program", event, entry.identity, record, everything === true)
+        post(entry.identity, "host-program", event, entry.identity, record, everything === true)
 
-        if (event === "uninstall") post("program-host", event, entry.reference, everything === true)
-        if (event === "forget") post("program-host", event, entry.reference)
+        if (event === "uninstall") post(entry.identity, "program-host", event, entry.reference, everything === true)
+        if (event === "forget") post(entry.identity, "program-host", event, entry.reference)
 
     }, [post])
 

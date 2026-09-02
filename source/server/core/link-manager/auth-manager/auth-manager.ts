@@ -121,6 +121,16 @@ export default class AuthManager extends TheLink {
         return this.processManager.permission(process, name)
     }
 
+    @Connect("/permission/grants")
+    protected async grantsPermission(process: unknown, name: unknown, requested: unknown) {
+
+        if (typeof process !== "string" || typeof name !== "string" || !Array.isArray(requested) || requested.some(value => typeof value !== "string")) {
+            throw new Error("A permission check is invalid")
+        }
+
+        return this.processManager.grants(process, name, requested)
+    }
+
     @Connect("/permission/request")
     protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown) {
 
