@@ -7,8 +7,12 @@ export default class ClientState {
 
     public readonly window: Window
 
+    public sameOrigin: boolean
+
     public constructor(processManager: ProcessManager, process: string, payload: NonNullable<TransmittedProcess["client"]>) {
 
         this.window = new Window(processManager, process, payload.window)
+
+        this.sameOrigin = payload.sameOrigin
     }
 }

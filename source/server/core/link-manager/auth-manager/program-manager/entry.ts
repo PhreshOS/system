@@ -41,14 +41,6 @@ export default class Entry {
         }
     }
 
-    // Only the trusted desktop needs the private route that hosts this
-    // program's files. It is deliberately absent from `toJSON`, which is
-    // also what crosses into program SDKs.
-    public hosted() {
-
-        return { ...this.record(), assetId: this.program.assetId }
-    }
-
     public toJSON() {
 
         return this.record()
@@ -56,7 +48,5 @@ export default class Entry {
 }
 
 export type ProgramRecord = ReturnType<Entry["record"]>
-
-export type HostedEntry = ReturnType<Entry["hosted"]>
 
 export type TransmittedEntry = Transmitted<ProgramRecord>

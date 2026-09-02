@@ -82,6 +82,8 @@ export default class Process {
 
     private readonly hostTraffic: HostTraffic
 
+    private clientSameOrigin: boolean
+
     private readonly serverStarts: ((server: ServerProcessBoundary) => void)[] = []
 
     private readonly serverStops: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = []
@@ -101,7 +103,7 @@ export default class Process {
 
     private exitProcess: (() => Promise<unknown>) | null = null
 
-    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic) {
+    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, clientSameOrigin: boolean) {
 
         this.identity = identity
 
@@ -116,6 +118,13 @@ export default class Process {
         this.parent = parent
 
         this.hostTraffic = hostTraffic
+
+        this.clientSameOrigin = clientSameOrigin
+    }
+
+    public setClientSameOrigin(sameOrigin: boolean) {
+
+        this.clientSameOrigin = sameOrigin
     }
 
     public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
@@ -322,9 +331,7 @@ export default class Process {
             // pane never receives this record whole.
             parent: this.parent?.record() ?? null,
 
-            assetId: this.program.assetId,
-
-            client: this.client
+            client: this.client ? { ...this.client, sameOrigin: this.clientSameOrigin } : null
         }
     }
 

@@ -1,4 +1,4 @@
-import { HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
+import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { type Launch } from "@phreshos/core"
 import ProgramManager from "./program-manager"
 import type { Transmitted } from "@libs/messagepack"
@@ -22,8 +22,6 @@ export default class Program {
 
     public readonly installed: boolean
 
-    public readonly assetId: string
-
     public readonly name: string
 
     public readonly version: string | null
@@ -32,11 +30,11 @@ export default class Program {
 
     public readonly hasAgent: boolean
 
-    public readonly server: Transmitted<HostedEntry>["server"]
+    public readonly server: Transmitted<ProgramRecord>["server"]
 
-    public readonly client: Transmitted<HostedEntry>["client"]
+    public readonly client: Transmitted<ProgramRecord>["client"]
 
-    public constructor(programManager: ProgramManager, payload: Transmitted<HostedEntry>) {
+    public constructor(programManager: ProgramManager, payload: Transmitted<ProgramRecord>) {
 
         this.programManager = programManager
 
@@ -45,8 +43,6 @@ export default class Program {
         this.reference = payload.reference
 
         this.installed = payload.installed
-
-        this.assetId = payload.assetId
 
         this.name = payload.name
 

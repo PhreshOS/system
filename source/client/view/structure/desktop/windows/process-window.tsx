@@ -7,6 +7,7 @@ import { type Position, type Size, type Theme } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
+import { type ProgramAccess } from "@client/view/components/program-access"
 import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "react"
 
 const settleDelay = 80
@@ -16,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -83,7 +84,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     }, [frameSource, loading, onReady, record.identity])
 
-    const frameLoading = loading.source !== frameSource || loading.phase !== "ready"
+    const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
     const progress = !bare && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
 
@@ -154,6 +155,8 @@ export default memo(function ({ identity, record, client, title, icon, position,
             title={title}
 
             door={door}
+
+            access={programAccess}
 
             theme={theme}
 
@@ -226,6 +229,8 @@ interface ProcessWindowProps {
     bare: boolean
 
     door: string
+
+    programAccess: ProgramAccess
 
     theme: Theme
 

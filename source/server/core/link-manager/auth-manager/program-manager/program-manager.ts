@@ -16,7 +16,7 @@ import { type ClientLaunch, type Launch, type ProgramCommandChunk } from "@phres
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
-import Entry, { type HostedEntry } from "./entry"
+import Entry, { type ProgramRecord } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import { readStartup, removeStartup, writeStartup } from "./startup"
@@ -167,26 +167,24 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Stores one canonical user grant and reports its Client activation need. */
-    public setPermission(program: Program, name: string, value: Exclude<PermissionInput, null>): PermissionChange {
+    public async setPermission(program: Program, name: string, value: Exclude<PermissionInput, null>): Promise<PermissionChange> {
 
         if (value === null) throw new Error("A stored Program permission cannot be null")
 
         const permissions = readPermissions(program)
         const before = permissions[name] ?? null
         const permission = permissionCatalog.resolve(name, value)
-        const change = this.permissionChange(program, name, before, permission)
-
         if (permissionCatalog.changed(before, permission)) {
 
             permissions[name] = permission
             writePermissions(program, permissions)
         }
 
-        return change
+        return await this.permissionChange(program, name, before, permission)
     }
 
     /** Removes one stored user grant without changing Program declarations. */
-    public deletePermission(program: Program, name: string): PermissionChange {
+    public async deletePermission(program: Program, name: string): Promise<PermissionChange> {
 
         permissionCatalog.definition(name)
 
@@ -199,7 +197,7 @@ export default class ProgramManager extends TheLink {
             writePermissions(program, permissions)
         }
 
-        return this.permissionChange(program, name, before, null)
+        return await this.permissionChange(program, name, before, null)
     }
 
     @Connect("/permissions")
@@ -209,27 +207,15 @@ export default class ProgramManager extends TheLink {
 
         if (operation === "all") return this.permissions(program)
         if (operation === "get") return this.permission(program, String(name))
-        if (operation === "set") return this.setPermission(program, String(name), value as Exclude<PermissionInput, null>)
-        if (operation === "delete") return this.deletePermission(program, String(name))
+        if (operation === "set") return await this.setPermission(program, String(name), value as Exclude<PermissionInput, null>)
+        if (operation === "delete") return await this.deletePermission(program, String(name))
 
         throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
     }
 
-    private permissionChange(program: Program, name: string, before: Permission, permission: Permission): PermissionChange {
+    private async permissionChange(program: Program, name: string, before: Permission, permission: Permission): Promise<PermissionChange> {
 
-        const needReload = [...this.authManager.processManager.processes.values()].some(process => {
-
-            if (process.program !== program || process.client === null) return false
-
-            const declared = program.clientPermissions[name] ?? null
-            const temporary = process.permissions.get(name) ?? null
-
-            return permissionCatalog.needReload(
-                name,
-                permissionCatalog.effective(name, declared, temporary, before),
-                permissionCatalog.effective(name, declared, temporary, permission)
-            )
-        })
+        const needReload = await this.authManager.processManager.storedPermissionChanged(program, name, before, permission)
 
         return Object.freeze({
             permission: clonePermission(permission),
@@ -277,14 +263,6 @@ export default class ProgramManager extends TheLink {
         if (!program || program.reference !== address.reference) throw new Error("The Program represented by this handle does not exist")
 
         return program
-    }
-
-    // Resolve the browser-only hosting address. This is intentionally a
-    // separate lookup from public identity: stable program identities
-    // must never become stable asset routes.
-    public fromAsset(assetId: string) {
-
-        return [...this.programs.values()].find(entry => entry.program.assetId === assetId)?.program ?? null
     }
 
     // A program created in memory. From the moment it exists it is an
@@ -422,7 +400,7 @@ export default class ProgramManager extends TheLink {
 
         await this.authManager.processManager.announceHost("program", "create", entry.identity, entry)
 
-        await this.$outbound.publish("/create", entry.hosted())
+        await this.$outbound.publish("/create", entry.record())
     }
 
     private async change<T>(identity: string, operation: () => Promise<T>) {
@@ -966,7 +944,7 @@ export default class ProgramManager extends TheLink {
                 // and removing the road took the echo with it — a desktop
                 // that never learns a program arrived is a desktop showing
                 // yesterday's list.
-                await this.$outbound.publish("/install", entry.hosted())
+                await this.$outbound.publish("/install", entry.record())
 
                 return entry
             }
@@ -1041,7 +1019,7 @@ export default class ProgramManager extends TheLink {
 
         await this.authManager.processManager.announceSubject("program", "uninstall", entry.program.reference, everything)
 
-        await this.$outbound.publish("/uninstall", entry.hosted(), everything)
+        await this.$outbound.publish("/uninstall", entry.record(), everything)
 
         if (everything) await this.forgetEntry(entry)
 
@@ -1374,7 +1352,7 @@ export default class ProgramManager extends TheLink {
 
         return {
 
-            programs: [...this.programs].map(([identity, entry]) => [identity, entry.hosted()] as [string, HostedEntry])
+            programs: [...this.programs].map(([identity, entry]) => [identity, entry.record()] as [string, ProgramRecord])
         }
     }
 }

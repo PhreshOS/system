@@ -15,6 +15,9 @@ function processManager() {
     const manager = new ProcessManager(authManager)
 
     Object.assign(authManager, {
+        programManager: {
+            permission() { return null }
+        },
         linkManager: {
             application: {
                 system: {

@@ -756,9 +756,9 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private window(program: Program, shape: Shape) {
+    private window(shape: Shape) {
 
-        const shown = { title: shape.title, url: program.clientRoot, layer: shape.layer, location: shape.location }
+        const shown = { title: shape.title, layer: shape.layer, location: shape.location }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
@@ -785,9 +785,33 @@ export default class ProcessManager extends TheLink {
         // do not hear about it.
         const front = shape && this.front(shape.layer)
 
-        const window = shape ? this.window(program, shape) : null
+        const window = shape ? this.window(shape) : null
 
-        const process = new Process(identity, name, program, options, launch, parent, this.hostTraffic)
+        const process = new Process(
+
+            identity,
+
+            name,
+
+            program,
+
+            options,
+
+            launch,
+
+            parent,
+
+            this.hostTraffic,
+
+            permissionCatalog.grants(permissionCatalog.effective(
+
+                "system",
+
+                program.clientPermissions.system ?? null,
+
+                this.authManager.programManager.permission(program, "system")
+            ), ["all"])
+        )
 
         this.processes.set(identity, process)
 
@@ -1021,7 +1045,7 @@ export default class ProcessManager extends TheLink {
 
             const shape = this.authManager.programManager.clientShape(process.program, launch)
 
-            const window = this.window(process.program, shape)
+            const window = this.window(shape)
 
             const before = this.front(window.layer)
 
@@ -1390,7 +1414,16 @@ export default class ProcessManager extends TheLink {
 
             process.permissions.set(name, permission)
 
-            return permissionChange(next, permissionCatalog.needReload(name, effective, next))
+            const needReload = permissionCatalog.needReload(name, effective, next)
+
+            if (needReload) {
+
+                process.setClientSameOrigin(permissionCatalog.grants(next, ["all"]))
+
+                await this.$outbound.publish("/client-access", process.identity, process.hosted())
+            }
+
+            return permissionChange(next, needReload)
         }
 
         if (choice === "always") {
@@ -1398,7 +1431,7 @@ export default class ProcessManager extends TheLink {
             const permission = permissionCatalog.merge(name, stored, requested)
             const next = permissionCatalog.effective(name, declared, temporary, permission)
 
-            this.authManager.programManager.setPermission(process.program, name, permission)
+            await this.authManager.programManager.setPermission(process.program, name, permission)
 
             return permissionChange(next, permissionCatalog.needReload(name, effective, next))
         }
@@ -1414,6 +1447,38 @@ export default class ProcessManager extends TheLink {
             process.permissions.get(name) ?? null,
             stored
         )
+    }
+
+    /** Publishes the Client access shape changed by one stored grant. */
+    public async storedPermissionChanged(program: Program, name: string, before: Permission, permission: Permission) {
+
+        let needReload = false
+
+        for (const process of this.processes.values()) {
+
+            if (process.program !== program || !process.client) continue
+
+            const declared = program.clientPermissions[name] ?? null
+            const temporary = process.permissions.get(name) ?? null
+            const changed = permissionCatalog.needReload(
+
+                name,
+
+                permissionCatalog.effective(name, declared, temporary, before),
+
+                permissionCatalog.effective(name, declared, temporary, permission)
+            )
+
+            if (!changed) continue
+
+            needReload = true
+
+            process.setClientSameOrigin(permissionCatalog.grants(this.effectivePermission(process, "system", permission), ["all"]))
+
+            await this.$outbound.publish("/client-access", process.identity, process.hosted())
+        }
+
+        return needReload
     }
 
     public cancelPermission(identity: string, request: string) {
@@ -1466,8 +1531,8 @@ export default class ProcessManager extends TheLink {
 
             if (operation === "all") return [this.authManager.programManager.permissions(program)]
             if (operation === "get") return [this.authManager.programManager.permission(program, String(rest[2]))]
-            if (operation === "set") return [this.authManager.programManager.setPermission(program, String(rest[2]), rest[3] as never)]
-            if (operation === "delete") return [this.authManager.programManager.deletePermission(program, String(rest[2]))]
+            if (operation === "set") return [await this.authManager.programManager.setPermission(program, String(rest[2]), rest[3] as never)]
+            if (operation === "delete") return [await this.authManager.programManager.deletePermission(program, String(rest[2]))]
 
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
         }

@@ -2,20 +2,16 @@ import { serveStatic } from "@hono/node-server/serve-static"
 import Application from "@server/core/application"
 import { isIconSize } from "@server/core/link-manager/auth-manager/program-manager/icon"
 import { existsSync } from "node:fs"
-import doors from "./doors"
 import { Hono } from "hono"
+import doors from "./doors"
+import { developmentResponse, developmentSocket, developmentTarget } from "./program-development"
 
 /**
- * What a program shows: its client half at `/program/<assetId>/assets`,
- * and how it is drawn at `/program/<assetId>/icons`.
+ * The browser representation of one Program domain.
  *
- * The asset id is a private runtime address, separate from public
- * program identity. Both are reachable only while the runtime registry
- * retains the program.
- *
- * No authorization: these are files a browser reads, with no link and
- * no operations. Nothing here can be found from a program's stable
- * identity.
+ * Every Client document uses `/program/<identity>/assets`, independently of
+ * whether its source is an installed directory or a live development server.
+ * Icons use the same Program identity beneath `/program/<identity>/icons`.
  */
 export default function (application: Application) {
 
@@ -23,17 +19,53 @@ export default function (application: Application) {
 
     const program = new Hono()
 
-    // A client is entered at its directory: the trailing slash makes
-    // the page's relative assets resolve beneath it.
-    program.get("/:assetId{[0-9a-f-]{36}}/assets", context => context.redirect(`${new URL(context.req.url).pathname}/`))
+    // The hidden Desktop probe deliberately asks from an opaque origin. Keep
+    // this header on every Program response so an outer reverse proxy becomes
+    // part of the same observable hosting contract.
+    program.use("*", async (context, next) => {
 
-    program.use("/:assetId{[0-9a-f-]{36}}/assets/:path{.*}", async (context, next) => {
+        await next()
 
-        const assetId = context.req.param("assetId") ?? ""
+        context.header("Access-Control-Allow-Origin", "*")
+    })
 
-        const found = programManager.fromAsset(assetId)
+    program.get("/ping", context => {
+
+        context.header("Cache-Control", "no-store")
+
+        return context.text("Program assets are available")
+    })
+
+    program.get("/:identity/assets", context => context.redirect(`${new URL(context.req.url).pathname}/`))
+
+    // A development Client's WebSocket is the same asset source as its HTTP
+    // documents. Bridging it here keeps HMR beneath the Program asset address.
+    program.use("/:identity/assets/:path{.*}", async (context, next) => {
+
+        if (context.req.header("upgrade")?.toLowerCase() !== "websocket") return await next()
+
+        const found = programManager.reach(context.req.param("identity"))
 
         if (!found) return context.text("Unknown program", 404)
+
+        const target = developmentTarget(found, context.req.url)
+
+        if (!target) return context.text("The program has no development Client", 404)
+
+        return developmentSocket(context, target)
+    })
+
+    program.all("/:identity/assets/:path{.*}", async context => {
+
+        const identity = context.req.param("identity")
+
+        const found = programManager.reach(identity)
+
+        if (!found) return context.text("Unknown program", 404)
+
+        const target = developmentTarget(found, context.req.url)
+
+        if (target) return await developmentResponse(context, target)
 
         const root = found.clientPath
 
@@ -44,14 +76,14 @@ export default function (application: Application) {
 
             root,
 
-            rewriteRequestPath: path => path.slice(`${doors.program}/${assetId}/assets`.length)
+            rewriteRequestPath: path => path.slice(`${doors.program}/${identity}/assets`.length)
 
-        })(context, next)
+        })(context, async () => undefined)
     })
 
-    program.get("/:assetId{[0-9a-f-]{36}}/icons/:file", async context => {
+    program.get("/:identity/icons/:file", async context => {
 
-        const found = programManager.fromAsset(context.req.param("assetId") ?? "")
+        const found = programManager.reach(context.req.param("identity"))
 
         if (!found) return context.text("Unknown program", 404)
 

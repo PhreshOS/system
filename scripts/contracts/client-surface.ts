@@ -10,7 +10,7 @@ import type { LocalWindowState } from "@client/view/components/desktop-host/loca
 import type { Transaction, WindowLayer } from "@phreshos/core"
 
 const authoritativeWindow = new ServerWindow(
-    { title: "Target", url: null, layer: "over", location: "/" },
+    { title: "Target", layer: "over", location: "/" },
     { x: 0, y: 0 },
     { width: 100, height: 100 },
     1,

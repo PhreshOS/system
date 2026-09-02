@@ -1,5 +1,5 @@
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import { type HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
+import { type ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { ReactTunnel } from "@the-link/react"
 import { useCallback } from "react"
 import ClientProcessBoundary from "./client-process-boundary"
@@ -72,7 +72,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, post]))
 
-    const programEvent = useCallback((event: "create" | "install" | "uninstall" | "forget", entry: HostedEntry | null, everything?: boolean) => {
+    const programEvent = useCallback((event: "create" | "install" | "uninstall" | "forget", entry: ProgramRecord | null, everything?: boolean) => {
 
         if (!entry) return
 
@@ -85,10 +85,10 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [post])
 
-    programs.useSubscribe("/create", useCallback((entry: HostedEntry | null) => programEvent("create", entry), [programEvent]))
-    programs.useSubscribe("/install", useCallback((entry: HostedEntry | null) => programEvent("install", entry), [programEvent]))
-    programs.useSubscribe("/uninstall", useCallback((entry: HostedEntry | null, everything: boolean) => programEvent("uninstall", entry, everything), [programEvent]))
-    programs.useSubscribe("/forgotten", useCallback((entry: HostedEntry | null) => programEvent("forget", entry), [programEvent]))
+    programs.useSubscribe("/create", useCallback((entry: ProgramRecord | null) => programEvent("create", entry), [programEvent]))
+    programs.useSubscribe("/install", useCallback((entry: ProgramRecord | null) => programEvent("install", entry), [programEvent]))
+    programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, everything: boolean) => programEvent("uninstall", entry, everything), [programEvent]))
+    programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
 }
 
 function processRecord(authManager: AuthManager, process: ProcessRecord) {

@@ -20,10 +20,6 @@ export default class Process {
 
     public readonly program: string
 
-    // Private hosting address from the trusted core payload. It never
-    // crosses into a framed program's SDK record.
-    public readonly assetId: string
-
     // A real date on this side: the link carries dates rather than
     // stringifying them.
     public readonly startedAt: Date
@@ -51,8 +47,6 @@ export default class Process {
         this.name = payload.name
 
         this.program = payload.program
-
-        this.assetId = payload.assetId
 
         this.startedAt = payload.startedAt
 
@@ -100,6 +94,8 @@ export default class Process {
 
             this.client.window.follow(payload.client.window)
 
+            this.client.sameOrigin = payload.client.sameOrigin
+
             return
         }
 
@@ -109,6 +105,11 @@ export default class Process {
     public clientStopped() {
 
         this.client = null
+    }
+
+    public clientAccessChanged(payload: TransmittedProcess) {
+
+        if (this.client && payload.client) this.client.sameOrigin = payload.client.sameOrigin
     }
 }
 

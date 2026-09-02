@@ -176,6 +176,12 @@ export const permissionCatalog = new PermissionCatalog({
         values: ["all"],
         default: ["all"],
         title: "System",
-        description: "Access every System capability."
+        description: "Access every System capability.",
+        requiresReload: (before, permission) => grantsAll(before) !== grantsAll(permission)
     }
 })
+
+function grantsAll(permission: Permission) {
+
+    return Array.isArray(permission) && permission.includes("all")
+}

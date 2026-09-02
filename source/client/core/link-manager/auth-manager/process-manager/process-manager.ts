@@ -282,6 +282,17 @@ export default class ProcessManager extends TheLink {
         return this.list()
     }
 
+    @Subscribe("/client-access")
+    @Publish("/processes", "inbound")
+    protected async clientAccessHandle(identity: string | null, payload: TransmittedProcess | null) {
+
+        if (!identity || !payload) return
+
+        this.processes.get(identity)?.clientAccessChanged(payload)
+
+        return this.list()
+    }
+
     @Subscribe("/exited")
     @Publish("/processes", "inbound")
     protected async exitedHandle(payload: TransmittedProcess | null) {

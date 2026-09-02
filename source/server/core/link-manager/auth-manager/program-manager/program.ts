@@ -26,8 +26,8 @@ import { permissionCatalog } from "@server/core/permissions"
  * again by whatever uses it, because the world moves in between.
  *
  * Identity is the program's one public address, whether or not it is
- * installed. Client files use a separate random address whose only job
- * is hosting: a stable identity never becomes a stable asset URL.
+ * installed. The browser asset view uses that same domain address rather
+ * than inventing a second identity for the same Program.
  */
 export default class Program {
 
@@ -35,8 +35,6 @@ export default class Program {
 
     /** Opaque identity of this runtime Program entity. */
     public readonly reference = randomUUID()
-
-    public readonly assetId = randomUUID()
 
     /** Changes whenever this runtime Program is replaced in place. */
     public revision = 0
@@ -73,8 +71,8 @@ export default class Program {
     }
 
     // Installation lays the same logical program out in the system's
-    // canonical place. Its public identity and private asset address do
-    // not change; only the description and root it runs from do.
+    // canonical place. Its identity does not change; only the description
+    // and root it runs from do.
     public replace(source: Program) {
 
         if (source.identity !== this.identity) throw new Error("A program cannot change its identity")
@@ -121,34 +119,14 @@ export default class Program {
         } : null
     }
 
-    // A client half may name a URL instead of a directory, which is how
-    // a program under development is framed from a live dev server. An
-    // installed program cannot: its paths are not its own to choose.
+    // A client half may name a URL instead of a directory. The Program asset
+    // view proxies that development source beneath the same browser address
+    // used for installed files. An installed program cannot name a URL.
     public get clientUrl() {
 
         const location = this.config.client?.location
 
         return location && /^https?:\/\//i.test(location) ? location : null
-    }
-
-    // A URL declaration says two things in one ordinary URL: its last
-    // slash ends the place this client may be launched beneath, and the
-    // remainder is the page it opens on when a launch says nothing.
-    public get clientRoot() {
-
-        const location = this.clientUrl
-
-        if (!location) return null
-
-        const url = new URL(location)
-
-        url.pathname = url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1)
-
-        url.search = ""
-
-        url.hash = ""
-
-        return url.href
     }
 
     public get clientLocation() {

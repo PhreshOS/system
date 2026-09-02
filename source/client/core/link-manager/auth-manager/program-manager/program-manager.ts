@@ -1,5 +1,5 @@
 import { TransmittedProgramManager } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
-import { HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
+import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
@@ -166,12 +166,12 @@ export default class ProgramManager extends TheLink {
 
     @Subscribe("/install")
     @Publish("/programs", "inbound")
-    protected async installed(payload: HostedEntry | null) {
+    protected async installed(payload: ProgramRecord | null) {
 
         return this.arrived(payload)
     }
 
-    private arrived(payload: HostedEntry | null) {
+    private arrived(payload: ProgramRecord | null) {
 
         if (!payload) return
 
@@ -182,14 +182,14 @@ export default class ProgramManager extends TheLink {
 
     @Subscribe("/create")
     @Publish("/programs", "inbound")
-    protected async created(payload: HostedEntry | null) {
+    protected async created(payload: ProgramRecord | null) {
 
         return this.arrived(payload)
     }
 
     @Subscribe("/uninstall")
     @Publish("/programs", "inbound")
-    protected async uninstalled(payload: HostedEntry | null) {
+    protected async uninstalled(payload: ProgramRecord | null) {
 
         return this.arrived(payload)
     }

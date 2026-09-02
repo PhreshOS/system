@@ -47,8 +47,6 @@ export interface Shown {
 
     title: string
 
-    url: string | null
-
     // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
 
@@ -74,11 +72,6 @@ export default class Window {
     // own afterwards.
     public title: string
 
-    // Where the frame is filled from, when it is not the program asset route: a
-    // client half may name a URL instead of a directory, which is what
-    // lets a program under development be shown from its own dev server.
-    public readonly url: string | null
-
     // The Window's authoritative Desktop layer.
     public readonly layer: WindowLayer
 
@@ -88,8 +81,6 @@ export default class Window {
     public constructor(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean) {
 
         this.title = shown.title
-
-        this.url = shown.url
 
         this.layer = shown.layer
 
@@ -175,8 +166,6 @@ export default class Window {
         return {
 
             title: this.title,
-
-            url: this.url,
 
             layer: this.layer,
 

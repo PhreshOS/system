@@ -31,8 +31,6 @@ export default class Window {
     // window owns it.
     public title: string
 
-    public url: string | null
-
     // The authoritative Desktop layer.
     public layer: WindowLayer
 
@@ -46,8 +44,6 @@ export default class Window {
         this.layer = payload.layer
 
         this.location = payload.location
-
-        this.url = payload.url
 
         this.processManager = processManager
 
@@ -67,8 +63,6 @@ export default class Window {
     public follow(payload: TransmittedWindow) {
 
         this.title = payload.title
-
-        this.url = payload.url
 
         this.layer = payload.layer
 
