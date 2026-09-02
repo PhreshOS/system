@@ -5,10 +5,9 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Process from "./process"
-import ProcessScope from "./process-scope"
 import { type ClientLaunch, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isPermissionName, type ServiceKey, type WindowLayer } from "@phreshos/core"
+import { type ServiceKey, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
 
 /**
@@ -41,12 +40,6 @@ export default class ProcessManager extends TheLink {
     private list() {
 
         return [...this.processes.values()]
-    }
-
-    /** Bind application operations and visibility policy to one framed Process. */
-    public scope(pane: string) {
-
-        return new ProcessScope(this, pane)
     }
 
     /** The shown authoritative Window at the front of one projected layer. */
@@ -197,14 +190,6 @@ export default class ProcessManager extends TheLink {
     public async stopEndpoint(identity: string, which: "server" | "client") {
 
         await this.$outbound.publish("/endpoint/stop", identity, which)
-    }
-
-    @Subscribe("/permission")
-    protected async permissionChanged(identity: unknown, permission: unknown, decision: unknown) {
-
-        if (typeof identity !== "string" || !isPermissionName(permission) || (decision !== true && decision !== false && decision !== null)) return
-
-        await this.$inbound.publish("/permission-changed", identity, permission, decision)
     }
 
     /** Announces a locally changed counterpart to desktop representations. */

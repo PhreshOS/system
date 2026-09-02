@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
-import { visibilityTransition, visualTransaction } from "@client/view/components/desktop-host/local-window"
+import { visualTransaction } from "@client/view/components/desktop-host/local-window"
 import host from "@client/view/components/desktop-host/host"
 import LocalWindows from "@client/view/components/window-manager/local-windows"
 import type { LocalWindowEntry } from "@client/view/components/window-manager/local-windows"
@@ -21,13 +21,12 @@ assert.equal("surface" in authoritativeWindow, false)
 assert.equal("surface" in authoritativeWindow.toJSON(), false)
 
 const transaction = visualTransaction({ duration: 240, easing: "ease-out", wait: true })
-const visibility = visibilityTransition({ duration: 240, easing: "ease-out", wait: true })
+const visibility = visualTransaction({ duration: 240, easing: "ease-out", wait: true })!
 
 assert.throws(() => visualTransaction({}), /must provide duration or easing/)
 assert.throws(() => visualTransaction({ wait: true }), /must provide duration or easing/)
 assert.throws(() => visualTransaction({ duration: 60_001 }), /0 to 60000/)
-assert.throws(() => visibilityTransition(undefined), /required/)
-assert.throws(() => visibilityTransition({ unknown: true }), /no "unknown" field/)
+assert.throws(() => visualTransaction({ unknown: true }), /no "unknown" field/)
 
 const ordinary = client("window")
 const bare = client("over")
@@ -93,7 +92,7 @@ const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, wait
 await first.move("bare", { x: 120, y: 130 })
 await assert.rejects(interrupted, /interrupted/)
 
-const surfaceWaiting = first.setSurface("bare", visibility)
+const surfaceWaiting = first.addSurface("bare", visibility)
 const surfaceRevision = surface(first, "bare:0").transition!.revision
 first.complete("bare", "surface", surfaceRevision)
 await surfaceWaiting
@@ -107,7 +106,6 @@ first.complete("bare", "surface", removalRevision)
 await surfaceRemoval
 assert.equal(represented(first, "bare:0").surface, null)
 
-assert.throws(() => first.setSurface("ordinary", visibility), /window-layer/)
 assert.equal(represented(second, "bare:0").surface, null)
 
 first.release("bare")
@@ -137,13 +135,12 @@ const calls: unknown[][] = []
 const localWindow = {
     state(identity: string) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
     move(identity: string, value: unknown, motion: Transaction | undefined) { calls.push(["move", identity, value, motion]) },
-    setSurface(identity: string, motion: Transaction) { calls.push(["set", identity, motion]) },
+    addSurface(identity: string, motion: Transaction) { calls.push(["add", identity, motion]) },
     removeSurface(identity: string, motion: Transaction) { calls.push(["remove", identity, motion]) }
 }
 const processManager = {
     processes,
     front: ClientProcessManager.prototype.front,
-    scope: ClientProcessManager.prototype.scope,
     async ownFrame() {},
     async releaseFrame() {},
     async unsubscribeFrame() {}
@@ -151,27 +148,28 @@ const processManager = {
 const authManager = {
     processManager,
     programManager: { programs: new Map() },
-    async permissionGranted() { return true }
 }
-const pointer = { snapshot: () => ({ position: { x: 12, y: 24 } }) }
-const request = host(authManager as never, requester.identity, () => ({ size: { width: 1, height: 1 } }), () => "owner", pointer as never, localWindow as never)
+const request = host(authManager as never, requester.identity, () => ({ size: { width: 1, height: 1 } }), () => "owner", localWindow as never)
 
 assert.deepEqual(await request("desktopSurface"), [{ size: { width: 1, height: 1 } }])
-assert.deepEqual(await request("desktopPointer"), [{ position: { x: 12, y: 24 } }])
 const targetAddress = { identity: target.identity, reference: target.reference }
-assert.deepEqual(await request("windowLocal", targetAddress), [{ position: { x: 70, y: 80 } }])
-await request("windowLocalMove", targetAddress, { x: 70, y: 80 })
-await request("windowLocalSurfaceSet", targetAddress, visibility)
-await request("windowLocalSurfaceRemove", targetAddress, visibility)
+const requesterAddress = { identity: requester.identity, reference: requester.reference }
+await request("windowLocalMove", requesterAddress, { x: 70, y: 80 })
+await request("windowLocalSurfaceAdd", requesterAddress, undefined, visibility)
+await request("windowLocalSurfaceRemove", requesterAddress, undefined, visibility)
 
 assert.deepEqual(calls, [
-    ["move", "target", { x: 70, y: 80 }, undefined],
-    ["set", "target", visibility],
-    ["remove", "target", visibility]
+    ["move", "requester", { x: 70, y: 80 }, undefined],
+    ["add", "requester", visibility],
+    ["remove", "requester", visibility]
 ])
 assert.deepEqual(target.client.window.position, { x: 10, y: 20 })
-await assert.rejects(request("windowLocalSurfaceSet", targetAddress, { identity: "unexpected" }), /no "identity" field/)
-await assert.rejects(request("windowLocalSurfaceSet", { ...targetAddress, reference: "wrong" }, visibility), /does not know this process/)
+await assert.rejects(request("windowLocalSurfaceAdd", requesterAddress, undefined, { identity: "unexpected" }), /no "identity" field/)
+await assert.rejects(request("windowLocalSurfaceAdd", targetAddress), /current Client Context/)
+await assert.rejects(request("windowLocalSurfaceAdd", { ...requesterAddress, reference: "wrong" }), /represented by this handle does not exist/)
+requester.client.window.layer = "window"
+await assert.rejects(request("windowLocalMove", requesterAddress, { x: 0, y: 0 }), /window-layer Process/)
+requester.client.window.layer = "over"
 
 const lifecycle: string[] = []
 const boundary = new ClientProcessBoundary(
@@ -179,7 +177,6 @@ const boundary = new ClientProcessBoundary(
     { contentWindow: null } as unknown as HTMLIFrameElement,
     authManager as never,
     () => ({ size: { width: 1, height: 1 } }),
-    {} as never,
     {} as never,
     { release(identity: string) { lifecycle.push(identity) } } as never
 )

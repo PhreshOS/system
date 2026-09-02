@@ -3,8 +3,10 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
+import { isDeepStrictEqual } from "node:util"
 import { validateIcon } from "./icon"
-import type { ProgramCommandChunk } from "@phreshos/core"
+import type { ClientPermissions, ProgramCommandChunk } from "@phreshos/core"
+import { permissionCatalog } from "@server/core/permissions"
 
 /**
  * A program: a description, and the things it names.
@@ -44,11 +46,15 @@ export default class Program {
 
     public config: ProgramConfig
 
+    public readonly clientPermissions: ClientPermissions
+
     public constructor(source: string | ProgramConfig, root?: string) {
 
         const [config, where] = typeof source === "string" ? read(source) : [source, process.cwd()]
 
         this.config = coherent(config)
+
+        this.clientPermissions = permissionCatalog.declarations(this.config.client?.permissions)
 
         this.identity = this.config.identity
 
@@ -72,6 +78,8 @@ export default class Program {
     public replace(source: Program) {
 
         if (source.identity !== this.identity) throw new Error("A program cannot change its identity")
+
+        if (!isDeepStrictEqual(source.clientPermissions, this.clientPermissions)) throw new Error("A Program's Client permissions cannot change during its lifetime")
 
         this.config = source.config
 
@@ -108,7 +116,8 @@ export default class Program {
         return this.config.client ? {
             ...this.config.client,
             start: this.config.client.start ?? true,
-            service: this.config.client.service ?? false
+            service: this.config.client.service ?? false,
+            permissions: this.clientPermissions
         } : null
     }
 
@@ -241,7 +250,9 @@ export default class Program {
 
                 layer: client.layer ?? null,
 
-                minimize: client.minimize ?? null
+                minimize: client.minimize ?? null,
+
+                permissions: client.permissions
             }
         }
     }

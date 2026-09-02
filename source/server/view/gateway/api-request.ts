@@ -1,6 +1,5 @@
 import type Application from "@server/core/application"
 import { uploadLimit } from "@server/core/upload-manager"
-import { isPermissionName } from "@phreshos/core"
 
 /** Execute one operation belonging to the shared System SDK contract. */
 export default async function apiRequest(application: Application, value: unknown, signal: AbortSignal) {
@@ -45,6 +44,16 @@ export default async function apiRequest(application: Application, value: unknow
 
         if (request.operation === "agent") return system.programAgent(program)
 
+        if (request.operation === "permissions") {
+
+            if (request.permissionOperation === "all") return system.programPermissions(program)
+            if (request.permissionOperation === "get") return system.programPermission(program, String(request.name))
+            if (request.permissionOperation === "set") return system.setProgramPermission(program, String(request.name), request.permission as never)
+            if (request.permissionOperation === "delete") return system.deleteProgramPermission(program, String(request.name))
+
+            throw new Error(`The Program permissions API does not know "${String(request.permissionOperation)}"`)
+        }
+
         if (request.operation === "store") {
 
             if (typeof request.storeOperation !== "string") throw new Error("A Program store operation is required")
@@ -56,33 +65,6 @@ export default async function apiRequest(application: Application, value: unknow
             if (request.database !== "logs" && request.database !== "database") throw new Error("A Program query targets logs or database")
             if (typeof request.statement !== "string" || !Array.isArray(request.values)) throw new Error("A Program query needs a statement and values")
             return system.programQuery(program, request.database, request.statement, request.values)
-        }
-
-        if (request.operation === "permission") {
-
-            const operation = request.permissionOperation
-
-            if (operation === "getAll") return system.programPermissions(program)
-            if (!isPermissionName(request.name)) throw new Error(`The system does not know the permission "${String(request.name)}"`)
-            if (operation === "get") return system.programPermission(program, request.name)
-
-            if (operation === "set") {
-
-                if (typeof request.value !== "boolean") throw new Error("A permission decision must be boolean")
-
-                system.setProgramPermission(program, request.name, request.value)
-
-                return
-            }
-
-            if (operation === "delete") {
-
-                system.deleteProgramPermission(program, request.name)
-
-                return
-            }
-
-            throw new Error(`The Program permission API does not know "${String(operation)}"`)
         }
 
         if (request.operation === "wait") {

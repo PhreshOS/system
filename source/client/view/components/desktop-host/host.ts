@@ -5,15 +5,16 @@ import {
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { type ClientBody, type ProxiedResponse, type UploadValue } from "@client/core/application"
-import { type PointerHost } from "./pointer"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
-import { isPermissionName, isServiceKey, isUploadFile, type DesktopPreferencesUpdate, type ProgramIconSize } from "@phreshos/core"
+import { type default as ClientProgram } from "@client/core/link-manager/auth-manager/program-manager/program"
+import { type default as ClientProcess } from "@client/core/link-manager/auth-manager/process-manager/process"
+import { isServiceKey, isUploadFile, type DesktopPreferencesUpdate, type PermissionRequest, type ProgramIconSize } from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
     localSize,
-    visibilityTransition,
+    requireLocalWindowLayer,
     visualTransaction,
     type LocalWindowHost
 } from "./local-window"
@@ -24,65 +25,149 @@ export class TransferredAnswer {
     public constructor(public readonly result: unknown[], public readonly transfer: Transferable[]) { }
 }
 
-/**
- * The desktop's vocabulary: what a client half may ask of the interface
- * that frames it.
- *
- * A client half has the capabilities a server half has, narrowed to a
- * world containing exactly one program — its own. Public services are the
- * deliberate exception: a complete service key may name another Program, but
- * it reveals no topology and resolves only through the authoritative service
- * registry. It is not a claim of network confinement — `fetch` deliberately
- * reaches arbitrary URLs, but carries neither a Program subject nor the
- * desktop's authorization.
- *
- * Program operations take no subject at all: the frame a message arrived
- * in decides which program is meant, and what was asked is discarded.
- * Operations on a Process handle name a sibling and all go through
- * `sibling`, the one place a process identity from a pane is measured.
- *
- * A server half is the other thing and deliberately so: it runs
- * arbitrary code already, so vocabulary costs it nothing.
- *
- * Answers cross to a sandboxed frame inside MessagePack envelopes. Native
- * browser capabilities travel only as explicit attachments, so every ordinary
- * word answers with data built here, never with an instance the desktop holds.
- */
-export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSurfaceSnapshot, frameOwner: () => string | null, pointer: PointerHost, localWindow: LocalWindowHost) {
+/** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
+export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSurfaceSnapshot, frameOwner: () => string | null, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 
-    const scope = processManager.scope(pane)
-
     function process() {
 
-        return scope.current()
+        const found = processManager.processes.get(pane)
+
+        if (!found) throw new Error("The desktop does not know this process")
+
+        return found
+    }
+
+    function programOf(found: Pick<ClientProcess, "program">) {
+
+        const program = programManager.programs.get(found.program)
+
+        if (!program) throw new Error("The desktop does not know this program")
+
+        return program
+    }
+
+    function requireProgram(identity: string) {
+
+        const program = programManager.programs.get(identity)
+
+        if (!program) throw new Error("The desktop does not know this program")
+
+        return program
+    }
+
+    function holdProgram(value: unknown, fallback: ClientProgram = programOf(process())) {
+
+        if (value === undefined || value === null) return fallback
+        if (!isHandleAddress(value)) throw new Error("A Program handle is required")
+
+        const found = programManager.programs.get(value.identity)
+
+        if (!found || found.reference !== value.reference) throw new Error("The Program represented by this handle does not exist")
+
+        return found
+    }
+
+    function holdProcess(value: unknown, fallback: ClientProcess = process()) {
+
+        if (value === undefined || value === null) return fallback
+        if (!isHandleAddress(value)) throw new Error("A Process handle is required")
+
+        const found = processManager.processes.get(value.identity)
+
+        if (!found || found.reference !== value.reference) throw new Error("The Process represented by this handle does not exist")
+
+        return found
+    }
+
+    function resolveProcess(value: unknown) {
+
+        if (!isHandleAddress(value)) return null
+
+        const found = processManager.processes.get(value.identity)
+
+        return found?.reference === value.reference ? found : null
+    }
+
+    function requireProcess(identity: string) {
+
+        const found = processManager.processes.get(identity)
+
+        if (!found) throw new Error("The desktop does not know this process")
+
+        return found
+    }
+
+    function clientOf(found: ClientProcess) {
+
+        if (!found.client) throw new Error("This process has no live client endpoint")
+
+        return found.client
+    }
+
+    function localProcess(value: unknown) {
+
+        const found = holdProcess(value)
+
+        if (found !== process()) throw new Error("Local Window operations belong to the current Client Context")
+
+        clientOf(found)
+
+        return found
     }
 
     // One process record on every road. Nullable values carry the resolved
     // shape as data; the SDK turns them into permanent addressed ends whose
     // exists() reads the latest fact. A frame receives MessagePack data, never
     // the desktop's mutable record.
-    function record(found: ReturnType<typeof process> | NonNullable<ReturnType<typeof process>["parent"]>) {
+    function record(found: ClientProcess) {
 
-        return sdkProcess(found, scope.programOf(found))
+        return sdkProcess(found, programOf(found))
     }
 
     return async function answer(word: unknown, ...args: unknown[]) {
-
-        if (word === "permission-granted") {
-
-            if (!isPermissionName(args[0])) throw new Error(`The system does not know the permission "${String(args[0])}"`)
-
-            return [await authManager.permissionGranted(pane, args[0])]
-        }
 
         // When it started is a fact about this process, which a pane may
         // already ask everything else about — it was missing on this side
         // only because it was added on the other.
         if (word === "current-process") return [record(process())]
 
+        if (word === "host-program-list") return [[...programManager.programs.values()].filter(program => args[0] !== true || program.installed).map(sdkProgram)]
+
+        if (word === "host-program-find") {
+
+            const program = programManager.programs.get(String(args[0]))
+
+            return [program ? sdkProgram(program) : null]
+        }
+
+        if (word === "host-program-create" || word === "host-program-force-create") {
+
+            const identity = word === "host-program-create"
+                ? await programManager.create(args[0])
+                : await programManager.forceCreate(args[0], pane)
+
+            return [sdkProgram(requireProgram(identity))]
+        }
+
+        if (word === "host-process-list") return [[...processManager.processes.values()].map(record)]
+
+        if (word === "host-process-find") {
+
+            const found = processManager.processes.get(String(args[0]))
+
+            return [found ? record(found) : null]
+        }
+
         if (word === "appearance") return [authManager.linkManager.appearance.value]
+
+        if (word === "updateAppearance") {
+
+            await authManager.updateAppearance(args[0])
+
+            return []
+        }
 
         if (word === "desktopPreferences") return [authManager.linkManager.desktopPreferences.value]
 
@@ -97,7 +182,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "exists") {
 
-            const target = args[1] === undefined ? process() : scope.sibling(args[1])
+            const target = holdProcess(args[1])
 
             if (args[0] === "server") return [target.server !== null]
 
@@ -108,7 +193,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "start-endpoint") {
 
-            const target = args[0] === undefined ? process() : scope.sibling(args[0])
+            const target = holdProcess(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -119,7 +204,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "stop-endpoint") {
 
-            const target = args[0] === undefined ? process() : scope.sibling(args[0])
+            const target = holdProcess(args[0])
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
@@ -137,7 +222,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "is-service") {
 
-            const target = args[1] === undefined ? process() : scope.sibling(args[1])
+            const target = holdProcess(args[1])
             const endpoint = args[0] ?? "client"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
@@ -203,78 +288,71 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
-        // A pane may receive a parent only inside the one program it is
-        // already a face of. No parent and a cross-program parent are
-        // the same `null`, so the relationship cannot reveal a stranger.
+        // A Process parent is resolved by its exact retained address.
         if (word === "parent") {
 
-            const target = args[0] === undefined ? process() : scope.sibling(args[0])
+            const target = holdProcess(args[0])
+            const parent = target.parent ? resolveProcess(target.parent) : null
 
-            const parent = scope.parent(target)
+            if (target.parent && !parent) throw new Error("The parent Process no longer exists")
 
             return [parent ? record(parent) : null]
         }
 
-        // Whether a process a pane holds has ended.
-        //
-        // The one word here that answers about a process the desktop
-        // does not know, because that absence is its subject — and the
-        // one that does not go through `sibling`, because refusing would
-        // answer the question it exists for. It stays inside the same
-        // boundary by giving a stranger the same answer as a ghost: a
-        // pane may not learn that another program's process exists, so
-        // as far as one is concerned, it does not.
+        // A retained Process handle remains able to report its own ending.
         if (word === "exited") {
 
             if (!isHandleAddress(args[0])) throw new Error("The boundary returned an invalid Process handle")
 
-            return [scope.exited(args[0])]
+            if (!isHandleAddress(args[0])) throw new Error("A Process handle is required")
+
+            return [resolveProcess(args[0]) === null]
         }
 
-        // Every instance of this pane's program, this one among them: a
-        // program's two halves must not disagree about how many of it
-        // are running. Nothing is named — the program is the frame's.
+        // Every live Process belonging to one exact Program handle.
         if (word === "program-process-list") {
 
-            return [scope.processes().map(record)]
+            const program = holdProgram(args[0])
+
+            return [[...processManager.processes.values()].filter(entry => entry.program === program.identity).map(record)]
         }
 
         // One process of this program by immutable identity or by its
         // living program-local name. An exact identity always wins.
         if (word === "program-process-find") {
 
-            const wanted = String(args[0])
-
-            const found = scope.findProcess(wanted)
+            const program = holdProgram(args[0])
+            const wanted = String(args[1])
+            const exact = processManager.processes.get(wanted)
+            const found = exact?.program === program.identity
+                ? exact
+                : [...processManager.processes.values()].find(entry => entry.program === program.identity && entry.name === wanted)
 
             return [found ? record(found) : null]
         }
 
-        // Another instance of this pane's own program. The identity comes
-        // from the frame, so this word can start nothing else.
-        // The whole record, not the identity alone: a record invented at the
-        // kit's end knows only what the caller could already have
-        // guessed, which is how the process a program starts was the one
-        // process that did not know when it started.
+        // Create another Process from one exact Program handle.
         if (word === "program-process-create") {
 
-            const started = await programManager.createProcess(process().program, args[0] as Launch, process().identity)
+            const program = holdProgram(args[0])
+            const started = await programManager.createProcess(address(program), args[1] as Launch, process().identity)
 
-            return [record(scope.requireProcess(started))]
+            return [record(requireProcess(started))]
         }
 
         if (word === "program-process-find-or-create") {
 
-            const launch = args[0] as Launch & { name: string }
+            const program = holdProgram(args[0])
+            const launch = args[1] as Launch & { name: string }
 
-            const found = await programManager.findOrCreateProcess(process().program, launch, process().identity)
+            const found = await programManager.findOrCreateProcess(address(program), launch, process().identity)
 
-            return [record(scope.requireProcess(found))]
+            return [record(requireProcess(found))]
         }
 
         // Every instance ended, the asker last. One implementation on the
         // core serves this and a server half both.
-        if (word === "program-process-exit-all") return [await processManager.exitAll(process().program, pane)]
+        if (word === "program-process-exit-all") return [await processManager.exitAll(holdProgram(args[0]).identity, pane)]
 
         if (word === "observe") {
 
@@ -290,7 +368,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const owner = frameOwner()
 
-            const target = args[1] === null ? process() : scope.related(args[1])
+            const target = args[1] === null ? process() : resolveProcess(args[1])
 
             // Callback subscriptions are synchronous and remain silent when
             // their source is unavailable. waitFor() and events() identify
@@ -303,7 +381,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!scope.declared(target, half)) {
+            if (!programOf(target)[half]) {
 
                 if (reportImpossible) throw new Error(`This program declared no ${half} half`)
 
@@ -338,7 +416,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const frame = frameOwner()
 
-            const target = args[1] === null ? process() : scope.related(args[1])
+            const target = args[1] === null ? process() : resolveProcess(args[1])
 
             if (!frame || !target) {
 
@@ -347,7 +425,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!scope.declared(target, half)) {
+            if (!programOf(target)[half]) {
 
                 if (reportImpossible) throw new Error(`This program declared no ${half} half`)
 
@@ -372,8 +450,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
-        // Destinationless emission. The source comes from the frame boundary,
-        // so Program code cannot speak as a sibling or another Program.
+        // Destinationless emission. The source comes from the frame boundary.
         if (word === "emit") {
 
             if (typeof args[0] !== "string") return []
@@ -383,14 +460,12 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
-        // Into one end of a sibling's channel, and asking its server end.
-        // `sibling` is what makes the name safe; everything after it is
-        // the same act a server half performs.
+        // Into one addressed Endpoint, with the current Client as source.
         if (word === "send") {
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error(`A process has no "${String(args[1])}" end`)
 
-            await processManager.publish(pane, scope.sibling(args[0]).identity, args[1], args.slice(2))
+            await processManager.publish(pane, holdProcess(args[0]).identity, args[1], args.slice(2))
 
             return []
         }
@@ -402,29 +477,23 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (args[1] !== "server") throw new Error("Only a server end can be asked — a client end has no one answerer")
 
-            await processManager.askOf(pane, scope.sibling(args[0]).identity, args.slice(2))
+            await processManager.askOf(pane, holdProcess(args[0]).identity, args.slice(2))
 
             return []
         }
 
-        // What a launch said. An explicit subject is a held sibling; the
-        // empty subject used by `context.option()` is this frame's Process.
-        // The latter is resolved here rather than named by program code,
-        // exactly like every other `context` operation on this side.
+        // What a launch said. An empty subject is this frame's Process.
         if (word === "option") {
 
-            const found = args[0] === undefined ? process() : scope.sibling(args[0])
+            const found = holdProcess(args[0])
 
             return [found.options[String(args[1])]]
         }
 
-        // What this pane's program says it is. Never a path: a client
-        // half has no disk, and where the machine put things is not a
-        // program's own word about itself.
-
+        // The Program belonging to the current Client Context.
         if (word === "current-program") {
 
-            const program = scope.program()
+            const program = programOf(process())
 
             // What it declared about its window comes too — the same
             // kind of fact as its name, and what a window needs to know
@@ -432,26 +501,50 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [sdkProgram(program)]
         }
 
-        if (word === "program-agent") return [await programManager.agent(process().program)]
+        if (word === "context-permission-get") return [await authManager.permission(pane, String(args[0]))]
 
-        // Icon bytes are requested only when this frame asks. The frame cannot
-        // provide an identity; its owning Process determines the Program.
-        if (word === "icon") return [await programManager.icon(process().program, args[0] as ProgramIconSize)]
+        if (word === "context-permission-request") {
 
-        // Whether this pane's Program is installed, and the operations
-        // that remove or forget it. Every subject is derived from the
-        // frame; no identity supplied by the pane crosses this gate.
-        //
-        // **No `fork` or `install`.** Both lay out a Program and belong to
-        // the server side; neither is a capability of a client face.
+            if (typeof args[0] !== "string") throw new Error("A permission request needs an identity")
+
+            return [await authManager.requestPermission(pane, args[0], String(args[1]), args[2] as PermissionRequest)]
+        }
+
+        if (word === "program-permissions") {
+
+            const operation = args[1]
+
+            if (operation !== "all" && operation !== "get" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+
+            return [await programManager.permissions(address(holdProgram(args[0])), operation, typeof args[2] === "string" ? args[2] : undefined, args[3] as never)]
+        }
+
+        if (word === "startup") return [await programManager.startup(args[0], String(args[1]), args[2])]
+
+        if (word === "fork") {
+
+            const identity = await programManager.fork(args[0], String(args[1]))
+            const program = programManager.programs.get(identity)
+
+            if (!program) throw new Error("The forked Program was not synchronized")
+
+            return [sdkProgram(program)]
+        }
+
+        if (word === "program-agent") return [await programManager.agent(address(holdProgram(args[0])))]
+
+        // Icon bytes are requested only when a concrete Program handle asks.
+        if (word === "icon") return [await programManager.icon(address(holdProgram(args[0])), args[1] as ProgramIconSize)]
+
+        // Installation state and lifecycle operations of one held Program.
         if (word === "installed") {
 
-            return [scope.program().installed === true]
+            return [holdProgram(args[0]).installed === true]
         }
 
         if (word === "forget") {
 
-            const program = scope.program()
+            const program = holdProgram(args[0])
 
             return [await program.forget(pane)]
         }
@@ -463,7 +556,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // was being used to ask.
         if (word === "window") {
 
-            const shown = scope.window(args[0] ?? address(process()))
+            const target = holdProcess(args[0])
+            const shown = clientOf(target).window
 
             return [{
 
@@ -475,7 +569,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 minimized: shown.minimized,
 
-                front: scope.front(shown.layer) === pane,
+                front: processManager.front(shown.layer) === target.identity,
 
                 // Which layer it lives in, and which of its own pages it
                 // was opened at. Both are the system's answers about
@@ -490,134 +584,116 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "move") {
 
-            await scope.mutableWindow(args[0]).move(args[1] as never)
+            await clientOf(holdProcess(args[0])).window.move(args[1] as never)
 
             return [pane]
         }
 
         if (word === "resize") {
 
-            await scope.mutableWindow(args[0]).resize(args[1] as never)
+            await clientOf(holdProcess(args[0])).window.resize(args[1] as never)
 
             return [pane]
         }
 
         if (word === "setGeometry") {
 
-            await scope.mutableWindow(args[0]).setGeometry(args[1] as never)
+            await clientOf(holdProcess(args[0])).window.setGeometry(args[1] as never)
 
             return [pane]
         }
 
-        if (word === "windowLocal") return [localWindow.state(scope.localProcess(args[0]).identity)]
-
         if (word === "windowLocalMove") {
 
-            await localWindow.move(scope.localProcess(args[0]).identity, localPosition(args[1]), visualTransaction(args[2]))
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.move(target.identity, localPosition(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalResize") {
 
-            await localWindow.resize(scope.localProcess(args[0]).identity, localSize(args[1]), visualTransaction(args[2]))
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.resize(target.identity, localSize(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalGeometry") {
 
-            await localWindow.geometry(scope.localProcess(args[0]).identity, localGeometry(args[1]), visualTransaction(args[2]))
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.geometry(target.identity, localGeometry(args[1]), visualTransaction(args[2]))
 
             return []
         }
 
-        if (word === "windowLocalMinimize") {
+        if (word === "windowLocalSurfaceAdd") {
 
-            localWindow.minimize(scope.localProcess(args[0]).identity, args[1] !== false)
-
-            return []
-        }
-
-        if (word === "windowLocalTitle") {
-
-            localWindow.title(scope.localProcess(args[0]).identity, String(args[1] ?? ""))
-
-            return []
-        }
-
-        if (word === "windowLocalRaise") {
-
-            localWindow.raise(scope.localProcess(args[0]).identity)
-
-            return []
-        }
-
-        if (word === "windowLocalSurfaceSet") {
-
-            await localWindow.setSurface(scope.localProcess(args[0]).identity, visibilityTransition(args[1]))
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.addSurface(target.identity, visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "windowLocalSurfaceRemove") {
 
-            await localWindow.removeSurface(scope.localProcess(args[0]).identity, visibilityTransition(args[1]))
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.removeSurface(target.identity, visualTransaction(args[2]))
 
             return []
         }
 
         if (word === "changeTitle") {
 
-            await scope.mutableWindow(args[0]).changeTitle(String(args[1] ?? ""))
+            await clientOf(holdProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
 
             return [pane]
         }
 
         if (word === "raise") {
 
-            await scope.mutableWindow(args[0]).raise()
+            await clientOf(holdProcess(args[0])).window.raise()
 
             return [pane]
         }
 
         if (word === "minimize") {
 
-            await scope.mutableWindow(args[0]).minimize(args[1] !== false)
+            await clientOf(holdProcess(args[0])).window.minimize(args[1] !== false)
 
             return [pane]
         }
 
         if (word === "exit") {
 
-            await scope.sibling(args[0]).exit()
+            await holdProcess(args[0]).exit()
 
             return [pane]
         }
 
-        // This program's own store. The question names whose, as it does
-        // on the other side, and the answer ignores it: whose is resolved
-        // from the frame, never from what was asked. The application store
-        // has no generic host road at all.
         if (word === "store") {
 
-            const [, operation, key, value, ttl] = args as [unknown, string, string, unknown, number | undefined]
+            const [subject, operation, key, value, ttl] = args as [unknown, string, string, unknown, number | undefined]
 
-            return [await programManager.store(process().program, operation, key, value, ttl)]
+            return [await programManager.store(address(holdProgram(subject)), operation, key, value, ttl)]
         }
 
         // This program's places. Metadata operations remain ordinary values;
         // file content takes the storage door so its bytes never enter The
-        // Link's serialization. The pane names neither a Program nor an
-        // authorization: this frame resolves to a Process, and that Process
-        // resolves to the Program whose area is opened.
+        // Link's serialization. The exact Program handle crosses with the
+        // request and is validated again by the authoritative Core.
         if (word === "data" || word === "cache") {
 
             const area: "data" | "cache" = word === "data" ? "data" : "cache"
 
             const operation = String(args[1])
 
-            if (operation === "path" || operation === "resolve") throw new Error(`A client half is not told where its ${word} is`)
+            const program = holdProgram(args[0])
 
             if (operation === "stream" || operation === "write") {
 
@@ -627,7 +703,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 const { control, controller } = cancellation(args[4], operation)
 
-                const request = { program: process().program, area, path: joins }
+                const request = { scope: "program" as const, program: address(program), area, path: joins }
 
                 try {
 
@@ -662,43 +738,65 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 }
             }
 
-            return [await programManager.area(process().program, word, operation, args.slice(2))]
+            return [await programManager.area(address(program), word, operation, args.slice(2))]
         }
 
-        // What this program has said. Whose, as everywhere here, is the
-        // frame's rather than the question's — so a window reads its own
-        // program's output and has no way to name another's.
-        //
-        // Nothing refuses a query that would write, because the
-        // connection behind it cannot: a pane's SQL reaches a read-only
-        // database, which is the same thing a server half's reaches.
+        // Read-only logs belonging to one exact Program.
         if (word === "logs") {
 
-            return [await programManager.logs(process().program, String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+            return [await programManager.logs(address(holdProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
         }
 
-        // This program's own database. Whose is the frame's, as
-        // everywhere here, so a window reads and writes its own and has
-        // no way to name another's.
+        // Read and write one exact Program database.
         if (word === "database") {
 
-            return [await programManager.database(process().program, String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+            return [await programManager.database(address(holdProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+        }
+
+        if (word === "host-storage") {
+
+            return [await authManager.storage(String(args[0]), args.slice(1).map(String))]
+        }
+
+        if (word === "host-storage-stream" || word === "host-storage-write") {
+
+            const path = args[0]
+
+            if (!Array.isArray(path) || path.some(part => typeof part !== "string")) throw new Error("A storage path is a list of names")
+
+            const writing = word === "host-storage-write"
+            const { control, controller } = cancellation(args[2], word)
+            const request = { scope: "system" as const, path }
+
+            try {
+
+                if (writing) {
+
+                    if (!clientBody(args[1])) throw new Error("Writing takes bytes")
+                    await authManager.linkManager.application.storageWrite(request, args[1], authManager.authorization, controller.signal)
+                    control.close()
+                    return []
+                }
+
+                const body = controlled(
+                    await authManager.linkManager.application.storageStream(request, authManager.authorization, controller.signal),
+                    controller,
+                    control
+                )
+
+                return new TransferredAnswer([body], [body])
+            }
+            catch (exception) {
+
+                control.close()
+                throw exception
+            }
         }
 
         // One desktop can frame many Client layers, but its complete area is
         // one host fact. It is this desktop's answer rather than a machine
         // fact, and the gutter remains private desktop layout state.
         if (word === "desktopSurface") return [desktop()]
-
-        // Coordinates use the same desktop display core as window geometry.
-        // Before this session has observed a pointer movement there is no
-        // position to invent, so the initial answer is null.
-        if (word === "desktopPointer") {
-
-            if (await authManager.permissionGranted(pane, "pointer") !== true) throw new Error("Permission \"pointer\" is not granted")
-
-            return [pointer.snapshot()]
-        }
 
         // Uploads are one flat public collection. A pane may provide bytes or
         // one opaque file key; it never receives a filesystem path or route.

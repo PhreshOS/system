@@ -3,7 +3,6 @@ import ClientState from "@client/core/link-manager/auth-manager/process-manager/
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type LocalAnimation, type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
 import { type LocalGeometryReader } from "@client/view/components/window-manager/local-windows"
-import { type ProgramAccess } from "@client/view/components/program-access"
 import { type Position, type Size, type Theme } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
@@ -17,7 +16,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, client, title, icon, position, size, localSurface, geometryAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -84,7 +83,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
 
     }, [frameSource, loading, onReady, record.identity])
 
-    const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
+    const frameLoading = loading.source !== frameSource || loading.phase !== "ready"
 
     const progress = !bare && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
 
@@ -145,12 +144,7 @@ export default memo(function ({ identity, record, client, title, icon, position,
     >
 
         {/* A launch names one of its client half's own pages; joining it
-            to the program asset route remains the view's responsibility.
-
-            Without allow-same-origin, the pane has an opaque origin and
-            cannot reach the desktop document or its authorization. Its
-            channel crosses through postMessage and resolves identity from
-            this frame, so isolation does not weaken communication. */}
+            to the program asset route remains the view's responsibility. */}
         {!stopping && !closing && <ProgramFrame
 
             record={record}
@@ -160,8 +154,6 @@ export default memo(function ({ identity, record, client, title, icon, position,
             title={title}
 
             door={door}
-
-            access={programAccess}
 
             theme={theme}
 
@@ -234,8 +226,6 @@ interface ProcessWindowProps {
     bare: boolean
 
     door: string
-
-    programAccess: ProgramAccess
 
     theme: Theme
 

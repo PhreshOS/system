@@ -6,9 +6,10 @@ import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
-import { type Layer, type PermissionName } from "@phreshos/core"
+import { type Layer } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "./server-runtime"
+import type { Permission } from "@phreshos/core"
 
 /**
  * One live execution of a Program.
@@ -50,9 +51,6 @@ export default class Process {
     /** Immutable normalized intent used only to converge named creation. */
     public readonly launch: ProcessLaunch
 
-    /** Permission grants that live exactly as long as this Process. */
-    public readonly permissions = new Set<PermissionName>()
-
     // When this instance began. A process's birth is its construction,
     // so nothing hands this over — there is no earlier moment to mean.
     //
@@ -78,6 +76,9 @@ export default class Process {
     // one. Lineage only: keeping this handle neither owns nor prolongs
     // either life.
     public readonly parent: Process | null
+
+    /** User grants retained only for this Process lifetime. */
+    public readonly permissions = new Map<string, Exclude<Permission, false | null>>()
 
     private readonly hostTraffic: HostTraffic
 

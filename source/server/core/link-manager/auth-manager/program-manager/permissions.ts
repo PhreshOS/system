@@ -2,36 +2,30 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
 import type Program from "./program"
-import { isPermissionName, type PermissionDecisions } from "@phreshos/core"
+import { permissionCatalog } from "@server/core/permissions"
+import type { Permissions } from "@phreshos/core"
 
 const file = "permissions.json"
 
-/** Reads one Program's system-managed persistent permission decisions. */
-export function readPermissions(program: Program): PermissionDecisions {
+/** Reads one Program's system-managed persistent user grants. */
+export function readPermissions(program: Program): Permissions {
+
     const path = join(program.storagePath, file)
 
     if (!existsSync(path)) return {}
 
-    const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown
+    try { return permissionCatalog.stored(JSON.parse(readFileSync(path, "utf8"))) }
 
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("The Program permissions file is invalid")
+    catch (exception) {
 
-    const entries = Object.entries(parsed)
+        if (exception instanceof SyntaxError) throw new Error("The Program permissions file is invalid")
 
-    const permissions: PermissionDecisions = {}
-
-    for (const [name, value] of entries) {
-
-        if (!isPermissionName(name) || typeof value !== "boolean") throw new Error("The Program permissions file is invalid")
-
-        permissions[name] = value
+        throw exception
     }
-
-    return permissions
 }
 
-/** Atomically replaces one Program's persistent permission decisions. */
-export function writePermissions(program: Program, permissions: PermissionDecisions) {
+/** Atomically replaces one Program's persistent user grants. */
+export function writePermissions(program: Program, permissions: Permissions) {
 
     mkdirSync(program.storagePath, { recursive: true })
 
@@ -39,6 +33,7 @@ export function writePermissions(program: Program, permissions: PermissionDecisi
     const temporary = join(program.storagePath, `.${file}.${randomUUID()}`)
 
     try {
+
         writeFileSync(temporary, `${JSON.stringify(permissions, null, 2)}\n`)
         renameSync(temporary, path)
     }

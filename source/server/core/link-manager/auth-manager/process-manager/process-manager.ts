@@ -17,8 +17,9 @@ import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
-import { isPermissionName, isServiceKey, type ClientLaunch, type Launch, type PermissionName, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { isServiceKey, type ClientLaunch, type Launch, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import type { ServerRuntime } from "./server-runtime"
+import { permissionCatalog } from "@server/core/permissions"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
@@ -355,8 +356,6 @@ export default class ProcessManager extends TheLink {
         try {
 
             observed = this.system.holdProcess(target)
-
-            if (observed.program !== this.find(pane).program) throw new Error("The desktop does not know this process")
         }
 
         catch (error) {
@@ -378,30 +377,9 @@ export default class ProcessManager extends TheLink {
         boundary.observe(subscription, observed.reference, observation.half, kind, event, reportImpossible)
     }
 
-    /** Remove foreign Endpoint identities before observed traffic reaches a Client boundary. */
-    private clientVisibleTraffic(pane: string, values: unknown[]) {
+    private clientVisibleTraffic(_pane: string, values: unknown[]) {
 
-        const viewer = this.processes.get(pane)
-
-        const index = values.length - 1
-
-        const message = values[index]
-
-        if (!viewer || index < 0 || typeof message !== "object" || message === null || !("to" in message)) return values
-
-        const to = message.to
-
-        if (typeof to !== "object" || to === null || !("process" in to)) return values
-
-        const reference = to as ReturnType<typeof endpointReference>
-
-        if (reference.process.program.identity === viewer.program.identity) return values
-
-        const masked = [...values]
-
-        masked[index] = { ...message, to: null }
-
-        return masked
+        return values
     }
 
     private removeClientObservation(connection: string, pane: string, owner: string, subscription: string) {
@@ -422,8 +400,6 @@ export default class ProcessManager extends TheLink {
         try {
 
             observed = this.system.holdProcess(target)
-
-            if (observed.program !== this.find(pane).program) throw new Error("The desktop does not know this process")
         }
 
         catch (error) {
@@ -553,9 +529,7 @@ export default class ProcessManager extends TheLink {
 
         const received = {
 
-            from: targetHalf === "client" && sourceProcess.program !== targetProcess.program
-                ? null
-                : endpointReference(sourceProcess, sourceHalf),
+            from: endpointReference(sourceProcess, sourceHalf),
 
             payload
         }
@@ -1376,72 +1350,66 @@ export default class ProcessManager extends TheLink {
         await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
 
-    /** Reads the effective permission decision for one live Client Process. */
-    public permissionGranted(identity: string, permission: PermissionName): boolean | null {
+    /** Reads only the persistent user grant belonging to this Process's Program. */
+    public permission(identity: string, name: string) {
 
-        const process = this.find(identity)
-
-        if (!process.client) throw new Error("This process has no live client endpoint")
-
-        if (process.permissions.has(permission)) return true
-
-        return this.authManager.programManager.permission(process.program, permission) ?? null
+        return this.authManager.programManager.permission(this.find(identity).program, name)
     }
 
-    /** Creates at most one user-facing permission request for a Client Process. */
-    public async requestPermission(identity: string, request: string, permission: PermissionName) {
+    /** Resolves one permission request through declarations, grants, then the owner. */
+    public async requestPermission(identity: string, request: string, name: string, input: PermissionRequest): Promise<PermissionChange> {
 
         const process = this.find(identity)
 
-        if (!process.client) throw new Error("This process has no live client endpoint")
+        if (!process.client) throw new Error("A permission request requires a live Client endpoint")
 
-        const known = this.permissionGranted(identity, permission)
+        const requested = permissionCatalog.resolve(name, input)
 
-        if (known !== null) return known
+        if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
 
-        const choice = await this.authManager.dialogManager.requestPermission(process, request, permission)
+        const declared = process.program.clientPermissions[name] ?? null
+        const temporary = process.permissions.get(name) ?? null
+        const stored = this.authManager.programManager.permission(process.program, name)
+        const effective = permissionCatalog.effective(name, declared, temporary, stored)
+
+        if (permissionCatalog.grants(effective, requested)) return Object.freeze({ permission: requested, needReload: false })
+        if (effective === false) return Object.freeze({ permission: false, needReload: false })
+
+        const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
 
         if (choice === "process") {
 
-            if (this.processes.get(identity) !== process || !process.client) return null
+            const permission = permissionCatalog.merge(name, temporary, requested)
+            const changed = permissionCatalog.changed(
+                effective,
+                permissionCatalog.effective(name, declared, permission, stored)
+            )
 
-            process.permissions.add(permission)
+            process.permissions.set(name, permission)
 
-            await this.permissionChanged(process.program, permission)
-
-            return true
+            return Object.freeze({
+                permission: [...permission],
+                needReload: permissionCatalog.needReload(name, changed)
+            })
         }
 
         if (choice === "always") {
 
-            if (this.processes.get(identity) !== process || !process.client) return null
-
-            this.authManager.programManager.setPermission(process.program, permission, true)
-
-            return true
+            return this.authManager.programManager.setPermission(
+                process.program,
+                name,
+                permissionCatalog.merge(name, stored, requested)
+            )
         }
 
-        return choice
+        return Object.freeze({ permission: choice, needReload: false })
     }
 
-    public async cancelPermission(identity: string, request: string) {
+    public cancelPermission(identity: string, request: string) {
 
         const process = this.processes.get(identity)
 
-        if (!process) return
-
-        await this.authManager.dialogManager.cancelPermission(request, process.reference)
-    }
-
-    /** Publishes one effective-decision change to every desktop counterpart. */
-    public async permissionChanged(program: Program, permission: PermissionName) {
-
-        for (const process of this.processes.values()) {
-
-            if (process.program !== program || !process.client) continue
-
-            await this.$outbound.publish("/permission", process.identity, permission, this.permissionGranted(process.identity, permission))
-        }
+        return process ? this.authManager.dialogManager.cancelPermission(request, process.reference) : Promise.resolve()
     }
 
     // A window's news, said once and heard by both kinds of half.
@@ -1480,6 +1448,19 @@ export default class ProcessManager extends TheLink {
 
         if (word === "current-program") return [this.system.requireProgram(process.program.identity)]
 
+        if (word === "program-permissions") {
+
+            const program = this.system.holdProgram(rest[0], process.program)
+            const operation = rest[1]
+
+            if (operation === "all") return [this.authManager.programManager.permissions(program)]
+            if (operation === "get") return [this.authManager.programManager.permission(program, String(rest[2]))]
+            if (operation === "set") return [this.authManager.programManager.setPermission(program, String(rest[2]), rest[3] as never)]
+            if (operation === "delete") return [this.authManager.programManager.deletePermission(program, String(rest[2]))]
+
+            throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+        }
+
         if (word === "program-agent") {
 
             const program = this.system.holdProgram(rest[0], process.program)
@@ -1499,37 +1480,6 @@ export default class ProcessManager extends TheLink {
             const program = this.system.holdProgram(rest[0], process.program)
 
             return [await this.system.programStartup(program, String(rest[1]), rest[2])]
-        }
-
-        if (word === "program-permission") {
-
-            const program = this.system.holdProgram(rest[0], process.program)
-            const operation = rest[1]
-            const name = rest[2]
-
-            if (operation === "getAll") return [this.system.programPermissions(program)]
-
-            if (!isPermissionName(name)) throw new Error(`The system does not know the permission "${String(name)}"`)
-
-            if (operation === "get") return [this.system.programPermission(program, name)]
-
-            if (operation === "set") {
-
-                if (typeof rest[3] !== "boolean") throw new Error("A permission decision must be boolean")
-
-                this.system.setProgramPermission(program, name, rest[3])
-
-                return []
-            }
-
-            if (operation === "delete") {
-
-                this.system.deleteProgramPermission(program, name)
-
-                return []
-            }
-
-            throw new Error(`The host does not know the permission operation "${String(operation)}"`)
         }
 
         // Which live process made this one through `program.process.create()`.

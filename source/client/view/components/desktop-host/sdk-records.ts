@@ -1,4 +1,15 @@
-import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
+export interface SdkProgramSource {
+
+    reference: string
+    identity: string
+    installed: boolean
+    name: string
+    version: string | null
+    description: string | null
+    hasAgent: boolean
+    server: unknown | null
+    client: unknown | null
+}
 
 export interface SdkProcessSource {
 
@@ -20,7 +31,7 @@ export interface SdkProcessSource {
 }
 
 /** Plain SDK Program state carried across the iframe boundary. */
-export function sdkProgram(program: Program) {
+export function sdkProgram(program: SdkProgramSource) {
 
     return {
 
@@ -45,7 +56,7 @@ export function sdkProgram(program: Program) {
 }
 
 /** Plain Process state with its ownership chain embedded for synchronous navigation. */
-export function sdkProcess(process: SdkProcessSource, program: Program) {
+export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource) {
 
     return {
 

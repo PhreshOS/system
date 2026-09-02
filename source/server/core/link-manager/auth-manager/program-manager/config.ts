@@ -1,4 +1,4 @@
-import { type Layer, type Position, type Size } from "@phreshos/core"
+import { type ClientPermissionDeclarations, type Layer, type Position, type Size } from "@phreshos/core"
 
 /**
  * What a program says it is.
@@ -136,6 +136,10 @@ export interface ClientConfig {
     // nothing to undo, where one that opens shown and hides itself has
     // already been seen.
     minimize?: boolean
+
+    // Initial grants fixed for this Program entity. Process launches cannot
+    // add to or replace them.
+    permissions?: ClientPermissionDeclarations
 }
 
 export { layers, type Layer, type Position, type Size, type Value } from "@phreshos/core"

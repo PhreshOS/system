@@ -3,7 +3,7 @@ import { Transmitted } from "@libs/messagepack"
 import { TheLink } from "@the-link/core"
 import { randomUUID } from "node:crypto"
 import { type default as Process } from "./link-manager/auth-manager/process-manager/process"
-import { type PermissionName } from "@phreshos/core"
+import { permissionCatalog } from "./permissions"
 
 /** Authoritative runtime queue of system messages awaiting acknowledgment. */
 export default class DialogManager extends TheLink {
@@ -57,46 +57,32 @@ export default class DialogManager extends TheLink {
         await this.$outbound.publish("/created", dialog).catch(() => undefined)
     }
 
-    /** Waits for one authoritative user decision for a Client Process. */
-    public async requestPermission(process: Process, request: string, permission: PermissionName): Promise<PermissionChoice> {
+    /** Waits for one authoritative owner decision for a Client Process. */
+    public async requestPermission(process: Process, request: string, permission: string, values: string[]): Promise<PermissionChoice> {
 
+        if (!request || this.permissionRequests.has(request)) throw new Error("A permission request needs a unique identity")
         if (this.permissionProcesses.has(process.reference)) throw new Error("This Client Process already has a pending permission request")
 
+        const definition = permissionCatalog.definition(permission)
         const dialog: PermissionDialog = {
 
             identity: randomUUID(),
-
             kind: "permission",
-
             createdAt: new Date(),
-
             permission,
-
-            program: {
-
-                identity: process.program.identity,
-
-                name: process.program.name
-            },
-
-            process: {
-
-                identity: process.identity,
-
-                name: process.name
-            }
+            values: [...values],
+            title: definition.title,
+            description: definition.description,
+            program: { identity: process.program.identity, name: process.program.name },
+            process: { identity: process.identity, name: process.name }
         }
 
         let settle: (choice: PermissionChoice) => void = () => undefined
-
         const answer = new Promise<PermissionChoice>(resolve => { settle = resolve })
-
         const stopExit = process.onExit(() => { this.cancelPermission(request, process.reference).catch(() => undefined) })
 
         this.permissionRequests.set(request, { request, dialog, process: process.reference, settle, stopExit })
-
         this.permissionProcesses.set(process.reference, request)
-
         this.dialogs.set(dialog.identity, dialog)
 
         await this.$outbound.publish("/created", dialog).catch(() => undefined)
@@ -104,7 +90,7 @@ export default class DialogManager extends TheLink {
         return await answer
     }
 
-    /** Resolves one permission prompt from any synchronized desktop. */
+    /** Resolves one permission prompt from any synchronized Desktop. */
     @Subscribe("/resolve-permission")
     protected async resolvePermission(identity: unknown, choice: unknown) {
 
@@ -112,9 +98,7 @@ export default class DialogManager extends TheLink {
 
         const pending = [...this.permissionRequests.values()].find(entry => entry.dialog.identity === identity)
 
-        if (!pending) return
-
-        await this.finishPermission(pending, choice)
+        if (pending) await this.finishPermission(pending, choice)
     }
 
     /** Cancels one boundary-owned prompt without creating a decision. */
@@ -122,9 +106,7 @@ export default class DialogManager extends TheLink {
 
         const pending = this.permissionRequests.get(request)
 
-        if (!pending || pending.process !== process) return
-
-        await this.finishPermission(pending, null)
+        if (pending?.process === process) await this.finishPermission(pending, null)
     }
 
     private async finishPermission(pending: PendingPermission, choice: PermissionChoice) {
@@ -132,11 +114,8 @@ export default class DialogManager extends TheLink {
         if (!this.permissionRequests.delete(pending.request)) return
 
         this.permissionProcesses.delete(pending.process)
-
         this.dialogs.delete(pending.dialog.identity)
-
         pending.stopExit()
-
         pending.settle(choice)
 
         await this.$outbound.publish("/removed", pending.dialog.identity).catch(() => undefined)
@@ -187,26 +166,14 @@ export interface ServerCrashDialog {
 export interface PermissionDialog {
 
     readonly identity: string
-
     readonly kind: "permission"
-
     readonly createdAt: Date
-
-    readonly permission: PermissionName
-
-    readonly program: Readonly<{
-
-        identity: string
-
-        name: string
-    }>
-
-    readonly process: Readonly<{
-
-        identity: string
-
-        name: string | null
-    }>
+    readonly permission: string
+    readonly values: string[]
+    readonly title: string
+    readonly description: string
+    readonly program: Readonly<{ identity: string, name: string }>
+    readonly process: Readonly<{ identity: string, name: string | null }>
 }
 
 export type PermissionChoice = "process" | "always" | false | null
@@ -216,13 +183,9 @@ export type SystemDialog = ServerCrashDialog | PermissionDialog
 interface PendingPermission {
 
     readonly request: string
-
     readonly dialog: PermissionDialog
-
     readonly process: string
-
     readonly settle: (choice: PermissionChoice) => void
-
     readonly stopExit: () => void
 }
 

@@ -43,28 +43,6 @@ const system = {
         calls.push(["query", database])
         return [{ statement, values }]
     },
-    programPermissions(owner: unknown) {
-
-        assert.equal(owner, program)
-        calls.push(["permission", "getAll"])
-        return { pointer: true }
-    },
-    programPermission(owner: unknown, name: string) {
-
-        assert.equal(owner, program)
-        calls.push(["permission", "get", name])
-        return true
-    },
-    setProgramPermission(owner: unknown, name: string, value: boolean) {
-
-        assert.equal(owner, program)
-        calls.push(["permission", "set", name, value])
-    },
-    deleteProgramPermission(owner: unknown, name: string) {
-
-        assert.equal(owner, program)
-        calls.push(["permission", "delete", name])
-    },
     listProcesses(owner: unknown) {
 
         assert.equal(owner, program)
@@ -150,38 +128,6 @@ assert.deepEqual(await apiRequest(application, {
     values: [1]
 }, signal), [{ statement: "select ?", values: [1] }])
 
-assert.deepEqual(await apiRequest(application, {
-    capability: "program",
-    operation: "permission",
-    handle,
-    permissionOperation: "getAll"
-}, signal), { pointer: true })
-
-assert.equal(await apiRequest(application, {
-    capability: "program",
-    operation: "permission",
-    handle,
-    permissionOperation: "get",
-    name: "pointer"
-}, signal), true)
-
-await apiRequest(application, {
-    capability: "program",
-    operation: "permission",
-    handle,
-    permissionOperation: "set",
-    name: "pointer",
-    value: false
-}, signal)
-
-await apiRequest(application, {
-    capability: "program",
-    operation: "permission",
-    handle,
-    permissionOperation: "delete",
-    name: "pointer"
-}, signal)
-
 assert.equal(await apiRequest(application, {
     capability: "program",
     operation: "wait",
@@ -239,10 +185,6 @@ assert.deepEqual(calls, [
     ["agent"],
     ["store", "get", "state", undefined, undefined],
     ["query", "logs"],
-    ["permission", "getAll"],
-    ["permission", "get", "pointer"],
-    ["permission", "set", "pointer", false],
-    ["permission", "delete", "pointer"],
     ["observe", "program", "uninstall"],
     ["observe", "program", "forget"],
     ["process", "list"],

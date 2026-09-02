@@ -1,10 +1,9 @@
 import { ReactTunnel } from "@the-link/react"
-import { isPermissionName, type DesktopSize, type DesktopSurfaceSnapshot } from "@phreshos/core"
+import { type DesktopSize, type DesktopSurfaceSnapshot } from "@phreshos/core"
 import useAnnouncements from "./announcements"
-import DesktopPointer from "./pointer"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
@@ -23,8 +22,6 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
     const frameTasks = useRef(new Map<string, Promise<void>>())
 
     const boundaries = useRef(new Map<string, ClientProcessBoundary>())
-
-    const [pointer] = useState(() => new DesktopPointer(desktop))
 
     const [traffic] = useState(() => new ClientTraffic())
 
@@ -109,8 +106,6 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
     }, [authManager, desktop, sources, traffic])
 
     useAnnouncements(authManager, boundaries.current, traffic)
-
-    useEffect(() => pointer.listen(), [pointer])
 
     // The process-to-interface leg rides the same tunnel the echoes land on:
     // an end-end arrives as (identity, values) and is posted into its pane in
@@ -200,16 +195,6 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }, [sources]))
 
-    inbound.useSubscribe("/permission-changed", useCallback((...results: unknown[]) => {
-
-        const [identity, permission, decision] = results
-
-        if (typeof identity !== "string" || !isPermissionName(permission) || (decision !== true && decision !== false && decision !== null)) return
-
-        boundaries.current.get(identity)?.permissionChanged(permission, decision)
-
-    }, []))
-
     const frame = useCallback(function (identity: string, element: HTMLIFrameElement | null) {
 
         if (element) {
@@ -218,7 +203,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopSurface, pointer, traffic, localWindow))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopSurface, traffic, localWindow))
 
             return
         }
@@ -233,7 +218,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopSurface, localWindow, pointer, sources, traffic])
+    }, [authManager, desktopSurface, localWindow, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
@@ -271,7 +256,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         task.finally(() => { if (frameTasks.current.get(identity) === task) frameTasks.current.delete(identity) }).catch(() => undefined)
 
-    }, [authManager, pointer, sources])
+    }, [authManager, sources])
 
     // The interface wall: an iframe's end-end relays to its process's
     // other end; its end-host terminates here, handled by the desktop —
@@ -314,7 +299,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         return () => window.removeEventListener("message", onMessage)
 
-    }, [authManager, pointer, sources])
+    }, [authManager, sources])
 
     return { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded }
 }

@@ -11,7 +11,6 @@ const common = {
     client,
     title: "Program",
     door: "/program",
-    access: "available" as const,
     onFrame() {},
     onLoad() {}
 }
@@ -21,3 +20,4 @@ const light = renderToStaticMarkup(<ProgramFrame {...common} theme="light" />)
 
 assert.match(dark, /style="color-scheme:dark"/)
 assert.match(light, /style="color-scheme:light"/)
+assert.doesNotMatch(dark, /sandbox=/)

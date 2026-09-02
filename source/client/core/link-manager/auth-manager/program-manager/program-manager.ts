@@ -4,7 +4,7 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Program from "./program"
-import { type Launch, type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
+import { type Launch, type PermissionInput, type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
 
 /**
  * The peer of the core's programs: born holding them from the
@@ -14,9 +14,9 @@ import { type Launch, type ProgramCommandChunk, type ProgramIconSize } from "@ph
  * Keyed by the program's public identity. A display name addresses
  * nothing and may be shared.
  *
- * The trusted desktop may install, uninstall, or forget a Program only
- * after deriving that Program from a frame. These methods take the
- * already-resolved subject; no client-provided identity is forwarded.
+ * Operations forward exact handles rather than reusable identities. Core
+ * validates the handle again, so a retained Program can never retarget a
+ * replacement that later claims the same public identity.
  */
 export default class ProgramManager extends TheLink {
 
@@ -41,32 +41,51 @@ export default class ProgramManager extends TheLink {
     // pane's store words with this, so a client half means the same
     // thing by them as a server half does — one implementation, two
     // roads to it.
-    public async store(identity: string, operation: string, key: string, value?: unknown, ttl?: number) {
+    public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: number) {
 
-        return await this.$outbound.publishFirst("/store", identity, operation, key, value, ttl)
+        return await this.$outbound.publishFirst("/store", subject, operation, key, value, ttl)
     }
 
-    // Another instance of a program. Which program is the desktop's to
-    // decide before it asks — from the frame, for a pane; from the list,
-    // for its own controls.
-    public async createProcess(identity: string, launch: Launch = {}, parent?: string) {
+    // Another instance of the exact Program represented by the supplied
+    // handle.
+    public async createProcess(subject: unknown, launch: Launch = {}, parent?: string) {
 
-        return await this.$outbound.publishFirst("/create-process", identity, launch, parent) as string
+        return await this.$outbound.publishFirst("/create-process", subject, launch, parent) as string
+    }
+
+    public async create(source: unknown) {
+
+        return await this.$outbound.publishFirst("/create-program", source) as string
+    }
+
+    public async forceCreate(source: unknown, asker: string) {
+
+        return await this.$outbound.publishFirst("/force-create-program", source, asker) as string
+    }
+
+    public async fork(subject: unknown, identity: string) {
+
+        return await this.$outbound.publishFirst("/fork-program", subject, identity) as string
+    }
+
+    public async startup(subject: unknown, operation: string, value?: unknown) {
+
+        return await this.$outbound.publishFirst("/startup", subject, operation, value)
+    }
+
+    public async permissions(subject: unknown, operation: "all" | "get" | "set" | "delete", name?: string, value?: Exclude<PermissionInput, null>) {
+
+        return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
     }
 
     /** Atomically resolves one named Process at the authoritative host. */
-    public async findOrCreateProcess(identity: string, launch: Launch & { name: string }, parent?: string) {
+    public async findOrCreateProcess(subject: unknown, launch: Launch & { name: string }, parent?: string) {
 
-        return await this.$outbound.publishFirst("/find-or-create-process", identity, launch, parent) as string
+        return await this.$outbound.publishFirst("/find-or-create-process", subject, launch, parent) as string
     }
 
-    public async install(identity: string, asker: string) {
-
-        return await this.$outbound.publishFirst("/install-program", identity, asker)
-    }
-
-    /** Streams one authoritative uninstall operation to its requesting View. */
-    public uninstallStreaming(identity: string, everything: boolean, asker: string) {
+    /** Streams one authoritative Program command to its requesting View. */
+    public command(subject: unknown, operation: "install" | "uninstall" | "run", value: unknown, asker: string) {
         const manager = this
 
         return (async function* (): AsyncGenerator<ProgramCommandChunk, void, void> {
@@ -75,7 +94,7 @@ export default class ProgramManager extends TheLink {
 
             manager.commands.set(stream, state)
 
-            const operation = manager.$outbound.publishFirst("/uninstall-program-stream", identity, everything, asker, stream).then(
+            const pending = manager.$outbound.publishFirst("/client-command", stream, operation, subject, value, asker).then(
                 () => { state.settled = true },
                 error => { state.failure = error instanceof Error ? error : new Error(String(error)) }
             ).finally(() => {
@@ -97,51 +116,52 @@ export default class ProgramManager extends TheLink {
                     await new Promise<void>(resolve => { state.wake = resolve })
                 }
 
-                await operation
+                await pending
 
                 if (state.failure) throw state.failure
             }
             finally {
                 manager.commands.delete(stream)
+                manager.$outbound.publish("/client-command-cancel", stream).catch(() => undefined)
             }
         })()
     }
 
-    public async forget(identity: string, asker: string) {
+    public async forget(subject: unknown, asker: string) {
 
-        return await this.$outbound.publishFirst("/forget-program", identity, asker)
+        return await this.$outbound.publishFirst("/forget-program", subject, asker)
     }
 
     // One of a Program's metadata operations, asked of the core. Byte
     // content takes the storage door instead of the serialized link.
-    public async area(identity: string, area: "data" | "cache", operation: string, args: unknown[]) {
+    public async area(subject: unknown, area: "data" | "cache", operation: string, args: unknown[]) {
 
-        return await this.$outbound.publishFirst("/area", identity, area, operation, args)
+        return await this.$outbound.publishFirst("/area", subject, area, operation, args)
     }
 
     // What a program has said, asked of the core. Read-only there, so
     // nothing on this side has to decide what a query means.
-    public async logs(identity: string, sql: string, values: unknown[]) {
+    public async logs(subject: unknown, sql: string, values: unknown[]) {
 
-        return await this.$outbound.publishFirst("/logs", identity, sql, values)
+        return await this.$outbound.publishFirst("/logs", subject, sql, values)
     }
 
     // A program's own database, asked of the core.
-    public async database(identity: string, sql: string, values: unknown[]) {
+    public async database(subject: unknown, sql: string, values: unknown[]) {
 
-        return await this.$outbound.publishFirst("/database", identity, sql, values)
+        return await this.$outbound.publishFirst("/database", subject, sql, values)
     }
 
     /** Request one rendered icon from the authoritative server Program. */
-    public async icon(identity: string, size: ProgramIconSize) {
+    public async icon(subject: unknown, size: ProgramIconSize) {
 
-        return await this.$outbound.publishFirst("/icon", identity, size) as number[]
+        return await this.$outbound.publishFirst("/icon", subject, size) as number[]
     }
 
     /** Reads Program-specific operating knowledge from authoritative Core. */
-    public async agent(identity: string) {
+    public async agent(subject: unknown) {
 
-        return await this.$outbound.publishFirst("/agent", identity) as string | null
+        return await this.$outbound.publishFirst("/agent", subject) as string | null
     }
 
     @Subscribe("/install")
@@ -174,7 +194,7 @@ export default class ProgramManager extends TheLink {
         return this.arrived(payload)
     }
 
-    @Subscribe("/uninstall-program-output")
+    @Subscribe("/client-command-output")
     protected commandOutput(stream: string, value: unknown) {
         const state = this.commands.get(stream)
 
@@ -200,7 +220,11 @@ export default class ProgramManager extends TheLink {
 
         if (!identity) return
 
+        const program = this.programs.get(identity)
+
         this.programs.delete(identity)
+
+        if (program) await this.$inbound.publish("/forgotten", program)
 
         return [...this.programs.values()]
     }

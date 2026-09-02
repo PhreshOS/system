@@ -1,6 +1,6 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type Transaction, type WindowGeometry, type WindowState } from "@phreshos/core"
-import { layerAllowsSurface, type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
+import { type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
 
 export interface LocalWindowEntry {
     identity: string
@@ -142,26 +142,24 @@ export default class LocalWindows implements LocalWindowHost {
         this.replace(identity, { ...state, depth: depth + 1 })
     }
 
-    public setSurface(process: string, transaction: Transaction) {
+    public addSurface(process: string, transaction?: Transaction) {
 
         const { identity, state } = this.existing(process)
-        layerAllowsSurface(state.layer)
         if (state.surface?.visible) return Promise.resolve()
 
         this.cancel(identity, "surface")
-        const transition = { revision: ++this.revision, transaction }
+        const transition = transaction ? { revision: ++this.revision, transaction } : null
         this.replace(identity, { ...state, surface: { visible: true, transition } })
         return this.waitFor(identity, "surface", transition)
     }
 
-    public removeSurface(process: string, transaction: Transaction) {
+    public removeSurface(process: string, transaction?: Transaction) {
 
         const { identity, state } = this.existing(process)
-        layerAllowsSurface(state.layer)
         if (!state.surface || !state.surface.visible) return Promise.resolve()
 
         this.cancel(identity, "surface")
-        const transition = { revision: ++this.revision, transaction }
+        const transition = transaction ? { revision: ++this.revision, transaction } : null
         this.replace(identity, { ...state, surface: { visible: false, transition } })
         return this.waitFor(identity, "surface", transition)
     }

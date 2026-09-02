@@ -120,7 +120,7 @@ export default class Application {
         }
     }
 
-    public async storageStream(request: Omit<StorageRequest, "operation">, authorization: string, signal?: AbortSignal) {
+    public async storageStream(request: StorageTarget, authorization: string, signal?: AbortSignal) {
 
         const response = await this.storage({ ...request, operation: "stream" }, null, authorization, signal)
 
@@ -129,7 +129,7 @@ export default class Application {
         return response.body
     }
 
-    public async storageWrite(request: Omit<StorageRequest, "operation">, body: ClientBody, authorization: string, signal?: AbortSignal) {
+    public async storageWrite(request: StorageTarget, body: ClientBody, authorization: string, signal?: AbortSignal) {
 
         await this.storage({ ...request, operation: "write" }, body, authorization, signal)
     }
@@ -169,6 +169,10 @@ export default class Application {
         finally { await prepared.remove() }
     }
 }
+
+type StorageTarget = StorageRequest extends infer Request
+    ? Request extends StorageRequest ? Omit<Request, "operation"> : never
+    : never
 
 function framedBody<Metadata>(metadata: Metadata, body: ClientBody | null) {
 

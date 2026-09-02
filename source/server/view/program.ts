@@ -23,19 +23,6 @@ export default function (application: Application) {
 
     const program = new Hono()
 
-    // The desktop asks from a sandbox identical to a Program frame. Keeping
-    // this beneath the same door and giving it the same public CORS response
-    // makes it a real test of the asset boundary rather than a health check
-    // performed from the desktop's own origin.
-    program.get("/ping", context => {
-
-        context.header("Access-Control-Allow-Origin", "*")
-
-        context.header("Cache-Control", "no-store")
-
-        return context.text("Program assets are available")
-    })
-
     // A client is entered at its directory: the trailing slash makes
     // the page's relative assets resolve beneath it.
     program.get("/:assetId{[0-9a-f-]{36}}/assets", context => context.redirect(`${new URL(context.req.url).pathname}/`))
@@ -52,8 +39,6 @@ export default function (application: Application) {
 
         // A retained Program may outlive files removed by uninstall(false).
         if (!root || !existsSync(root)) return context.text("The program has no assets", 404)
-
-        context.header("Access-Control-Allow-Origin", "*")
 
         return await serveStatic({
 
@@ -76,13 +61,11 @@ export default function (application: Application) {
 
         if (!isIconSize(size)) return context.text("Unknown icon size", 404)
 
-        context.header("Access-Control-Allow-Origin", "*")
-
         context.header("Cache-Control", "no-cache")
 
         context.header("Content-Type", "image/png")
 
-        return context.body(Uint8Array.from(await programManager.icon(found.identity, size)))
+        return context.body(Uint8Array.from(await programManager.icon(found, size)))
     })
 
     return program

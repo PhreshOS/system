@@ -1,18 +1,13 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { TheLink } from "@the-link/core"
 import host, { TransferredAnswer } from "./host"
-import { type PointerHost } from "./pointer"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import {
-    isPermissionName,
-    type DesktopPointerPosition,
-    type DesktopSurfaceSnapshot,
-    type PermissionName
-} from "@phreshos/core"
+import { type DesktopSurfaceSnapshot } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
+import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 
 /** The desktop boundary around one iframe execution endpoint. */
 export default class ClientProcessBoundary extends TheLink {
@@ -25,15 +20,11 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly desktop: () => DesktopSurfaceSnapshot
 
-    private readonly pointer: PointerHost
-
     private readonly traffic: ClientTraffic
 
     private readonly localWindow: LocalWindowHost
 
     private readonly subscriptions = new Map<string, EndpointSubscription>()
-
-    private readonly blockedSubscriptions = new Map<string, EndpointSubscription>()
 
     private readonly expected = new Set<string>()
 
@@ -59,15 +50,11 @@ export default class ClientProcessBoundary extends TheLink {
     // as later ones.
     private readonly pending = new Array<unknown[]>()
 
-    private pointerStop: (() => void) | null = null
-
-    private pointerPosition: DesktopPointerPosition | null = null
-
     private owner: string | null = null
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSurfaceSnapshot, pointer: PointerHost, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSurfaceSnapshot, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
         super()
 
@@ -78,8 +65,6 @@ export default class ClientProcessBoundary extends TheLink {
         this.authManager = authManager
 
         this.desktop = desktop
-
-        this.pointer = pointer
 
         this.traffic = traffic
 
@@ -238,14 +223,7 @@ export default class ClientProcessBoundary extends TheLink {
             })
         }
 
-        if (values[0] === "pointerSample") {
-
-            this.samplePointer(values[1], values[2])
-
-            return
-        }
-
-        host(this.authManager, this.pane, this.desktop, () => this.owner, this.pointer, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
+        host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -373,18 +351,6 @@ export default class ClientProcessBoundary extends TheLink {
 
             const description = { kind, route, event, subject }
 
-            if (pointerSubscription(description)) {
-
-                this.blockedSubscriptions.set(subscription, description)
-
-                this.authManager.permissionGranted(this.pane, "pointer").then(decision => {
-
-                    if (decision === true) this.allowSubscription(subscription)
-                }).catch(() => undefined)
-
-                return
-            }
-
             this.subscriptions.set(subscription, description)
 
             if (!localPropertySubscription(description)) this.addTraffic(kind, route, event)
@@ -415,16 +381,12 @@ export default class ClientProcessBoundary extends TheLink {
 
             if (kind === "ask") this.releaseWaiting(route, event)
 
-            this.updatePointer()
-
             return
         }
 
         if (operation === "unsubscribe") {
 
             if (typeof args[0] === "string") this.removeSubscription(args[0])
-
-            this.updatePointer()
 
             return
         }
@@ -465,30 +427,18 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        if (args[0] === "permission-request") {
-
-            if (!isPermissionName(args[1])) {
-
-                this.deliver("host-end", "answer", question, failed(new Error(`The system does not know the permission "${String(args[1])}"`))).catch(() => undefined)
-
-                return
-            }
-
-            const controller = new AbortController()
+        if (args[0] === "context-permission-request" && typeof args[1] === "string") {
 
             this.answerRequest(
-
                 question,
-
-                this.authManager.requestPermission(this.pane, args[1], controller.signal).then(decision => [decision]),
-
-                () => controller.abort()
+                host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(args[0], ...args.slice(1)),
+                () => { this.authManager.cancelPermission(this.pane, args[1] as string).catch(() => undefined) }
             )
 
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.desktop, () => this.owner, this.pointer, this.localWindow)(args[0], ...args.slice(1)))
+        this.answerRequest(question, host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(args[0], ...args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {
@@ -543,9 +493,9 @@ export default class ClientProcessBoundary extends TheLink {
         const run = async () => {
             await this.deliver("host-end", "stream", question, "open")
 
-            if (args[0] !== "uninstall") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
+            if (args[0] !== "install" && args[0] !== "uninstall" && args[0] !== "run") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
 
-            const operation = this.authManager.processManager.scope(this.pane).program().uninstall(args[2] === true, this.pane)
+            const operation = this.authManager.programManager.command(args[1], args[0], args[2], this.pane)
 
             iterator = operation[Symbol.asyncIterator]()
 
@@ -554,7 +504,7 @@ export default class ClientProcessBoundary extends TheLink {
 
                 if (next.done) break
 
-                await this.deliver("host-end", "stream", question, "data", next.value)
+                await this.deliver("host-end", "stream", question, "data", args[0] === "run" ? runEvent(this.authManager, next.value) : next.value)
             }
 
             if (active && this.expected.has(question)) {
@@ -574,15 +524,13 @@ export default class ClientProcessBoundary extends TheLink {
 
     private waitReady(question: string, target: unknown, endpoint: unknown, requireCurrentIncarnation: boolean) {
 
-        const mine = this.authManager.processManager.processes.get(this.pane)
-
         const process = target === undefined || target === null
-            ? mine
+            ? this.authManager.processManager.processes.get(this.pane)
             : isHandleAddress(target)
                 ? this.authManager.processManager.processes.get(target.identity)
                 : undefined
 
-        if (!mine || !process || mine.program !== process.program || (isHandleAddress(target) && process.reference !== target.reference)) {
+        if (!process || (isHandleAddress(target) && process.reference !== target.reference)) {
 
             this.deliver("host-end", "answer", question, failed(new Error("The desktop does not know this process"))).catch(() => undefined)
 
@@ -720,8 +668,6 @@ export default class ClientProcessBoundary extends TheLink {
 
     private removeSubscription(subscription: string) {
 
-        this.blockedSubscriptions.delete(subscription)
-
         const existing = this.subscriptions.get(subscription)
 
         if (!existing) return
@@ -757,43 +703,6 @@ export default class ClientProcessBoundary extends TheLink {
         traffic.stop()
 
         this.trafficSubscriptions.delete(key)
-    }
-
-    private allowSubscription(subscription: string) {
-
-        const description = this.blockedSubscriptions.get(subscription)
-
-        if (!description) return
-
-        this.blockedSubscriptions.delete(subscription)
-
-        this.subscriptions.set(subscription, description)
-
-        this.updatePointer()
-    }
-
-    /** Applies an authoritative effective-decision change to guarded subscriptions. */
-    public permissionChanged(permission: PermissionName, decision: boolean | null) {
-
-        if (permission !== "pointer") return
-
-        if (decision === true) {
-
-            for (const subscription of [...this.blockedSubscriptions.keys()]) this.allowSubscription(subscription)
-
-            return
-        }
-
-        for (const [subscription, description] of [...this.subscriptions]) {
-
-            if (!pointerSubscription(description)) continue
-
-            this.removeSubscription(subscription)
-
-            this.blockedSubscriptions.set(subscription, description)
-        }
-
-        this.updatePointer()
     }
 
     private releaseWaiting(route: string, event: string | null) {
@@ -859,13 +768,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         for (const stop of this.requests.values()) stop()
 
-        this.pointerStop?.()
-
         this.requests.clear()
-
-        this.pointerStop = null
-
-        this.pointerPosition = null
 
         if (this.owner) for (const [subscription, description] of this.subscriptions) {
 
@@ -873,8 +776,6 @@ export default class ClientProcessBoundary extends TheLink {
         }
 
         this.subscriptions.clear()
-
-        this.blockedSubscriptions.clear()
 
         this.desktopPreferencesSubscriptions.clear()
 
@@ -899,50 +800,19 @@ export default class ClientProcessBoundary extends TheLink {
         this.pending.length = 0
     }
 
-    private updatePointer() {
+}
 
-        const wanted = [...this.subscriptions.values()].some(pointerSubscription)
+function runEvent(authManager: AuthManager, value: unknown) {
 
-        if (!wanted) {
+    const event = value as { event?: unknown, process?: SdkProcessSource } | null
 
-            this.pointerStop?.()
+    if ((event?.event !== "started" && event?.event !== "exited") || !event.process) return value
 
-            this.pointerStop = null
+    const program = authManager.programManager.programs.get(event.process.program)
 
-            this.pointerPosition = null
+    if (!program) throw new Error("The desktop does not know the Process Program")
 
-            return
-        }
-
-        if (this.pointerStop) return
-
-        this.pointerPosition = this.pointer.snapshot().position
-
-        this.pointerStop = this.pointer.$inbound.subscribe("move", (position: unknown) => {
-
-            if (!isPointerPosition(position)) return
-
-            this.pointerPosition = position
-
-            this.deliver("host-desktop-pointer", "move", { position }).catch(() => undefined)
-        })
-    }
-
-    // Pointer movement inside a sandboxed iframe does not bubble into the
-    // desktop document. Advance the last desktop-space position retained by
-    // this boundary, never a frame-relative coordinate.
-    private samplePointer(movementX: unknown, movementY: unknown) {
-
-        const position = this.pointerPosition
-
-        if (!position || typeof movementX !== "number" || typeof movementY !== "number" || !Number.isFinite(movementX) || !Number.isFinite(movementY)) return
-
-        const next = { x: position.x + Number(movementX), y: position.y + Number(movementY) }
-
-        this.pointerPosition = next
-
-        this.deliver("host-desktop-pointer", "move", { position: next }).catch(() => undefined)
-    }
+    return { ...event, process: sdkProcess(event.process, program) }
 }
 
 const nativeAttachments = (value: unknown, transfer: readonly Transferable[]) => {
@@ -993,15 +863,6 @@ const nativeAttachments = (value: unknown, transfer: readonly Transferable[]) =>
     return attachments
 }
 
-function isPointerPosition(value: unknown): value is { x: number, y: number } {
-
-    if (!value || typeof value !== "object") return false
-
-    const position = value as { x?: unknown, y?: unknown }
-
-    return typeof position.x === "number" && typeof position.y === "number"
-}
-
 interface EndpointSubscription {
 
     kind: TrafficKind
@@ -1011,11 +872,6 @@ interface EndpointSubscription {
     event: string | null
 
     subject: string | null
-}
-
-function pointerSubscription(subscription: EndpointSubscription) {
-
-    return subscription.kind === "publish" && subscription.route === "host-desktop-pointer" && (subscription.event === null || subscription.event === "move")
 }
 
 function desktopPreferencesSubscription(subscription: EndpointSubscription) {

@@ -2,7 +2,7 @@ import type Application from "./application"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
-import type { ClientLaunch, Launch, PermissionName, Position, ServerLaunch, Size, WindowGeometry } from "@phreshos/core"
+import type { ClientLaunch, Launch, PermissionInput, Position, ServerLaunch, Size, WindowGeometry } from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
@@ -79,19 +79,19 @@ export default class System {
         return this.programManager.permissions(program)
     }
 
-    public programPermission(program: Program, permission: PermissionName) {
+    public programPermission(program: Program, name: string) {
 
-        return this.programManager.permission(program, permission)
+        return this.programManager.permission(program, name)
     }
 
-    public setProgramPermission(program: Program, permission: PermissionName, value: boolean) {
+    public setProgramPermission(program: Program, name: string, permission: Exclude<PermissionInput, null>) {
 
-        this.programManager.setPermission(program, permission, value)
+        return this.programManager.setPermission(program, name, permission)
     }
 
-    public deleteProgramPermission(program: Program, permission: PermissionName) {
+    public deleteProgramPermission(program: Program, name: string) {
 
-        this.programManager.deletePermission(program, permission)
+        return this.programManager.deletePermission(program, name)
     }
 
     public listProcesses(program?: Program) {
@@ -151,12 +151,12 @@ export default class System {
 
     public async createProcess(program: string | Program, launch: Launch = {}, parent: Process | string | null = null) {
 
-        return this.programManager.createProcess(typeof program === "string" ? program : program.identity, launch, parent)
+        return this.programManager.createProcess(typeof program === "string" ? this.requireProgram(program) : program, launch, parent)
     }
 
     public async findOrCreateProcess(program: string | Program, launch: Launch & { name: string }, parent: Process | string | null = null) {
 
-        return this.programManager.findOrCreateProcess(program, launch, parent)
+        return this.programManager.findOrCreateProcess(typeof program === "string" ? this.requireProgram(program) : program, launch, parent)
     }
 
     public runProcess(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null) {
@@ -280,7 +280,8 @@ export default class System {
                 size: program.client.size ?? null,
                 position: program.client.position ?? null,
                 layer: program.client.layer ?? null,
-                minimize: program.client.minimize ?? null
+                minimize: program.client.minimize ?? null,
+                permissions: program.client.permissions
             }) : null
         })
     }
@@ -339,12 +340,12 @@ export default class System {
 
     public programIcon(program: Program, size: unknown) {
 
-        return this.programManager.icon(program.identity, size)
+        return this.programManager.icon(program, size)
     }
 
     public programAgent(program: Program) {
 
-        return this.programManager.agent(program.identity)
+        return this.programManager.agent(program)
     }
 
     public programStartup(program: Program, operation: string, value?: unknown) {
@@ -379,12 +380,12 @@ export default class System {
 
     public programStoragePath(program: Program, area: Area) {
 
-        return this.programManager.area(program.identity, area, "path", [])
+        return this.programManager.area(program, area, "path", [])
     }
 
     public programStore(program: Program, operation: string, key: string, value?: unknown, ttl?: number) {
 
-        return this.programManager.store(program.identity, operation, key, value, ttl)
+        return this.programManager.store(program, operation, key, value, ttl)
     }
 
     public programQuery(program: Program, database: "logs" | "database", statement: string, values: unknown[]) {

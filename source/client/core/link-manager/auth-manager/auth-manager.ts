@@ -5,7 +5,7 @@ import ProgramManager from "./program-manager/program-manager"
 import DialogManager from "./dialog-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import { type PermissionDecision, type PermissionName } from "@phreshos/core"
+import { type PermissionChange, type PermissionRequest } from "@phreshos/core"
 
 export default class AuthManager extends TheLink {
 
@@ -48,26 +48,29 @@ export default class AuthManager extends TheLink {
         this.linkManager.emitToSession(`/auth${event}`, this.authorization, ...values)
     }
 
-    /** Reads one effective permission for the structurally identified Process. */
-    public async permissionGranted(process: string, permission: PermissionName): Promise<PermissionDecision> {
+    public async storage(operation: string, values: string[]) {
 
-        return await this.$outbound.publishFirst("/permission/granted", process, permission) as PermissionDecision
+        return await this.$outbound.publishFirst("/storage", operation, values)
     }
 
-    /** Requests one permission until the iframe boundary cancels or authority decides. */
-    public async requestPermission(process: string, permission: PermissionName, signal: AbortSignal): Promise<PermissionDecision> {
+    public async updateAppearance(value: unknown) {
 
-        const request = crypto.randomUUID()
+        return await this.$outbound.publishFirst("/appearance/update", value)
+    }
 
-        const cancel = () => { this.$outbound.publish("/permission/cancel", request, process).catch(() => undefined) }
+    public async permission(process: string, name: string) {
 
-        if (signal.aborted) return null
+        return await this.$outbound.publishFirst("/permission/get", process, name)
+    }
 
-        signal.addEventListener("abort", cancel, { once: true })
+    public async requestPermission(process: string, request: string, name: string, permission: PermissionRequest) {
 
-        try { return await this.$outbound.publishFirst("/permission/request", request, process, permission) as PermissionDecision }
+        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as PermissionChange
+    }
 
-        finally { signal.removeEventListener("abort", cancel) }
+    public async cancelPermission(process: string, request: string) {
+
+        await this.$outbound.publish("/permission/cancel", request, process)
     }
 
     public disconnect() {

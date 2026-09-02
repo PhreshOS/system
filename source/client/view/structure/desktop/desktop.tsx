@@ -5,7 +5,6 @@ import useClientHost from "../../components/desktop-host/client-host"
 import DesktopDisplay from "./desktop-display"
 import useDesktopFocus from "./desktop-focus"
 import programIcon from "./programs/program-icon"
-import ProgramAccessProbe, { type ProgramAccess } from "../../components/program-access"
 import StartMenu from "./taskbar/launcher/start-menu"
 import OverflowRow from "./taskbar/programs/overflow-row"
 import SignOut from "./taskbar/system/sign-out"
@@ -49,11 +48,9 @@ export default function Workspace() {
 
     const desktop = useRef<HTMLDivElement>(null)
 
-    const [programAccess, setProgramAccess] = useState<ProgramAccess>("checking")
-
     const currentPrograms = new Set(windows.records.map(record => record.identity))
 
-    const initialProgramsReady = programAccess === "blocked" || [...initialPrograms.current].every(identity => readyPrograms.has(identity) || !currentPrograms.has(identity))
+    const initialProgramsReady = [...initialPrograms.current].every(identity => readyPrograms.has(identity) || !currentPrograms.has(identity))
 
     useEffect(function () {
 
@@ -144,8 +141,6 @@ export default function Workspace() {
 
             door={application.doors.program}
 
-            programAccess={programAccess}
-
             theme={theme}
 
             onFrame={frame}
@@ -219,8 +214,6 @@ export default function Workspace() {
     const wallpaper = <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
     return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none" style={{ color: foreground }}>
-
-        <ProgramAccessProbe door={application.doors.program} setAccess={setProgramAccess} />
 
         <DesktopDisplay
 

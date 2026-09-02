@@ -4,7 +4,6 @@ import {
     type Position,
     type Size,
     type Transaction,
-    type VisibilityTransition,
     type WindowGeometry,
     type WindowLayer,
     type WindowState
@@ -36,8 +35,8 @@ export interface LocalWindowHost {
     minimize(identity: string, minimized: boolean): void
     title(identity: string, title: string): void
     raise(identity: string): void
-    setSurface(identity: string, transition: VisibilityTransition): Promise<void>
-    removeSurface(identity: string, transition: VisibilityTransition): Promise<void>
+    addSurface(identity: string, transaction?: Transaction): Promise<void>
+    removeSurface(identity: string, transaction?: Transaction): Promise<void>
     complete(identity: string, kind: "geometry" | "surface", revision: number): void
     release(identity: string): void
 }
@@ -91,15 +90,9 @@ export function visualTransaction(value: unknown): Transaction | undefined {
     return Object.freeze(result) as Transaction
 }
 
-export function visibilityTransition(value: unknown): VisibilityTransition {
-    const transition = visualTransaction(value)
-    if (!transition) throw new Error("A VisibilityTransition is required")
-    return transition
-}
+export function requireLocalWindowLayer(layer: WindowLayer) {
 
-export function layerAllowsSurface(layer: WindowLayer) {
-
-    if (layer === "window") throw new Error("A window-layer representation cannot own a Surface")
+    if (layer === "window") throw new Error("A window-layer Process cannot change its local Window representation")
 }
 
 function easing(value: unknown): Easing {

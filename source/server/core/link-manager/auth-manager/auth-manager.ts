@@ -6,7 +6,7 @@ import ProgramManager from "./program-manager/program-manager"
 import { Transmitted } from "@libs/messagepack"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import { isPermissionName } from "@phreshos/core"
+import { type PermissionRequest } from "@phreshos/core"
 
 export default class AuthManager extends TheLink {
 
@@ -77,11 +77,34 @@ export default class AuthManager extends TheLink {
         return fetch(input, init)
     }
 
-    public streamArea(authorization: unknown, identity: string, area: "data" | "cache", path: string[]) {
+    public streamArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[]) {
 
         this.verify(authorization)
 
-        return this.programManager.streamArea(identity, area, path)
+        return this.programManager.streamArea(program, area, path)
+    }
+
+    @Connect("/storage")
+    protected async storage(operation: unknown, values: unknown) {
+
+        if (typeof operation !== "string" || !Array.isArray(values) || values.some(value => typeof value !== "string")) throw new Error("A System storage operation is invalid")
+
+        const area = this.linkManager.application.home
+
+        if (operation === "path") return area.path
+        if (operation === "resolve") return area.resolve(values)
+        if (operation === "stat") return area.stat(values)
+        if (operation === "list") return area.list(values)
+        if (operation === "delete") return area.delete(values)
+        if (operation === "clear") return area.clear(values)
+
+        throw new Error(`System storage does not know "${operation}"`)
+    }
+
+    @Connect("/appearance/update")
+    protected async changeAppearance(value: unknown) {
+
+        return await this.updateAppearance(value)
     }
 
     /** Replace System Appearance through the authenticated boundary. */
@@ -90,35 +113,33 @@ export default class AuthManager extends TheLink {
         return await this.linkManager.updateAppearance(value)
     }
 
-    @Connect("/permission/granted")
-    protected async permissionGranted(process: unknown, permission: unknown) {
+    @Connect("/permission/get")
+    protected async permission(process: unknown, name: unknown) {
 
-        if (typeof process !== "string" || !isPermissionName(permission)) throw new Error("A permission request is invalid")
+        if (typeof process !== "string" || typeof name !== "string") throw new Error("A permission read is invalid")
 
-        return this.processManager.permissionGranted(process, permission)
+        return this.processManager.permission(process, name)
     }
 
     @Connect("/permission/request")
-    protected async requestPermission(request: unknown, process: unknown, permission: unknown) {
+    protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown) {
 
-        if (typeof request !== "string" || typeof process !== "string" || !isPermissionName(permission)) throw new Error("A permission request is invalid")
+        if (typeof request !== "string" || typeof process !== "string" || typeof name !== "string") throw new Error("A permission request is invalid")
 
-        return await this.processManager.requestPermission(process, request, permission)
+        return this.processManager.requestPermission(process, request, name, permission as PermissionRequest)
     }
 
     @Subscribe("/permission/cancel")
     protected async cancelPermission(request: unknown, process: unknown) {
 
-        if (typeof request !== "string" || typeof process !== "string") return
-
-        await this.processManager.cancelPermission(process, request)
+        if (typeof request === "string" && typeof process === "string") await this.processManager.cancelPermission(process, request)
     }
 
-    public async writeArea(authorization: unknown, identity: string, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+    public async writeArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
 
         this.verify(authorization)
 
-        await this.programManager.writeArea(identity, area, path, content, signal)
+        await this.programManager.writeArea(program, area, path, content, signal)
     }
 
     // A targeted client observation belongs to one authorized desktop

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import FileArea from "@libs/file-area"
+import AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 
 const fixture = mkdtempSync(join(tmpdir(), "phreshos-storage-"))
 const root = join(fixture, "configured")
@@ -10,6 +11,16 @@ const outside = join(fixture, "outside")
 
 try {
     const storage = new FileArea(root)
+    const home = new FileArea(join(fixture, "home"))
+    const authManager = Object.assign(Object.create(AuthManager.prototype), {
+        linkManager: { application: { home, storage: { path: root } } },
+        $outbound: { async publish() {} }
+    }) as AuthManager
+    const systemStorage = (AuthManager.prototype as unknown as {
+        storage(operation: unknown, values: unknown): Promise<unknown>
+    }).storage
+
+    assert.equal(await systemStorage.call(authManager, "path", []), home.path)
 
     mkdirSync(join(root, "kept"), { recursive: true })
     mkdirSync(join(root, "nested"), { recursive: true })

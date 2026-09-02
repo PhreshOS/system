@@ -18,6 +18,7 @@ interface FixtureManager {
 const processes = new Map<string, FixtureProcess>()
 const program = {
   identity: "example",
+  reference: "example-reference",
   server: { start: true },
   client: {
     start: true,
@@ -65,8 +66,8 @@ const launch = {
 }
 
 const [first, second] = await Promise.all([
-  manager.findOrCreateProcess(program.identity, launch),
-  manager.findOrCreateProcess(program.identity, {
+  manager.findOrCreateProcess(program, launch),
+  manager.findOrCreateProcess(program, {
     name: "shared",
     server: true,
     client: false,
@@ -78,7 +79,7 @@ assert.equal(first, second)
 assert.equal(starts, 1)
 
 await assert.rejects(
-  manager.findOrCreateProcess(program.identity, {
+  manager.findOrCreateProcess(program, {
     name: "shared",
     server: false,
     client: true,
@@ -109,3 +110,8 @@ const activated = fixture.resolveLaunch(program, {
 
 assert.equal(activated.server?.service, true)
 assert.equal(activated.client?.service, true)
+
+const stale = { identity: program.identity, reference: "replaced-program-reference" } as unknown as Program
+
+await assert.rejects(manager.createProcess(stale), /represented by this handle does not exist/)
+await assert.rejects(manager.findOrCreateProcess(stale, { name: "stale" }), /represented by this handle does not exist/)

@@ -101,9 +101,11 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
         <div className="grid gap-1">
 
-            <h3 className="text-base font-medium">{dialog.program.name} needs permission</h3>
+            <h3 className="text-base font-medium">{dialog.program.name} needs {dialog.title}</h3>
 
-            <p id={description} className="text-sm leading-6 opacity-60">{permissionDescription(dialog)}</p>
+            <p id={description} className="text-sm leading-6 opacity-60">{dialog.description}</p>
+
+            {dialog.values.length > 0 && <p className="text-xs leading-5 opacity-50">{dialog.values.join(", ")}</p>}
 
         </div>
 
@@ -163,18 +165,6 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
     </div>
 }
 
-function permissionDescription(dialog: PermissionDialog) {
-
-    if (dialog.permission === "pointer") return "Allow this Program to read and listen to pointer movement across the desktop."
-
-    return unknownPermission(dialog.permission)
-}
-
-function unknownPermission(permission: never): never {
-
-    throw new Error(`The system has no description for permission "${permission}"`)
-}
-
 function crashDescription(dialog: ServerCrashDialog) {
 
     const endpoint = dialog.process.name ? `the “${dialog.process.name}” Process’s server endpoint` : "its server endpoint"
@@ -186,15 +176,6 @@ function crashDescription(dialog: ServerCrashDialog) {
     return `${dialog.program.name} stopped because ${endpoint} ended unexpectedly.`
 }
 
-interface PermissionRequestProps {
-
-    dialog: PermissionDialog
-
-    description: string
-
-    decide(choice: PermissionChoice): Promise<void>
-}
-
 interface CrashReportProps {
 
     dialog: ServerCrashDialog
@@ -202,4 +183,11 @@ interface CrashReportProps {
     description: string
 
     acknowledge(): Promise<void>
+}
+
+interface PermissionRequestProps {
+
+    dialog: PermissionDialog
+    description: string
+    decide(choice: PermissionChoice): Promise<void>
 }

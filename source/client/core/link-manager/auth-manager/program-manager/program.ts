@@ -1,6 +1,7 @@
 import { HostedEntry } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { type Launch } from "@phreshos/core"
 import ProgramManager from "./program-manager"
+import type { Transmitted } from "@libs/messagepack"
 
 /**
  * A program this session knows about, rebuilt from what the core
@@ -31,11 +32,11 @@ export default class Program {
 
     public readonly hasAgent: boolean
 
-    public readonly server: HostedEntry["server"]
+    public readonly server: Transmitted<HostedEntry>["server"]
 
-    public readonly client: HostedEntry["client"]
+    public readonly client: Transmitted<HostedEntry>["client"]
 
-    public constructor(programManager: ProgramManager, payload: HostedEntry) {
+    public constructor(programManager: ProgramManager, payload: Transmitted<HostedEntry>) {
 
         this.programManager = programManager
 
@@ -62,23 +63,28 @@ export default class Program {
 
     public async createProcess(launch: Launch = {}) {
 
-        await this.programManager.$outbound.publish("/create-process", this.identity, launch)
+        await this.programManager.$outbound.publish("/create-process", this.address, launch)
     }
 
-    public async install(asker: string) {
+    public install(asker: string) {
 
-        await this.programManager.install(this.identity, asker)
+        return this.programManager.command(this.address, "install", undefined, asker)
     }
 
     // False removes only installed program files. True removes everything
     // owned by the system and forgets the runtime Program.
     public uninstall(everything = false, asker = "") {
 
-        return this.programManager.uninstallStreaming(this.identity, everything, asker)
+        return this.programManager.command(this.address, "uninstall", everything, asker)
     }
 
     public async forget(asker: string) {
 
-        await this.programManager.forget(this.identity, asker)
+        await this.programManager.forget(this.address, asker)
+    }
+
+    private get address() {
+
+        return { identity: this.identity, reference: this.reference }
     }
 }
