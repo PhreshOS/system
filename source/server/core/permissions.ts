@@ -11,19 +11,22 @@ export class PermissionCatalog {
 
     private readonly definitions: Readonly<Record<string, PermissionDefinition>>
 
-    public constructor(definitions: Readonly<Record<string, PermissionDefinition>>) {
+    private readonly reloads: Readonly<Record<string, PermissionReload>>
+
+    public constructor(rules: Readonly<Record<string, PermissionRule>>) {
 
         const validated: Record<string, PermissionDefinition> = {}
+        const reloads: Record<string, PermissionReload> = {}
 
-        for (const [name, definition] of Object.entries(definitions)) {
+        for (const [name, rule] of Object.entries(rules)) {
 
-            if (!name.length || !definition || typeof definition !== "object") throw new Error("A permission definition needs a name and definition")
-            if (definition.activation !== "live" && definition.activation !== "reload") throw new Error(`Permission "${name}" has an invalid activation`)
-            if (typeof definition.title !== "string" || !definition.title.trim()) throw new Error(`Permission "${name}" needs a title`)
-            if (typeof definition.description !== "string" || !definition.description.trim()) throw new Error(`Permission "${name}" needs a description`)
+            if (!name.length || !rule || typeof rule !== "object") throw new Error("A permission definition needs a name and definition")
+            if (rule.requiresReload !== undefined && typeof rule.requiresReload !== "function") throw new Error(`Permission "${name}" has an invalid reload resolver`)
+            if (typeof rule.title !== "string" || !rule.title.trim()) throw new Error(`Permission "${name}" needs a title`)
+            if (typeof rule.description !== "string" || !rule.description.trim()) throw new Error(`Permission "${name}" needs a description`)
 
-            const values = strings(definition.values, `Permission "${name}" values`)
-            const defaults = strings(definition.default, `Permission "${name}" default`)
+            const values = strings(rule.values, `Permission "${name}" values`)
+            const defaults = strings(rule.default, `Permission "${name}" default`)
 
             if (values.length !== new Set(values).size) throw new Error(`Permission "${name}" values must be unique`)
             if (defaults.length !== new Set(defaults).size || defaults.some(value => !values.includes(value))) throw new Error(`Permission "${name}" has an invalid default`)
@@ -31,13 +34,15 @@ export class PermissionCatalog {
             validated[name] = Object.freeze({
                 values: Object.freeze([...values]),
                 default: Object.freeze([...defaults]),
-                activation: definition.activation,
-                title: definition.title,
-                description: definition.description
+                title: rule.title,
+                description: rule.description
             })
+
+            if (rule.requiresReload) reloads[name] = rule.requiresReload
         }
 
         this.definitions = Object.freeze(validated)
+        this.reloads = Object.freeze(reloads)
     }
 
     public definition(name: unknown) {
@@ -129,13 +134,29 @@ export class PermissionCatalog {
         return !isDeepStrictEqual(left, right)
     }
 
-    public needReload(name: string, changed: boolean) {
+    /** Resolves one concrete effective-grant transition when it occurs. */
+    public needReload(name: string, before: Permission, permission: Permission) {
 
-        return changed && this.definition(name).activation === "reload"
+        this.definition(name)
+
+        if (!this.changed(before, permission)) return false
+
+        return this.reloads[name]?.(clone(before), clone(permission)) === true
     }
 }
 
 type PermissionGrant = readonly string[] | false | null
+
+type PermissionReload = (before: Permission, permission: Permission) => boolean
+
+type PermissionRule = PermissionDefinition & Readonly<{
+    requiresReload?: PermissionReload
+}>
+
+function clone(permission: Permission): Permission {
+
+    return Array.isArray(permission) ? [...permission] : permission
+}
 
 function strings(value: unknown, subject: string): string[] {
 

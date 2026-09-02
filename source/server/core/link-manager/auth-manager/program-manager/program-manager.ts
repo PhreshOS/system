@@ -217,14 +217,15 @@ export default class ProgramManager extends TheLink {
 
     private permissionChange(program: Program, name: string, before: Permission, permission: Permission): PermissionChange {
 
-        const changed = [...this.authManager.processManager.processes.values()].some(process => {
+        const needReload = [...this.authManager.processManager.processes.values()].some(process => {
 
             if (process.program !== program || process.client === null) return false
 
             const declared = program.clientPermissions[name] ?? null
             const temporary = process.permissions.get(name) ?? null
 
-            return permissionCatalog.changed(
+            return permissionCatalog.needReload(
+                name,
                 permissionCatalog.effective(name, declared, temporary, before),
                 permissionCatalog.effective(name, declared, temporary, permission)
             )
@@ -232,7 +233,7 @@ export default class ProgramManager extends TheLink {
 
         return Object.freeze({
             permission: clonePermission(permission),
-            needReload: permissionCatalog.needReload(name, changed)
+            needReload
         })
     }
 

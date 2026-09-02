@@ -1380,16 +1380,13 @@ export default class ProcessManager extends TheLink {
         if (choice === "process") {
 
             const permission = permissionCatalog.merge(name, temporary, requested)
-            const changed = permissionCatalog.changed(
-                effective,
-                permissionCatalog.effective(name, declared, permission, stored)
-            )
+            const next = permissionCatalog.effective(name, declared, permission, stored)
 
             process.permissions.set(name, permission)
 
             return Object.freeze({
                 permission: [...permission],
-                needReload: permissionCatalog.needReload(name, changed)
+                needReload: permissionCatalog.needReload(name, effective, next)
             })
         }
 
