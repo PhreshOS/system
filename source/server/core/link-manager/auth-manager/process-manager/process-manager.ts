@@ -17,7 +17,7 @@ import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
-import { isServiceKey, type ClientLaunch, type Launch, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { isServiceKey, type ClientLaunch, type Launch, type Permission, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import type { ServerRuntime } from "./server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
@@ -1372,7 +1372,7 @@ export default class ProcessManager extends TheLink {
         const stored = this.authManager.programManager.permission(process.program, name)
         const effective = permissionCatalog.effective(name, declared, temporary, stored)
 
-        if (permissionCatalog.grants(effective, requested)) return Object.freeze({ permission: requested, needReload: false })
+        if (permissionCatalog.grants(effective, requested)) return permissionChange(effective, false)
         if (effective === false) return Object.freeze({ permission: false, needReload: false })
 
         const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
@@ -1384,19 +1384,17 @@ export default class ProcessManager extends TheLink {
 
             process.permissions.set(name, permission)
 
-            return Object.freeze({
-                permission: [...permission],
-                needReload: permissionCatalog.needReload(name, effective, next)
-            })
+            return permissionChange(next, permissionCatalog.needReload(name, effective, next))
         }
 
         if (choice === "always") {
 
-            return this.authManager.programManager.setPermission(
-                process.program,
-                name,
-                permissionCatalog.merge(name, stored, requested)
-            )
+            const permission = permissionCatalog.merge(name, stored, requested)
+            const next = permissionCatalog.effective(name, declared, temporary, permission)
+
+            this.authManager.programManager.setPermission(process.program, name, permission)
+
+            return permissionChange(next, permissionCatalog.needReload(name, effective, next))
         }
 
         return Object.freeze({ permission: choice, needReload: false })
@@ -2508,6 +2506,14 @@ export default class ProcessManager extends TheLink {
             processes: [...this.processes].map(([identity, process]) => [identity, process.hosted()] as [string, HostedProcess])
         }
     }
+}
+
+function permissionChange(permission: Permission, needReload: boolean): PermissionChange {
+
+    return Object.freeze({
+        permission: Array.isArray(permission) ? [...permission] : permission,
+        needReload
+    })
 }
 
 // Where an answer goes, read out of the question itself.

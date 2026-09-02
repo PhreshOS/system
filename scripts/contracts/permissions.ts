@@ -22,6 +22,7 @@ const catalog = new PermissionCatalog({
 
 assert.deepEqual(catalog.resolve("files", true), ["read"])
 assert.deepEqual(catalog.resolve("files", ["write", "read"]), ["read", "write"])
+assert.deepEqual(catalog.resolve("files", ["write", "read", "write"]), ["read", "write"])
 assert.deepEqual(catalog.resolve("environment", true), ["locale"])
 assert.equal(catalog.resolve("files", false), false)
 assert.equal(catalog.resolve("files", null), null)
@@ -43,6 +44,7 @@ assert.equal(catalog.effective("files", null, false), false)
 assert.deepEqual(catalog.effective("files", ["read"], false), ["read"])
 assert.deepEqual(catalog.effective("environment", []), [])
 assert.deepEqual(catalog.merge("files", ["read"], ["write"]), ["read", "write"])
+assert(!catalog.changed(["read", "write"], ["write", "read"]))
 
 assert(!catalog.needReload("files", ["read"], ["read", "write"]))
 assert(!catalog.needReload("environment", null, ["locale"]))
@@ -51,7 +53,7 @@ assert(!catalog.needReload("environment", ["locale", "isolation"], ["locale", "i
 
 assert.throws(() => catalog.resolve("unknown", true), /does not know/)
 assert.throws(() => catalog.resolve("files", ["delete"]), /unknown value/)
-assert.throws(() => catalog.resolve("files", ["read", "read"]), /unknown value/)
+assert.throws(() => catalog.declarations({ files: ["delete"] }), /unknown value/)
 assert.throws(() => catalog.stored({ files: true }), /unresolved shorthand/)
 assert.throws(() => new PermissionCatalog({
     invalid: {

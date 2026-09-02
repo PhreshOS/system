@@ -4,7 +4,6 @@ import {
     type PermissionDefinition,
     type Permissions
 } from "@phreshos/core"
-import { isDeepStrictEqual } from "node:util"
 
 /** Validation and derivation over one exact permission definition set. */
 export class PermissionCatalog {
@@ -25,11 +24,10 @@ export class PermissionCatalog {
             if (typeof rule.title !== "string" || !rule.title.trim()) throw new Error(`Permission "${name}" needs a title`)
             if (typeof rule.description !== "string" || !rule.description.trim()) throw new Error(`Permission "${name}" needs a description`)
 
-            const values = strings(rule.values, `Permission "${name}" values`)
-            const defaults = strings(rule.default, `Permission "${name}" default`)
+            const values = unique(strings(rule.values, `Permission "${name}" values`))
+            const defaults = unique(strings(rule.default, `Permission "${name}" default`))
 
-            if (values.length !== new Set(values).size) throw new Error(`Permission "${name}" values must be unique`)
-            if (defaults.length !== new Set(defaults).size || defaults.some(value => !values.includes(value))) throw new Error(`Permission "${name}" has an invalid default`)
+            if (defaults.some(value => !values.includes(value))) throw new Error(`Permission "${name}" has an invalid default`)
 
             validated[name] = Object.freeze({
                 values: Object.freeze([...values]),
@@ -59,9 +57,9 @@ export class PermissionCatalog {
         if (value === true) return [...definition.default]
         if (value === false || value === null) return value
 
-        const requested = strings(value, `Permission "${String(name)}"`)
+        const requested = unique(strings(value, `Permission "${String(name)}"`))
 
-        if (requested.length !== new Set(requested).size || requested.some(entry => !definition.values.includes(entry))) {
+        if (requested.some(entry => !definition.values.includes(entry))) {
             throw new Error(`Permission "${String(name)}" contains an unknown value`)
         }
 
@@ -131,7 +129,9 @@ export class PermissionCatalog {
 
     public changed(left: Permission, right: Permission) {
 
-        return !isDeepStrictEqual(left, right)
+        if (!Array.isArray(left) || !Array.isArray(right)) return left !== right
+
+        return left.length !== right.length || left.some(value => !right.includes(value))
     }
 
     /** Resolves one concrete effective-grant transition when it occurs. */
@@ -163,6 +163,11 @@ function strings(value: unknown, subject: string): string[] {
     if (!Array.isArray(value) || value.some(entry => typeof entry !== "string")) throw new Error(`${subject} must be a list of strings`)
 
     return value
+}
+
+function unique(values: string[]) {
+
+    return [...new Set(values)]
 }
 
 /** The complete permission domain recognized by this System release. */
