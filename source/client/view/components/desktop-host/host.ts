@@ -206,6 +206,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "updateDesktopPreferences") {
 
+            await access.requireAll()
+
             const preferences = desktopPreferencesUpdate(args[0])
 
             await authManager.linkManager.requestDesktopPreferences(preferences)
