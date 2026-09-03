@@ -2,7 +2,7 @@ import { HttpClient } from "@the-link/http/client"
 import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaType } from "@server/core/protocol/proxy"
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
-import messagepack from "@libs/messagepack"
+import messagepack from "@the-link/messagepack"
 import type { Upload } from "@phreshos/core"
 
 export default class Application {

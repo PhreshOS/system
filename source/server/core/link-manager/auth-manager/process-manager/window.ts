@@ -1,5 +1,5 @@
 import { isRelativeValue, type Position, type Size, type Value, type WindowGeometry, type WindowLayer } from "@phreshos/core"
-import { Transmitted } from "@libs/messagepack"
+import { Transmitted } from "@the-link/messagepack"
 
 /**
  * How a process is shown. Every value is either a number of pixels or a

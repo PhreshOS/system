@@ -1,7 +1,7 @@
 import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
-import { Transmitted } from "@libs/messagepack"
+import { Transmitted } from "@the-link/messagepack"
 import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"

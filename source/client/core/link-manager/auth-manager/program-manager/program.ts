@@ -1,7 +1,7 @@
 import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { type Launch } from "@phreshos/core"
 import ProgramManager from "./program-manager"
-import type { Transmitted } from "@libs/messagepack"
+import type { Transmitted } from "@the-link/messagepack"
 
 /**
  * A program this session knows about, rebuilt from what the core

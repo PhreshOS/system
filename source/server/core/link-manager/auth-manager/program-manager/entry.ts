@@ -1,4 +1,4 @@
-import { Transmitted } from "@libs/messagepack"
+import { Transmitted } from "@the-link/messagepack"
 import Program from "./program"
 
 /**

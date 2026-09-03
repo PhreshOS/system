@@ -5,7 +5,7 @@ import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceKey } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
-import messagepack from "@libs/messagepack"
+import messagepack from "@the-link/messagepack"
 import type { ServerRuntime, Stream } from "./server-runtime"
 
 /**

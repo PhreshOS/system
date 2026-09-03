@@ -6,7 +6,7 @@ import ClientTraffic from "./client-traffic"
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type LocalWindowHost } from "./local-window"
-import messagepack from "@libs/messagepack"
+import messagepack from "@the-link/messagepack"
 
 /**
  * The browser boundary between a program pane and the desktop that hosts it.

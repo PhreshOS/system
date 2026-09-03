@@ -6,7 +6,7 @@ import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isServiceKey, type DesktopSurfaceSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
-import messagepack from "@libs/messagepack"
+import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 import SystemAccess from "./system-access"
 

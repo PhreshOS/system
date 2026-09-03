@@ -2,7 +2,7 @@ import { failed, succeeded } from "@libs/request-outcome"
 import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
 import { HttpServer } from "@the-link/http/server"
-import messagepack from "@libs/messagepack"
+import messagepack from "@the-link/messagepack"
 
 export default function (application: Application, debugging: boolean) {
 

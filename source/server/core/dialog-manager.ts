@@ -1,5 +1,5 @@
 import { Subscribe } from "@the-link/core/decorators"
-import { Transmitted } from "@libs/messagepack"
+import { Transmitted } from "@the-link/messagepack"
 import { TheLink } from "@the-link/core"
 import { randomUUID } from "node:crypto"
 import { type default as Process } from "./link-manager/auth-manager/process-manager/process"

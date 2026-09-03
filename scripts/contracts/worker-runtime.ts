@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
-import { delimiter, join, resolve } from "node:path"
+import { delimiter, join } from "node:path"
 import { pathToFileURL } from "node:url"
-import { decode, encode } from "@msgpack/msgpack"
+import { deserialize as decode, serialize as encode } from "@the-link/messagepack"
 import { CommandServerRuntime, commandServerEnvironment, WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
@@ -11,7 +12,7 @@ import type { ProgramConfig } from "@server/core/link-manager/auth-manager/progr
 const directory = await mkdtemp(join(tmpdir(), "phresh-worker-runtime-"))
 const entry = join(directory, "server.mjs")
 const commandEntry = join(directory, "command.mjs")
-const codec = pathToFileURL(resolve("node_modules/@msgpack/msgpack/dist.esm/index.mjs")).href
+const codec = pathToFileURL(createRequire(import.meta.url).resolve("@the-link/messagepack")).href
 
 assert.equal(
     commandServerEnvironment(directory, { Path: "/native/bin" }).Path,
@@ -20,7 +21,7 @@ assert.equal(
 
 await writeFile(entry, `
 import { parentPort } from "node:worker_threads"
-import { decode, encode } from ${JSON.stringify(codec)}
+import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
 
 console.log("worker output")
 parentPort.postMessage(encode(["boundary", "ready"]))
@@ -31,7 +32,7 @@ parentPort.on("message", message => {
 `)
 
 await writeFile(commandEntry, `
-import { decode, encode } from ${JSON.stringify(codec)}
+import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
 
 console.log("command output")
 process.send?.(encode(["boundary", "ready"]))
