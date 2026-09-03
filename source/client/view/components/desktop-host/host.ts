@@ -102,6 +102,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         return access.process(holdProcess(value))
     }
 
+    function permittedService(value: unknown) {
+
+        if (!isServiceKey(value)) throw new Error("A complete service key is required")
+
+        return access.service(value)
+    }
+
     function resolveProcess(value: unknown) {
 
         if (!isHandleAddress(value)) return null
@@ -275,25 +282,19 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-exists") {
 
-            await access.requireAll()
+            const service = await permittedService(args[0])
 
-            if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
-
-            return [await processManager.serviceExists(args[0])]
+            return [await processManager.serviceExists(service)]
         }
 
         if (word === "service-wait-ready") {
 
-            await access.requireAll()
+            const service = await permittedService(args[0])
 
-            if (!isServiceKey(args[0])) throw new Error("A complete service key is required")
-
-            return [await processManager.waitServiceReady(args[0], args[1] as number | undefined)]
+            return [await processManager.waitServiceReady(service, args[1] as number | undefined)]
         }
 
         if (word === "service-follow") {
-
-            await access.requireAll()
 
             const [subscription, key, scope, event] = args
 
@@ -302,6 +303,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             if (scope !== "lifecycle" && scope !== "events") return []
 
             if (event !== null && typeof event !== "string") return []
+
+            await access.service(key)
 
             const owner = frameOwner()
 
@@ -321,22 +324,22 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "service-send") {
 
-            await access.requireAll()
-
             if (!isServiceKey(args[0]) || typeof args[1] !== "string") return []
 
-            await processManager.sendService(pane, args[0], args[1], args[2])
+            const service = await access.service(args[0])
+
+            await processManager.sendService(pane, service, args[1], args[2])
 
             return []
         }
 
         if (word === "service-ask") {
 
-            await access.requireAll()
-
             if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
 
-            await processManager.askService(pane, args[0], args.slice(1))
+            const service = await access.service(args[0])
+
+            await processManager.askService(pane, service, args.slice(1))
 
             return []
         }

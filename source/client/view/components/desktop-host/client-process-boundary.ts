@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { type DesktopSurfaceSnapshot, type ShellOptions } from "@phreshos/core"
+import { isServiceKey, type DesktopSurfaceSnapshot, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -37,7 +37,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly trafficSubscriptions = new Map<string, TrafficSubscription>()
 
-    /** Program ownership of Endpoint subscriptions; `null` marks a Service. */
+    /** Program ownership of each System-routed subscription. */
     private readonly systemSubscriptions = new Map<string, string | null>()
 
     private readonly desktopPreferencesSubscriptions = new Set<string>()
@@ -350,7 +350,10 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (operation === "service-follow") {
 
-            this.systemSubscriptions.set(subscription, null)
+            this.systemSubscriptions.set(
+                subscription,
+                isServiceKey(target) ? this.systemAccess.serviceProgram(target) : null
+            )
 
             return
         }

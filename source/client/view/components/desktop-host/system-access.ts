@@ -1,6 +1,7 @@
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
+import type { ServiceKey } from "@phreshos/core"
 
 const denied = "Execution is not permitted"
 
@@ -17,6 +18,16 @@ export default class SystemAccess {
     public ownsProcess(process: Pick<Process, "program">) {
 
         return this.owner().program === process.program
+    }
+
+    public serviceProgram(service: ServiceKey) {
+
+        return service.program ?? this.authManager.processManager.processes.get(service.process)?.program ?? null
+    }
+
+    public ownsService(service: ServiceKey) {
+
+        return this.serviceProgram(service) === this.owner().program
     }
 
     public async all() {
@@ -36,6 +47,13 @@ export default class SystemAccess {
         if (!this.ownsProcess(process) && !await this.all()) throw new Error(denied)
 
         return process
+    }
+
+    public async service(service: ServiceKey) {
+
+        if (!this.ownsService(service) && !await this.all()) throw new Error(denied)
+
+        return service
     }
 
     public async requireAll() {
