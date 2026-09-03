@@ -176,6 +176,11 @@ export default class ClientProcessForwarder {
         this.requests.delete(question)
     }
 
+    public forget(question: string) {
+
+        this.requests.delete(question)
+    }
+
     public release() {
 
         for (const stop of this.observations.values()) stop()

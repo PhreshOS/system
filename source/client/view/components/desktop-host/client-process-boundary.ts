@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { type DesktopSurfaceSnapshot } from "@phreshos/core"
+import { type DesktopSurfaceSnapshot, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -600,19 +600,35 @@ export default class ClientProcessBoundary extends TheLink {
         const run = async () => {
             await this.deliver("host-end", "stream", question, "open")
 
-            if (args[0] !== "install" && args[0] !== "uninstall" && args[0] !== "run") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
+            if (args[0] === "shell") {
 
-            if (!isHandleAddress(args[1])) throw new Error("A Program handle is required")
+                await this.systemAccess.requireAll()
+                if (typeof args[1] !== "string") throw new Error("A shell command must be text")
 
-            const program = this.authManager.programManager.programs.get(args[1].identity)
+                const operation = this.authManager.shellManager.run(
+                    args[1],
+                    shellOptions(args[2]),
+                    this.pane
+                )
 
-            if (!program || program.reference !== args[1].reference) throw new Error("The Program represented by this handle does not exist")
+                iterator = operation[Symbol.asyncIterator]()
+            }
+            else {
 
-            await this.systemAccess.program(program)
+                if (args[0] !== "install" && args[0] !== "uninstall" && args[0] !== "run") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
 
-            const operation = this.authManager.programManager.command(args[1], args[0], args[2], this.pane)
+                if (!isHandleAddress(args[1])) throw new Error("A Program handle is required")
 
-            iterator = operation[Symbol.asyncIterator]()
+                const program = this.authManager.programManager.programs.get(args[1].identity)
+
+                if (!program || program.reference !== args[1].reference) throw new Error("The Program represented by this handle does not exist")
+
+                await this.systemAccess.program(program)
+
+                const operation = this.authManager.programManager.command(args[1], args[0], args[2], this.pane)
+
+                iterator = operation[Symbol.asyncIterator]()
+            }
 
             while (active) {
                 const next = await iterator.next()
@@ -939,6 +955,23 @@ function runEvent(authManager: AuthManager, value: unknown) {
     if (!program) throw new Error("The desktop does not know the Process Program")
 
     return { ...event, process: sdkProcess(event.process, program) }
+}
+
+function shellOptions(value: unknown): Omit<ShellOptions, "signal"> {
+
+    if (value === undefined) return {}
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Shell options must be an object")
+
+    const options = value as Record<string, unknown>
+
+    if (Object.keys(options).some(key => key !== "cwd" && key !== "env")) throw new Error("Shell options contain an unknown field")
+    if (options.cwd !== undefined && (typeof options.cwd !== "string" || !options.cwd)) throw new Error("A shell working directory must be non-empty text")
+    if (options.env !== undefined && (!options.env || typeof options.env !== "object" || Array.isArray(options.env) || Object.values(options.env).some(entry => typeof entry !== "string"))) {
+
+        throw new Error("Shell environment values must be text")
+    }
+
+    return options as Omit<ShellOptions, "signal">
 }
 
 const nativeAttachments = (value: unknown, transfer: readonly Transferable[]) => {

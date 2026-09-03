@@ -2,10 +2,11 @@ import type Application from "./application"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
-import type { ClientLaunch, Launch, PermissionInput, Position, ServerLaunch, Size, WindowGeometry } from "@phreshos/core"
+import type { ClientLaunch, Launch, PermissionInput, Position, ServerLaunch, ShellOptions, Size, WindowGeometry } from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
+import shell from "./shell"
 
 type Endpoint = "server" | "client"
 type ProgramSource = Parameters<Application["linkManager"]["authManager"]["programManager"]["create"]>[0]
@@ -20,6 +21,11 @@ type ProgramSource = Parameters<Application["linkManager"]["authManager"]["progr
 export default class System {
 
     public constructor(private readonly application: Application) {}
+
+    public shell(command: string, options: ShellOptions = {}) {
+
+        return shell(command, options)
+    }
 
     public listPrograms(onlyInstalled = false) {
 

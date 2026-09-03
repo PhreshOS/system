@@ -2,6 +2,7 @@ import type Application from "@server/core/application"
 import localServer from "./local-server"
 import apiRequest from "./api-request"
 import programRequest from "./program-request"
+import shellRequest from "./shell-request"
 import systemRequest from "./system-request"
 
 const maximumRequestSize = 16 * 1024 * 1024
@@ -44,6 +45,12 @@ export default function gateway(application: Application, path: string) {
                 return
             }
 
+            if (envelope.target === "shell") {
+
+                shellRequest(application, socket, envelope.request, controller.signal).catch(error => fail(socket, error))
+                return
+            }
+
             if (envelope.target === "api") {
 
                 apiRequest(application, envelope.request, controller.signal).then(
@@ -77,7 +84,7 @@ function parseEnvelope(line: string): GatewayEnvelope {
 
     if (Object.keys(envelope).some(key => key !== "target" && key !== "request")) throw new Error("The gateway request contains an unknown field")
 
-    if (envelope.target !== "api" && envelope.target !== "program" && envelope.target !== "system") throw new Error("The Gateway target must be api, program, or system")
+    if (envelope.target !== "api" && envelope.target !== "program" && envelope.target !== "shell" && envelope.target !== "system") throw new Error("The Gateway target must be api, program, shell, or system")
     if (!("request" in envelope)) throw new Error("The gateway request is missing")
 
     return { target: envelope.target, request: envelope.request }
@@ -100,6 +107,6 @@ function reason(error: unknown) {
 
 interface GatewayEnvelope {
 
-    target: "api" | "program" | "system"
+    target: "api" | "program" | "shell" | "system"
     request: unknown
 }

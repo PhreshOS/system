@@ -17,7 +17,7 @@ import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
-import { isServiceKey, type ClientLaunch, type Launch, type Permission, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { isServiceKey, type ClientLaunch, type Launch, type Permission, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type ShellOptions, type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import type { ServerRuntime } from "./server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
@@ -488,6 +488,17 @@ export default class ProcessManager extends TheLink {
 
             this.clientForwarders.delete(key)
         }
+    }
+
+    public retainClientOperation(connection: string, pane: string, operation: string, cancel: () => void) {
+
+        const boundary = this.clientForwarders.get(this.clientOwnerKey(connection, pane))
+
+        if (!boundary) return null
+
+        boundary.retain(operation, cancel)
+
+        return () => boundary.forget(operation)
     }
 
     // Raw boundary delivery. Application publications and questions are
@@ -2219,6 +2230,31 @@ export default class ProcessManager extends TheLink {
         try {
 
             const operation = args[0]
+
+            if (operation === "shell") {
+
+                if (typeof args[1] !== "string") throw new Error("A shell command must be text")
+
+                const command = this.system.shell(args[1], args[2] as ShellOptions ?? {})
+
+                cancel = () => {
+
+                    active = false
+                    void command.return(undefined)
+                }
+
+                for await (const event of command) {
+
+                    if (!active) return
+
+                    await this.say(server, "host-end", "stream", question, "data", event)
+                }
+
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
             const program = this.system.holdProgram(args[1])
 
             if (operation === "run") {

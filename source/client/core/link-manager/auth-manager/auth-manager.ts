@@ -6,6 +6,7 @@ import DialogManager from "./dialog-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { type PermissionChange, type PermissionRequest } from "@phreshos/core"
+import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
 
@@ -18,6 +19,8 @@ export default class AuthManager extends TheLink {
     public readonly processManager: ProcessManager
 
     public readonly dialogManager: DialogManager
+
+    public readonly shellManager: ShellManager
 
     public constructor(linkManager: LinkManager, authorization: string, payload: TransmittedAuthManager) {
 
@@ -34,6 +37,8 @@ export default class AuthManager extends TheLink {
         this.processManager = new ProcessManager(this, payload.processManager)
 
         this.dialogManager = new DialogManager(this, payload.dialogManager)
+
+        this.shellManager = new ShellManager(this)
     }
 
     @Intercept("outbound")

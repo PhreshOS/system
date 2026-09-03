@@ -7,6 +7,7 @@ import { Transmitted } from "@libs/messagepack"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { type PermissionRequest } from "@phreshos/core"
+import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
 
@@ -17,6 +18,8 @@ export default class AuthManager extends TheLink {
     public readonly processManager: ProcessManager
 
     public readonly dialogManager: DialogManager
+
+    public readonly shellManager: ShellManager
 
     public constructor(linkManager: LinkManager) {
 
@@ -29,6 +32,8 @@ export default class AuthManager extends TheLink {
         this.processManager = new ProcessManager(this)
 
         this.dialogManager = this.linkManager.application.dialogManager
+
+        this.shellManager = new ShellManager(this)
 
         this.dialogManager.connectTo(this, "/dialog")
 

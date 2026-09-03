@@ -24,7 +24,7 @@ export default function (application: Application, debugging: boolean) {
             // envelope. Route it once and do not manufacture an acknowledgement.
             if (responseUuid === null) {
 
-                const routed = event.startsWith("/auth/process/frame/") ? [values[0], connectionIdentity, ...values.slice(1)] : values
+                const routed = connectionOwned(event) ? [values[0], connectionIdentity, ...values.slice(1)] : values
 
                 application.linkManager.$inbound.publish(event, ...routed).catch(() => undefined)
 
@@ -33,10 +33,10 @@ export default function (application: Application, debugging: boolean) {
 
             try {
 
-                // Every client Process-boundary operation is owned by this
-                // socket. Insert the connection here, where it comes from the
-                // connection itself and cannot be supplied by an iframe.
-                const routed = event.startsWith("/auth/process/frame/") ? [values[0], connectionIdentity, ...values.slice(1)] : values
+                // Every Client-frame operation is owned by this socket. Insert
+                // the connection here, where it comes from the connection
+                // itself and cannot be supplied by an iframe.
+                const routed = connectionOwned(event) ? [values[0], connectionIdentity, ...values.slice(1)] : values
 
                 const results = await application.linkManager.$inbound.publish(event, ...routed)
 
@@ -62,4 +62,9 @@ export default function (application: Application, debugging: boolean) {
     serverLink.prepareConnection(upgradeWebSocket)
 
     return serverLink.app
+}
+
+function connectionOwned(event: string) {
+
+    return event.startsWith("/auth/frame/") || event.startsWith("/auth/process/frame/")
 }

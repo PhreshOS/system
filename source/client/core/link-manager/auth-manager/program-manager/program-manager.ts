@@ -5,6 +5,7 @@ import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Program from "./program"
 import { type Launch, type PermissionInput, type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
+import StreamRelay from "@client/core/link-manager/stream-relay"
 
 /**
  * The peer of the core's programs: born holding them from the
@@ -24,7 +25,7 @@ export default class ProgramManager extends TheLink {
 
     public readonly programs = new Map<string, Program>()
 
-    private readonly commands = new Map<string, PendingCommand>()
+    private readonly commands = new StreamRelay("Program command output", programCommandChunk)
 
     public constructor(authManager: AuthManager, payload: TransmittedProgramManager) {
 
@@ -86,45 +87,11 @@ export default class ProgramManager extends TheLink {
 
     /** Streams one authoritative Program command to its requesting View. */
     public command(subject: unknown, operation: "install" | "uninstall" | "run", value: unknown, asker: string) {
-        const manager = this
 
-        return (async function* (): AsyncGenerator<ProgramCommandChunk, void, void> {
-            const stream = crypto.randomUUID()
-            const state: PendingCommand = { queue: [], settled: false, failure: null, wake: null }
-
-            manager.commands.set(stream, state)
-
-            const pending = manager.$outbound.publishFirst("/client-command", stream, operation, subject, value, asker).then(
-                () => { state.settled = true },
-                error => { state.failure = error instanceof Error ? error : new Error(String(error)) }
-            ).finally(() => {
-                state.wake?.()
-                state.wake = null
-            })
-
-            try {
-                while (!state.settled || state.queue.length) {
-                    const next = state.queue.shift()
-
-                    if (next) {
-                        yield next
-                        continue
-                    }
-
-                    if (state.failure) throw state.failure
-
-                    await new Promise<void>(resolve => { state.wake = resolve })
-                }
-
-                await pending
-
-                if (state.failure) throw state.failure
-            }
-            finally {
-                manager.commands.delete(stream)
-                manager.$outbound.publish("/client-command-cancel", stream).catch(() => undefined)
-            }
-        })()
+        return this.commands.open(
+            stream => this.$outbound.publishFirst("/client-command", stream, operation, subject, value, asker),
+            stream => this.$outbound.publish("/client-command-cancel", stream)
+        )
     }
 
     public async forget(subject: unknown, asker: string) {
@@ -196,22 +163,8 @@ export default class ProgramManager extends TheLink {
 
     @Subscribe("/client-command-output")
     protected commandOutput(stream: string, value: unknown) {
-        const state = this.commands.get(stream)
 
-        if (!state || state.failure) return
-
-        const chunk = value as Partial<ProgramCommandChunk> | null
-
-        if (!chunk || (chunk.stream !== "stdout" && chunk.stream !== "stderr") || typeof chunk.text !== "string") {
-            state.failure = new Error("The System returned an invalid Program command output chunk")
-        }
-        else if (state.queue.length >= maximumCommandQueue) {
-            state.failure = new Error(`Program command output exceeded its queue capacity of ${maximumCommandQueue}`)
-        }
-        else state.queue.push(Object.freeze({ stream: chunk.stream, text: chunk.text }))
-
-        state.wake?.()
-        state.wake = null
+        this.commands.receive(stream, value)
     }
 
     @Subscribe("/forget")
@@ -230,11 +183,14 @@ export default class ProgramManager extends TheLink {
     }
 }
 
-interface PendingCommand {
-    queue: ProgramCommandChunk[]
-    settled: boolean
-    failure: Error | null
-    wake: (() => void) | null
-}
+function programCommandChunk(value: unknown): ProgramCommandChunk {
 
-const maximumCommandQueue = 256
+    const chunk = value as Partial<ProgramCommandChunk> | null
+
+    if (!chunk || (chunk.stream !== "stdout" && chunk.stream !== "stderr") || typeof chunk.text !== "string") {
+
+        throw new Error("The System returned an invalid Program command output chunk")
+    }
+
+    return Object.freeze({ stream: chunk.stream, text: chunk.text })
+}
