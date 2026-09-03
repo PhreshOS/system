@@ -1022,6 +1022,15 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return new TransferredAnswer([{ ...response, body }], body ? [body] : [])
         }
 
+        // The browser owns the standard WebSocket object. This boundary grants
+        // authority before the frame creates it; no transport proxy is needed.
+        if (word === "websocket") {
+
+            await access.requireAll()
+
+            return []
+        }
+
         throw new Error(`The desktop does not know the word "${String(word)}"`)
     }
 }
