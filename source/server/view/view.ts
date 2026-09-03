@@ -15,7 +15,7 @@ import { Hono } from "hono"
 import { resolve } from "node:path"
 import { writeFile } from "node:fs/promises"
 import { styleText } from "node:util"
-import serverRuntime from "./server-runtime"
+import serverRuntime from "./server-runtime/server-runtime"
 import { listenOnPorts } from "./configuration"
 
 export default async function (config: Config) {
