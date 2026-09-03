@@ -4,6 +4,7 @@ import { TheLink } from "@the-link/core"
 import { randomUUID } from "node:crypto"
 import { type default as Process } from "./link-manager/auth-manager/process-manager/process"
 import { permissionCatalog } from "./permissions"
+import type { PermissionName, PermissionValue } from "@phreshos/core"
 
 /** Authoritative runtime queue of system messages awaiting acknowledgment. */
 export default class DialogManager extends TheLink {
@@ -58,7 +59,12 @@ export default class DialogManager extends TheLink {
     }
 
     /** Waits for one authoritative owner decision for a Client Process. */
-    public async requestPermission(process: Process, request: string, permission: string, values: string[]): Promise<PermissionChoice> {
+    public async requestPermission<Name extends PermissionName>(
+        process: Process,
+        request: string,
+        permission: Name,
+        values: readonly PermissionValue<Name>[]
+    ): Promise<PermissionChoice> {
 
         if (!request || this.permissionRequests.has(request)) throw new Error("A permission request needs a unique identity")
         if (this.permissionProcesses.has(process.reference)) throw new Error("This Client Process already has a pending permission request")
@@ -168,8 +174,8 @@ export interface PermissionDialog {
     readonly identity: string
     readonly kind: "permission"
     readonly createdAt: Date
-    readonly permission: string
-    readonly values: string[]
+    readonly permission: PermissionName
+    readonly values: PermissionValue<PermissionName>[]
     readonly title: string
     readonly description: string
     readonly program: Readonly<{ identity: string, name: string }>

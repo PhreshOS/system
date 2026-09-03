@@ -23,11 +23,18 @@ import { readStartup, removeStartup, writeStartup } from "./startup"
 import { CommandServerRuntime, WorkerServerRuntime } from "../process-manager/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 import { readPermissions, writePermissions } from "./permissions"
-import { type Permission, type PermissionChange, type PermissionInput, type Permissions } from "@phreshos/core"
+import {
+    parsePermissionName,
+    type Permission,
+    type PermissionChange,
+    type PermissionInput,
+    type PermissionName,
+    type Permissions
+} from "@phreshos/core"
 
 const maximumProcessesPerProgram = 20
 
-function clonePermission(permission: Permission): Permission {
+function clonePermission<Name extends PermissionName>(permission: Permission<Name>): Permission<Name> {
 
     return Array.isArray(permission) ? [...permission] : permission
 }
@@ -153,9 +160,7 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Reads one Program's stored user grant without deriving effective access. */
-    public permission(program: Program, name: string): Permission {
-
-        permissionCatalog.definition(name)
+    public permission<Name extends PermissionName>(program: Program, name: Name): Permission<Name> {
 
         return clonePermission(readPermissions(program)[name] ?? null)
     }
@@ -167,7 +172,11 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Stores one canonical user grant and reports its Client activation need. */
-    public async setPermission(program: Program, name: string, value: Exclude<PermissionInput, null>): Promise<PermissionChange> {
+    public async setPermission<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        value: Exclude<PermissionInput<Name>, null>
+    ): Promise<PermissionChange<Name>> {
 
         if (value === null) throw new Error("A stored Program permission cannot be null")
 
@@ -184,9 +193,7 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Removes one stored user grant without changing Program declarations. */
-    public async deletePermission(program: Program, name: string): Promise<PermissionChange> {
-
-        permissionCatalog.definition(name)
+    public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<PermissionChange<Name>> {
 
         const permissions = readPermissions(program)
         const before = permissions[name] ?? null
@@ -206,14 +213,24 @@ export default class ProgramManager extends TheLink {
         const program = this.held(subject)
 
         if (operation === "all") return this.permissions(program)
-        if (operation === "get") return this.permission(program, String(name))
-        if (operation === "set") return await this.setPermission(program, String(name), value as Exclude<PermissionInput, null>)
-        if (operation === "delete") return await this.deletePermission(program, String(name))
+        if (operation === "get") return this.permission(program, parsePermissionName(name))
+        if (operation === "set") {
+
+            const permission = parsePermissionName(name)
+
+            return await this.setPermission(program, permission, value as Exclude<PermissionInput<typeof permission>, null>)
+        }
+        if (operation === "delete") return await this.deletePermission(program, parsePermissionName(name))
 
         throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
     }
 
-    private async permissionChange(program: Program, name: string, before: Permission, permission: Permission): Promise<PermissionChange> {
+    private async permissionChange<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        before: Permission<Name>,
+        permission: Permission<Name>
+    ): Promise<PermissionChange<Name>> {
 
         const needReload = await this.authManager.processManager.storedPermissionChanged(program, name, before, permission)
 

@@ -17,7 +17,22 @@ import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
-import { isServiceKey, type ClientLaunch, type Launch, type Permission, type PermissionChange, type PermissionRequest, type ServerLaunch, type ServiceKey, type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import {
+    isServiceKey,
+    parsePermissionName,
+    type ClientLaunch,
+    type Launch,
+    type Permission,
+    type PermissionChange,
+    type PermissionInput,
+    type PermissionName,
+    type PermissionRequest,
+    type PermissionValue,
+    type ServerLaunch,
+    type ServiceKey,
+    type WindowGeometry,
+    type WindowLayer
+} from "@phreshos/core"
 import type { ServerRuntime } from "./server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
@@ -1386,13 +1401,13 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Reads only the persistent user grant belonging to this Process's Program. */
-    public permission(identity: string, name: string) {
+    public permission<Name extends PermissionName>(identity: string, name: Name) {
 
         return this.authManager.programManager.permission(this.find(identity).program, name)
     }
 
     /** Tests one concrete permission against this Process's effective grants. */
-    public grants(identity: string, name: string, requested: readonly string[]) {
+    public grants<Name extends PermissionName>(identity: string, name: Name, requested: readonly PermissionValue<Name>[]) {
 
         const process = this.find(identity)
 
@@ -1409,7 +1424,12 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Resolves one permission request through declarations, grants, then the owner. */
-    public async requestPermission(identity: string, request: string, name: string, input: PermissionRequest): Promise<PermissionChange> {
+    public async requestPermission<Name extends PermissionName>(
+        identity: string,
+        request: string,
+        name: Name,
+        input: PermissionRequest<Name>
+    ): Promise<PermissionChange<Name>> {
 
         const process = this.find(identity)
 
@@ -1466,7 +1486,11 @@ export default class ProcessManager extends TheLink {
         return Object.freeze({ permission: choice, needReload: false })
     }
 
-    private effectivePermission(process: Process, name: string, stored = this.authManager.programManager.permission(process.program, name)) {
+    private effectivePermission<Name extends PermissionName>(
+        process: Process,
+        name: Name,
+        stored = this.authManager.programManager.permission(process.program, name)
+    ) {
 
         return permissionCatalog.effective(
             name,
@@ -1477,7 +1501,12 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Publishes the Client access shape changed by one stored grant. */
-    public async storedPermissionChanged(program: Program, name: string, before: Permission, permission: Permission) {
+    public async storedPermissionChanged<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        before: Permission<Name>,
+        permission: Permission<Name>
+    ) {
 
         let needReload = false
 
@@ -1557,9 +1586,18 @@ export default class ProcessManager extends TheLink {
             const operation = rest[1]
 
             if (operation === "all") return [this.authManager.programManager.permissions(program)]
-            if (operation === "get") return [this.authManager.programManager.permission(program, String(rest[2]))]
-            if (operation === "set") return [await this.authManager.programManager.setPermission(program, String(rest[2]), rest[3] as never)]
-            if (operation === "delete") return [await this.authManager.programManager.deletePermission(program, String(rest[2]))]
+            if (operation === "get") return [this.authManager.programManager.permission(program, parsePermissionName(rest[2]))]
+            if (operation === "set") {
+
+                const permission = parsePermissionName(rest[2])
+
+                return [await this.authManager.programManager.setPermission(
+                    program,
+                    permission,
+                    rest[3] as Exclude<PermissionInput<typeof permission>, null>
+                )]
+            }
+            if (operation === "delete") return [await this.authManager.programManager.deletePermission(program, parsePermissionName(rest[2]))]
 
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
         }
@@ -2617,7 +2655,7 @@ export default class ProcessManager extends TheLink {
     }
 }
 
-function permissionChange(permission: Permission, needReload: boolean): PermissionChange {
+function permissionChange<Name extends PermissionName>(permission: Permission<Name>, needReload: boolean): PermissionChange<Name> {
 
     return Object.freeze({
         permission: Array.isArray(permission) ? [...permission] : permission,

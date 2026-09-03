@@ -1,69 +1,85 @@
 import {
+    clientPermissionCatalog,
+    parsePermissionName,
     type ClientPermissions,
     type Permission,
     type PermissionDefinition,
+    type PermissionDefinitions,
+    type PermissionName,
+    type PermissionValue,
     type Permissions
 } from "@phreshos/core"
 
-/** Validation and derivation over one exact permission definition set. */
+/** Validation and derivation over the one permission domain defined by Core. */
 export class PermissionCatalog {
 
-    private readonly definitions: Readonly<Record<string, PermissionDefinition>>
+    private readonly definitions: PermissionDefinitions
 
-    private readonly reloads: Readonly<Record<string, PermissionReload>>
+    private readonly reloads: Readonly<Partial<Record<PermissionName, PermissionReload>>>
 
-    public constructor(rules: Readonly<Record<string, PermissionRule>>) {
+    public constructor(rules: PermissionRules) {
 
-        const validated: Record<string, PermissionDefinition> = {}
-        const reloads: Record<string, PermissionReload> = {}
+        const validated: Partial<Record<PermissionName, StoredDefinition>> = {}
+        const reloads: Partial<Record<PermissionName, PermissionReload>> = {}
 
-        for (const [name, rule] of Object.entries(rules)) {
+        for (const unknownName of Object.keys(rules)) {
 
-            if (!name.length || !rule || typeof rule !== "object") throw new Error("A permission definition needs a name and definition")
+            const name = parsePermissionName(unknownName)
+            const rule = rules[name]
+
+            if (!rule || typeof rule !== "object") throw new Error(`Permission "${name}" needs a definition`)
             if (rule.requiresReload !== undefined && typeof rule.requiresReload !== "function") throw new Error(`Permission "${name}" has an invalid reload resolver`)
             if (typeof rule.title !== "string" || !rule.title.trim()) throw new Error(`Permission "${name}" needs a title`)
             if (typeof rule.description !== "string" || !rule.description.trim()) throw new Error(`Permission "${name}" needs a description`)
 
-            const values = unique(strings(rule.values, `Permission "${name}" values`))
+            const values = clientPermissionCatalog[name] as readonly string[]
             const defaults = unique(strings(rule.default, `Permission "${name}" default`))
 
             if (defaults.some(value => !values.includes(value))) throw new Error(`Permission "${name}" has an invalid default`)
 
             validated[name] = Object.freeze({
-                values: Object.freeze([...values]),
-                default: Object.freeze([...defaults]),
+                values,
+                default: Object.freeze(defaults),
                 title: rule.title,
                 description: rule.description
             })
 
-            if (rule.requiresReload) reloads[name] = rule.requiresReload
+            if (rule.requiresReload) reloads[name] = rule.requiresReload as PermissionReload
         }
 
-        this.definitions = Object.freeze(validated)
+        for (const name of Object.keys(clientPermissionCatalog) as PermissionName[]) {
+
+            if (!validated[name]) throw new Error(`Permission "${name}" needs a definition`)
+        }
+
+        this.definitions = Object.freeze(validated) as PermissionDefinitions
         this.reloads = Object.freeze(reloads)
     }
 
-    public definition(name: unknown) {
+    public definition<Name extends PermissionName>(name: Name): PermissionDefinition<Name> {
 
-        if (typeof name !== "string" || !Object.hasOwn(this.definitions, name)) throw new Error(`The System does not know the permission "${String(name)}"`)
+        const definition = this.definitions[name]
 
-        return this.definitions[name]
+        if (!definition) throw new Error(`The System does not know the permission "${String(name)}"`)
+
+        return definition
     }
 
-    public resolve(name: unknown, value: unknown): Permission {
+    public resolve<Name extends PermissionName>(name: Name, value: unknown): Permission<Name> {
 
         const definition = this.definition(name)
 
         if (value === true) return [...definition.default]
         if (value === false || value === null) return value
 
-        const requested = unique(strings(value, `Permission "${String(name)}"`))
+        const requested = unique(strings(value, `Permission "${name}"`))
+        const values = definition.values as readonly string[]
 
-        if (requested.some(entry => !definition.values.includes(entry))) {
-            throw new Error(`Permission "${String(name)}" contains an unknown value`)
+        if (requested.some(entry => !values.includes(entry))) {
+            throw new Error(`Permission "${name}" contains an unknown value`)
         }
 
-        return definition.values.filter(entry => requested.includes(entry))
+        return values.filter(entry => requested.includes(entry)) as PermissionValue<Name>[]
     }
 
     public declarations(value: unknown): ClientPermissions {
@@ -71,37 +87,40 @@ export class PermissionCatalog {
         if (value === undefined) return Object.freeze({})
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A Client's permissions must be a record")
 
-        const resolved: Record<string, readonly string[]> = {}
+        const resolved: Partial<Record<PermissionName, readonly string[]>> = {}
 
-        for (const [name, assignment] of Object.entries(value)) {
+        for (const [unknownName, assignment] of Object.entries(value)) {
 
+            const name = parsePermissionName(unknownName)
             const permission = this.resolve(name, assignment)
 
-            if (!Array.isArray(permission)) throw new Error(`A Client-declared permission must be true or a list of values`)
+            if (!Array.isArray(permission)) throw new Error("A Client-declared permission must be true or a list of values")
 
             resolved[name] = Object.freeze(permission)
         }
 
-        return Object.freeze(resolved)
+        return Object.freeze(resolved) as ClientPermissions
     }
 
     public stored(value: unknown): Permissions {
 
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The Program permissions file is invalid")
 
-        const permissions: Permissions = {}
+        const permissions: Partial<Record<PermissionName, Permission>> = {}
 
-        for (const [name, assignment] of Object.entries(value)) {
+        for (const [unknownName, assignment] of Object.entries(value)) {
+
+            const name = parsePermissionName(unknownName)
 
             if (assignment === true) throw new Error("The Program permissions file contains unresolved shorthand")
 
             permissions[name] = this.resolve(name, assignment)
         }
 
-        return permissions
+        return permissions as Permissions
     }
 
-    public grants(grant: PermissionGrant, requested: readonly string[]) {
+    public grants<Name extends PermissionName>(grant: PermissionGrant<Name>, requested: readonly PermissionValue<Name>[]) {
 
         return Array.isArray(grant) && requested.every(value => grant.includes(value))
     }
@@ -113,35 +132,44 @@ export class PermissionCatalog {
     }
 
     /** Applies the value-less all grant before one permission's own values. */
-    public allows(name: string, all: PermissionGrant, permission: PermissionGrant, requested: readonly string[]) {
+    public allows<Name extends PermissionName>(
+        name: Name,
+        all: PermissionGrant<"all">,
+        permission: PermissionGrant<Name>,
+        requested: readonly PermissionValue<Name>[]
+    ) {
 
         this.definition(name)
 
         return this.granted(all) || this.grants(permission, requested)
     }
 
-    public combine(name: string, ...grants: PermissionGrant[]): Permission {
+    public combine<Name extends PermissionName>(name: Name, ...grants: PermissionGrant<Name>[]): Permission<Name> {
 
-        const present = grants.filter((grant): grant is readonly string[] => Array.isArray(grant))
+        const present = grants.filter((grant): grant is readonly PermissionValue<Name>[] => Array.isArray(grant))
 
         return present.length
-            ? present.reduce<string[]>((combined, grant) => this.merge(name, combined, grant), [])
+            ? present.reduce<PermissionValue<Name>[]>((combined, grant) => this.merge(name, combined, grant), [])
             : null
     }
 
-    public effective(name: string, ...grants: PermissionGrant[]): Permission {
+    public effective<Name extends PermissionName>(name: Name, ...grants: PermissionGrant<Name>[]): Permission<Name> {
 
         return this.combine(name, ...grants) ?? (grants.includes(false) ? false : null)
     }
 
-    public merge(name: string, grant: PermissionGrant, requested: readonly string[]) {
+    public merge<Name extends PermissionName>(
+        name: Name,
+        grant: PermissionGrant<Name>,
+        requested: readonly PermissionValue<Name>[]
+    ): PermissionValue<Name>[] {
 
         const current = Array.isArray(grant) ? grant : []
 
-        return this.resolve(name, [...current, ...requested]) as string[]
+        return this.resolve(name, [...current, ...requested]) as PermissionValue<Name>[]
     }
 
-    public changed(left: Permission, right: Permission) {
+    public changed<Name extends PermissionName>(left: Permission<Name>, right: Permission<Name>) {
 
         if (!Array.isArray(left) || !Array.isArray(right)) return left !== right
 
@@ -149,9 +177,7 @@ export class PermissionCatalog {
     }
 
     /** Resolves one concrete effective-grant transition when it occurs. */
-    public needReload(name: string, before: Permission, permission: Permission) {
-
-        this.definition(name)
+    public needReload<Name extends PermissionName>(name: Name, before: Permission<Name>, permission: Permission<Name>) {
 
         if (!this.changed(before, permission)) return false
 
@@ -159,15 +185,29 @@ export class PermissionCatalog {
     }
 }
 
-type PermissionGrant = readonly string[] | false | null
+type PermissionGrant<Name extends PermissionName = PermissionName> = readonly PermissionValue<Name>[] | false | null
 
-type PermissionReload = (before: Permission, permission: Permission) => boolean
+type PermissionReload<Name extends PermissionName = PermissionName> = (
+    before: Permission<Name>,
+    permission: Permission<Name>
+) => boolean
 
-type PermissionRule = PermissionDefinition & Readonly<{
-    requiresReload?: PermissionReload
+type PermissionRule<Name extends PermissionName> = Omit<PermissionDefinition<Name>, "values"> & Readonly<{
+    requiresReload?: PermissionReload<Name>
 }>
 
-function clone(permission: Permission): Permission {
+type PermissionRules = Readonly<{
+    [Name in PermissionName]: PermissionRule<Name>
+}>
+
+type StoredDefinition = Readonly<{
+    values: readonly string[]
+    default: readonly string[]
+    title: string
+    description: string
+}>
+
+function clone<Name extends PermissionName>(permission: Permission<Name>): Permission<Name> {
 
     return Array.isArray(permission) ? [...permission] : permission
 }
@@ -179,15 +219,14 @@ function strings(value: unknown, subject: string): string[] {
     return value
 }
 
-function unique(values: string[]) {
+function unique(values: readonly string[]) {
 
     return [...new Set(values)]
 }
 
-/** The complete permission domain recognized by this System release. */
+/** The presentation and activation rules for every Core-defined permission. */
 export const permissionCatalog = new PermissionCatalog({
     all: {
-        values: [],
         default: [],
         title: "All permissions",
         description: "Grant every available Client permission.",

@@ -9,7 +9,15 @@ import { type TrafficKind } from "@server/core/link-manager/auth-manager/process
 import { sdkProcess, sdkProgram } from "./sdk-records"
 import { type default as ClientProgram } from "@client/core/link-manager/auth-manager/program-manager/program"
 import { type default as ClientProcess } from "@client/core/link-manager/auth-manager/process-manager/process"
-import { isServiceKey, isUploadFile, type DesktopPreferencesUpdate, type PermissionRequest, type ProgramIconSize } from "@phreshos/core"
+import {
+    isServiceKey,
+    isUploadFile,
+    parsePermissionName,
+    type DesktopPreferencesUpdate,
+    type PermissionInput,
+    type PermissionRequest,
+    type ProgramIconSize
+} from "@phreshos/core"
 import {
     localGeometry,
     localPosition,
@@ -564,13 +572,15 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return [sdkProgram(program)]
         }
 
-        if (word === "context-permission-get") return [await authManager.permission(pane, String(args[0]))]
+        if (word === "context-permission-get") return [await authManager.permission(pane, parsePermissionName(args[0]))]
 
         if (word === "context-permission-request") {
 
             if (typeof args[0] !== "string") throw new Error("A permission request needs an identity")
 
-            return [await authManager.requestPermission(pane, args[0], String(args[1]), args[2] as PermissionRequest)]
+            const permission = parsePermissionName(args[1])
+
+            return [await authManager.requestPermission(pane, args[0], permission, args[2] as PermissionRequest<typeof permission>)]
         }
 
         if (word === "program-permissions") {
@@ -581,7 +591,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (operation !== "all" && operation !== "get" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
-            return [await programManager.permissions(address(holdProgram(args[0])), operation, typeof args[2] === "string" ? args[2] : undefined, args[3] as never)]
+            if (operation === "all") return [await programManager.permissions(address(holdProgram(args[0])), operation)]
+
+            const permission = parsePermissionName(args[2])
+
+            return [await programManager.permissions(
+                address(holdProgram(args[0])),
+                operation,
+                permission,
+                args[3] as Exclude<PermissionInput<typeof permission>, null>
+            )]
         }
 
         if (word === "startup") {

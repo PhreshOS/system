@@ -6,7 +6,8 @@ import ProgramManager from "./program-manager/program-manager"
 import { Transmitted } from "@libs/messagepack"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import { type PermissionRequest } from "@phreshos/core"
+import { parsePermissionName, type PermissionRequest } from "@phreshos/core"
+import { permissionCatalog } from "@server/core/permissions"
 import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
@@ -127,27 +128,34 @@ export default class AuthManager extends TheLink {
     @Connect("/permission/get")
     protected async permission(process: unknown, name: unknown) {
 
-        if (typeof process !== "string" || typeof name !== "string") throw new Error("A permission read is invalid")
+        if (typeof process !== "string") throw new Error("A permission read is invalid")
 
-        return this.processManager.permission(process, name)
+        return this.processManager.permission(process, parsePermissionName(name))
     }
 
     @Connect("/permission/grants")
     protected async grantsPermission(process: unknown, name: unknown, requested: unknown) {
 
-        if (typeof process !== "string" || typeof name !== "string" || !Array.isArray(requested) || requested.some(value => typeof value !== "string")) {
+        if (typeof process !== "string") {
             throw new Error("A permission check is invalid")
         }
 
-        return this.processManager.grants(process, name, requested)
+        const permission = parsePermissionName(name)
+        const values = permissionCatalog.resolve(permission, requested)
+
+        if (!Array.isArray(values)) throw new Error("A permission check is invalid")
+
+        return this.processManager.grants(process, permission, values)
     }
 
     @Connect("/permission/request")
     protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown) {
 
-        if (typeof request !== "string" || typeof process !== "string" || typeof name !== "string") throw new Error("A permission request is invalid")
+        if (typeof request !== "string" || typeof process !== "string") throw new Error("A permission request is invalid")
 
-        return this.processManager.requestPermission(process, request, name, permission as PermissionRequest)
+        const permissionName = parsePermissionName(name)
+
+        return this.processManager.requestPermission(process, request, permissionName, permission as PermissionRequest<typeof permissionName>)
     }
 
     @Subscribe("/permission/cancel")

@@ -4,7 +4,13 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Program from "./program"
-import { type Launch, type PermissionInput, type ProgramCommandChunk, type ProgramIconSize } from "@phreshos/core"
+import {
+    type Launch,
+    type PermissionInput,
+    type PermissionName,
+    type ProgramCommandChunk,
+    type ProgramIconSize
+} from "@phreshos/core"
 import StreamRelay from "@client/core/link-manager/stream-relay"
 
 /**
@@ -74,7 +80,12 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/startup", subject, operation, value)
     }
 
-    public async permissions(subject: unknown, operation: "all" | "get" | "set" | "delete", name?: string, value?: Exclude<PermissionInput, null>) {
+    public async permissions<Name extends PermissionName>(
+        subject: unknown,
+        operation: "all" | "get" | "set" | "delete",
+        name?: Name,
+        value?: Exclude<PermissionInput<Name>, null>
+    ) {
 
         return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
     }

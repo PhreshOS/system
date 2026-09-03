@@ -9,7 +9,7 @@ let unrestricted = false
 
 const authManager = {
     processManager: { processes: new Map([[owner.identity, owner]]) },
-    async grantsPermission(process: string, name: string, values: readonly string[]) {
+    async grantsPermission(process: string, name: "all", values: readonly never[]) {
 
         assert.equal(process, owner.identity)
         assert.equal(name, "all")

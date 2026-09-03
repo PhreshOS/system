@@ -5,7 +5,12 @@ import ProgramManager from "./program-manager/program-manager"
 import DialogManager from "./dialog-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import { type PermissionChange, type PermissionRequest } from "@phreshos/core"
+import {
+    type PermissionChange,
+    type PermissionName,
+    type PermissionRequest,
+    type PermissionValue
+} from "@phreshos/core"
 import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
@@ -68,19 +73,24 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/appearance/update", value)
     }
 
-    public async permission(process: string, name: string) {
+    public async permission<Name extends PermissionName>(process: string, name: Name) {
 
         return await this.$outbound.publishFirst("/permission/get", process, name)
     }
 
-    public async grantsPermission(process: string, name: string, requested: readonly string[]) {
+    public async grantsPermission<Name extends PermissionName>(process: string, name: Name, requested: readonly PermissionValue<Name>[]) {
 
         return await this.$outbound.publishFirst("/permission/grants", process, name, requested) as boolean
     }
 
-    public async requestPermission(process: string, request: string, name: string, permission: PermissionRequest) {
+    public async requestPermission<Name extends PermissionName>(
+        process: string,
+        request: string,
+        name: Name,
+        permission: PermissionRequest<Name>
+    ): Promise<PermissionChange<Name>> {
 
-        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as PermissionChange
+        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as PermissionChange<Name>
     }
 
     public async cancelPermission(process: string, request: string) {

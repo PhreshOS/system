@@ -1,5 +1,6 @@
 import type Application from "@server/core/application"
 import { uploadLimit } from "@server/core/upload-manager"
+import { parsePermissionName, type PermissionInput } from "@phreshos/core"
 
 /** Execute one operation belonging to the shared System SDK contract. */
 export default async function apiRequest(application: Application, value: unknown, signal: AbortSignal) {
@@ -47,9 +48,14 @@ export default async function apiRequest(application: Application, value: unknow
         if (request.operation === "permissions") {
 
             if (request.permissionOperation === "all") return system.programPermissions(program)
-            if (request.permissionOperation === "get") return system.programPermission(program, String(request.name))
-            if (request.permissionOperation === "set") return system.setProgramPermission(program, String(request.name), request.permission as never)
-            if (request.permissionOperation === "delete") return system.deleteProgramPermission(program, String(request.name))
+            if (request.permissionOperation === "get") return system.programPermission(program, parsePermissionName(request.name))
+            if (request.permissionOperation === "set") {
+
+                const permission = parsePermissionName(request.name)
+
+                return system.setProgramPermission(program, permission, request.permission as Exclude<PermissionInput<typeof permission>, null>)
+            }
+            if (request.permissionOperation === "delete") return system.deleteProgramPermission(program, parsePermissionName(request.name))
 
             throw new Error(`The Program permissions API does not know "${String(request.permissionOperation)}"`)
         }

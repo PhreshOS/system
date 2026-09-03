@@ -2,7 +2,17 @@ import type Application from "./application"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
-import type { ClientLaunch, Launch, PermissionInput, Position, ServerLaunch, ShellOptions, Size, WindowGeometry } from "@phreshos/core"
+import type {
+    ClientLaunch,
+    Launch,
+    PermissionInput,
+    PermissionName,
+    Position,
+    ServerLaunch,
+    ShellOptions,
+    Size,
+    WindowGeometry
+} from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
@@ -85,17 +95,21 @@ export default class System {
         return this.programManager.permissions(program)
     }
 
-    public programPermission(program: Program, name: string) {
+    public programPermission<Name extends PermissionName>(program: Program, name: Name) {
 
         return this.programManager.permission(program, name)
     }
 
-    public setProgramPermission(program: Program, name: string, permission: Exclude<PermissionInput, null>) {
+    public setProgramPermission<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        permission: Exclude<PermissionInput<Name>, null>
+    ) {
 
         return this.programManager.setPermission(program, name, permission)
     }
 
-    public deleteProgramPermission(program: Program, name: string) {
+    public deleteProgramPermission<Name extends PermissionName>(program: Program, name: Name) {
 
         return this.programManager.deletePermission(program, name)
     }
