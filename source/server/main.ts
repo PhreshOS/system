@@ -1,8 +1,9 @@
 import { displayName, name, version } from "@/package.json"
-import view, { defaultHome, environmentHome, environmentPort, requestedHome } from "./view/view"
+import view, { defaultHome, environmentHome, environmentPorts, portRange, requestedHome, requestedPorts } from "./view/view"
 import { fileURLToPath } from "node:url"
 
 const requested = await requestedHome(process.argv)
+const requestedPortSelection = await requestedPorts(process.argv)
 const home = environmentHome(name, process.env)
     ?? requested
     ?? defaultHome(process.argv)
@@ -20,7 +21,7 @@ await view({
 
     home,
 
-    port: environmentPort(name, process.env) ?? 4300,
+    ports: environmentPorts(name, process.env) ?? requestedPortSelection ?? portRange(4300, 4399),
 
     assets: fileURLToPath(new URL("../client", import.meta.url))
 })
