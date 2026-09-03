@@ -185,8 +185,7 @@ export default class ProgramManager extends TheLink {
         const permission = permissionCatalog.resolve(name, value)
         if (permissionCatalog.changed(before, permission)) {
 
-            permissions[name] = permission
-            writePermissions(program, permissions)
+            writePermissions(program, { ...permissions, [name]: permission })
         }
 
         return await this.permissionChange(program, name, before, permission)

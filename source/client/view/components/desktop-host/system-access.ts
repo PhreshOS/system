@@ -1,7 +1,7 @@
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import type { ServiceKey } from "@phreshos/core"
+import type { PermissionName, PermissionValue, ServiceKey } from "@phreshos/core"
 
 const denied = "Execution is not permitted"
 
@@ -35,23 +35,46 @@ export default class SystemAccess {
         return await this.authManager.grantsPermission(this.pane, "all", [])
     }
 
+    public async canProgram(program: Pick<Program, "identity">) {
+
+        return this.ownsProgram(program)
+            || await this.authManager.grantsPermission(this.pane, "programs", [program.identity])
+    }
+
+    public async canProcess(process: Pick<Process, "program">) {
+
+        return this.ownsProcess(process)
+            || await this.authManager.grantsPermission(this.pane, "programs", [process.program])
+    }
+
+    public async canService(service: ServiceKey) {
+
+        const program = this.serviceProgram(service)
+
+        if (program === null) return await this.all()
+        if (program === this.owner().program) return true
+
+        return await this.authManager.grantsPermission(this.pane, "programs", [program])
+            || await this.authManager.grantsPermission(this.pane, "services", [program])
+    }
+
     public async program(program: Program) {
 
-        if (!this.ownsProgram(program) && !await this.all()) throw new Error(denied)
+        if (!await this.canProgram(program)) throw new Error(denied)
 
         return program
     }
 
     public async process(process: Process) {
 
-        if (!this.ownsProcess(process) && !await this.all()) throw new Error(denied)
+        if (!await this.canProcess(process)) throw new Error(denied)
 
         return process
     }
 
     public async service(service: ServiceKey) {
 
-        if (!this.ownsService(service) && !await this.all()) throw new Error(denied)
+        if (!await this.canService(service)) throw new Error(denied)
 
         return service
     }
@@ -59,6 +82,16 @@ export default class SystemAccess {
     public async requireAll() {
 
         if (!await this.all()) throw new Error(denied)
+    }
+
+    public async requirePrograms() {
+
+        await this.require("programs", [])
+    }
+
+    public async require<Name extends PermissionName>(name: Name, values: readonly PermissionValue<Name>[]) {
+
+        if (!await this.authManager.grantsPermission(this.pane, name, values)) throw new Error(denied)
     }
 
     private owner() {

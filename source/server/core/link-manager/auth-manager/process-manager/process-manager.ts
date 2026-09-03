@@ -1446,10 +1446,10 @@ export default class ProcessManager extends TheLink {
 
         if (name !== "all" && permissionCatalog.granted(this.effectivePermission(process, "all"))) {
 
-            return permissionChange([...permissionCatalog.definition(name).values], false)
+            return permissionChange([...permissionCatalog.definition(name).default], false)
         }
 
-        if (permissionCatalog.grants(effective, requested)) return permissionChange(effective, false)
+        if (permissionCatalog.grants(name, effective, requested)) return permissionChange(effective, false)
         if (effective === false) return Object.freeze({ permission: false, needReload: false })
 
         const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)

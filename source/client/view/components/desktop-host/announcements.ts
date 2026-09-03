@@ -19,8 +19,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
             const access = new SystemAccess(authManager, pane)
 
-            if (access.ownsProgram({ identity: program })) traffic.emit(pane, route, ...message).catch(() => undefined)
-            else access.all().then(granted => {
+            access.canProgram({ identity: program }).then(granted => {
 
                 if (granted) return traffic.emit(pane, route, ...message)
             }).catch(() => undefined)

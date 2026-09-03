@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@server/core/outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceKey, type DesktopSurfaceSnapshot, type ShellOptions } from "@phreshos/core"
+import { isServiceKey, type DesktopSurfaceSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@libs/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -37,8 +37,8 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly trafficSubscriptions = new Map<string, TrafficSubscription>()
 
-    /** Program ownership of each System-routed subscription. */
-    private readonly systemSubscriptions = new Map<string, string | null>()
+    /** The exact System authority exercised by each routed subscription. */
+    private readonly systemSubscriptions = new Map<string, SystemSubscriptionTarget>()
 
     private readonly desktopPreferencesSubscriptions = new Set<string>()
 
@@ -350,10 +350,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (operation === "service-follow") {
 
-            this.systemSubscriptions.set(
-                subscription,
-                isServiceKey(target) ? this.systemAccess.serviceProgram(target) : null
-            )
+            if (isServiceKey(target)) this.systemSubscriptions.set(subscription, { domain: "service", service: target })
 
             return
         }
@@ -366,7 +363,7 @@ export default class ClientProcessBoundary extends TheLink {
                     ? this.authManager.processManager.processes.get(target.identity)
                     : undefined
 
-            this.systemSubscriptions.set(subscription, process?.program ?? null)
+            if (process) this.systemSubscriptions.set(subscription, { domain: "program", program: process.program })
 
             return
         }
@@ -382,26 +379,20 @@ export default class ClientProcessBoundary extends TheLink {
         if (route !== "observed" && route !== "emitted" && route !== "service-event") return true
         if (typeof subscription !== "string" || !this.systemSubscriptions.has(subscription)) return false
 
-        const program = this.systemSubscriptions.get(subscription)
+        const target = this.systemSubscriptions.get(subscription)
 
-        return program !== null && program !== undefined && this.systemAccess.ownsProgram({ identity: program })
-            ? true
-            : await this.systemAccess.all()
+        return target?.domain === "service"
+            ? await this.systemAccess.canService(target.service)
+            : target?.domain === "program"
+                ? await this.systemAccess.canProgram({ identity: target.program })
+                : false
     }
 
     private async visibleReferences(values: unknown[]) {
 
-        let unrestricted: Promise<boolean> | null = null
-
         const visible = async (reference: EndpointReference) => {
 
-            const process = reference.process
-
-            if (this.systemAccess.ownsProgram(process.program)) return reference
-
-            unrestricted ??= this.systemAccess.all()
-
-            return await unrestricted ? reference : null
+            return await this.systemAccess.canProgram(reference.process.program) ? reference : null
         }
 
         return await Promise.all(values.map(async value => {
@@ -1035,6 +1026,10 @@ interface EndpointSubscription {
 
     subject: string | null
 }
+
+type SystemSubscriptionTarget =
+    | Readonly<{ domain: "program", program: string }>
+    | Readonly<{ domain: "service", service: ServiceKey }>
 
 function desktopPreferencesSubscription(subscription: EndpointSubscription) {
 

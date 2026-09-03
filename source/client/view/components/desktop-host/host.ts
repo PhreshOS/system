@@ -164,7 +164,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         if (word === "host-program-list") {
 
             const programs = [...programManager.programs.values()].filter(program => args[0] !== true || program.installed)
-            const visible = await access.all() ? programs : programs.filter(program => access.ownsProgram(program))
+            const visible = []
+
+            for (const program of programs) if (await access.canProgram(program)) visible.push(program)
 
             return [visible.map(sdkProgram)]
         }
@@ -180,7 +182,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "host-program-create" || word === "host-program-force-create") {
 
-            await access.requireAll()
+            await access.requirePrograms()
 
             const identity = word === "host-program-create"
                 ? await programManager.create(args[0])
@@ -192,7 +194,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         if (word === "host-process-list") {
 
             const processes = [...processManager.processes.values()]
-            const visible = await access.all() ? processes : processes.filter(process => access.ownsProcess(process))
+            const visible = []
+
+            for (const process of processes) if (await access.canProcess(process)) visible.push(process)
 
             return [visible.map(record)]
         }
@@ -210,7 +214,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "updateAppearance") {
 
-            await access.requireAll()
+            await access.require("appearance", [])
 
             await authManager.updateAppearance(args[0])
 
@@ -221,7 +225,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "updateDesktopPreferences") {
 
-            await access.requireAll()
+            await access.require("desktopPreferences", [])
 
             const preferences = desktopPreferencesUpdate(args[0])
 
@@ -441,7 +445,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!access.ownsProcess(target) && !await access.all()) {
+            if (!await access.canProcess(target)) {
 
                 if (reportImpossible) throw new Error("Execution is not permitted")
 
@@ -492,7 +496,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 return []
             }
 
-            if (!access.ownsProcess(target) && !await access.all()) {
+            if (!await access.canProcess(target)) {
 
                 if (reportImpossible) throw new Error("Execution is not permitted")
 
@@ -615,7 +619,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "fork") {
 
-            await access.requireAll()
+            await access.requirePrograms()
 
             const identity = await programManager.fork(args[0], String(args[1]))
             const program = programManager.programs.get(identity)
