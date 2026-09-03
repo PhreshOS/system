@@ -56,6 +56,12 @@ export default class AuthManager extends TheLink {
         if (!session) throw new Error("Unauthorized")
     }
 
+    /** Identity of the connection currently invoking an authenticated operation. */
+    public connection() {
+
+        return this.linkManager.connection().identity
+    }
+
     @Intercept("inbound")
     protected authenticate(authorization: string, ...values: unknown[]) {
 

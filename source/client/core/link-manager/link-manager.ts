@@ -8,7 +8,7 @@ import { TheLink } from "@the-link/core"
 import { Property } from "@the-link/core"
 import Application from "../application"
 import { v4 as uuidv4 } from "uuid"
-import { type Outcome, unwrap } from "@server/core/outcome"
+import { type RequestOutcome, unwrap } from "@libs/request-outcome"
 
 export default class LinkManager extends TheLink {
 
@@ -16,23 +16,19 @@ export default class LinkManager extends TheLink {
 
     public readonly sourceLink: TheLink
 
-    public readonly connectionIdentity: string
-
     /** Immediate unresolved System Appearance and future authoritative updates. */
     public readonly appearance: Property<Appearance>
 
     /** Complete effective local Desktop preferences and future updates. */
     public readonly desktopPreferences: Property<DesktopPreferences>
 
-    public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, connectionIdentity: string, desktopPreferences: DesktopPreferences) {
+    public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, desktopPreferences: DesktopPreferences) {
 
         super()
 
         this.application = application
 
         this.sourceLink = sourceLink
-
-        this.connectionIdentity = connectionIdentity
 
         this.subscribeTo(this.sourceLink)
 
@@ -56,7 +52,7 @@ export default class LinkManager extends TheLink {
 
         await this.sourceLink.$outbound.publish(event, responseUuid, ...values)
 
-        const response = await this.sourceLink.$inbound.waitFirst<Outcome<unknown[]>>(responseUuid)
+        const response = await this.sourceLink.$inbound.waitFirst<RequestOutcome<unknown[]>>(responseUuid)
 
         return unwrap(response)
     }
@@ -85,6 +81,6 @@ export default class LinkManager extends TheLink {
 
     public async sessionAuthenticate(authorization: string | null) {
 
-        return await this.$outbound.publishFirst<[string, TransmittedAuthManager] | false>("/session-authenticate", this.connectionIdentity, authorization)
+        return await this.$outbound.publishFirst<[string, TransmittedAuthManager] | false>("/session-authenticate", authorization)
     }
 }

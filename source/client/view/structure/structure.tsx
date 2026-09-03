@@ -1,7 +1,6 @@
 import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
 import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
-import { SocketLink } from "@the-link/client"
 import LinkManager from "@client/core/link-manager/link-manager"
 import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
 import Loading from "../components/loading"
@@ -48,22 +47,23 @@ function Desktop() {
 
     const [connectionRevision, setConnectionRevision] = useState(0)
 
-    const internal = ReactTunnel.useFactory(application.clientLink.$internal)
+    const subscribe = useCallback(function () {
 
-    internal.useSubscribe("subscribe", useCallback(function (socketLink: SocketLink<[TransmittedLinkManager, string]>) {
+        return application.httpClient.onSubscribe<TransmittedLinkManager>(function (link) {
 
-        const [payload, connectionIdentity] = socketLink.payload
+            const manager = new LinkManager(application, link, link.payload, preferences)
 
-        const manager = new LinkManager(application, socketLink, payload, connectionIdentity, preferences)
+            link.$internal.subscribeOnce("unsubscribe", () => {
+                setLinkManager(current => current === manager ? null : current)
+            })
 
-        socketLink.$internal.subscribeOnce("unsubscribe", () => {
-            setLinkManager(current => current === manager ? null : current)
+            setLinkManager(manager)
         })
+    }, [application, preferences])
 
-        setLinkManager(manager)
-    }, [application, preferences]))
+    useEffect(subscribe, [subscribe])
 
-    const connection = usePromise(async () => application.clientLink.subscribe(), [application, connectionRevision])
+    const connection = usePromise(async () => application.httpClient.subscribe(), [application, connectionRevision])
 
     if (connection.exception) return <FailedConnection
 

@@ -1,4 +1,4 @@
-import { ClientLink } from "@the-link/client"
+import { HttpClient } from "@the-link/http/client"
 import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaType } from "@server/core/protocol/proxy"
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
@@ -15,7 +15,7 @@ export default class Application {
 
     public readonly doors: Doors
 
-    public readonly clientLink: ClientLink
+    public readonly httpClient: HttpClient
 
     public constructor(name: string, displayName: string, version: string, doors: Doors) {
 
@@ -27,11 +27,11 @@ export default class Application {
 
         this.doors = doors
 
-        this.clientLink = new ClientLink(this.doors.link)
+        this.httpClient = new HttpClient(this.doors.link)
 
-        this.clientLink.setSerialize(messagepack.serialize)
+        this.httpClient.setSerialize(messagepack.serialize)
 
-        this.clientLink.setDeserialize(messagepack.deserialize)
+        this.httpClient.setDeserialize(messagepack.deserialize)
     }
 
     // A finite browser body keeps its length, so HTTP/1 can stream it from its

@@ -6,6 +6,7 @@ import { Transmitted } from "@libs/messagepack"
 import Application from "../application"
 import { type Appearance } from "@phreshos/core"
 import { type AuthenticationState, type RegistrationError } from "../authentication/authentication"
+import { AsyncLocalStorage } from "node:async_hooks"
 
 export default class LinkManager extends TheLink {
 
@@ -13,6 +14,8 @@ export default class LinkManager extends TheLink {
 
     /** Live desktop connections. Authentication sessions outlive these links. */
     public readonly connections = new Map<string, Connection>()
+
+    private readonly connectionContext = new AsyncLocalStorage<Connection>()
 
     public readonly authManager: AuthManager
 
@@ -34,22 +37,38 @@ export default class LinkManager extends TheLink {
 
     public addConnection(link: TheLink) {
 
-        const identity = crypto.randomUUID()
+        const connection = new Connection(this, link)
 
-        this.connections.set(identity, { link, session: null })
+        this.connections.set(connection.identity, connection)
 
-        return identity
+        return connection
     }
 
-    public async removeConnection(identity: string) {
+    public async removeConnection(connection: Connection) {
 
-        const connection = this.connections.get(identity)
+        if (this.connections.get(connection.identity) !== connection) return
 
-        this.authManager.processManager.releaseConnection(identity)
+        this.authManager.processManager.releaseConnection(connection.identity)
 
-        this.connections.delete(identity)
+        this.connections.delete(connection.identity)
 
-        if (connection?.session && !this.connected(connection.session)) await this.application.authentication.disconnectSession(connection.session)
+        if (connection.session && !this.connected(connection.session)) await this.application.authentication.disconnectSession(connection.session)
+    }
+
+    public receive(connection: Connection, event: string, ...values: unknown[]) {
+
+        if (this.connections.get(connection.identity) !== connection) throw new Error("Connection not found")
+
+        return this.connectionContext.run(connection, () => this.$inbound.publish(event, ...values))
+    }
+
+    public connection() {
+
+        const connection = this.connectionContext.getStore()
+
+        if (!connection || this.connections.get(connection.identity) !== connection) throw new Error("This operation requires a live connection")
+
+        return connection
     }
 
     @Subscribe("/owner/state")
@@ -104,11 +123,9 @@ export default class LinkManager extends TheLink {
     }
 
     @Subscribe("/session-authenticate")
-    protected async sessionAuthenticate(connectionIdentity: string, authorization: string | null) {
+    protected async sessionAuthenticate(authorization: string | null) {
 
-        const connection = this.connections.get(connectionIdentity)
-
-        if (!connection) throw new Error("Connection not found")
+        const connection = this.connection()
 
         if (!authorization) {
 
@@ -205,11 +222,18 @@ export type TransmittedLinkManager = Transmitted<LinkManager>
 
 export type RegistrationResponse = { authorization: string } | { error: RegistrationError }
 
-interface Connection {
+export class Connection {
 
-    link: TheLink
+    public readonly identity = crypto.randomUUID()
 
-    session: string | null
+    public session: string | null = null
+
+    public constructor(private readonly manager: LinkManager, public readonly link: TheLink) {}
+
+    public publish(event: string, ...values: unknown[]) {
+
+        return this.manager.receive(this, event, ...values)
+    }
 }
 
 function isAuthorization(value: unknown): value is { version: 1, session: string } {

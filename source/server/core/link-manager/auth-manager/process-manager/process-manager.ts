@@ -12,7 +12,7 @@ import ServerProcessBoundary from "./server-process-boundary"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import ClientProcessForwarder from "./client-process-forwarder"
 import HostTraffic from "./host-traffic"
-import { failed, succeeded, type Outcome } from "@server/core/outcome"
+import { failed, succeeded, type RequestOutcome } from "@libs/request-outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices from "./endpoint-services"
@@ -583,14 +583,14 @@ export default class ProcessManager extends TheLink {
 
         if (back.half === "outside") {
 
-            this.outsideQuestions.answer(values[1], values[4] as Outcome)
+            this.outsideQuestions.answer(values[1], values[4] as RequestOutcome)
 
             return true
         }
 
         const process = this.processes.get(back.identity)
 
-        const outcome = values[4] as Outcome
+        const outcome = values[4] as RequestOutcome
 
         if (answerer && process) {
 
@@ -1292,65 +1292,65 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/own")
-    protected ownClientFrame(connection: string, pane: string, owner: string) {
+    protected ownClientFrame(pane: string, owner: string) {
 
-        this.ownClient(connection, pane, owner)
+        this.ownClient(this.authManager.connection(), pane, owner)
     }
 
     @Subscribe("/frame/release")
-    protected releaseClientFrame(connection: string, pane: string, owner: string) {
+    protected releaseClientFrame(pane: string, owner: string) {
 
-        this.releaseClient(connection, pane, owner)
+        this.releaseClient(this.authManager.connection(), pane, owner)
     }
 
     @Subscribe("/frame/subscribe")
-    protected subscribeClientFrame(connection: string, pane: string, owner: string, subscription: string, kind: unknown, event: unknown) {
+    protected subscribeClientFrame(pane: string, owner: string, subscription: string, kind: unknown, event: unknown) {
 
         if (kind !== "publish" || event !== null && typeof event !== "string") return
 
-        this.registerClientSubscription(connection, pane, owner, subscription, event)
+        this.registerClientSubscription(this.authManager.connection(), pane, owner, subscription, event)
     }
 
     @Subscribe("/frame/unsubscribe")
-    protected unsubscribeClientFrame(connection: string, pane: string, owner: string, subscription: string) {
+    protected unsubscribeClientFrame(pane: string, owner: string, subscription: string) {
 
-        this.removeClientSubscription(connection, pane, owner, subscription)
+        this.removeClientSubscription(this.authManager.connection(), pane, owner, subscription)
     }
 
     @Subscribe("/frame/observe")
-    protected observeClientFrame(connection: string, pane: string, owner: string, subscription: string, target: unknown, half: string, kind: unknown, event: unknown, reportImpossible: unknown) {
+    protected observeClientFrame(pane: string, owner: string, subscription: string, target: unknown, half: string, kind: unknown, event: unknown, reportImpossible: unknown) {
 
         if (!isTrafficKind(kind)) return
 
         if (event !== null && typeof event !== "string") return
 
-        this.registerClientObservation(connection, pane, owner, subscription, target, half, kind, event, reportImpossible === true)
+        this.registerClientObservation(this.authManager.connection(), pane, owner, subscription, target, half, kind, event, reportImpossible === true)
     }
 
     @Subscribe("/frame/unobserve")
-    protected unobserveClientFrame(connection: string, pane: string, owner: string, subscription: string) {
+    protected unobserveClientFrame(pane: string, owner: string, subscription: string) {
 
-        this.removeClientObservation(connection, pane, owner, subscription)
+        this.removeClientObservation(this.authManager.connection(), pane, owner, subscription)
     }
 
     @Subscribe("/frame/follow")
-    protected followClientFrame(connection: string, pane: string, owner: string, subscription: string, target: unknown, half: string, event: unknown, reportImpossible: unknown) {
+    protected followClientFrame(pane: string, owner: string, subscription: string, target: unknown, half: string, event: unknown, reportImpossible: unknown) {
 
         if (event !== null && typeof event !== "string") return
 
-        this.registerClientFollow(connection, pane, owner, subscription, target, half, event, reportImpossible === true)
+        this.registerClientFollow(this.authManager.connection(), pane, owner, subscription, target, half, event, reportImpossible === true)
     }
 
     @Subscribe("/frame/unfollow")
-    protected unfollowClientFrame(connection: string, pane: string, owner: string, subscription: string) {
+    protected unfollowClientFrame(pane: string, owner: string, subscription: string) {
 
-        this.removeClientFollow(connection, pane, owner, subscription)
+        this.removeClientFollow(this.authManager.connection(), pane, owner, subscription)
     }
 
     @Subscribe("/frame/service/follow")
-    protected followClientService(connection: string, pane: string, owner: string, subscription: unknown, key: unknown, scope: unknown, event: unknown) {
+    protected followClientService(pane: string, owner: string, subscription: unknown, key: unknown, scope: unknown, event: unknown) {
 
-        const boundary = this.clientForwarders.get(this.clientOwnerKey(connection, pane))
+        const boundary = this.clientForwarders.get(this.clientOwnerKey(this.authManager.connection(), pane))
 
         if (boundary?.owner !== owner || typeof subscription !== "string" || !isServiceKey(key)) return
 
@@ -1362,15 +1362,15 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/service/unfollow")
-    protected unfollowClientService(connection: string, pane: string, owner: string, subscription: unknown) {
+    protected unfollowClientService(pane: string, owner: string, subscription: unknown) {
 
-        const boundary = this.clientForwarders.get(this.clientOwnerKey(connection, pane))
+        const boundary = this.clientForwarders.get(this.clientOwnerKey(this.authManager.connection(), pane))
 
         if (boundary?.owner === owner && typeof subscription === "string") boundary.unfollowService(subscription)
     }
 
     @Subscribe("/frame/log")
-    protected logClientFrame(_connection: string, pane: string, kind: unknown, content: unknown) {
+    protected logClientFrame(pane: string, kind: unknown, content: unknown) {
 
         if (typeof kind !== "string" || typeof content !== "string") return
 
@@ -2191,7 +2191,7 @@ export default class ProcessManager extends TheLink {
                 let stopExit: () => void = () => undefined
                 let stopEndpoint: () => void = () => undefined
 
-                const finish = (outcome?: Outcome<unknown[]>) => {
+                const finish = (outcome?: RequestOutcome<unknown[]>) => {
 
                     if (!active) return
 
@@ -2352,7 +2352,9 @@ export default class ProcessManager extends TheLink {
     // losing the session therefore removes the target's queued request even
     // when the desktop can no longer send an explicit cancellation.
     @Subscribe("/frame/ask")
-    protected askClientFrame(connection: string, source: string, identity: string, values: unknown[]) {
+    protected askClientFrame(source: string, identity: string, values: unknown[]) {
+
+        const connection = this.authManager.connection()
 
         const question = String(values[0])
 
@@ -2367,7 +2369,9 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/service/ask")
-    protected askClientService(connection: string, source: string, key: unknown, values: unknown[]) {
+    protected askClientService(source: string, key: unknown, values: unknown[]) {
+
+        const connection = this.authManager.connection()
 
         if (!isServiceKey(key) || key.endpoint !== "server" || typeof values[0] !== "string" || typeof values[1] !== "string" || typeof values[2] !== "string") {
 
@@ -2389,9 +2393,9 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/cancel")
-    protected cancelClientFrame(connection: string, source: string, question: string) {
+    protected cancelClientFrame(source: string, question: string) {
 
-        this.clientForwarders.get(this.clientOwnerKey(connection, source))?.cancel(question)
+        this.clientForwarders.get(this.clientOwnerKey(this.authManager.connection(), source))?.cancel(question)
     }
 
     // Where both roads meet: a question named by whoever is waiting for
@@ -2426,7 +2430,9 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/end-end")
-    protected async endEndClientFrame(connection: string, identity: string, values: unknown[]) {
+    protected async endEndClientFrame(identity: string, values: unknown[]) {
+
+        const connection = this.authManager.connection()
 
         // The payload crosses The Link once as its native event tuple. The
         // route still supplies the speaker; no nested wire format is needed.

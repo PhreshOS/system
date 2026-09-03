@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import type { Outcome } from "@server/core/outcome"
+import type { RequestOutcome } from "@libs/request-outcome"
 import type ServerProcessBoundary from "./server-process-boundary"
 
 /** Active questions from trusted System views that are not Program Endpoints. */
@@ -37,7 +37,7 @@ export default class OutsideQuestions {
         })
     }
 
-    public answer(question: string, outcome: Outcome) {
+    public answer(question: string, outcome: RequestOutcome) {
 
         const pending = this.take(question)
 

@@ -1,22 +1,22 @@
-import { ServerLink } from "@the-link/server"
+import { failed, succeeded } from "@libs/request-outcome"
 import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
+import { HttpServer } from "@the-link/http/server"
 import messagepack from "@libs/messagepack"
-import { failed, succeeded } from "@server/core/outcome"
 
 export default function (application: Application, debugging: boolean) {
 
-    const serverLink = new ServerLink()
+    const http = new HttpServer()
 
-    if (debugging) serverLink.enableDebugging()
+    if (debugging) http.enableDebugging()
 
-    serverLink.setSerialize(messagepack.serialize)
+    http.setSerialize(messagepack.serialize)
 
-    serverLink.setDeserialize(messagepack.deserialize)
+    http.setDeserialize(messagepack.deserialize)
 
-    serverLink.onSubscribe(function (socketLink) {
+    http.onSubscribe(function (socketLink) {
 
-        const connectionIdentity = application.linkManager.addConnection(socketLink)
+        const connection = application.linkManager.addConnection(socketLink)
 
         const stopForwarding = socketLink.$inbound.forwardTo(async function (event, responseUuid: string | null, ...values: unknown[]) {
 
@@ -24,21 +24,14 @@ export default function (application: Application, debugging: boolean) {
             // envelope. Route it once and do not manufacture an acknowledgement.
             if (responseUuid === null) {
 
-                const routed = connectionOwned(event) ? [values[0], connectionIdentity, ...values.slice(1)] : values
-
-                application.linkManager.$inbound.publish(event, ...routed).catch(() => undefined)
+                connection.publish(event, ...values).catch(() => undefined)
 
                 return
             }
 
             try {
 
-                // Every Client-frame operation is owned by this socket. Insert
-                // the connection here, where it comes from the connection
-                // itself and cannot be supplied by an iframe.
-                const routed = connectionOwned(event) ? [values[0], connectionIdentity, ...values.slice(1)] : values
-
-                const results = await application.linkManager.$inbound.publish(event, ...routed)
+                const results = await connection.publish(event, ...values)
 
                 await socketLink.$outbound.publish(responseUuid, succeeded(results))
             }
@@ -51,20 +44,15 @@ export default function (application: Application, debugging: boolean) {
 
         socketLink.$internal.subscribeOnce("unsubscribe", async function () {
 
-            await application.linkManager.removeConnection(connectionIdentity)
+            await application.linkManager.removeConnection(connection)
 
             stopForwarding()
         })
 
-        return [application.linkManager, connectionIdentity]
+        return application.linkManager
     })
 
-    serverLink.prepareConnection(upgradeWebSocket)
+    http.prepareConnection(upgradeWebSocket)
 
-    return serverLink.app
-}
-
-function connectionOwned(event: string) {
-
-    return event.startsWith("/auth/frame/") || event.startsWith("/auth/process/frame/")
+    return http.app
 }
