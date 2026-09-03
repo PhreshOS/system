@@ -1,14 +1,13 @@
 import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
-import { Transmitted } from "@the-link/messagepack"
 import ServerProcessBoundary from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
 import { type Layer } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
-import type { ServerRuntime } from "./server-runtime"
+import type { ServerRuntime } from "@server/core/server-runtime"
 import type { PermissionName, PermissionValue } from "@phreshos/core"
 
 /**
@@ -54,13 +53,8 @@ export default class Process {
     // When this instance began. A process's birth is its construction,
     // so nothing hands this over — there is no earlier moment to mean.
     //
-    // A `Date`, and the link keeps it one: MessagePack carries dates, and
-    // `libs/messagepack` leaves them alone rather than letting `toJSON`
-    // degrade them to strings. The other two roads out of here speak
-    // plain JSON — a program's channel and this machine's door — so on
-    // those it arrives as the ISO string a date serialises to. That is
-    // harmless while nothing reads it there, and would stop being
-    // harmless the moment a kit declared it a `Date`.
+    // A `Date` in the public representation contract. Every boundary adapter
+    // must preserve that value without changing the domain shape.
     public readonly startedAt = new Date()
 
     // The current server incarnation. Null is current live state, not a
@@ -353,7 +347,18 @@ export type HostedProcess = ReturnType<Process["hosted"]>
 /** Public Process data from which an endpoint SDK reconstructs a handle. */
 export type ProcessRecord = ReturnType<Process["record"]>
 
-export type TransmittedProcess = Transmitted<HostedProcess>
+export type ProcessSnapshot = Omit<HostedProcess, "client"> & {
+
+    client: HostedProcess["client"] extends infer Client
+
+        ? Client extends { window: Window }
+
+            ? Omit<Client, "window"> & { window: ReturnType<Window["toJSON"]> }
+
+            : Client
+
+        : never
+}
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
 

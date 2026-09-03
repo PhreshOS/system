@@ -5,9 +5,8 @@ import Program from "../program-manager/program"
 import { Layer } from "../program-manager/config"
 import Window, { Position, Size } from "./window"
 import { TheLink } from "@the-link/core"
-import { Transmitted } from "@the-link/messagepack"
 import AuthManager from "../auth-manager"
-import Process, { type HostedProcess, type ProcessLaunch } from "./process"
+import Process, { type HostedProcess, type ProcessLaunch, type ProcessSnapshot } from "./process"
 import ServerProcessBoundary from "./server-process-boundary"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import ClientProcessForwarder from "./client-process-forwarder"
@@ -15,7 +14,7 @@ import HostTraffic from "./host-traffic"
 import { failed, succeeded, type RequestOutcome } from "@libs/request-outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
-import EndpointServices from "./endpoint-services"
+import EndpointServices, { serviceTimeout } from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
 import {
     isServiceKey,
@@ -33,7 +32,7 @@ import {
     type WindowGeometry,
     type WindowLayer
 } from "@phreshos/core"
-import type { ServerRuntime } from "./server-runtime"
+import type { ServerRuntime } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
 /**
@@ -73,6 +72,9 @@ export default class ProcessManager extends TheLink {
     // The remote half of each desktop boundary lease. It owns only that
     // document's forwarding interests and disappears with the lease.
     private readonly clientForwarders = new Map<string, ClientProcessForwarder>()
+
+    /** Live observations owned by an authenticated System representation. */
+    private readonly connectionObservations = new Map<string, Map<string, () => void>>()
 
     // Endpoint transitions for one Process are serialized. State is changed in
     // one place, so two simultaneous stop requests cannot both believe the
@@ -267,6 +269,46 @@ export default class ProcessManager extends TheLink {
     public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
 
         return this.services.follow(key, scope, event, subscriber)
+    }
+
+    /** Publish to an Endpoint from the invoking System representation. */
+    @Subscribe("/endpoint/publish")
+    protected async publishForConnection(target: unknown, endpoint: unknown, event: unknown, payload: unknown) {
+
+        if (typeof event !== "string") throw new Error("An Endpoint event must be text")
+
+        const process = this.find(String(target))
+
+        await this.publishFromOutside(process.identity, half(endpoint), event, payload)
+    }
+
+    /** Ask a Server Endpoint from the invoking System representation. */
+    @Subscribe("/endpoint/ask")
+    protected askForConnection(target: unknown, event: unknown, payload: unknown, timeout: unknown) {
+
+        if (typeof event !== "string") throw new Error("An Endpoint event must be text")
+
+        const process = this.find(String(target))
+
+        return this.askFromOutside(process.identity, event, payload, serviceTimeout(timeout), this.authManager.connectionSignal())
+    }
+
+    /** Publish through a Service from the invoking System representation. */
+    @Subscribe("/service/publish")
+    protected async publishServiceForConnection(key: unknown, event: unknown, payload: unknown) {
+
+        if (typeof event !== "string") throw new Error("A Service event must be text")
+
+        await this.publishServiceFromOutside(key, event, payload)
+    }
+
+    /** Ask a Server Service from the invoking System representation. */
+    @Subscribe("/service/ask")
+    protected askServiceForConnection(key: unknown, event: unknown, payload: unknown, timeout: unknown) {
+
+        if (typeof event !== "string") throw new Error("A Service event must be text")
+
+        return this.askServiceFromOutside(key, event, payload, serviceTimeout(timeout), this.authManager.connectionSignal())
     }
 
     // The boundary owns its server runtime transport. A stopped child remains
@@ -503,6 +545,82 @@ export default class ProcessManager extends TheLink {
 
             this.clientForwarders.delete(key)
         }
+
+        const observations = this.connectionObservations.get(connection)
+
+        if (observations) for (const stop of observations.values()) stop()
+
+        this.connectionObservations.delete(connection)
+    }
+
+    /** Attach one live domain observation to the invoking connection. */
+    @Subscribe("/follow")
+    protected followConnection(subscription: unknown, value: unknown) {
+
+        if (typeof subscription !== "string" || !subscription) throw new Error("A System observation identity is required")
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A System observation is required")
+
+        const connection = this.authManager.connection()
+        const observations = this.connectionObservations.get(connection) ?? new Map<string, () => void>()
+
+        observations.get(subscription)?.()
+        this.connectionObservations.set(connection, observations)
+
+        const observation = value as Record<string, unknown>
+        const event = observation.event === null || typeof observation.event === "string" ? observation.event : invalid("A System observation event must be text or null")
+        const followed = (received: string, payload: unknown) => this.authManager.publishToConnection(connection, "/process/followed", subscription, received, payload).catch(() => undefined)
+        const impossible = (reason: string) => {
+
+            this.removeConnectionObservation(connection, subscription)
+            this.authManager.publishToConnection(connection, "/process/impossible", subscription, reason).catch(() => undefined)
+        }
+
+        let stop: () => void
+
+        if (observation.scope === "endpoint") {
+
+            const endpoint = half(observation.endpoint)
+            const process = this.find(String(observation.process))
+
+            stop = this.observeEndpoint(process.identity, endpoint, event, (payload, received) => followed(received, payload), impossible)
+        }
+
+        else if (observation.scope === "traffic") {
+
+            const endpoint = half(observation.endpoint)
+            const kind = trafficKind(observation.kind)
+            const process = this.find(String(observation.process))
+
+            stop = this.observeTrafficFromOutside(process.identity, endpoint, kind, event, (received, ...values) => followed(received, values), impossible)
+        }
+
+        else if (observation.scope === "service") {
+
+            if (observation.kind !== "events" && observation.kind !== "lifecycle") throw new Error("A Service observation kind is events or lifecycle")
+
+            stop = this.observeServiceFromOutside(observation.key, observation.kind, event, followed)
+        }
+
+        else throw new Error("A System observation scope is endpoint, traffic, or service")
+
+        observations.set(subscription, stop)
+    }
+
+    /** Release one observation without affecting its connection or siblings. */
+    @Subscribe("/unfollow")
+    protected unfollowConnection(subscription: unknown) {
+
+        if (typeof subscription === "string") this.removeConnectionObservation(this.authManager.connection(), subscription)
+    }
+
+    private removeConnectionObservation(connection: string, subscription: string) {
+
+        const observations = this.connectionObservations.get(connection)
+
+        observations?.get(subscription)?.()
+        observations?.delete(subscription)
+
+        if (!observations?.size) this.connectionObservations.delete(connection)
     }
 
     public retainClientOperation(connection: string, pane: string, operation: string, cancel: () => void) {
@@ -1274,7 +1392,7 @@ export default class ProcessManager extends TheLink {
     @Connect("/service/wait-ready")
     protected async waitServiceReady(key: unknown, timeout: unknown) {
 
-        await this.services.waitReady(key, timeout)
+        await this.services.waitReady(key, timeout, this.authManager.connectionSignal())
     }
 
     @Subscribe("/service/send")
@@ -2690,6 +2808,25 @@ function isTrafficKind(value: unknown): value is TrafficKind {
     return value === "publish" || value === "ask" || value === "answer"
 }
 
+function half(value: unknown): Half {
+
+    if (value === "server" || value === "client") return value
+
+    throw new Error("An Endpoint observation targets server or client")
+}
+
+function trafficKind(value: unknown): TrafficKind {
+
+    if (isTrafficKind(value)) return value
+
+    throw new Error("A traffic observation kind is publish, ask, or answer")
+}
+
+function invalid(message: string): never {
+
+    throw new Error(message)
+}
+
 interface HandleAddress {
 
     identity: string
@@ -2760,7 +2897,10 @@ export type Shape = StandardShape
 
 type EndpointEvent = "endpointStart" | "endpointStop"
 
-export type TransmittedProcessManager = Transmitted<ProcessManager>
+export type ProcessManagerSnapshot = {
+
+    processes: [string, ProcessSnapshot][]
+}
 
 // Inside, or not at all. A program joining its own paths from the root
 // gives that up knowingly; a join asked of the host does not.

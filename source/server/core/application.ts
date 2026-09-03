@@ -10,6 +10,8 @@ import Keyv from "keyv"
 import FileArea, { FileSystem } from "@libs/file-area"
 import { homedir } from "node:os"
 import System from "./system"
+import type Program from "./link-manager/auth-manager/program-manager/program"
+import type { ServerRuntimeFactory } from "./server-runtime"
 
 export default class Application {
 
@@ -45,6 +47,9 @@ export default class Application {
     /** One authoritative System domain shared by every trusted adapter. */
     public readonly system: System
 
+    /** Runtime creation supplied by the host boundary. */
+    public readonly createServerRuntime: ServerRuntimeFactory<Program>
+
     private constructor(payload: ApplicationPayload) {
 
         this.name = payload.name
@@ -69,6 +74,8 @@ export default class Application {
 
         this.appearanceManager = payload.appearanceManager
 
+        this.createServerRuntime = payload.createServerRuntime
+
         this.dialogManager = new DialogManager()
 
         this.linkManager = new LinkManager(this)
@@ -76,7 +83,7 @@ export default class Application {
         this.system = new System(this)
     }
 
-    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string) {
+    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string, createServerRuntime: ServerRuntimeFactory<Program>) {
 
         const storage = new FileManager(homePath)
 
@@ -92,7 +99,7 @@ export default class Application {
 
         const appearanceManager = await AppearanceManager.open(store, uploads)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, uploads })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, uploads, createServerRuntime })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -123,4 +130,6 @@ interface ApplicationPayload {
     appearanceManager: AppearanceManager
 
     uploads: UploadManager
+
+    createServerRuntime: ServerRuntimeFactory<Program>
 }

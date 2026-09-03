@@ -1,4 +1,4 @@
-import { TransmittedProgramManager } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { ProgramManagerSnapshot } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
@@ -33,7 +33,7 @@ export default class ProgramManager extends TheLink {
 
     private readonly commands = new StreamRelay("Program command output", programCommandChunk)
 
-    public constructor(authManager: AuthManager, payload: TransmittedProgramManager) {
+    public constructor(authManager: AuthManager, payload: ProgramManagerSnapshot) {
 
         super()
 
@@ -100,8 +100,8 @@ export default class ProgramManager extends TheLink {
     public command(subject: unknown, operation: "install" | "uninstall" | "run", value: unknown, asker: string) {
 
         return this.commands.open(
-            stream => this.$outbound.publishFirst("/client-command", stream, operation, subject, value, asker),
-            stream => this.$outbound.publish("/client-command-cancel", stream)
+            stream => this.$outbound.publishFirst("/command", stream, operation, subject, value, asker),
+            stream => this.$outbound.publish("/command-cancel", stream)
         )
     }
 
@@ -172,7 +172,7 @@ export default class ProgramManager extends TheLink {
         return this.arrived(payload)
     }
 
-    @Subscribe("/client-command-output")
+    @Subscribe("/command-output")
     protected commandOutput(stream: string, value: unknown) {
 
         this.commands.receive(stream, value)

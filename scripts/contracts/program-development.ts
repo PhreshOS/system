@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
-import { developmentTarget } from "@server/view/program-development"
+import { developmentTarget } from "@server/view/http/program/development"
 
 const development = new Program({
 

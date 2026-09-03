@@ -5,8 +5,7 @@ import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceKey } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
-import messagepack from "@the-link/messagepack"
-import type { ServerRuntime, Stream } from "./server-runtime"
+import type { ServerRuntime, Stream } from "@server/core/server-runtime"
 
 /**
  * The boundary around one server execution endpoint.
@@ -68,11 +67,11 @@ export default class ServerProcessBoundary extends TheLink {
 
         this.runtime = runtime
 
-        runtime.onMessage(message => { this.receive(message).catch(() => undefined) })
+        runtime.onMessage((event, ...values) => { this.$inbound.publish(event, ...values).catch(() => undefined) })
 
         this.$outbound.forwardTo((event, ...values) => {
 
-            runtime.send(messagepack.serialize([event, ...values]))
+            runtime.send(event, ...values)
         })
 
         let finish!: (ending: { code: number | null, signal: NodeJS.Signals | null }) => void
@@ -93,22 +92,6 @@ export default class ServerProcessBoundary extends TheLink {
         this.unanswered = unanswered
 
         this.$inbound.subscribe("boundary", (...values) => this.control(values))
-    }
-
-    /** Admit one binary envelope from this exact Server runtime. */
-    private async receive(message: unknown) {
-
-        let decoded: unknown
-
-        try { decoded = messagepack.deserialize(receiveBytes(message)) }
-
-        catch { return }
-
-        if (!Array.isArray(decoded) || typeof decoded[0] !== "string") return
-
-        const [event, ...values] = decoded as [string, ...unknown[]]
-
-        await this.$inbound.publish(event, ...values)
     }
 
     /** Deliver one routed envelope only when this endpoint requested it. */
@@ -519,17 +502,6 @@ interface WaitingQuestion {
     question: string
 }
 
-export type { Stream } from "./server-runtime"
+export type { Stream } from "@server/core/server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
-
-function receiveBytes(value: unknown) {
-
-    if (value instanceof Uint8Array) return Uint8Array.from(value)
-
-    if (value instanceof ArrayBuffer) return new Uint8Array(value)
-
-    if (ArrayBuffer.isView(value)) return Uint8Array.from(new Uint8Array(value.buffer, value.byteOffset, value.byteLength))
-
-    throw new TypeError("The server process message is not binary")
-}

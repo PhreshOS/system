@@ -9,9 +9,10 @@ export const disconnectedSessionLifetime = 24 * 60 * 60 * 1_000
 /**
  * Durable authentication sessions, independent of transient desktop links.
  *
- * A session remains valid while at least one connection holds it. The link
- * manager records the final connection loss here; reconnecting clears that
- * timestamp, while a full disconnected day makes the session unreachable.
+ * A session remains valid while at least one connection holds it. Ordinary
+ * sessions receive a reconnecting grace period; owner-local sessions are
+ * removed with their final connection because no reusable token leaves that
+ * boundary.
  */
 export default class Sessions {
 
@@ -53,7 +54,11 @@ export default class Sessions {
                 continue
             }
 
-            sessions.set(record.identity, { identity: record.identity, disconnectedAt })
+            const owner = record.owner === true
+
+            if (record.owner === undefined) changed = true
+
+            sessions.set(record.identity, { identity: record.identity, owner, disconnectedAt })
         }
 
         const opened = new Sessions(store, sessions)
@@ -63,14 +68,14 @@ export default class Sessions {
         return opened
     }
 
-    /** Creates a resumable session which has not yet acquired a connection. */
-    public async create() {
+    /** Creates a session which has not yet acquired a connection. */
+    public async create(owner = false) {
 
         this.prune(Date.now())
 
         const identity = randomUUID()
 
-        this.sessions.set(identity, { identity, disconnectedAt: Date.now() })
+        this.sessions.set(identity, { identity, owner, disconnectedAt: Date.now() })
 
         await this.persist()
 
@@ -91,6 +96,12 @@ export default class Sessions {
         this.persist().catch(() => undefined)
 
         return false
+    }
+
+    /** Whether this session represents a trusted owner-local connection. */
+    public owner(identity: string) {
+
+        return this.valid(identity) && this.sessions.get(identity)!.owner
     }
 
     /** Resumes a valid session and removes its disconnected deadline. */
@@ -149,7 +160,7 @@ export default class Sessions {
     }
 }
 
-function parse(value: unknown): StoredSession[] {
+function parse(value: unknown): StoredSessionInput[] {
 
     if (value === undefined) return []
 
@@ -158,18 +169,24 @@ function parse(value: unknown): StoredSession[] {
     return value
 }
 
-function isStoredSession(value: unknown): value is StoredSession {
+function isStoredSession(value: unknown): value is StoredSessionInput {
 
     if (!value || typeof value !== "object") return false
 
-    const record = value as Partial<StoredSession>
+    const record = value as Partial<StoredSessionInput>
 
-    return typeof record.identity === "string" && (record.disconnectedAt === null || typeof record.disconnectedAt === "number" && Number.isFinite(record.disconnectedAt))
+    return typeof record.identity === "string"
+        && (record.owner === undefined || typeof record.owner === "boolean")
+        && (record.disconnectedAt === null || typeof record.disconnectedAt === "number" && Number.isFinite(record.disconnectedAt))
 }
 
 interface StoredSession {
 
     identity: string
 
+    owner: boolean
+
     disconnectedAt: number | null
 }
+
+type StoredSessionInput = Omit<StoredSession, "owner"> & { owner?: boolean }

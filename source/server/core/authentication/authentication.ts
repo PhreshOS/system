@@ -146,10 +146,16 @@ export default class Authentication {
             && timingSafeEqual(candidate, expected)
     }
 
-    /** Creates a durable session after the owner has authenticated. */
-    public createSession() {
+    /** Creates a session with the authority assigned by its trusted boundary. */
+    public createSession(owner = false) {
 
-        return this.sessions.create()
+        return this.sessions.create(owner)
+    }
+
+    /** Whether a valid session belongs to a trusted owner-local connection. */
+    public sessionOwner(identity: string) {
+
+        return this.sessions.owner(identity)
     }
 
     /** Whether a session is still within its connection-bound lifetime. */

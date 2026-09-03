@@ -1,165 +1,62 @@
 import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
-import { connect } from "node:net"
 import { resolve } from "node:path"
+import { SocketClient } from "@the-link/ipc/socket-client"
+import messagepack from "@the-link/messagepack"
 import gatewayAddress from "@server/view/gateway/address"
 import gateway from "@server/view/gateway/gateway"
-import type Application from "@server/core/application"
+import type LinkManager from "@server/core/link-manager/link-manager"
 
 const directory = await mkdtemp(resolve(".verify-gateway-"))
 const path = gatewayAddress(directory)
-const entry = {
-    installed: false,
-    program: { identity: "example" }
-}
-const forkedEntry = {
-    installed: false,
-    program: { identity: "forked" }
-}
-const programSnapshot = {
-    reference: "example-reference",
-    identity: "example",
-    assetId: "00000000-0000-4000-8000-000000000000",
-    name: "Example",
-    version: "1.0.0",
-    description: null,
-    installed: false,
-    hasAgent: false,
-    server: null,
-    client: { start: true }
-}
-const process = {
-    reference: "process-reference",
-    identity: "process-identity",
-    program: { identity: entry.program.identity, client: {} },
-    waitReady(endpoint: "server" | "client", notify: () => void) {
-
-        assert.equal(endpoint, "client")
-        notify()
-
-        return () => undefined
-    },
-    onExit() { return () => undefined }
-}
-const application = {
-    system: {
-        listPrograms() { return [] },
-        async forceCreateProgram() { return entry.program },
-        requireProgram(identity: string) { return identity === forkedEntry.program.identity ? forkedEntry : entry },
-        programSnapshot(selected: typeof entry) { return { ...programSnapshot, identity: selected.program.identity } },
-        holdProgram(handle: { identity?: string, reference?: string }) {
-
-            assert.deepEqual(handle, { identity: "example", reference: "example-reference" })
-            return entry.program
-        },
-        forkProgram(owner: unknown, identity: string) {
-
-            assert.equal(owner, entry.program)
-            assert.equal(identity, forkedEntry.program.identity)
-
-            return forkedEntry.program
-        },
-        async *installProgram() {},
-        findProcess() { return null },
-        resolveProcess() { return process },
-        endpointSnapshot(_process: unknown, endpoint: string) {
-
-            return { process: process.identity, endpoint, running: true }
-        }
-    },
-    linkManager: {
-        authManager: {
-            processManager: {
-                processes: new Map(),
-                async exit() {}
-            },
-            programManager: {}
-        }
+const received: unknown[][] = []
+let removed = false
+const session = {
+    authorization: "owner",
+    linkManager: { appearance: { key: "appearance", value: {} } },
+    authManager: {
+        programManager: { programs: [] },
+        processManager: { processes: [] }
     }
 }
+const linkManager = {
+    addConnection() {
+        return {
+            async publish(event: string, ...values: unknown[]) {
+                received.push([event, ...values])
+                return [{ event, values }]
+            }
+        }
+    },
+    async addSession(_connection: unknown, owner: boolean) {
+        assert.equal(owner, true)
+        return session
+    },
+    async removeConnection() { removed = true }
+}
+const listener = await gateway(linkManager as unknown as LinkManager, path)
+const client = new SocketClient(path)
 
-const server = await gateway(application as unknown as Application, path)
+client.setSerialize(messagepack.serialize)
+client.setDeserialize(messagepack.deserialize)
+
+const ready = client.$inbound.waitFirst("/gateway/ready")
 
 try {
-    const system = await exchange(path, { target: "system", request: { capability: "program", operation: "list", input: {} } })
+    await client.connect()
 
-    assert.deepEqual(system, [{ success: true, result: { data: [], total: 0, truncated: false } }])
-
-    const ready = await exchange(path, {
-        target: "system",
-        request: {
-            capability: "endpoint",
-            operation: "waitReady",
-            input: { process: process.identity, endpoint: "client" }
-        }
-    })
-
-    assert.deepEqual(ready, [{
-        success: true,
-        result: { process: process.identity, endpoint: "client", running: true }
-    }])
-
-    const created = await exchange(path, {
-        target: "program",
-        request: { word: "force-create", program: { identity: "example", storage: "/tmp/example", client: { location: "/tmp/client" } } }
-    })
-
-    assert.deepEqual(created, [{
-        event: "created",
-        program: {
-            reference: "example-reference",
-            identity: "example",
-            assetId: "00000000-0000-4000-8000-000000000000",
-            name: "Example",
-            version: "1.0.0",
-            description: null,
-            installed: false,
-            hasAgent: false,
-            server: null,
-            client: { start: true }
-        }
-    }])
-
-    const forked = await exchange(path, {
-        target: "program",
-        request: {
-            word: "fork",
-            handle: { identity: "example", reference: "example-reference" },
-            identity: "forked"
-        }
-    })
-
-    assert.deepEqual(forked, [{
-        event: "created",
-        program: { ...programSnapshot, identity: "forked" }
-    }])
-
-    const installed = await exchange(path, {
-        target: "program",
-        request: { word: "install-existing", handle: { identity: "example", reference: "example-reference" } }
-    })
-
-    assert.deepEqual(installed, [{
-        event: "installed",
-        identity: "example"
-    }])
+    assert.deepEqual(await ready, session)
+    assert.deepEqual(
+        await client.$outbound.publishFirst("/auth/example", "authorization", { binary: new Uint8Array([1, 2, 3]) }),
+        { event: "/auth/example", values: ["authorization", { binary: new Uint8Array([1, 2, 3]) }] }
+    )
+    assert.deepEqual(received, [["/auth/example", "authorization", { binary: new Uint8Array([1, 2, 3]) }]])
 } finally {
-    await server.close()
+    await client.disconnect()
+    await listener.close()
     await rm(directory, { recursive: true, force: true })
 }
 
-async function exchange(path: string, request: unknown): Promise<unknown[]> {
+assert.equal(removed, true)
 
-    return await new Promise<unknown[]>((resolve, reject) => {
-
-        const socket = connect(path)
-        let buffer = ""
-
-        socket.on("connect", () => socket.write(`${JSON.stringify(request)}\n`))
-        socket.on("data", chunk => { buffer += String(chunk) })
-        socket.on("error", reject)
-        socket.on("close", () => resolve(buffer.trim().split("\n").filter(Boolean).map(line => JSON.parse(line))))
-    })
-}
-
-console.log("shared gateway verified")
+console.log("gateway boundary verified")

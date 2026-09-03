@@ -4,8 +4,7 @@ import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { delimiter, join } from "node:path"
 import { pathToFileURL } from "node:url"
-import { deserialize as decode, serialize as encode } from "@the-link/messagepack"
-import { CommandServerRuntime, commandServerEnvironment, WorkerServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
+import { CommandServerRuntime, commandServerEnvironment, WorkerServerRuntime } from "@server/view/server-runtime"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
 
@@ -64,17 +63,12 @@ try {
     const messages: unknown[][] = []
     const output: ["out" | "err", string][] = []
 
-    runtime.onMessage(message => {
-        if (!(message instanceof Uint8Array)) throw new Error("The Worker response must be bytes")
-        const decoded = decode(message)
-        if (!Array.isArray(decoded)) throw new Error("The Worker response must be an array")
-        messages.push(decoded)
-    })
+    runtime.onMessage((event, ...values) => messages.push([event, ...values]))
     runtime.onOutput((stream, text) => output.push([stream, text]))
 
     await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready"))
 
-    runtime.send(encode(["probe", 42]))
+    runtime.send("probe", 42)
 
     await until(() => messages.some(message => message[0] === "probe-result"))
     await until(() => output.some(([stream, text]) => stream === "out" && text.includes("worker output")))
@@ -91,17 +85,12 @@ try {
     const commandMessages: unknown[][] = []
     const commandOutput: ["out" | "err", string][] = []
 
-    command.onMessage(message => {
-        if (!(message instanceof Uint8Array)) throw new Error("The command response must be bytes")
-        const decoded = decode(message)
-        if (!Array.isArray(decoded)) throw new Error("The command response must be an array")
-        commandMessages.push(decoded)
-    })
+    command.onMessage((event, ...values) => commandMessages.push([event, ...values]))
     command.onOutput((stream, text) => commandOutput.push([stream, text]))
 
     await until(() => commandMessages.some(message => message[0] === "boundary" && message[1] === "ready"))
 
-    command.send(encode(["probe", 42]))
+    command.send("probe", 42)
 
     await until(() => commandMessages.some(message => message[0] === "probe-result"))
     await until(() => commandOutput.some(([stream, text]) => stream === "out" && text.includes("command output")))

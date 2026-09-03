@@ -1,4 +1,4 @@
-import { TransmittedProcess } from "@server/core/link-manager/auth-manager/process-manager/process"
+import { ProcessSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process"
 import ProcessManager from "./process-manager"
 import ClientState from "./client-state"
 
@@ -36,7 +36,7 @@ export default class Process {
     // What its launch said, carried for its whole life.
     public readonly options: Record<string, string>
 
-    public constructor(processManager: ProcessManager, payload: TransmittedProcess) {
+    public constructor(processManager: ProcessManager, payload: ProcessSnapshot) {
 
         this.processManager = processManager
 
@@ -72,7 +72,7 @@ export default class Process {
         await this.processManager.$outbound.publish("/frame/end-end", this.identity, args)
     }
 
-    public serverStarted(payload: TransmittedProcess) {
+    public serverStarted(payload: ProcessSnapshot) {
 
         if (payload.server) this.server = payload.server
     }
@@ -82,7 +82,7 @@ export default class Process {
         this.server = null
     }
 
-    public clientStarted(payload: TransmittedProcess) {
+    public clientStarted(payload: ProcessSnapshot) {
 
         if (!payload.client) return
 
@@ -107,7 +107,7 @@ export default class Process {
         this.client = null
     }
 
-    public clientAccessChanged(payload: TransmittedProcess) {
+    public clientAccessChanged(payload: ProcessSnapshot) {
 
         if (this.client && payload.client) this.client.sameOrigin = payload.client.sameOrigin
     }

@@ -1,9 +1,8 @@
 import { Connect, Forward, Intercept, Subscribe } from "@the-link/core/decorators"
-import UploadManager from "@server/core/upload-manager"
+import UploadManager, { uploadLimit } from "@server/core/upload-manager"
 import DialogManager from "@server/core/dialog-manager"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
-import { Transmitted } from "@the-link/messagepack"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { parsePermissionName, type PermissionRequest } from "@phreshos/core"
@@ -62,6 +61,12 @@ export default class AuthManager extends TheLink {
         return this.linkManager.connection().identity
     }
 
+    /** Lifetime of the connection currently invoking an authenticated operation. */
+    public connectionSignal() {
+
+        return this.linkManager.connection().signal
+    }
+
     @Intercept("inbound")
     protected authenticate(authorization: string, ...values: unknown[]) {
 
@@ -117,6 +122,18 @@ export default class AuthManager extends TheLink {
     protected async uploadsPath() {
 
         return this.uploads.fileManager.path
+    }
+
+    @Connect("/uploads/access")
+    protected async uploadsAccess() {
+
+        return { path: this.uploads.fileManager.path, limit: uploadLimit }
+    }
+
+    @Connect("/uploads/stat")
+    protected async uploadStat(file: unknown) {
+
+        return this.uploads.stat(String(file))
     }
 
     @Connect("/appearance/update")
@@ -213,4 +230,11 @@ export default class AuthManager extends TheLink {
     }
 }
 
-export type TransmittedAuthManager = Transmitted<AuthManager>
+export interface AuthManagerSnapshot {
+
+    programManager: ReturnType<ProgramManager["toJSON"]>
+
+    processManager: import("./process-manager/process-manager").ProcessManagerSnapshot
+
+    dialogManager: ReturnType<DialogManager["toJSON"]>
+}

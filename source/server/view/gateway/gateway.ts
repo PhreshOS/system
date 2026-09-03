@@ -1,105 +1,51 @@
-import type Application from "@server/core/application"
+import type LinkManager from "@server/core/link-manager/link-manager"
 import localServer from "./local-server"
-import apiRequest from "./api-request"
-import programRequest from "./program-request"
-import systemRequest from "./system-request"
+import messagepack from "@the-link/messagepack"
+import type { SocketServer } from "@the-link/ipc/socket-server"
 
-const maximumRequestSize = 16 * 1024 * 1024
+/** Open the owner-local IPC adapter for the System Link Manager. */
+export default function gateway(linkManager: LinkManager, path: string) {
 
-/** Open the one owner-local gateway and route each connection internally. */
-export default function gateway(application: Application, path: string) {
+    return localServer(path, function (server) {
 
-    return localServer(path, function (socket) {
-
-        const controller = new AbortController()
-        let buffer = ""
-        let handled = false
-
-        socket.on("data", function (chunk) {
-
-            if (handled) return
-
-            buffer += String(chunk)
-
-            if (buffer.length > maximumRequestSize) {
-
-                handled = true
-                return fail(socket, new Error("The gateway request is too large"))
-            }
-
-            const boundary = buffer.indexOf("\n")
-
-            if (boundary < 0) return
-
-            handled = true
-
-            let envelope: GatewayEnvelope
-
-            try { envelope = parseEnvelope(buffer.slice(0, boundary)) }
-            catch (error) { return fail(socket, error) }
-
-            if (envelope.target === "program") {
-
-                programRequest(application, socket, envelope.request).catch(error => fail(socket, error))
-                return
-            }
-
-            if (envelope.target === "api") {
-
-                apiRequest(application, envelope.request, controller.signal).then(
-                    result => finish(socket, { success: true, result }),
-                    error => finish(socket, { success: false, error: reason(error) })
-                )
-                return
-            }
-
-            systemRequest(application, envelope.request, controller.signal).then(
-                result => finish(socket, { success: true, result }),
-                error => finish(socket, { success: false, error: reason(error) })
-            )
-        })
-
-        socket.on("close", () => controller.abort(new Error("The requester disconnected")))
-        socket.on("error", () => undefined)
+        server.setSerialize(messagepack.serialize)
+        server.setDeserialize(messagepack.deserialize)
+        server.onConnection(peer => connect(linkManager, peer))
     })
 }
 
-function parseEnvelope(line: string): GatewayEnvelope {
+async function connect(linkManager: LinkManager, peer: GatewayPeer) {
 
-    let value: unknown
+    const connection = linkManager.addConnection(peer)
+    let closed = false
+    const close = async () => {
 
-    try { value = JSON.parse(line) }
-    catch { throw new Error("What arrived is not JSON") }
+        if (closed) return
 
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("The gateway request must be an object")
+        closed = true
 
-    const envelope = value as Record<string, unknown>
+        stopForwarding()
 
-    if (Object.keys(envelope).some(key => key !== "target" && key !== "request")) throw new Error("The gateway request contains an unknown field")
+        await linkManager.removeConnection(connection)
+    }
+    const stopForwarding = peer.$inbound.forwardTo((event, ...values: unknown[]) => connection.publish(event, ...values))
 
-    if (envelope.target !== "api" && envelope.target !== "program" && envelope.target !== "system") throw new Error("The Gateway target must be api, program, or system")
-    if (!("request" in envelope)) throw new Error("The gateway request is missing")
+    peer.$internal.subscribeOnce("disconnect", close)
 
-    return { target: envelope.target, request: envelope.request }
+    try {
+
+        const session = await linkManager.addSession(connection, true)
+
+        await peer.$outbound.publish("/gateway/ready", session)
+    }
+
+    catch (error) {
+
+        await close()
+        await peer.disconnect()
+
+        throw error
+    }
 }
 
-function fail(socket: import("node:net").Socket, error: unknown) {
-
-    if (socket.writable) socket.end(`${JSON.stringify({ event: "error", message: reason(error) })}\n`)
-}
-
-function finish(socket: import("node:net").Socket, outcome: object) {
-
-    if (socket.writable) socket.end(`${JSON.stringify(outcome)}\n`)
-}
-
-function reason(error: unknown) {
-
-    return error instanceof Error ? error.message : String(error)
-}
-
-interface GatewayEnvelope {
-
-    target: "api" | "program" | "system"
-    request: unknown
-}
+type GatewayPeer = Parameters<Parameters<SocketServer["onConnection"]>[0]>[0]

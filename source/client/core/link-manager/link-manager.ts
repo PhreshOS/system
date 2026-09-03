@@ -1,5 +1,5 @@
-import { TransmittedAuthManager } from "@server/core/link-manager/auth-manager/auth-manager"
-import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
+import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth-manager"
+import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { type RegistrationResponse } from "@server/core/link-manager/link-manager"
 import { type Appearance, type DesktopPreferences, type DesktopPreferencesUpdate } from "@phreshos/core"
@@ -22,7 +22,7 @@ export default class LinkManager extends TheLink {
     /** Complete effective local Desktop preferences and future updates. */
     public readonly desktopPreferences: Property<DesktopPreferences>
 
-    public constructor(application: Application, sourceLink: TheLink, payload: TransmittedLinkManager, desktopPreferences: DesktopPreferences) {
+    public constructor(application: Application, sourceLink: TheLink, payload: LinkManagerSnapshot, desktopPreferences: DesktopPreferences) {
 
         super()
 
@@ -81,6 +81,6 @@ export default class LinkManager extends TheLink {
 
     public async sessionAuthenticate(authorization: string | null) {
 
-        return await this.$outbound.publishFirst<[string, TransmittedAuthManager] | false>("/session-authenticate", authorization)
+        return await this.$outbound.publishFirst<[string, AuthManagerSnapshot] | false>("/session-authenticate", authorization)
     }
 }

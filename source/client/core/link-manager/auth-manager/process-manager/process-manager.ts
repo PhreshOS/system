@@ -1,6 +1,6 @@
-import { TransmittedProcessManager } from "@server/core/link-manager/auth-manager/process-manager/process-manager"
-import { TransmittedProcess } from "@server/core/link-manager/auth-manager/process-manager/process"
-import { TransmittedWindow } from "@server/core/link-manager/auth-manager/process-manager/window"
+import { ProcessManagerSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process-manager"
+import { ProcessSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process"
+import { WindowSnapshot } from "@server/core/link-manager/auth-manager/process-manager/window"
 import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
@@ -26,7 +26,7 @@ export default class ProcessManager extends TheLink {
 
     public readonly processes = new Map<string, Process>()
 
-    public constructor(authManager: AuthManager, payload: TransmittedProcessManager) {
+    public constructor(authManager: AuthManager, payload: ProcessManagerSnapshot) {
 
         super()
 
@@ -200,7 +200,7 @@ export default class ProcessManager extends TheLink {
 
     // Any window change arrives in one shape: the process it belongs to,
     // and the window whole.
-    private followed(payload: { identity: string, window: TransmittedWindow } | null) {
+    private followed(payload: { identity: string, window: WindowSnapshot } | null) {
 
         if (!payload) return
 
@@ -211,7 +211,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/created")
     @Publish("/processes", "inbound")
-    protected async createdHandle(payload: TransmittedProcess | null) {
+    protected async createdHandle(payload: ProcessSnapshot | null) {
 
         if (!payload) return
 
@@ -240,7 +240,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/server-start")
     @Publish("/processes", "inbound")
-    protected async serverStartHandle(identity: string | null, payload: TransmittedProcess | null) {
+    protected async serverStartHandle(identity: string | null, payload: ProcessSnapshot | null) {
 
         if (!identity || !payload) return
 
@@ -251,7 +251,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/server-stop")
     @Publish("/processes", "inbound")
-    protected async serverStopHandle(identity: string | null, _payload: TransmittedProcess | null) {
+    protected async serverStopHandle(identity: string | null, _payload: ProcessSnapshot | null) {
 
         if (!identity) return
 
@@ -262,7 +262,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/client-start")
     @Publish("/processes", "inbound")
-    protected async clientStartHandle(identity: string | null, payload: TransmittedProcess | null) {
+    protected async clientStartHandle(identity: string | null, payload: ProcessSnapshot | null) {
 
         if (!identity || !payload) return
 
@@ -273,7 +273,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/client-stop")
     @Publish("/processes", "inbound")
-    protected async clientStopHandle(identity: string | null, _payload: TransmittedProcess | null) {
+    protected async clientStopHandle(identity: string | null, _payload: ProcessSnapshot | null) {
 
         if (!identity) return
 
@@ -284,7 +284,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/client-access")
     @Publish("/processes", "inbound")
-    protected async clientAccessHandle(identity: string | null, payload: TransmittedProcess | null) {
+    protected async clientAccessHandle(identity: string | null, payload: ProcessSnapshot | null) {
 
         if (!identity || !payload) return
 
@@ -295,7 +295,7 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/exited")
     @Publish("/processes", "inbound")
-    protected async exitedHandle(payload: TransmittedProcess | null) {
+    protected async exitedHandle(payload: ProcessSnapshot | null) {
 
         if (!payload) return
 
@@ -306,42 +306,42 @@ export default class ProcessManager extends TheLink {
 
     @Subscribe("/move")
     @Publish("/processes", "inbound")
-    protected async moveHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async moveHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }
 
     @Subscribe("/resize")
     @Publish("/processes", "inbound")
-    protected async resizeHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async resizeHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }
 
     @Subscribe("/geometry")
     @Publish("/processes", "inbound")
-    protected async geometryHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async geometryHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }
 
     @Subscribe("/raise")
     @Publish("/processes", "inbound")
-    protected async raiseHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async raiseHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }
 
     @Subscribe("/change-title")
     @Publish("/processes", "inbound")
-    protected async changeTitleHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async changeTitleHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }
 
     @Subscribe("/minimize")
     @Publish("/processes", "inbound")
-    protected async minimizeHandle(payload: { identity: string, window: TransmittedWindow } | null) {
+    protected async minimizeHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }

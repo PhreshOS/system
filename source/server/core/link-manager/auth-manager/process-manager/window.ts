@@ -1,5 +1,4 @@
 import { isRelativeValue, type Position, type Size, type Value, type WindowGeometry, type WindowLayer } from "@phreshos/core"
-import { Transmitted } from "@the-link/messagepack"
 
 /**
  * How a process is shown. Every value is either a number of pixels or a
@@ -191,6 +190,6 @@ function validate(value: Value, name: string) {
     throw new Error(`${name} must be a finite pixel number or a relative expression such as "50% + 10"`)
 }
 
-export type TransmittedWindow = Transmitted<Window>
+export type WindowSnapshot = ReturnType<Window["toJSON"]>
 
 export type { Position, Size, Value } from "@phreshos/core"

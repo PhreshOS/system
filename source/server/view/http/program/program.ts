@@ -3,8 +3,8 @@ import Application from "@server/core/application"
 import { isIconSize } from "@server/core/link-manager/auth-manager/program-manager/icon"
 import { existsSync } from "node:fs"
 import { Hono } from "hono"
-import doors from "./doors"
-import { developmentResponse, developmentSocket, developmentTarget } from "./program-development"
+import doors from "../doors"
+import { developmentResponse, developmentSocket, developmentTarget } from "./development"
 
 /**
  * The browser representation of one Program domain.

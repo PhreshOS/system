@@ -2,18 +2,22 @@ import ProcessTree from "@libs/process-tree"
 import { spawn, type ChildProcess } from "node:child_process"
 import { Worker } from "node:worker_threads"
 import { delimiter, join } from "node:path"
+import messagepack from "@the-link/messagepack"
+import type { ServerRuntime, ServerRuntimeMessage, Stream } from "@server/core/server-runtime"
+import type Program from "@server/core/link-manager/auth-manager/program-manager/program"
 
-export interface ServerRuntime {
+/** Create the concrete host runtime selected by one Program declaration. */
+export default function serverRuntime(program: Program): ServerRuntime {
 
-    readonly finished: Promise<Ending>
+    const server = program.server
 
-    send(message: Uint8Array): void
+    if (!server) throw new Error("This program declared no server half")
 
-    onMessage(listener: (message: unknown) => void): void
+    return server.startCommand !== undefined
 
-    onOutput(listener: OutputListener): void
+        ? new CommandServerRuntime(server.startCommand, program.serverPath!)
 
-    stop(): void
+        : new WorkerServerRuntime(program.serverEntryPath!)
 }
 
 /** One Server running as an isolated operating-system process tree. */
@@ -62,9 +66,9 @@ export class CommandServerRuntime implements ServerRuntime {
         this.child.on("error", () => undefined)
     }
 
-    public send(message: Uint8Array) { this.child.send!(message) }
+    public send(event: string, ...values: unknown[]) { this.child.send!(messagepack.serialize([event, ...values])) }
 
-    public onMessage(listener: (message: unknown) => void) { this.inbox.listen(listener) }
+    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.inbox.listen(listener) }
 
     public onOutput(listener: OutputListener) {
 
@@ -124,9 +128,9 @@ export class WorkerServerRuntime implements ServerRuntime {
         this.worker.on("error", error => this.print("err", `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`))
     }
 
-    public send(message: Uint8Array) { this.worker.postMessage(message) }
+    public send(event: string, ...values: unknown[]) { this.worker.postMessage(messagepack.serialize([event, ...values])) }
 
-    public onMessage(listener: (message: unknown) => void) { this.inbox.listen(listener) }
+    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.inbox.listen(listener) }
 
     public onOutput(listener: OutputListener) {
 
@@ -164,28 +168,40 @@ export class WorkerServerRuntime implements ServerRuntime {
 
 class RuntimeInbox {
 
-    private listener: ((message: unknown) => void) | null = null
+    private listener: ((event: string, ...values: unknown[]) => void) | null = null
 
-    private readonly pending: unknown[] = []
+    private readonly pending: ServerRuntimeMessage[] = []
 
     public receive(message: unknown) {
 
-        if (this.listener) this.listener(message)
+        const bytes = commandMessageBytes(message)
 
-        else if (this.pending.length < maximumPendingMessages) this.pending.push(message)
+        if (!bytes) return
+
+        let decoded: unknown
+
+        try { decoded = messagepack.deserialize(bytes) }
+
+        catch { return }
+
+        if (!Array.isArray(decoded) || typeof decoded[0] !== "string") return
+
+        const envelope = decoded as ServerRuntimeMessage
+
+        if (this.listener) this.listener(...envelope)
+
+        else if (this.pending.length < maximumPendingMessages) this.pending.push(envelope)
     }
 
-    public listen(listener: (message: unknown) => void) {
+    public listen(listener: (event: string, ...values: unknown[]) => void) {
 
         if (this.listener) throw new Error("The server runtime already has a message listener")
 
         this.listener = listener
 
-        for (const message of this.pending.splice(0)) listener(message)
+        for (const message of this.pending.splice(0)) listener(...message)
     }
 }
-
-export type Stream = "out" | "err"
 
 type OutputListener = (stream: Stream, text: string) => void
 

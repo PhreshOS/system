@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { resolve } from "node:path"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
-import uploadView from "@server/view/uploads"
+import uploadView from "@server/view/http/uploads"
 import type Application from "@server/core/application"
 import { Hono } from "hono"
 

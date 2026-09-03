@@ -5,7 +5,7 @@ import Program from "@server/core/link-manager/auth-manager/program-manager/prog
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import type Process from "@server/core/link-manager/auth-manager/process-manager/process"
 import type ServerProcessBoundary from "@server/core/link-manager/auth-manager/process-manager/server-process-boundary"
-import type { ServerRuntime } from "@server/core/link-manager/auth-manager/process-manager/server-runtime"
+import type { ServerRuntime } from "@server/core/server-runtime"
 
 const launch = { server: null, client: null, options: {} } as const
 

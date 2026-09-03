@@ -1,6 +1,6 @@
 import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
-import { TransmittedLinkManager } from "@server/core/link-manager/link-manager"
+import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
 import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
 import Loading from "../components/loading"
@@ -49,7 +49,7 @@ function Desktop() {
 
     const subscribe = useCallback(function () {
 
-        return application.httpClient.onSubscribe<TransmittedLinkManager>(function (link) {
+        return application.httpClient.onSubscribe<LinkManagerSnapshot>(function (link) {
 
             const manager = new LinkManager(application, link, link.payload, preferences)
 

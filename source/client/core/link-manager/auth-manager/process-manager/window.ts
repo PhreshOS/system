@@ -1,4 +1,4 @@
-import { type TransmittedWindow, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
+import { type WindowSnapshot, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
 import { type WindowGeometry, type WindowLayer } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
@@ -37,7 +37,7 @@ export default class Window {
     // Which of the half's own pages the frame opens on.
     public location: string
 
-    public constructor(processManager: ProcessManager, process: string, payload: TransmittedWindow) {
+    public constructor(processManager: ProcessManager, process: string, payload: WindowSnapshot) {
 
         this.title = payload.title
 
@@ -60,7 +60,7 @@ export default class Window {
     }
 
     // What the echo carries, applied whole: one shape for any change.
-    public follow(payload: TransmittedWindow) {
+    public follow(payload: WindowSnapshot) {
 
         this.title = payload.title
 

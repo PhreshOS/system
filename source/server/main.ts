@@ -1,5 +1,6 @@
 import { displayName, name, version } from "@/package.json"
-import view, { defaultHome, environmentHome, environmentPorts, portRange, requestedHome, requestedPorts } from "./view/view"
+import view from "./view/view"
+import { defaultHome, environmentHome, environmentPorts, portRange, requestedHome, requestedPorts } from "./view/configuration"
 import { fileURLToPath } from "node:url"
 
 const requested = await requestedHome(process.argv)

@@ -1,11 +1,10 @@
 import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import { type Launch } from "@phreshos/core"
 import ProgramManager from "./program-manager"
-import type { Transmitted } from "@the-link/messagepack"
 
 /**
  * A program this session knows about, rebuilt from what the core
- * transmitted. What it holds is what a program says of itself and what
+ * represented. What it holds is what a program says of itself and what
  * is needed to draw it — never a path, because this side has no disk
  * and where the machine put things is not a program's own word.
  *
@@ -32,11 +31,11 @@ export default class Program {
 
     public readonly hasAgent: boolean
 
-    public readonly server: Transmitted<ProgramRecord>["server"]
+    public readonly server: ProgramRecord["server"]
 
-    public readonly client: Transmitted<ProgramRecord>["client"]
+    public readonly client: ProgramRecord["client"]
 
-    public constructor(programManager: ProgramManager, payload: Transmitted<ProgramRecord>) {
+    public constructor(programManager: ProgramManager, payload: ProgramRecord) {
 
         this.programManager = programManager
 

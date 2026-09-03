@@ -1,5 +1,4 @@
 import { Subscribe } from "@the-link/core/decorators"
-import { Transmitted } from "@the-link/messagepack"
 import { TheLink } from "@the-link/core"
 import { randomUUID } from "node:crypto"
 import { type default as Process } from "./link-manager/auth-manager/process-manager/process"
@@ -200,4 +199,4 @@ function isPermissionChoice(value: unknown): value is PermissionChoice {
     return value === "process" || value === "always" || value === false || value === null
 }
 
-export type TransmittedDialogManager = Transmitted<DialogManager>
+export type DialogManagerSnapshot = ReturnType<DialogManager["toJSON"]>

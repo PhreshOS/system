@@ -3,7 +3,7 @@ import { createServer } from "node:http"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { environmentPorts, listenOnPorts, parsePorts, portRange, requestedPorts } from "@server/view/view"
+import { environmentPorts, listenOnPorts, parsePorts, portRange, requestedPorts } from "@server/view/configuration"
 
 assert.equal(environmentPorts("phreshos", {}), undefined)
 assert.deepEqual(environmentPorts("phreshos", { PHRESHOS_PORT: "4305" }), [4305])

@@ -1,4 +1,4 @@
-import { TransmittedAuthManager } from "@server/core/link-manager/auth-manager/auth-manager"
+import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth-manager"
 import { Intercept } from "@the-link/core/decorators"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
@@ -27,7 +27,7 @@ export default class AuthManager extends TheLink {
 
     public readonly shellManager: ShellManager
 
-    public constructor(linkManager: LinkManager, authorization: string, payload: TransmittedAuthManager) {
+    public constructor(linkManager: LinkManager, authorization: string, payload: AuthManagerSnapshot) {
 
         super()
 

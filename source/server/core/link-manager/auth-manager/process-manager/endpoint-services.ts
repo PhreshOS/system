@@ -16,7 +16,7 @@ export default class EndpointServices extends TheLink {
         return this.target(key) !== null
     }
 
-    public async waitReady(key: unknown, timeout: unknown = 10_000) {
+    public async waitReady(key: unknown, timeout: unknown = 10_000, signal?: AbortSignal) {
 
         const resolved = this.key(key)
 
@@ -26,17 +26,22 @@ export default class EndpointServices extends TheLink {
 
             let settled = false
             let stopReady: () => void = () => undefined
+            let stopStart: () => void = () => undefined
+            let timer: ReturnType<typeof setTimeout> | undefined
 
             const finish = (complete: () => void) => {
 
                 if (settled) return
 
                 settled = true
-                clearTimeout(timer)
+                if (timer) clearTimeout(timer)
                 stopStart()
                 stopReady()
+                signal?.removeEventListener("abort", abort)
                 complete()
             }
+
+            const abort = () => finish(() => reject(signal?.reason instanceof Error ? signal.reason : new Error("Waiting for the service was cancelled")))
 
             const inspect = () => {
 
@@ -50,10 +55,13 @@ export default class EndpointServices extends TheLink {
                 stopReady = target.process.waitReady(resolved.endpoint, () => finish(resolve))
             }
 
-            const stopStart = this.$inbound.subscribe(this.event(resolved, "lifecycle", "start"), inspect)
-            const timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), milliseconds)
+            stopStart = this.$inbound.subscribe(this.event(resolved, "lifecycle", "start"), inspect)
+            timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), milliseconds)
 
-            inspect()
+            signal?.addEventListener("abort", abort, { once: true })
+
+            if (signal?.aborted) abort()
+            else inspect()
         })
     }
 

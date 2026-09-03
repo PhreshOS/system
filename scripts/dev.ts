@@ -1,6 +1,7 @@
 import { displayName, name, version } from "@/package.json"
-import doors from "@server/view/doors"
-import view, { environmentHome } from "@server/view/view"
+import doors from "@server/view/http/doors"
+import view from "@server/view/view"
+import { environmentHome } from "@server/view/configuration"
 import { createServer } from "vite"
 import { fileURLToPath } from "node:url"
 

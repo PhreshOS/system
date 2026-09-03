@@ -1,55 +1,44 @@
-import { chmodSync, mkdirSync, rmSync } from "node:fs"
-import { connect, createServer, type Socket } from "node:net"
+import { mkdirSync, rmSync } from "node:fs"
+import { connect } from "node:net"
 import { dirname } from "node:path"
+import { SocketServer } from "@the-link/ipc/socket-server"
 
-/** Open Gateway's owner-only local socket and safely recover a stale POSIX address. */
-export default function localServer(path: string, receive: (socket: Socket) => void) {
+/** Open the owner-only IPC listener and safely recover a stale POSIX address. */
+export default async function localServer(path: string, prepare: (server: SocketServer) => void) {
 
     const namedPipe = process.platform === "win32"
-    const server = createServer(receive)
 
     if (!namedPipe) mkdirSync(dirname(path), { recursive: true })
 
-    return new Promise<LocalServer>(function (resolve, reject) {
+    for (let recovered = false; ; recovered = true) {
 
-        const listen = (recovered: boolean) => {
+        const server = new SocketServer(path, { mode: 0o600 })
 
-            server.once("error", function (error: NodeJS.ErrnoException) {
+        prepare(server)
 
-                if (error.code !== "EADDRINUSE" || recovered) return reject(error)
+        try {
 
-                alive(path).then(function (running) {
+            await server.listen()
 
-                    if (running) return reject(new Error(`A system is already running here — ${dirname(path)} holds one system, and two would share its programs and persistent state`))
-
-                    if (namedPipe) return reject(error)
-
-                    rmSync(path, { force: true })
-                    listen(true)
-                }, reject)
-            })
-
-            server.listen({ path, readableAll: false, writableAll: false }, () => resolve({
-                path: secured(path, namedPipe),
-                close: () => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
-            }))
+            return { path, server, close: () => server.close() }
         }
 
-        listen(false)
-    })
-}
+        catch (error) {
 
-export interface LocalServer {
+            const failure = error as NodeJS.ErrnoException
 
-    path: string
-    close(): Promise<void>
-}
+            if (failure.code !== "EADDRINUSE" || recovered) throw error
 
-function secured(path: string, namedPipe: boolean) {
+            if (await alive(path)) {
 
-    if (!namedPipe) chmodSync(path, 0o600)
+                throw new Error(`A system is already running here — ${dirname(path)} holds one system, and two would share its programs and persistent state`)
+            }
 
-    return path
+            if (namedPipe) throw error
+
+            rmSync(path, { force: true })
+        }
+    }
 }
 
 function alive(path: string) {

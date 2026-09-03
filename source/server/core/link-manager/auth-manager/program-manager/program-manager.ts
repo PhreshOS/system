@@ -3,7 +3,6 @@ import { Connect, Subscribe } from "@the-link/core/decorators"
 import { randomUUID } from "node:crypto"
 import { TheLink } from "@the-link/core"
 import SqliteDatabase from "@libs/sqlite-database"
-import { Transmitted } from "@the-link/messagepack"
 import FileManager from "@libs/file-manager"
 import FileArea from "@libs/file-area"
 import openStore from "@server/core/open-store"
@@ -20,7 +19,6 @@ import Entry, { type ProgramRecord } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import { readStartup, removeStartup, writeStartup } from "./startup"
-import { CommandServerRuntime, WorkerServerRuntime } from "../process-manager/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 import { readPermissions, writePermissions } from "./permissions"
 import {
@@ -68,7 +66,7 @@ export default class ProgramManager extends TheLink {
     // This keeps find-or-create atomic even when another caller uses create.
     private readonly creating = new Map<string, Promise<void>>()
 
-    private readonly clientCommands = new Map<string, () => void>()
+    private readonly commands = new Map<string, () => void>()
 
     // What each program remembers about itself, opened on first use and
     // kept by the identity of the program that asked.
@@ -712,12 +710,13 @@ export default class ProgramManager extends TheLink {
         return await this.forget(this.held(subject), asker)
     }
 
-    @Connect("/client-command")
-    protected async clientCommand(stream: string, operation: string, subject: unknown, value: unknown, asker: string) {
+    @Connect("/command")
+    protected async command(stream: string, operation: string, subject: unknown, value: unknown, asker: string) {
 
-        if (!stream || this.clientCommands.has(stream)) throw new Error("A Client Program command needs a unique stream")
+        if (!stream || this.commands.has(stream)) throw new Error("A Program command needs a unique stream")
 
         const program = this.held(subject)
+        const connection = this.authManager.connectionSignal()
         let active = true
         let running: Process | null = null
         const cancel = () => {
@@ -726,7 +725,8 @@ export default class ProgramManager extends TheLink {
             if (running) this.authManager.linkManager.application.system.exitProcess(running).catch(() => undefined)
         }
 
-        this.clientCommands.set(stream, cancel)
+        this.commands.set(stream, cancel)
+        connection.addEventListener("abort", cancel, { once: true })
 
         try {
 
@@ -738,7 +738,7 @@ export default class ProgramManager extends TheLink {
                 const emit = (event: unknown) => {
 
                     if (!active) return
-                    sending = sending.then(async () => { await this.$outbound.publish("/client-command-output", stream, event) })
+                    sending = sending.then(async () => { await this.$outbound.publish("/command-output", stream, event) })
                 }
 
                 await this.runProcess(program, value as Launch ?? {}, {
@@ -775,19 +775,20 @@ export default class ProgramManager extends TheLink {
             for await (const chunk of command) {
 
                 if (!active) return
-                await this.$outbound.publish("/client-command-output", stream, chunk)
+                await this.$outbound.publish("/command-output", stream, chunk)
             }
         }
         finally {
 
-            this.clientCommands.delete(stream)
+            connection.removeEventListener("abort", cancel)
+            this.commands.delete(stream)
         }
     }
 
-    @Subscribe("/client-command-cancel")
-    protected cancelClientCommand(stream: unknown) {
+    @Subscribe("/command-cancel")
+    protected cancelCommand(stream: unknown) {
 
-        if (typeof stream === "string") this.clientCommands.get(stream)?.()
+        if (typeof stream === "string") this.commands.get(stream)?.()
     }
 
     /** Install while exposing command output with consumer-driven backpressure. */
@@ -1315,11 +1316,7 @@ export default class ProgramManager extends TheLink {
 
         if (!server) throw new Error("This program declared no server half")
 
-        return server.startCommand !== undefined
-
-            ? new CommandServerRuntime(server.startCommand, program.serverPath!)
-
-            : new WorkerServerRuntime(program.serverEntryPath!)
+        return this.authManager.linkManager.application.createServerRuntime(program)
     }
 
     /** Resolves and validates one client endpoint incarnation. */
@@ -1379,7 +1376,7 @@ export default class ProgramManager extends TheLink {
     }
 }
 
-export type TransmittedProgramManager = Transmitted<ProgramManager>
+export type ProgramManagerSnapshot = ReturnType<ProgramManager["toJSON"]>
 
 // Which of a half's own pages a launch asked for.
 //

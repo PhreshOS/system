@@ -1,4 +1,4 @@
-import { type PermissionChoice, type SystemDialog, type TransmittedDialogManager } from "@server/core/dialog-manager"
+import { type DialogManagerSnapshot, type PermissionChoice, type SystemDialog } from "@server/core/dialog-manager"
 import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "./auth-manager"
@@ -10,7 +10,7 @@ export default class DialogManager extends TheLink {
 
     public readonly dialogs: Map<string, SystemDialog>
 
-    public constructor(authManager: AuthManager, payload: TransmittedDialogManager) {
+    public constructor(authManager: AuthManager, payload: DialogManagerSnapshot) {
 
         super()
 

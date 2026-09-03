@@ -2,7 +2,6 @@ import { Forward, Subscribe } from "@the-link/core/decorators"
 import AuthManager from "./auth-manager/auth-manager"
 import { TheLink } from "@the-link/core"
 import { Property } from "@the-link/core"
-import { Transmitted } from "@the-link/messagepack"
 import Application from "../application"
 import { type Appearance } from "@phreshos/core"
 import { type AuthenticationState, type RegistrationError } from "../authentication/authentication"
@@ -12,7 +11,7 @@ export default class LinkManager extends TheLink {
 
     public readonly application: Application
 
-    /** Live desktop connections. Authentication sessions outlive these links. */
+    /** Live boundary connections. Ordinary authentication sessions outlive them. */
     public readonly connections = new Map<string, Connection>()
 
     private readonly connectionContext = new AsyncLocalStorage<Connection>()
@@ -44,15 +43,39 @@ export default class LinkManager extends TheLink {
         return connection
     }
 
+    /** Create and bind a new authenticated session to a live connection. */
+    public async addSession(connection: Connection, owner = false) {
+
+        if (this.connections.get(connection.identity) !== connection) throw new Error("Connection not found")
+        if (connection.session) throw new Error("The connection already has a session")
+
+        const session = await this.application.authentication.createSession(owner)
+
+        if (!await this.application.authentication.connectSession(session)) throw new Error("The created session is unavailable")
+
+        connection.session = session
+
+        return {
+
+            authorization: this.application.encryptor.createToken({ version: 1, session }),
+
+            linkManager: this,
+
+            authManager: this.authManager
+        }
+    }
+
     public async removeConnection(connection: Connection) {
 
         if (this.connections.get(connection.identity) !== connection) return
+
+        connection.close()
 
         this.authManager.processManager.releaseConnection(connection.identity)
 
         this.connections.delete(connection.identity)
 
-        if (connection.session && !this.connected(connection.session)) await this.application.authentication.disconnectSession(connection.session)
+        if (connection.session && !this.connected(connection.session)) await this.releaseSession(connection.session)
     }
 
     public receive(connection: Connection, event: string, ...values: unknown[]) {
@@ -186,7 +209,16 @@ export default class LinkManager extends TheLink {
             return
         }
 
-        if (!this.connected(session)) await this.application.authentication.disconnectSession(session)
+        if (!this.connected(session)) await this.releaseSession(session)
+    }
+
+    private releaseSession(session: string) {
+
+        return this.application.authentication.sessionOwner(session)
+
+            ? this.application.authentication.removeSession(session)
+
+            : this.application.authentication.disconnectSession(session)
     }
 
     /** Persist and publish one authorized Appearance replacement in call order. */
@@ -218,7 +250,10 @@ export default class LinkManager extends TheLink {
     }
 }
 
-export type TransmittedLinkManager = Transmitted<LinkManager>
+export interface LinkManagerSnapshot {
+
+    appearance: ReturnType<Property<Appearance>["toJSON"]>
+}
 
 export type RegistrationResponse = { authorization: string } | { error: RegistrationError }
 
@@ -228,11 +263,20 @@ export class Connection {
 
     public session: string | null = null
 
+    private readonly lifetime = new AbortController()
+
+    public readonly signal = this.lifetime.signal
+
     public constructor(private readonly manager: LinkManager, public readonly link: TheLink) {}
 
     public publish(event: string, ...values: unknown[]) {
 
         return this.manager.receive(this, event, ...values)
+    }
+
+    public close() {
+
+        this.lifetime.abort(new Error("The System representation disconnected"))
     }
 }
 

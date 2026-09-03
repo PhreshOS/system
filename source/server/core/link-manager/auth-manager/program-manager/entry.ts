@@ -1,4 +1,3 @@
-import { Transmitted } from "@the-link/messagepack"
 import Program from "./program"
 
 /**
@@ -48,5 +47,3 @@ export default class Entry {
 }
 
 export type ProgramRecord = ReturnType<Entry["record"]>
-
-export type TransmittedEntry = Transmitted<ProgramRecord>
