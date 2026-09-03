@@ -872,13 +872,15 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // fact, and the gutter remains private desktop layout state.
         if (word === "desktopSurface") return [desktop()]
 
-        // Uploads are one flat public collection. A pane may provide bytes or
-        // one opaque file key; it never receives a filesystem path or route.
+        // Uploads are one flat public collection. The all permission exposes
+        // its native entry point as part of the complete System contract.
         if (word === "uploads") {
 
             await access.requireAll()
 
             const operation = args[0]
+
+            if (operation === "path") return [await authManager.uploadsPath()]
 
             if (operation === "stat") {
 

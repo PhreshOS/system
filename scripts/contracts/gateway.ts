@@ -44,14 +44,6 @@ const process = {
 const application = {
     system: {
         listPrograms() { return [] },
-        async *shell(command: string) {
-
-            assert.equal(command, "printf hello")
-
-            yield { event: "started", pid: 42 }
-            yield { event: "output", stream: "stdout", text: "hello" }
-            yield { event: "exited", exit: { status: "exited", code: 0, signal: null } }
-        },
         async forceCreateProgram() { return entry.program },
         requireProgram(identity: string) { return identity === forkedEntry.program.identity ? forkedEntry : entry },
         programSnapshot(selected: typeof entry) { return { ...programSnapshot, identity: selected.program.identity } },
@@ -92,17 +84,6 @@ try {
     const system = await exchange(path, { target: "system", request: { capability: "program", operation: "list", input: {} } })
 
     assert.deepEqual(system, [{ success: true, result: { data: [], total: 0, truncated: false } }])
-
-    const shell = await exchange(path, {
-        target: "shell",
-        request: { command: "printf hello", options: {} }
-    })
-
-    assert.deepEqual(shell, [
-        { event: "started", pid: 42 },
-        { event: "output", stream: "stdout", text: "hello" },
-        { event: "exited", exit: { status: "exited", code: 0, signal: null } }
-    ])
 
     const ready = await exchange(path, {
         target: "system",

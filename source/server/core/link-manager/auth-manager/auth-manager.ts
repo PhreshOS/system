@@ -106,6 +106,12 @@ export default class AuthManager extends TheLink {
         throw new Error(`System storage does not know "${operation}"`)
     }
 
+    @Connect("/uploads/path")
+    protected async uploadsPath() {
+
+        return this.uploads.fileManager.path
+    }
+
     @Connect("/appearance/update")
     protected async changeAppearance(value: unknown) {
 

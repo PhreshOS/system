@@ -58,6 +58,11 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/storage", operation, values)
     }
 
+    public async uploadsPath() {
+
+        return await this.$outbound.publishFirst("/uploads/path") as string
+    }
+
     public async updateAppearance(value: unknown) {
 
         return await this.$outbound.publishFirst("/appearance/update", value)
