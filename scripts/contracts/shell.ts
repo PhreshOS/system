@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import shell from "@server/core/shell"
 
-const executable = JSON.stringify(process.execPath)
-const script = JSON.stringify("process.stdout.write(process.env.PHRESHOS_SHELL_TEST); process.stderr.write('error'); process.exit(7)")
+const executable = `"${process.execPath}"`
+const script = JSON.stringify("process.stdout.write(process.env.PHRESHOS_SHELL_TEST); process.stderr.write('error'); process.exitCode = 7")
 const events = []
 
 for await (const event of shell(`${executable} -e ${script}`, { env: { PHRESHOS_SHELL_TEST: "output" } })) events.push(event)
