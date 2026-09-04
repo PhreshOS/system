@@ -26,9 +26,9 @@
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "check": "tsc --noEmit",
-    "dev": "vite-node scripts/dev.ts",
+    "dev": "NODE_ENV=development vite-node scripts/dev.ts",
     "build": "vite-node scripts/build.ts",
-    "start": "node --run build && node dist/server/main.js",
+    "start": "node --run build && NODE_ENV=development node dist/server/main.js",
     "pack": "node --run build && vite-node scripts/pack.ts",
     "verify:contracts": "vite-node scripts/verify-contracts.ts",
     "verify:distribution": "node scripts/verify-distribution.mjs",

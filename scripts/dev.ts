@@ -1,13 +1,27 @@
 import { displayName, name, version } from "@/package.json"
 import doors from "@server/view/http/doors"
 import view from "@server/view/view"
-import { environmentHome } from "@server/view/configuration"
+import { defaultHome, defaultPorts, environmentHome, environmentPorts } from "@server/view/configuration"
 import { createServer } from "vite"
-import { fileURLToPath } from "node:url"
 
-const home = environmentHome(name, process.env) ?? fileURLToPath(new URL("../storage", import.meta.url))
+const home = environmentHome(name, process.env) ?? defaultHome(true)
 
-const host = await view({ name, displayName, version, mode: "development", hostname: "localhost", home })
+const host = await view({
+
+    name,
+
+    displayName,
+
+    version,
+
+    mode: "development",
+
+    hostname: "localhost",
+
+    home,
+
+    ports: environmentPorts(name, process.env) ?? defaultPorts(true)
+})
 
 const client = await createServer({
 

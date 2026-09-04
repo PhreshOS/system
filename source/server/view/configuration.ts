@@ -1,12 +1,25 @@
 import environment from "@libs/environment"
 import type { ServerType } from "@hono/node-server"
 import { readFile, rm } from "node:fs/promises"
+import { homedir } from "node:os"
 import { isAbsolute, normalize, resolve } from "node:path"
 
 /** Expand one inclusive TCP port range. */
 export function portRange(from: number, to: number) {
 
     return Array.from({ length: to - from + 1 }, (_, index) => from + index)
+}
+
+/** Select the default state root for the current runtime environment. */
+export function defaultHome(development: boolean) {
+
+    return development ? resolve("storage") : resolve(homedir(), ".phreshos")
+}
+
+/** Select the default public ports for the current runtime environment. */
+export function defaultPorts(development: boolean) {
+
+    return development ? portRange(5300, 5399) : portRange(4300, 4399)
 }
 
 /** Read the optional ordered production port selection. */
@@ -85,21 +98,6 @@ export async function listenOnPorts(server: ServerType, hostname: string, ports?
     }
 
     throw new Error("No configured System port is available")
-}
-
-/** Read the stable fallback home supplied by the native service definition. */
-export function defaultHome(arguments_: string[]) {
-
-    const positions = arguments_.flatMap((value, index) => value === "--default-home" ? [index] : [])
-
-    if (positions.length === 0) return undefined
-    if (positions.length !== 1) throw new Error("--default-home can be supplied only once")
-
-    const value = arguments_[positions[0]! + 1]
-
-    if (!value || !isAbsolute(value)) throw new Error("--default-home must be followed by an absolute filesystem path")
-
-    return normalize(value)
 }
 
 /** Consume the optional one-time home request supplied through the native service boundary. */

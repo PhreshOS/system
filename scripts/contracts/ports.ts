@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert"
 import { createServer } from "node:http"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { environmentPorts, listenOnPorts, parsePorts, portRange, requestedPorts } from "@server/view/configuration"
+import { homedir, tmpdir } from "node:os"
+import { join, resolve } from "node:path"
+import { defaultHome, defaultPorts, environmentPorts, listenOnPorts, parsePorts, portRange, requestedPorts } from "@server/view/configuration"
 
 assert.equal(environmentPorts("phreshos", {}), undefined)
 assert.deepEqual(environmentPorts("phreshos", { PHRESHOS_PORT: "4305" }), [4305])
@@ -12,6 +12,10 @@ assert.deepEqual(
     [4196, 4234, 5000, 5001, 5002]
 )
 assert.deepEqual(portRange(4300, 4399), Array.from({ length: 100 }, (_, index) => 4300 + index))
+assert.deepEqual(defaultPorts(false), portRange(4300, 4399))
+assert.deepEqual(defaultPorts(true), portRange(5300, 5399))
+assert.equal(defaultHome(false), resolve(homedir(), ".phreshos"))
+assert.equal(defaultHome(true), resolve("storage"))
 
 for (const value of ["", "0", "65536", "43.12", "port", "4300-", "4301-4300", "4300,,4301"]) {
 
