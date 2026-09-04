@@ -24,6 +24,16 @@ const catalog = new PermissionCatalog({
         title: "Network",
         description: "Use System networking with every request target or selected target scopes."
     },
+    storage: {
+        default: [],
+        title: "Storage",
+        description: "Use every native filesystem path or selected operation-and-path scopes."
+    },
+    uploads: {
+        default: [],
+        title: "Uploads",
+        description: "Create values in the System uploads collection."
+    },
     appearance: {
         default: [],
         title: "Appearance",
@@ -54,11 +64,25 @@ assert.deepEqual(catalog.definition("network"), {
     title: "Network",
     description: "Use System networking with every request target or selected target scopes."
 })
+assert.deepEqual(catalog.definition("storage"), {
+    valueDomain: "storage",
+    default: [],
+    title: "Storage",
+    description: "Use every native filesystem path or selected operation-and-path scopes."
+})
+assert.deepEqual(catalog.definition("uploads"), {
+    valueDomain: "none",
+    default: [],
+    title: "Uploads",
+    description: "Create values in the System uploads collection."
+})
 assert.deepEqual(catalog.resolve("all", true), [])
 assert.deepEqual(catalog.resolve("all", []), [])
 assert.deepEqual(catalog.resolve("services", true), [])
 assert.deepEqual(catalog.resolve("services", ["flambo", "terminal", "flambo"]), ["flambo", "terminal"])
 assert.deepEqual(catalog.resolve("network", ["HTTPS://API.Example.com:443/v1/**"]), ["https://api.example.com/v1/**"])
+assert.deepEqual(catalog.resolve("storage", ["delete,read:Documents/**"]), ["read,delete:Documents/**"])
+assert.deepEqual(catalog.resolve("uploads", true), [])
 assert.equal(catalog.resolve("all", false), false)
 assert.equal(catalog.resolve("all", null), null)
 
@@ -78,6 +102,10 @@ assert(catalog.grants("network", ["https://api.example.com"], ["https://api.exam
 assert(catalog.grants("network", ["https://*.example.com/v1/**"], ["https://eu.example.com/v1/users"]))
 assert(!catalog.grants("network", ["https://*.example.com/v1/**"], ["https://example.com/v1/users"]))
 assert(!catalog.grants("network", ["https://api.example.com/v1/**"], ["https://api.example.com/v2/users"]))
+assert(catalog.grants("storage", ["Documents/**"], ["read:Documents/report.txt"]))
+assert(catalog.grants("storage", ["read,delete:Documents/**"], ["delete:Documents/old.txt"]))
+assert(!catalog.grants("storage", ["read:Documents/**"], ["write:Documents/report.txt"]))
+assert(!catalog.grants("storage", ["Documents/report.txt"], ["read:Documents/**"]))
 assert(catalog.allows("all", [], null, []))
 assert(!catalog.allows("all", null, null, []))
 assert(catalog.allows("services", [], null, ["flambo"]))
@@ -110,6 +138,8 @@ assert(!catalog.needReload("all", [], []))
 assert(!catalog.needReload("services", null, []))
 assert(!catalog.needReload("programs", ["flambo"], []))
 assert(!catalog.needReload("network", null, []))
+assert(!catalog.needReload("storage", null, []))
+assert(!catalog.needReload("uploads", null, []))
 assert(!catalog.needReload("appearance", null, []))
 assert(!catalog.needReload("desktopPreferences", null, []))
 
@@ -118,6 +148,8 @@ assert.throws(() => catalog.resolve("all", ["unknown"]), /unknown value/)
 assert.throws(() => catalog.resolve("appearance", ["flambo"]), /unknown value/)
 assert.throws(() => catalog.resolve("services", ["Not a Program"]), /unknown value/)
 assert.throws(() => catalog.resolve("network", ["api.example.com"]), /unknown value/)
+assert.throws(() => catalog.resolve("storage", ["all:Documents"]), /unknown value/)
+assert.throws(() => catalog.resolve("storage", ["all,read:Documents"]), /unknown value/)
 assert.throws(() => catalog.declarations({ all: ["unknown"] }), /unknown value/)
 assert.throws(() => catalog.stored({ all: true }), /unresolved shorthand/)
 assert.throws(() => new PermissionCatalog({} as never), /needs a definition/)
@@ -130,6 +162,8 @@ assert.throws(() => new PermissionCatalog({
     services: catalog.definition("services"),
     programs: catalog.definition("programs"),
     network: catalog.definition("network"),
+    storage: catalog.definition("storage"),
+    uploads: catalog.definition("uploads"),
     appearance: catalog.definition("appearance"),
     desktopPreferences: catalog.definition("desktopPreferences")
 } as never), /invalid default/)

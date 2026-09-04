@@ -1541,6 +1541,19 @@ export default class ProcessManager extends TheLink {
         )
     }
 
+    /** Tests one native Storage target against this Process's effective grants. */
+    public grantsStorage(identity: string, path: string, operation?: "read" | "write" | "delete") {
+
+        const process = this.find(identity)
+
+        return permissionCatalog.allowsStorage(
+            this.effectivePermission(process, "all"),
+            this.effectivePermission(process, "storage"),
+            path,
+            operation
+        )
+    }
+
     /** Resolves one permission request through declarations, grants, then the owner. */
     public async requestPermission<Name extends PermissionName>(
         identity: string,

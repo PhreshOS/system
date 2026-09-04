@@ -10,8 +10,10 @@ import {
     type PermissionName,
     type PermissionValue,
     type PermissionValueDomain,
-    type Permissions
+    type Permissions,
+    type StoragePermissionOperation
 } from "@phreshos/core"
+import { nativeStorageScopeAccesses, nativeStorageScopeCovers } from "./storage-permission"
 
 /** Validation and derivation over the one permission domain defined by Core. */
 export class PermissionCatalog {
@@ -174,6 +176,21 @@ export class PermissionCatalog {
         return this.granted(all) || this.grants(name, permission, requested)
     }
 
+    /** Tests one native Storage path against the complete effective authority. */
+    public allowsStorage(
+        all: PermissionGrant,
+        storage: PermissionGrant,
+        path: string,
+        operation?: StoragePermissionOperation
+    ) {
+
+        if (this.granted(all)) return true
+        if (!Array.isArray(storage)) return false
+        if (storage.length === 0) return true
+
+        return storage.some(scope => nativeStorageScopeAccesses(scope, path, operation))
+    }
+
     public combine<Name extends PermissionName>(name: Name, ...grants: PermissionGrant[]): Permission<Name> {
 
         const present = grants.filter((grant): grant is readonly string[] => Array.isArray(grant))
@@ -259,7 +276,7 @@ function unique(values: readonly string[]) {
 
 function valued(domain: PermissionValueDomain) {
 
-    if (domain === "program" || domain === "network") return true
+    if (domain === "program" || domain === "network" || domain === "storage") return true
     if (domain === "none") return false
 
     domain satisfies never
@@ -271,6 +288,7 @@ function valueCovers(domain: PermissionValueDomain, grant: string, requested: st
 
     if (domain === "program") return grant === requested
     if (domain === "network") return networkScopeCovers(grant, requested)
+    if (domain === "storage") return nativeStorageScopeCovers(grant, requested)
     if (domain === "none") return false
 
     domain satisfies never
@@ -300,6 +318,16 @@ export const permissionCatalog = new PermissionCatalog({
         default: [],
         title: "Network",
         description: "Use System networking with every request target or selected target scopes."
+    },
+    storage: {
+        default: [],
+        title: "Storage",
+        description: "Use every native filesystem path or selected operation-and-path scopes."
+    },
+    uploads: {
+        default: [],
+        title: "Uploads",
+        description: "Create values in the System uploads collection."
     },
     appearance: {
         default: [],

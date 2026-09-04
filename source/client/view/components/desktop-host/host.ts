@@ -793,6 +793,17 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const program = await permittedProgram(args[0])
 
+            if (operation === "path" || operation === "resolve") {
+
+                const path = await programManager.area(address(program), word, operation, args.slice(2))
+
+                if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
+
+                await access.requireStorage(path)
+
+                return [path]
+            }
+
             if (operation === "stream" || operation === "write") {
 
                 const joins = args[2]
@@ -853,20 +864,52 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "host-storage") {
 
-            await access.requireAll()
+            const operation = String(args[0])
+            const paths = args.slice(1)
 
-            return [await authManager.storage(String(args[0]), args.slice(1).map(String))]
+            if (paths.some(path => typeof path !== "string")) throw new Error("A storage path is a list of names")
+
+            if (operation === "path") {
+
+                const path = await authManager.storage(operation, [])
+
+                if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
+
+                await access.requireStorage(path)
+
+                return [path]
+            }
+
+            const path = await authManager.storage("resolve", paths as string[])
+
+            if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
+
+            if (operation === "resolve") {
+
+                await access.requireStorage(path)
+
+                return [path]
+            }
+
+            const required = operation === "delete" || operation === "clear" ? "delete" : "read"
+
+            await access.requireStorage(path, required)
+
+            return [await authManager.storage(operation, paths as string[])]
         }
 
         if (word === "host-storage-stream" || word === "host-storage-write") {
-
-            await access.requireAll()
 
             const path = args[0]
 
             if (!Array.isArray(path) || path.some(part => typeof part !== "string")) throw new Error("A storage path is a list of names")
 
             const writing = word === "host-storage-write"
+            const resolved = await authManager.storage("resolve", path)
+
+            if (typeof resolved !== "string") throw new Error("The System returned an invalid Storage path")
+
+            await access.requireStorage(resolved, writing ? "write" : "read")
             const { control, controller } = cancellation(args[2], word)
             const request = { scope: "system" as const, path }
 
@@ -900,15 +943,20 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // fact, and the gutter remains private desktop layout state.
         if (word === "desktopSurface") return [desktop()]
 
-        // Uploads are one flat public collection. The all permission exposes
-        // its native entry point as part of the complete System contract.
+        // Completed uploads are public values. Creating one has its own
+        // permission; exposing the native directory requires complete access.
         if (word === "uploads") {
-
-            await access.requireAll()
 
             const operation = args[0]
 
-            if (operation === "path") return [await authManager.uploadsPath()]
+            if (operation === "path") {
+
+                const path = await authManager.uploadsPath()
+
+                await access.requireStorage(path)
+
+                return [path]
+            }
 
             if (operation === "stat") {
 
@@ -946,6 +994,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             }
 
             if (operation !== "write") throw new Error(`Uploads does not know the operation "${String(operation)}"`)
+
+            await access.require("uploads", [])
+
             if (!clientBody(args[1])) throw new Error("Uploads write takes bytes")
 
             const description = args[2] as Partial<UploadValue> | null

@@ -171,6 +171,18 @@ export default class AuthManager extends TheLink {
         return this.processManager.grants(process, permission, values)
     }
 
+    @Connect("/permission/storage")
+    protected async grantsStorage(process: unknown, path: unknown, operation: unknown) {
+
+        if (typeof process !== "string"
+            || typeof path !== "string"
+            || operation !== undefined && operation !== "read" && operation !== "write" && operation !== "delete") {
+            throw new Error("A Storage permission check is invalid")
+        }
+
+        return this.processManager.grantsStorage(process, path, operation)
+    }
+
     @Connect("/permission/request")
     protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown) {
 

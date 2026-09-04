@@ -94,6 +94,11 @@ export default class SystemAccess {
         await this.require("network", [scope])
     }
 
+    public async requireStorage(path: string, operation?: "read" | "write" | "delete") {
+
+        if (!await this.authManager.grantsStorage(this.pane, path, operation)) throw new Error(denied)
+    }
+
     public async require<Name extends PermissionName>(name: Name, values: readonly PermissionValue<Name>[]) {
 
         if (!await this.authManager.grantsPermission(this.pane, name, values)) throw new Error(denied)
