@@ -27,6 +27,7 @@ import {
     type PermissionInput,
     type PermissionName,
     type PermissionRequest,
+    type PermissionValue,
     type Permissions
 } from "@phreshos/core"
 
@@ -169,7 +170,7 @@ export default class ProgramManager extends TheLink {
         return clonePermissions(readPermissions(program))
     }
 
-    /** Tests one requested value against this Program's persistent layer only. */
+    /** Tests one requested value against this Program's stored permissions. */
     public allowsPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
@@ -187,6 +188,42 @@ export default class ProgramManager extends TheLink {
             permissions.all ?? null,
             permissions[name] ?? null,
             requested
+        )
+    }
+
+    /** Resolves one permission from this Program's declaration and stored value. */
+    public effectivePermission<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        stored = this.permission(program, name)
+    ) {
+
+        return permissionCatalog.effective(name, program.clientPermissions[name] ?? null, stored)
+    }
+
+    /** Tests one request against this Program's complete effective authority. */
+    public grantsPermission<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        requested: readonly PermissionValue<Name>[]
+    ) {
+
+        return permissionCatalog.allows(
+            name,
+            this.effectivePermission(program, "all"),
+            this.effectivePermission(program, name),
+            requested
+        )
+    }
+
+    /** Tests one native Storage operation against this Program's authority. */
+    public grantsStorage(program: Program, path: string, operation?: "read" | "write" | "delete") {
+
+        return permissionCatalog.allowsStorage(
+            this.effectivePermission(program, "all"),
+            this.effectivePermission(program, "storage"),
+            path,
+            operation
         )
     }
 

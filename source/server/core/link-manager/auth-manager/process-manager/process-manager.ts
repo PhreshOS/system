@@ -27,7 +27,6 @@ import {
     type PermissionName,
     type PermissionRequest,
     type PermissionValue,
-    type Permissions,
     type ServerLaunch,
     type ServiceKey,
     type WindowGeometry,
@@ -1527,110 +1526,12 @@ export default class ProcessManager extends TheLink {
         return this.authManager.programManager.permission(this.find(identity).program, name)
     }
 
-    /** Reads one assignment from this Process's temporary layer only. */
-    public processPermission<Name extends PermissionName>(process: Process, name: Name): Permission<Name> {
-
-        return clonePermission((process.permissions.get(name) ?? null) as Permission<Name>)
-    }
-
-    /** Returns an independent snapshot of this Process's temporary layer. */
-    public processPermissions(process: Process): Permissions {
-
-        return clonePermissions(Object.fromEntries(process.permissions) as Permissions)
-    }
-
-    /** Tests one request against this Process's temporary layer only. */
-    public processAllows<Name extends PermissionName>(
-        process: Process,
-        name: Name,
-        input: PermissionRequest<Name> = true
-    ) {
-
-        const requested = permissionCatalog.resolve(name, input)
-
-        if (!Array.isArray(requested)) throw new Error("A permission check must be true or a list of values")
-
-        return permissionCatalog.allows(
-            name,
-            this.processPermission(process, "all"),
-            this.processPermission(process, name),
-            requested
-        )
-    }
-
-    /** Replaces one assignment in this Process's temporary layer. */
-    public async setProcessPermission<Name extends PermissionName>(
-        process: Process,
-        name: Name,
-        input: Exclude<PermissionInput<Name>, null>
-    ) {
-
-        const before = this.processPermission(process, name)
-        const permission = permissionCatalog.resolve(name, input)
-
-        if (permission === null) throw new Error("A temporary Process permission cannot be null")
-
-        if (permissionCatalog.changed(before, permission)) process.permissions.set(name, permission)
-
-        await this.processPermissionChanged(process, name, before, permission)
-    }
-
-    /** Removes one assignment from this Process's temporary layer. */
-    public async deleteProcessPermission<Name extends PermissionName>(process: Process, name: Name) {
-
-        const before = this.processPermission(process, name)
-
-        process.permissions.delete(name)
-
-        await this.processPermissionChanged(process, name, before, null)
-    }
-
-    @Connect("/permissions")
-    protected async permissionOperations(subject: unknown, operation: unknown, name?: unknown, value?: unknown) {
-
-        const process = this.system.holdProcess(subject)
-
-        if (operation === "all") return this.processPermissions(process)
-        if (operation === "get") return this.processPermission(process, parsePermissionName(name))
-        if (operation === "allows") {
-
-            const permission = parsePermissionName(name)
-
-            return this.processAllows(process, permission, value as PermissionRequest<typeof permission>)
-        }
-        if (operation === "set") {
-
-            const permission = parsePermissionName(name)
-
-            await this.setProcessPermission(process, permission, value as Exclude<PermissionInput<typeof permission>, null>)
-
-            return
-        }
-        if (operation === "delete") {
-
-            await this.deleteProcessPermission(process, parsePermissionName(name))
-
-            return
-        }
-
-        throw new Error(`The System does not know the Process permission operation "${String(operation)}"`)
-    }
-
-    /** Tests one concrete permission against this Process's effective grants. */
+    /** Tests one concrete permission for the Program executing this Process. */
     public grants<Name extends PermissionName>(identity: string, name: Name, requested: readonly PermissionValue<Name>[]) {
 
         const process = this.find(identity)
 
-        return permissionCatalog.allows(
-
-            name,
-
-            this.effectivePermission(process, "all"),
-
-            this.effectivePermission(process, name),
-
-            requested
-        )
+        return this.authManager.programManager.grantsPermission(process.program, name, requested)
     }
 
     /** Tests one native Storage target against this Process's effective grants. */
@@ -1638,12 +1539,7 @@ export default class ProcessManager extends TheLink {
 
         const process = this.find(identity)
 
-        return permissionCatalog.allowsStorage(
-            this.effectivePermission(process, "all"),
-            this.effectivePermission(process, "storage"),
-            path,
-            operation
-        )
+        return this.authManager.programManager.grantsStorage(process.program, path, operation)
     }
 
     /** Resolves one permission request through declarations, grants, then the owner. */
@@ -1663,11 +1559,10 @@ export default class ProcessManager extends TheLink {
         if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
 
         const declared = process.program.clientPermissions[name] ?? null
-        const temporary = process.permissions.get(name) ?? null
         const stored = this.authManager.programManager.permission(process.program, name)
-        const effective = this.effectivePermission(process, name, stored)
+        const effective = this.authManager.programManager.effectivePermission(process.program, name, stored)
 
-        if (name !== "all" && permissionCatalog.granted(this.effectivePermission(process, "all"))) {
+        if (name !== "all" && permissionCatalog.granted(this.authManager.programManager.effectivePermission(process.program, "all"))) {
 
             return permissionChange([...permissionCatalog.definition(name).default], false)
         }
@@ -1677,22 +1572,10 @@ export default class ProcessManager extends TheLink {
 
         const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
 
-        if (choice === "process") {
-
-            const permission = permissionCatalog.merge(name, temporary, requested)
-            const next = permissionCatalog.effective(name, declared, permission, stored)
-
-            const needReload = permissionCatalog.needReload(name, effective, next)
-
-            await this.setProcessPermission(process, name, permission)
-
-            return permissionChange(next, needReload)
-        }
-
-        if (choice === "always") {
+        if (choice === true) {
 
             const permission = permissionCatalog.merge(name, stored, requested)
-            const next = permissionCatalog.effective(name, declared, temporary, permission)
+            const next = permissionCatalog.effective(name, declared, permission)
 
             await this.authManager.programManager.setPermission(process.program, name, permission)
 
@@ -1700,20 +1583,6 @@ export default class ProcessManager extends TheLink {
         }
 
         return Object.freeze({ permission: choice, needReload: false })
-    }
-
-    private effectivePermission<Name extends PermissionName>(
-        process: Process,
-        name: Name,
-        stored = this.authManager.programManager.permission(process.program, name)
-    ) {
-
-        return permissionCatalog.effective(
-            name,
-            process.program.clientPermissions[name] ?? null,
-            process.permissions.get(name) ?? null,
-            stored
-        )
     }
 
     /** Publishes the Client access shape changed by one stored grant. */
@@ -1729,46 +1598,21 @@ export default class ProcessManager extends TheLink {
             if (process.program !== program || !process.client) continue
 
             const declared = program.clientPermissions[name] ?? null
-            const temporary = process.permissions.get(name) ?? null
             const changed = permissionCatalog.needReload(
 
                 name,
 
-                permissionCatalog.effective(name, declared, temporary, before),
+                permissionCatalog.effective(name, declared, before),
 
-                permissionCatalog.effective(name, declared, temporary, permission)
+                permissionCatalog.effective(name, declared, permission)
             )
 
             if (!changed) continue
 
-            if (name === "all") process.setClientSameOrigin(permissionCatalog.granted(this.effectivePermission(process, name, permission)))
+            if (name === "all") process.setClientSameOrigin(permissionCatalog.granted(this.authManager.programManager.effectivePermission(program, name, permission)))
 
             await this.$outbound.publish("/client-access", process.identity, process.hosted())
         }
-    }
-
-    private async processPermissionChanged<Name extends PermissionName>(
-        process: Process,
-        name: Name,
-        before: Permission<Name>,
-        permission: Permission<Name>
-    ) {
-
-        if (!process.client) return
-
-        const declared = process.program.clientPermissions[name] ?? null
-        const stored = this.authManager.programManager.permission(process.program, name)
-        const changed = permissionCatalog.needReload(
-            name,
-            permissionCatalog.effective(name, declared, before, stored),
-            permissionCatalog.effective(name, declared, permission, stored)
-        )
-
-        if (!changed) return
-
-        if (name === "all") process.setClientSameOrigin(permissionCatalog.granted(this.effectivePermission(process, name)))
-
-        await this.$outbound.publish("/client-access", process.identity, process.hosted())
     }
 
     public cancelPermission(identity: string, request: string) {
@@ -1847,37 +1691,6 @@ export default class ProcessManager extends TheLink {
             }
 
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
-        }
-
-        if (word === "process-permissions") {
-
-            const target = this.system.holdProcess(rest[0], process)
-            const operation = rest[1]
-
-            if (operation === "all") return [this.processPermissions(target)]
-            if (operation === "get") return [this.processPermission(target, parsePermissionName(rest[2]))]
-            if (operation === "allows") {
-
-                const permission = parsePermissionName(rest[2])
-
-                return [this.processAllows(target, permission, rest[3] as PermissionRequest<typeof permission>)]
-            }
-            if (operation === "set") {
-
-                const permission = parsePermissionName(rest[2])
-
-                await this.setProcessPermission(target, permission, rest[3] as Exclude<PermissionInput<typeof permission>, null>)
-
-                return []
-            }
-            if (operation === "delete") {
-
-                await this.deleteProcessPermission(target, parsePermissionName(rest[2]))
-
-                return []
-            }
-
-            throw new Error(`The System does not know the Process permission operation "${String(operation)}"`)
         }
 
         if (word === "program-agent") {
@@ -2960,16 +2773,6 @@ function permissionChange<Name extends PermissionName>(permission: Permission<Na
         permission: Array.isArray(permission) ? [...permission] : permission,
         needReload
     })
-}
-
-function clonePermission<Name extends PermissionName>(permission: Permission<Name>): Permission<Name> {
-
-    return Array.isArray(permission) ? [...permission] : permission
-}
-
-function clonePermissions(permissions: Permissions): Permissions {
-
-    return Object.fromEntries(Object.entries(permissions).map(([name, permission]) => [name, clonePermission(permission)]))
 }
 
 // Where an answer goes, read out of the question itself.

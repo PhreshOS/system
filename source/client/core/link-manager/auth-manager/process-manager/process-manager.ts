@@ -5,7 +5,7 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Process from "./process"
-import { type ClientLaunch, type PermissionInput, type PermissionName, type ServerLaunch } from "@phreshos/core"
+import { type ClientLaunch, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { type ServiceKey, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
@@ -190,16 +190,6 @@ export default class ProcessManager extends TheLink {
     public async stopEndpoint(identity: string, which: "server" | "client") {
 
         await this.$outbound.publish("/endpoint/stop", identity, which)
-    }
-
-    public async permissions<Name extends PermissionName>(
-        subject: unknown,
-        operation: "all" | "get" | "allows" | "set" | "delete",
-        name?: Name,
-        value?: PermissionInput<Name>
-    ) {
-
-        return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
     }
 
     /** Announces a locally changed counterpart to desktop representations. */

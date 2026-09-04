@@ -115,9 +115,7 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
             <TaskbarButton small autoFocus disabled={decision.isPending} onClick={() => decision.safeExecute(null)}>Later</TaskbarButton>
 
-            <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute("process")}>Allow for this Process</TaskbarButton>
-
-            <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute("always")}>Always allow</TaskbarButton>
+            <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute(true)}>Allow for this Program</TaskbarButton>
 
         </div>
 

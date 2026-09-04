@@ -51,36 +51,6 @@ async function register(manager: ProcessManager, identity: string) {
     return await manager.register(identity, null, program(identity), {}, launch, null, false, null, null)
 }
 
-// A Process permission handle represents only its temporary assignment layer.
-// Coverage within that layer includes its own `all`, but never consults the
-// Program's persistent or declared values.
-{
-    const manager = processManager()
-    const process = await register(manager, "temporary-permissions")
-
-    assert.equal(manager.processPermission(process, "network"), null)
-    assert.deepEqual(manager.processPermissions(process), {})
-    assert.equal(manager.processAllows(process, "network", ["https://api.example.com"]), false)
-    assert.equal(manager.grants(process.identity, "network", ["https://api.example.com"]), false)
-
-    await manager.setProcessPermission(process, "network", ["https://api.example.com/v1/**"])
-
-    assert.deepEqual(manager.processPermission(process, "network"), ["https://api.example.com/v1/**"])
-    assert(manager.processAllows(process, "network", ["https://api.example.com/v1/users"]))
-    assert(!manager.processAllows(process, "network", ["https://other.example.com/users"]))
-    assert(manager.grants(process.identity, "network", ["https://api.example.com/v1/users"]))
-
-    await manager.setProcessPermission(process, "all", true)
-
-    assert(manager.processAllows(process, "appearance"))
-    assert(manager.grants(process.identity, "appearance", []))
-
-    await manager.deleteProcessPermission(process, "network")
-    await manager.deleteProcessPermission(process, "all")
-
-    assert.deepEqual(manager.processPermissions(process), {})
-}
-
 // Parentage retains the exact Process entity after it exits. Absence and
 // ended lineage therefore remain distinct states at every System boundary.
 {

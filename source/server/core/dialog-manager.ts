@@ -181,7 +181,7 @@ export interface PermissionDialog {
     readonly process: Readonly<{ identity: string, name: string | null }>
 }
 
-export type PermissionChoice = "process" | "always" | false | null
+export type PermissionChoice = true | false | null
 
 export type SystemDialog = ServerCrashDialog | PermissionDialog
 
@@ -196,7 +196,7 @@ interface PendingPermission {
 
 function isPermissionChoice(value: unknown): value is PermissionChoice {
 
-    return value === "process" || value === "always" || value === false || value === null
+    return value === true || value === false || value === null
 }
 
 export type DialogManagerSnapshot = ReturnType<DialogManager["toJSON"]>
