@@ -8,8 +8,8 @@ const events = []
 for await (const event of shell(`${executable} -e ${script}`, { env: { PHRESHOS_SHELL_TEST: "output" } })) events.push(event)
 
 assert.equal(events[0]?.event, "started")
-assert.equal(events.filter(event => event.event === "output" && event.stream === "stdout").map(event => event.text).join(""), "output", JSON.stringify(events))
-assert.equal(events.filter(event => event.event === "output" && event.stream === "stderr").map(event => event.text).join(""), "error", JSON.stringify(events))
+assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stdout" ? [event.text] : []).join(""), "output", JSON.stringify(events))
+assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stderr" ? [event.text] : []).join(""), "error", JSON.stringify(events))
 assert.deepEqual(events.at(-1), {
     event: "exited",
     exit: { status: "exited", code: 7, signal: null }
