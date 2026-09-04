@@ -38,6 +38,7 @@ process.startClient(new Window(
 
 assert.equal(process.hosted().client?.sameOrigin, false)
 
-process.setClientSameOrigin(true)
+assert.equal(process.setClientSameOrigin(true), true)
+assert.equal(process.setClientSameOrigin(true), false)
 
 assert.equal(process.hosted().client?.sameOrigin, true)

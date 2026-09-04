@@ -21,7 +21,7 @@ const authManager = {
 
         assert.equal(process, owner.identity)
 
-        return permissionCatalog.allows(name, permissions.all ?? null, permissions[name] ?? null, values as never)
+        return permissionCatalog.allows(name, values as never, permissions)
     },
     async grantsStorage(process: string, path: string, operation?: "read" | "write" | "delete") {
 

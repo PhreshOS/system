@@ -54,8 +54,7 @@ export default class SystemAccess {
         if (program === null) return await this.all()
         if (program === this.owner().program) return true
 
-        return await this.authManager.grantsPermission(this.pane, "programs", [program])
-            || await this.authManager.grantsPermission(this.pane, "services", [program])
+        return await this.authManager.grantsPermission(this.pane, "services", [program])
     }
 
     public async program(program: Program) {

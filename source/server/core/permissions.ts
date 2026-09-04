@@ -20,12 +20,9 @@ export class PermissionCatalog {
 
     private readonly definitions: PermissionDefinitions
 
-    private readonly reloads: Readonly<Partial<Record<PermissionName, PermissionReload>>>
-
     public constructor(rules: PermissionRules) {
 
         const validated: Partial<Record<PermissionName, StoredDefinition>> = {}
-        const reloads: Partial<Record<PermissionName, PermissionReload>> = {}
 
         for (const unknownName of Object.keys(rules)) {
 
@@ -33,7 +30,6 @@ export class PermissionCatalog {
             const rule = rules[name]
 
             if (!rule || typeof rule !== "object") throw new Error(`Permission "${name}" needs a definition`)
-            if (rule.requiresReload !== undefined && typeof rule.requiresReload !== "function") throw new Error(`Permission "${name}" has an invalid reload resolver`)
             if (typeof rule.title !== "string" || !rule.title.trim()) throw new Error(`Permission "${name}" needs a title`)
             if (typeof rule.description !== "string" || !rule.description.trim()) throw new Error(`Permission "${name}" needs a description`)
 
@@ -60,7 +56,6 @@ export class PermissionCatalog {
                 description: rule.description
             })
 
-            if (rule.requiresReload) reloads[name] = rule.requiresReload as PermissionReload
         }
 
         for (const name of Object.keys(clientPermissionCatalog) as PermissionName[]) {
@@ -69,7 +64,6 @@ export class PermissionCatalog {
         }
 
         this.definitions = Object.freeze(validated) as PermissionDefinitions
-        this.reloads = Object.freeze(reloads)
     }
 
     public definition<Name extends PermissionName>(name: Name): PermissionDefinition<Name> {
@@ -163,17 +157,24 @@ export class PermissionCatalog {
         return Array.isArray(permission)
     }
 
-    /** Applies the value-less all grant before one permission's own values. */
+    /** Tests complete authority, including grants implied by another permission. */
     public allows<Name extends PermissionName>(
         name: Name,
-        all: PermissionGrant,
-        permission: PermissionGrant,
-        requested: readonly PermissionValue<Name>[]
+        requested: readonly PermissionValue<Name>[],
+        ...sources: PermissionGrants[]
     ) {
 
         this.definition(name)
 
-        return this.granted(all) || this.grants(name, permission, requested)
+        const effective = (key: PermissionName) => this.effective(key, ...sources.map(source => source[key] ?? null))
+
+        if (this.granted(effective("all"))) return true
+
+        const permission = name === "services"
+            ? this.combine("services", effective("services"), effective("programs"))
+            : effective(name)
+
+        return this.grants(name, permission, requested)
     }
 
     /** Tests one native Storage path against the complete effective authority. */
@@ -226,25 +227,13 @@ export class PermissionCatalog {
         return left.length !== right.length || left.some(value => !right.includes(value))
     }
 
-    /** Resolves one concrete effective-grant transition when it occurs. */
-    public needReload<Name extends PermissionName>(name: Name, before: Permission<Name>, permission: Permission<Name>) {
-
-        if (!this.changed(before, permission)) return false
-
-        return this.reloads[name]?.(clone(before), clone(permission)) === true
-    }
 }
 
 type PermissionGrant = readonly string[] | false | null
 
-type PermissionReload<Name extends PermissionName = PermissionName> = (
-    before: Permission<Name>,
-    permission: Permission<Name>
-) => boolean
+type PermissionGrants = Readonly<Partial<Record<PermissionName, PermissionGrant>>>
 
-type PermissionRule<Name extends PermissionName> = Omit<PermissionDefinition<Name>, "valueDomain"> & Readonly<{
-    requiresReload?: PermissionReload<Name>
-}>
+type PermissionRule<Name extends PermissionName> = Omit<PermissionDefinition<Name>, "valueDomain">
 
 type PermissionRules = Readonly<{
     [Name in PermissionName]: PermissionRule<Name>
@@ -256,11 +245,6 @@ type StoredDefinition = Readonly<{
     title: string
     description: string
 }>
-
-function clone<Name extends PermissionName>(permission: Permission<Name>): Permission<Name> {
-
-    return Array.isArray(permission) ? [...permission] : permission
-}
 
 function strings(value: unknown, subject: string): string[] {
 
@@ -296,13 +280,12 @@ function valueCovers(domain: PermissionValueDomain, grant: string, requested: st
     return false
 }
 
-/** The presentation and activation rules for every Core-defined permission. */
+/** The presentation and defaults for every Core-defined permission. */
 export const permissionCatalog = new PermissionCatalog({
     all: {
         default: [],
         title: "All permissions",
-        description: "Grant every available Client permission.",
-        requiresReload: (before, permission) => Array.isArray(before) !== Array.isArray(permission)
+        description: "Grant every available Client permission."
     },
     services: {
         default: [],

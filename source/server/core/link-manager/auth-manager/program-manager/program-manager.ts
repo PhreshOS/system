@@ -185,9 +185,8 @@ export default class ProgramManager extends TheLink {
 
         return permissionCatalog.allows(
             name,
-            permissions.all ?? null,
-            permissions[name] ?? null,
-            requested
+            requested,
+            permissions
         )
     }
 
@@ -210,9 +209,10 @@ export default class ProgramManager extends TheLink {
 
         return permissionCatalog.allows(
             name,
-            this.effectivePermission(program, "all"),
-            this.effectivePermission(program, name),
-            requested
+            requested,
+            { programs: [program.identity] },
+            program.clientPermissions,
+            readPermissions(program)
         )
     }
 
@@ -242,24 +242,22 @@ export default class ProgramManager extends TheLink {
         if (permissionCatalog.changed(before, permission)) {
 
             writePermissions(program, { ...permissions, [name]: permission })
-        }
 
-        await this.authManager.processManager.storedPermissionChanged(program, name, before, permission)
+            if (name === "all") await this.authManager.processManager.updateClientAccess(program)
+        }
     }
 
     /** Removes one stored user grant without changing Program declarations. */
     public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<void> {
 
         const permissions = readPermissions(program)
-        const before = permissions[name] ?? null
-
         if (Object.hasOwn(permissions, name)) {
 
             delete permissions[name]
             writePermissions(program, permissions)
-        }
 
-        await this.authManager.processManager.storedPermissionChanged(program, name, before, null)
+            if (name === "all") await this.authManager.processManager.updateClientAccess(program)
+        }
     }
 
     @Connect("/permissions")

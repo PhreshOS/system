@@ -6,8 +6,7 @@ const catalog = new PermissionCatalog({
     all: {
         default: [],
         title: "All permissions",
-        description: "Grant every available Client permission.",
-        requiresReload: (before, permission) => Array.isArray(before) !== Array.isArray(permission)
+        description: "Grant every available Client permission."
     },
     services: {
         default: [],
@@ -106,10 +105,19 @@ assert(catalog.grants("storage", ["Documents/**"], ["read:Documents/report.txt"]
 assert(catalog.grants("storage", ["read,delete:Documents/**"], ["delete:Documents/old.txt"]))
 assert(!catalog.grants("storage", ["read:Documents/**"], ["write:Documents/report.txt"]))
 assert(!catalog.grants("storage", ["Documents/report.txt"], ["read:Documents/**"]))
-assert(catalog.allows("all", [], null, []))
-assert(!catalog.allows("all", null, null, []))
-assert(catalog.allows("services", [], null, ["flambo"]))
-assert(catalog.allows("services", null, ["flambo"], ["flambo"]))
+assert(catalog.allows("all", [], { all: [] }))
+assert(!catalog.allows("all", [], {}))
+assert(catalog.allows("services", ["browser"], { all: [] }))
+assert(catalog.allows("services", ["browser"], { services: ["browser"] }))
+assert(catalog.allows("services", ["browser"], { programs: [] }))
+assert(catalog.allows("services", [], { programs: [] }))
+assert(catalog.allows("services", ["browser"], { programs: ["browser"] }))
+assert(catalog.allows("services", ["browser", "editor"], { programs: ["browser"], services: ["editor"] }))
+assert(catalog.allows("services", ["browser", "editor"], { programs: ["browser"] }, { services: ["editor"] }))
+assert(!catalog.allows("services", ["editor"], { programs: ["browser"] }))
+assert(!catalog.allows("services", [], { programs: ["browser"] }))
+assert(!catalog.allows("programs", ["browser"], { services: [] }))
+assert(catalog.allows("services", ["browser"], { programs: [], services: false }))
 assert.equal(catalog.combine("all", null, false), null)
 assert.deepEqual(catalog.combine("all", []), [])
 assert.deepEqual(catalog.combine("services", ["flambo"], ["terminal"]), ["flambo", "terminal"])
@@ -131,17 +139,6 @@ assert.deepEqual(catalog.merge("network", ["https://api.example.com"], ["wss://e
 assert(!catalog.changed([], []))
 assert(!catalog.changed(["flambo", "terminal"], ["terminal", "flambo"]))
 assert(catalog.changed(["flambo"], []))
-
-assert(catalog.needReload("all", null, []))
-assert(catalog.needReload("all", [], null))
-assert(!catalog.needReload("all", [], []))
-assert(!catalog.needReload("services", null, []))
-assert(!catalog.needReload("programs", ["flambo"], []))
-assert(!catalog.needReload("network", null, []))
-assert(!catalog.needReload("storage", null, []))
-assert(!catalog.needReload("uploads", null, []))
-assert(!catalog.needReload("appearance", null, []))
-assert(!catalog.needReload("desktopPreferences", null, []))
 
 assert.throws(() => parsePermissionName("files"), /does not know/)
 assert.throws(() => catalog.resolve("all", ["unknown"]), /unknown value/)

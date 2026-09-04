@@ -6,7 +6,7 @@ import DialogManager from "./dialog-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import {
-    type PermissionChange,
+    type Permission,
     type PermissionName,
     type PermissionRequest
 } from "@phreshos/core"
@@ -92,9 +92,9 @@ export default class AuthManager extends TheLink {
         request: string,
         name: Name,
         permission: PermissionRequest<Name>
-    ): Promise<PermissionChange<Name>> {
+    ): Promise<Permission<Name>> {
 
-        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as PermissionChange<Name>
+        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as Permission<Name>
     }
 
     public async cancelPermission(process: string, request: string) {

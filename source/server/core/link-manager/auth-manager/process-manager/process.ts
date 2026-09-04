@@ -114,7 +114,11 @@ export default class Process {
 
     public setClientSameOrigin(sameOrigin: boolean) {
 
+        if (this.clientSameOrigin === sameOrigin) return false
+
         this.clientSameOrigin = sameOrigin
+
+        return true
     }
 
     public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {

@@ -22,7 +22,6 @@ import {
     type ClientLaunch,
     type Launch,
     type Permission,
-    type PermissionChange,
     type PermissionInput,
     type PermissionName,
     type PermissionRequest,
@@ -1548,7 +1547,7 @@ export default class ProcessManager extends TheLink {
         request: string,
         name: Name,
         input: PermissionRequest<Name>
-    ): Promise<PermissionChange<Name>> {
+    ): Promise<Permission<Name>> {
 
         const process = this.find(identity)
 
@@ -1558,58 +1557,36 @@ export default class ProcessManager extends TheLink {
 
         if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
 
-        const declared = process.program.clientPermissions[name] ?? null
+        if (this.authManager.programManager.grantsPermission(process.program, name, requested)) return requested
+
         const stored = this.authManager.programManager.permission(process.program, name)
         const effective = this.authManager.programManager.effectivePermission(process.program, name, stored)
 
-        if (name !== "all" && permissionCatalog.granted(this.authManager.programManager.effectivePermission(process.program, "all"))) {
-
-            return permissionChange([...permissionCatalog.definition(name).default], false)
-        }
-
-        if (permissionCatalog.grants(name, effective, requested)) return permissionChange(effective, false)
-        if (effective === false) return Object.freeze({ permission: false, needReload: false })
+        if (effective === false) return false
 
         const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
 
         if (choice === true) {
 
-            const permission = permissionCatalog.merge(name, stored, requested)
-            const next = permissionCatalog.effective(name, declared, permission)
-
+            const permission = permissionCatalog.merge(name, this.authManager.programManager.permission(process.program, name), requested)
             await this.authManager.programManager.setPermission(process.program, name, permission)
 
-            return permissionChange(next, permissionCatalog.needReload(name, effective, next))
+            return requested
         }
 
-        return Object.freeze({ permission: choice, needReload: false })
+        return choice
     }
 
-    /** Publishes the Client access shape changed by one stored grant. */
-    public async storedPermissionChanged<Name extends PermissionName>(
-        program: Program,
-        name: Name,
-        before: Permission<Name>,
-        permission: Permission<Name>
-    ) {
+    /** Keeps each live Client's iframe access policy aligned with its Program. */
+    public async updateClientAccess(program: Program) {
+
+        const sameOrigin = permissionCatalog.granted(this.authManager.programManager.effectivePermission(program, "all"))
 
         for (const process of this.processes.values()) {
 
             if (process.program !== program || !process.client) continue
 
-            const declared = program.clientPermissions[name] ?? null
-            const changed = permissionCatalog.needReload(
-
-                name,
-
-                permissionCatalog.effective(name, declared, before),
-
-                permissionCatalog.effective(name, declared, permission)
-            )
-
-            if (!changed) continue
-
-            if (name === "all") process.setClientSameOrigin(permissionCatalog.granted(this.authManager.programManager.effectivePermission(program, name, permission)))
+            if (!process.setClientSameOrigin(sameOrigin)) continue
 
             await this.$outbound.publish("/client-access", process.identity, process.hosted())
         }
@@ -2765,14 +2742,6 @@ interface ProcessRegistration {
 
     /** Report creation only after the authoritative Process snapshot is published. */
     created?: (process: Process) => void
-}
-
-function permissionChange<Name extends PermissionName>(permission: Permission<Name>, needReload: boolean): PermissionChange<Name> {
-
-    return Object.freeze({
-        permission: Array.isArray(permission) ? [...permission] : permission,
-        needReload
-    })
 }
 
 // Where an answer goes, read out of the question itself.
