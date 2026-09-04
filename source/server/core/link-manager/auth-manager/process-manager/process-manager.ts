@@ -907,7 +907,7 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
 
-    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, configure?: (process: Process) => void) {
+    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
 
         if (this.processes.has(identity)) {
 
@@ -965,7 +965,7 @@ export default class ProcessManager extends TheLink {
 
         try {
 
-            configure?.(process)
+            registration?.prepare?.(process)
 
             // Initial activation is one endpoint transition too. A server that
             // exits immediately is queued behind it, preserving the only coherent
@@ -987,6 +987,8 @@ export default class ProcessManager extends TheLink {
                 await this.announce("process", "create", program.identity, program.reference, processReference(process))
 
                 await this.$outbound.publish("/created", process.hosted())
+
+                registration?.created?.(process)
 
                 if (window) this.settleFront(window.layer, front)
 
@@ -2790,6 +2792,15 @@ export default class ProcessManager extends TheLink {
             processes: [...this.processes].map(([identity, process]) => [identity, process.hosted()] as [string, HostedProcess])
         }
     }
+}
+
+interface ProcessRegistration {
+
+    /** Attach observers before either Endpoint can emit output or exit. */
+    prepare?: (process: Process) => void
+
+    /** Report creation only after the authoritative Process snapshot is published. */
+    created?: (process: Process) => void
 }
 
 function permissionChange<Name extends PermissionName>(permission: Permission<Name>, needReload: boolean): PermissionChange<Name> {

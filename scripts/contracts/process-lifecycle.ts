@@ -68,7 +68,7 @@ async function register(manager: ProcessManager, identity: string) {
         false,
         null,
         null,
-        () => { throw new Error("configuration failed") }
+        { prepare() { throw new Error("configuration failed") } }
     ), /configuration failed/)
 
     assert.equal(manager.processes.has("failed-registration"), false)
@@ -99,6 +99,30 @@ async function register(manager: ProcessManager, identity: string) {
     ), /creation publication failed/)
 
     assert.equal(manager.processes.has("partial-registration"), false)
+}
+
+// A launcher can only receive a started Process after the authoritative
+// representation has received that Process's creation snapshot.
+{
+    const manager = processManager()
+    const order: string[] = []
+
+    manager.$outbound.subscribe("/created", () => { order.push("published") })
+
+    await manager.register(
+        "ordered-registration",
+        null,
+        program("ordered-registration"),
+        {},
+        launch,
+        null,
+        false,
+        null,
+        null,
+        { created() { order.push("reported") } }
+    )
+
+    assert.deepEqual(order, ["published", "reported"])
 }
 
 // A failing observer is not allowed to stop the authoritative teardown or

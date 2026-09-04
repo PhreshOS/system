@@ -1288,22 +1288,18 @@ export default class ProgramManager extends TheLink {
         // Lifecycle consumers are attached before either initial endpoint is
         // activated, so even a server command that exits immediately has a
         // complete output and exit record.
-        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, record => {
+        await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, {
+            prepare: record => {
+                record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
+                record.onServerStop((code, signal) => logs.endpointExited(identity, "server", code, signal))
+                record.onClientStop(() => logs.endpointExited(identity, "client", null, null))
 
-            record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
-
-            record.onServerStop((code, signal) => logs.endpointExited(identity, "server", code, signal))
-
-            record.onClientStop(() => logs.endpointExited(identity, "client", null, null))
-
-            if (watching) {
-
-                watching.started?.(record)
-
-                record.onServerStart(server => server.onOutput(watching.output))
-
-                record.onExit(watching.exited)
-            }
+                if (watching) {
+                    record.onServerStart(server => server.onOutput(watching.output))
+                    record.onExit(watching.exited)
+                }
+            },
+            created: record => watching?.started?.(record)
         })
 
         return identity
