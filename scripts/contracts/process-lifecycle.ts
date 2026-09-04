@@ -51,6 +51,26 @@ async function register(manager: ProcessManager, identity: string) {
     return await manager.register(identity, null, program(identity), {}, launch, null, false, null, null)
 }
 
+// Parentage retains the exact Process entity after it exits. Absence and
+// ended lineage therefore remain distinct states at every System boundary.
+{
+    const manager = processManager()
+    const parent = await register(manager, "parent")
+    const child = await manager.register("child", null, parent.program, {}, launch, null, false, null, parent)
+    const boundary = manager as unknown as {
+        parent(value: unknown): Promise<{ identity: string } | null>
+        endHost(process: Process, server: ServerProcessBoundary, args: unknown[]): Promise<unknown[]>
+    }
+
+    await manager.remove(parent.identity)
+
+    assert.equal((await boundary.parent({ identity: child.identity, reference: child.reference }))?.identity, parent.identity)
+
+    const retained = (await boundary.endHost(child, {} as ServerProcessBoundary, ["parent"]))[0] as { identity: string }
+
+    assert.equal(retained.identity, parent.identity)
+}
+
 // A failed configuration cannot leave either its Process identity or an
 // unattached runtime behind in the registry.
 {

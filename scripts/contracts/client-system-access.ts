@@ -40,8 +40,8 @@ const outsideService = { program: "outside", process: "main", endpoint: "server"
 
 assert(access.ownsProgram(ownProgram))
 assert(!access.ownsProgram(outsideProgram))
-assert(access.ownsProcess(sibling as never))
-assert(!access.ownsProcess(outside as never))
+assert(access.ownsProcess(sibling))
+assert(!access.ownsProcess(outside))
 assert(access.ownsService(ownService))
 assert(access.ownsService(ownExactService))
 assert(!access.ownsService(outsideService))
@@ -49,7 +49,7 @@ assert.equal(await access.program(ownProgram as never), ownProgram)
 assert.equal(await access.service(ownService), ownService)
 assert.equal(await access.service(ownExactService), ownExactService)
 await assert.rejects(access.program(outsideProgram as never), /Execution is not permitted/)
-await assert.rejects(access.process(outside as never), /Execution is not permitted/)
+await assert.rejects(access.process(outside), /Execution is not permitted/)
 await assert.rejects(access.service(outsideService), /Execution is not permitted/)
 await assert.rejects(access.requirePrograms(), /Execution is not permitted/)
 await assert.rejects(access.requireNetwork("https://api.example.com/v1/users"), /Execution is not permitted/)
@@ -62,7 +62,7 @@ permissions = { services: ["outside"] }
 
 assert.equal(await access.service(outsideService), outsideService)
 await assert.rejects(access.program(outsideProgram as never), /Execution is not permitted/)
-await assert.rejects(access.process(outside as never), /Execution is not permitted/)
+await assert.rejects(access.process(outside), /Execution is not permitted/)
 await assert.rejects(access.requirePrograms(), /Execution is not permitted/)
 
 permissions = { services: [] }
@@ -74,7 +74,7 @@ await assert.rejects(access.requirePrograms(), /Execution is not permitted/)
 permissions = { programs: ["outside"] }
 
 assert.equal(await access.program(outsideProgram as never), outsideProgram)
-assert.equal(await access.process(outside as never), outside)
+assert.equal(await access.process(outside), outside)
 assert.equal(await access.service(outsideService), outsideService)
 await assert.rejects(access.requirePrograms(), /Execution is not permitted/)
 
@@ -117,7 +117,7 @@ await access.requireStorage(homedir())
 permissions = { all: [] }
 
 assert.equal((await access.program(outsideProgram as never)).identity, "outside")
-assert.equal((await access.process(outside as never)).identity, outside.identity)
+assert.equal((await access.process(outside)).identity, outside.identity)
 assert.equal(await access.service(outsideService), outsideService)
 await access.requirePrograms()
 await access.require("appearance", [])

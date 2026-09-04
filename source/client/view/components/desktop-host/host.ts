@@ -348,17 +348,17 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
-        // A Process parent is resolved by its exact retained address.
+        // Parentage is immutable lineage. Its retained record remains a valid
+        // Process handle source after the parent leaves the live registry.
         if (word === "parent") {
 
             const target = await permittedProcess(args[0])
-            const parent = target.parent ? resolveProcess(target.parent) : null
 
-            if (target.parent && !parent) throw new Error("The parent Process no longer exists")
+            if (!target.parent) return [null]
 
-            if (parent) await access.process(parent)
+            await access.process(target.parent)
 
-            return [parent ? record(parent) : null]
+            return [sdkProcess(target.parent, programOf(target.parent))]
         }
 
         // A retained Process handle remains able to report its own ending.

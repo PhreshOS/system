@@ -118,10 +118,21 @@ assert(remaining)
 first.reconcile(new Map([["ordinary", remaining]]))
 await assert.rejects(removed, /representation was removed/)
 
+const parent = {
+    identity: "parent",
+    reference: "parent-reference",
+    name: "manager",
+    program: "program",
+    options: {},
+    startedAt: new Date(),
+    server: null,
+    client: null
+}
 const requester = {
     identity: "requester",
     reference: "requester-reference",
     program: "program",
+    parent,
     client: { window: { process: "requester", layer: "over" } }
 }
 const target = {
@@ -130,7 +141,7 @@ const target = {
     program: "program",
     client: { window: { process: "target", layer: "over", position: { x: 10, y: 20 } } }
 }
-const processes = new Map([[requester.identity, requester], [target.identity, target]])
+const processes = new Map<string, object>([[parent.identity, parent], [requester.identity, requester], [target.identity, target]])
 const calls: unknown[][] = []
 const localWindow = {
     state(identity: string) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
@@ -147,13 +158,29 @@ const processManager = {
 }
 const authManager = {
     processManager,
-    programManager: { programs: new Map() },
+    programManager: { programs: new Map([["program", {
+        reference: "program-reference",
+        identity: "program",
+        assetId: "00000000-0000-4000-8000-000000000000",
+        installed: true,
+        name: "Program",
+        version: null,
+        description: null,
+        hasAgent: false,
+        server: null,
+        client: null
+    }]]) },
 }
 const request = host(authManager as never, requester.identity, () => ({ size: { width: 1, height: 1 } }), () => "owner", localWindow as never)
 
 assert.deepEqual(await request("desktopSurface"), [{ size: { width: 1, height: 1 } }])
 const targetAddress = { identity: target.identity, reference: target.reference }
 const requesterAddress = { identity: requester.identity, reference: requester.reference }
+processes.delete(parent.identity)
+const parentAnswer = await request("parent", requesterAddress)
+assert(Array.isArray(parentAnswer))
+const retainedParent = parentAnswer[0] as { identity: string }
+assert.equal(retainedParent.identity, parent.identity)
 await request("windowLocalMove", requesterAddress, { x: 70, y: 80 })
 await request("windowLocalSurfaceAdd", requesterAddress, undefined, visibility)
 await request("windowLocalSurfaceRemove", requesterAddress, undefined, visibility)

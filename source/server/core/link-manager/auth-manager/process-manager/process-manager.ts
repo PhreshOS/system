@@ -1756,16 +1756,14 @@ export default class ProcessManager extends TheLink {
             return [await this.system.programStartup(program, String(rest[1]), rest[2])]
         }
 
-        // Which live process made this one through `program.process.create()`.
-        // The child retains a handle, but the registry remains authoritative:
-        // once the parent disappears that retained handle no longer resolves.
+        // Which exact process made this one through `program.process.create()`.
+        // Parentage is immutable lineage; liveness belongs to the returned
+        // Process handle rather than to this relationship.
         if (word === "parent") {
 
             const target = this.system.holdProcess(rest[0], process)
 
             if (!target.parent) return [null]
-
-            if (this.processes.get(target.parent.identity) !== target.parent) throw new Error("The parent Process no longer exists")
 
             return [processReference(target.parent)]
         }
@@ -2592,6 +2590,14 @@ export default class ProcessManager extends TheLink {
     public async exit(identity: string) {
 
         return await this.exitProcess(identity)
+    }
+
+    @Connect("/parent")
+    protected async parent(value: unknown) {
+
+        const process = this.system.holdProcess(value)
+
+        return process.parent ? processReference(process.parent) : null
     }
 
     @Connect("/endpoint/start")

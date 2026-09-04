@@ -65,7 +65,7 @@ export default class SystemAccess {
         return program
     }
 
-    public async process(process: Process) {
+    public async process<Subject extends Pick<Process, "program">>(process: Subject) {
 
         if (!await this.canProcess(process)) throw new Error(denied)
 

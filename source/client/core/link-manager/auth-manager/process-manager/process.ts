@@ -29,8 +29,8 @@ export default class Process {
 
     public client: ClientState | null
 
-    // Retained only as an address. The pane gate verifies that the parent is
-    // still live before an SDK handle may resolve it.
+    // Retained lineage from creation. It remains sufficient to reconstruct
+    // the same Process handle after the parent leaves the live registry.
     public readonly parent: ProcessRecord | null
 
     // What its launch said, carried for its whole life.
