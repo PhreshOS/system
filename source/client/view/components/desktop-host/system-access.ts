@@ -89,6 +89,11 @@ export default class SystemAccess {
         await this.require("programs", [])
     }
 
+    public async requireNetwork(scope: string) {
+
+        await this.require("network", [scope])
+    }
+
     public async require<Name extends PermissionName>(name: Name, values: readonly PermissionValue<Name>[]) {
 
         if (!await this.authManager.grantsPermission(this.pane, name, values)) throw new Error(denied)

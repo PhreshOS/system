@@ -44,6 +44,7 @@ await assert.rejects(access.program(outsideProgram as never), /Execution is not 
 await assert.rejects(access.process(outside as never), /Execution is not permitted/)
 await assert.rejects(access.service(outsideService), /Execution is not permitted/)
 await assert.rejects(access.requirePrograms(), /Execution is not permitted/)
+await assert.rejects(access.requireNetwork("https://api.example.com/v1/users"), /Execution is not permitted/)
 await assert.rejects(access.require("appearance", []), /Execution is not permitted/)
 await assert.rejects(access.require("desktopPreferences", []), /Execution is not permitted/)
 
@@ -79,6 +80,12 @@ await access.require("appearance", [])
 await access.require("desktopPreferences", [])
 await assert.rejects(access.program(outsideProgram as never), /Execution is not permitted/)
 
+permissions = { network: ["https://*.example.com/v1/**"] }
+
+await access.requireNetwork("https://api.example.com/v1/users")
+await assert.rejects(access.requireNetwork("https://example.com/v1/users"), /Execution is not permitted/)
+await assert.rejects(access.requireNetwork("https://api.example.com/v2/users"), /Execution is not permitted/)
+
 permissions = { all: [] }
 
 assert.equal((await access.program(outsideProgram as never)).identity, "outside")
@@ -87,4 +94,5 @@ assert.equal(await access.service(outsideService), outsideService)
 await access.requirePrograms()
 await access.require("appearance", [])
 await access.require("desktopPreferences", [])
+await access.requireNetwork("wss://events.example.com/socket")
 await access.requireAll()

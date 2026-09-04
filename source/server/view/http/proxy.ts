@@ -3,7 +3,7 @@ import { frame, unframe } from "@libs/framing"
 import Application from "@server/core/application"
 import { Hono } from "hono"
 
-/** The authorized HTTP door for unrestricted server-side fetch. */
+/** The authorized HTTP door for server-side System fetch. */
 export default function (application: Application) {
 
     const { authManager } = application.linkManager

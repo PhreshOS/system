@@ -19,6 +19,11 @@ const catalog = new PermissionCatalog({
         title: "Programs",
         description: "Access every Program or selected Programs and their Services."
     },
+    network: {
+        default: [],
+        title: "Network",
+        description: "Use System networking with every request target or selected target scopes."
+    },
     appearance: {
         default: [],
         title: "Appearance",
@@ -43,10 +48,17 @@ assert.deepEqual(catalog.definition("programs"), {
     title: "Programs",
     description: "Access every Program or selected Programs and their Services."
 })
+assert.deepEqual(catalog.definition("network"), {
+    valueDomain: "network",
+    default: [],
+    title: "Network",
+    description: "Use System networking with every request target or selected target scopes."
+})
 assert.deepEqual(catalog.resolve("all", true), [])
 assert.deepEqual(catalog.resolve("all", []), [])
 assert.deepEqual(catalog.resolve("services", true), [])
 assert.deepEqual(catalog.resolve("services", ["flambo", "terminal", "flambo"]), ["flambo", "terminal"])
+assert.deepEqual(catalog.resolve("network", ["HTTPS://API.Example.com:443/v1/**"]), ["https://api.example.com/v1/**"])
 assert.equal(catalog.resolve("all", false), false)
 assert.equal(catalog.resolve("all", null), null)
 
@@ -62,6 +74,10 @@ assert(catalog.grants("services", [], ["flambo"]))
 assert(catalog.grants("services", ["flambo"], ["flambo"]))
 assert(!catalog.grants("services", ["flambo"], ["terminal"]))
 assert(!catalog.grants("services", ["flambo"], []))
+assert(catalog.grants("network", ["https://api.example.com"], ["https://api.example.com/v1/users"]))
+assert(catalog.grants("network", ["https://*.example.com/v1/**"], ["https://eu.example.com/v1/users"]))
+assert(!catalog.grants("network", ["https://*.example.com/v1/**"], ["https://example.com/v1/users"]))
+assert(!catalog.grants("network", ["https://api.example.com/v1/**"], ["https://api.example.com/v2/users"]))
 assert(catalog.allows("all", [], null, []))
 assert(!catalog.allows("all", null, null, []))
 assert(catalog.allows("services", [], null, ["flambo"]))
@@ -70,12 +86,20 @@ assert.equal(catalog.combine("all", null, false), null)
 assert.deepEqual(catalog.combine("all", []), [])
 assert.deepEqual(catalog.combine("services", ["flambo"], ["terminal"]), ["flambo", "terminal"])
 assert.deepEqual(catalog.combine("services", ["flambo"], []), [])
+assert.deepEqual(catalog.combine("network", ["https://api.example.com"], ["wss://events.example.com"]), [
+    "https://api.example.com",
+    "wss://events.example.com"
+])
 assert.equal(catalog.effective("all", null, false), false)
 assert.deepEqual(catalog.effective("all", [], false), [])
 assert.deepEqual(catalog.merge("all", null, []), [])
 assert.deepEqual(catalog.merge("services", ["flambo"], ["terminal"]), ["flambo", "terminal"])
 assert.deepEqual(catalog.merge("services", ["flambo"], []), [])
 assert.deepEqual(catalog.merge("services", [], ["flambo"]), [])
+assert.deepEqual(catalog.merge("network", ["https://api.example.com"], ["wss://events.example.com"]), [
+    "https://api.example.com",
+    "wss://events.example.com"
+])
 assert(!catalog.changed([], []))
 assert(!catalog.changed(["flambo", "terminal"], ["terminal", "flambo"]))
 assert(catalog.changed(["flambo"], []))
@@ -85,6 +109,7 @@ assert(catalog.needReload("all", [], null))
 assert(!catalog.needReload("all", [], []))
 assert(!catalog.needReload("services", null, []))
 assert(!catalog.needReload("programs", ["flambo"], []))
+assert(!catalog.needReload("network", null, []))
 assert(!catalog.needReload("appearance", null, []))
 assert(!catalog.needReload("desktopPreferences", null, []))
 
@@ -92,6 +117,7 @@ assert.throws(() => parsePermissionName("files"), /does not know/)
 assert.throws(() => catalog.resolve("all", ["unknown"]), /unknown value/)
 assert.throws(() => catalog.resolve("appearance", ["flambo"]), /unknown value/)
 assert.throws(() => catalog.resolve("services", ["Not a Program"]), /unknown value/)
+assert.throws(() => catalog.resolve("network", ["api.example.com"]), /unknown value/)
 assert.throws(() => catalog.declarations({ all: ["unknown"] }), /unknown value/)
 assert.throws(() => catalog.stored({ all: true }), /unresolved shorthand/)
 assert.throws(() => new PermissionCatalog({} as never), /needs a definition/)
@@ -103,6 +129,7 @@ assert.throws(() => new PermissionCatalog({
     },
     services: catalog.definition("services"),
     programs: catalog.definition("programs"),
+    network: catalog.definition("network"),
     appearance: catalog.definition("appearance"),
     desktopPreferences: catalog.definition("desktopPreferences")
 } as never), /invalid default/)

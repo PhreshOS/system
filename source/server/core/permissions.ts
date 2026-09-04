@@ -1,5 +1,6 @@
 import {
     clientPermissionCatalog,
+    networkScopeCovers,
     parsePermission,
     parsePermissionName,
     type ClientPermissions,
@@ -141,9 +142,14 @@ export class PermissionCatalog {
 
         if (!Array.isArray(grant)) return false
 
-        if (programScoped(this.definition(name).valueDomain)) {
+        const domain = this.definition(name).valueDomain
 
-            return grant.length === 0 || (requested.length > 0 && requested.every(value => grant.includes(value)))
+        if (valued(domain)) {
+
+            return grant.length === 0 || (requested.length > 0 && requested.every(value => {
+
+                return grant.some(granted => valueCovers(domain, granted, value))
+            }))
         }
 
         return requested.length === 0
@@ -173,7 +179,7 @@ export class PermissionCatalog {
         const present = grants.filter((grant): grant is readonly string[] => Array.isArray(grant))
 
         if (present.length === 0) return null
-        if (!programScoped(this.definition(name).valueDomain)) return []
+        if (!valued(this.definition(name).valueDomain)) return []
         if (present.some(grant => grant.length === 0)) return []
 
         return this.resolve(name, present.flat()) as PermissionValue<Name>[]
@@ -191,7 +197,7 @@ export class PermissionCatalog {
     ): PermissionValue<Name>[] {
 
         if (!Array.isArray(grant)) return [...requested]
-        if (programScoped(this.definition(name).valueDomain) && (grant.length === 0 || requested.length === 0)) return []
+        if (valued(this.definition(name).valueDomain) && (grant.length === 0 || requested.length === 0)) return []
 
         return this.resolve(name, [...grant, ...requested]) as PermissionValue<Name>[]
     }
@@ -251,14 +257,25 @@ function unique(values: readonly string[]) {
     return [...new Set(values)]
 }
 
-function programScoped(domain: PermissionValueDomain) {
+function valued(domain: PermissionValueDomain) {
 
-    if (domain === "program") return true
+    if (domain === "program" || domain === "network") return true
     if (domain === "none") return false
 
     domain satisfies never
 
     throw new Error("The System does not know this permission value domain")
+}
+
+function valueCovers(domain: PermissionValueDomain, grant: string, requested: string) {
+
+    if (domain === "program") return grant === requested
+    if (domain === "network") return networkScopeCovers(grant, requested)
+    if (domain === "none") return false
+
+    domain satisfies never
+
+    return false
 }
 
 /** The presentation and activation rules for every Core-defined permission. */
@@ -278,6 +295,11 @@ export const permissionCatalog = new PermissionCatalog({
         default: [],
         title: "Programs",
         description: "Access every Program or selected Programs and their Services."
+    },
+    network: {
+        default: [],
+        title: "Network",
+        description: "Use System networking with every request target or selected target scopes."
     },
     appearance: {
         default: [],

@@ -76,7 +76,7 @@ export default class Application {
         return await response.json()
     }
 
-    /** Carry an unrestricted request through the desktop's authorized proxy. */
+    /** Carry one authorized System request through the desktop proxy. */
     public async proxy(request: ProxyRequest, body: ClientBody | null, authorization: string, signal?: AbortSignal): Promise<ProxiedResponse> {
 
         const response = await this.post(

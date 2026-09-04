@@ -988,7 +988,9 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // authorization is supplied here and never becomes a transmitted value.
         if (word === "fetch") {
 
-            await access.requireAll()
+            const description = args[0] as ProxyRequest
+
+            await access.requireNetwork(description.url)
 
             const { control, controller } = cancellation(args[2], "fetch")
 
@@ -998,7 +1000,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 response = await authManager.linkManager.application.proxy(
 
-                    args[0] as ProxyRequest,
+                    description,
 
                     args[1] as ClientBody | null,
 
@@ -1026,7 +1028,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // authority before the frame creates it; no transport proxy is needed.
         if (word === "websocket") {
 
-            await access.requireAll()
+            await access.requireNetwork(String(args[0]))
 
             return []
         }
