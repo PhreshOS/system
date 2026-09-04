@@ -27,7 +27,9 @@ export default function () {
 
                 aria-hidden={pending.length === 0}
 
-                className={`transition-opacity duration-200 ease-out ${pending.length ? "" : "pointer-events-none opacity-0"}`}
+                className={pending.length
+                    ? "opacity-100"
+                    : "pointer-events-none opacity-0 transition-opacity duration-200 ease-out"}
 
                 style={{ backgroundColor: standardAppearance.background.light }}
 
