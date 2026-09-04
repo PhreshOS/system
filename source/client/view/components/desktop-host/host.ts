@@ -581,6 +581,13 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
         if (word === "context-permission-get") return [await authManager.permission(pane, parsePermissionName(args[0]))]
 
+        if (word === "context-permission-allows") {
+
+            const permission = parsePermissionName(args[0])
+
+            return [await authManager.grantsPermission(pane, permission, args[1] as PermissionRequest<typeof permission>)]
+        }
+
         if (word === "context-permission-request") {
 
             if (typeof args[0] !== "string") throw new Error("A permission request needs an identity")
@@ -596,18 +603,72 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const operation = args[1]
 
-            if (operation !== "all" && operation !== "get" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
             if (operation === "all") return [await programManager.permissions(address(holdProgram(args[0])), operation)]
 
             const permission = parsePermissionName(args[2])
 
-            return [await programManager.permissions(
+            if (operation === "allows") return [await programManager.permissions(
                 address(holdProgram(args[0])),
                 operation,
                 permission,
-                args[3] as Exclude<PermissionInput<typeof permission>, null>
+                args[3] as PermissionRequest<typeof permission>
             )]
+
+            if (operation === "set") {
+
+                await programManager.permissions(
+                    address(holdProgram(args[0])),
+                    operation,
+                    permission,
+                    args[3] as Exclude<PermissionInput<typeof permission>, null>
+                )
+
+                return []
+            }
+
+            await programManager.permissions(address(holdProgram(args[0])), operation, permission)
+
+            return []
+        }
+
+        if (word === "process-permissions") {
+
+            await access.requireAll()
+
+            const operation = args[1]
+
+            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Process permission operation "${String(operation)}"`)
+
+            const target = address(holdProcess(args[0]))
+
+            if (operation === "all") return [await processManager.permissions(target, operation)]
+
+            const permission = parsePermissionName(args[2])
+
+            if (operation === "allows") return [await processManager.permissions(
+                target,
+                operation,
+                permission,
+                args[3] as PermissionRequest<typeof permission>
+            )]
+
+            if (operation === "set") {
+
+                await processManager.permissions(
+                    target,
+                    operation,
+                    permission,
+                    args[3] as Exclude<PermissionInput<typeof permission>, null>
+                )
+
+                return []
+            }
+
+            await processManager.permissions(target, operation, permission)
+
+            return []
         }
 
         if (word === "startup") {

@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto"
 import { type Layer } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "@server/core/server-runtime"
-import type { PermissionName, PermissionValue } from "@phreshos/core"
+import type { Permission, PermissionName } from "@phreshos/core"
 
 /**
  * One live execution of a Program.
@@ -72,7 +72,7 @@ export default class Process {
     public readonly parent: Process | null
 
     /** User grants retained only for this Process lifetime. */
-    public readonly permissions = new Map<PermissionName, readonly PermissionValue<PermissionName>[]>()
+    public readonly permissions = new Map<PermissionName, Exclude<Permission, null>>()
 
     private readonly hostTraffic: HostTraffic
 

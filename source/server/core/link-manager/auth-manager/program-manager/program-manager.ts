@@ -24,9 +24,9 @@ import { readPermissions, writePermissions } from "./permissions"
 import {
     parsePermissionName,
     type Permission,
-    type PermissionChange,
     type PermissionInput,
     type PermissionName,
+    type PermissionRequest,
     type Permissions
 } from "@phreshos/core"
 
@@ -169,12 +169,33 @@ export default class ProgramManager extends TheLink {
         return clonePermissions(readPermissions(program))
     }
 
-    /** Stores one canonical user grant and reports its Client activation need. */
+    /** Tests one requested value against this Program's persistent layer only. */
+    public allowsPermission<Name extends PermissionName>(
+        program: Program,
+        name: Name,
+        input: PermissionRequest<Name> = true
+    ) {
+
+        const requested = permissionCatalog.resolve(name, input)
+
+        if (!Array.isArray(requested)) throw new Error("A permission check must be true or a list of values")
+
+        const permissions = readPermissions(program)
+
+        return permissionCatalog.allows(
+            name,
+            permissions.all ?? null,
+            permissions[name] ?? null,
+            requested
+        )
+    }
+
+    /** Stores one canonical user grant and propagates its effective access change. */
     public async setPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
         value: Exclude<PermissionInput<Name>, null>
-    ): Promise<PermissionChange<Name>> {
+    ): Promise<void> {
 
         if (value === null) throw new Error("A stored Program permission cannot be null")
 
@@ -186,11 +207,11 @@ export default class ProgramManager extends TheLink {
             writePermissions(program, { ...permissions, [name]: permission })
         }
 
-        return await this.permissionChange(program, name, before, permission)
+        await this.authManager.processManager.storedPermissionChanged(program, name, before, permission)
     }
 
     /** Removes one stored user grant without changing Program declarations. */
-    public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<PermissionChange<Name>> {
+    public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<void> {
 
         const permissions = readPermissions(program)
         const before = permissions[name] ?? null
@@ -201,7 +222,7 @@ export default class ProgramManager extends TheLink {
             writePermissions(program, permissions)
         }
 
-        return await this.permissionChange(program, name, before, null)
+        await this.authManager.processManager.storedPermissionChanged(program, name, before, null)
     }
 
     @Connect("/permissions")
@@ -211,30 +232,28 @@ export default class ProgramManager extends TheLink {
 
         if (operation === "all") return this.permissions(program)
         if (operation === "get") return this.permission(program, parsePermissionName(name))
+        if (operation === "allows") {
+
+            const permission = parsePermissionName(name)
+
+            return this.allowsPermission(program, permission, value as PermissionRequest<typeof permission>)
+        }
         if (operation === "set") {
 
             const permission = parsePermissionName(name)
 
-            return await this.setPermission(program, permission, value as Exclude<PermissionInput<typeof permission>, null>)
+            await this.setPermission(program, permission, value as Exclude<PermissionInput<typeof permission>, null>)
+
+            return
         }
-        if (operation === "delete") return await this.deletePermission(program, parsePermissionName(name))
+        if (operation === "delete") {
+
+            await this.deletePermission(program, parsePermissionName(name))
+
+            return
+        }
 
         throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
-    }
-
-    private async permissionChange<Name extends PermissionName>(
-        program: Program,
-        name: Name,
-        before: Permission<Name>,
-        permission: Permission<Name>
-    ): Promise<PermissionChange<Name>> {
-
-        const needReload = await this.authManager.processManager.storedPermissionChanged(program, name, before, permission)
-
-        return Object.freeze({
-            permission: clonePermission(permission),
-            needReload
-        })
     }
 
     @Connect("/create-program")

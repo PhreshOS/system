@@ -82,7 +82,7 @@ export default class ProgramManager extends TheLink {
 
     public async permissions<Name extends PermissionName>(
         subject: unknown,
-        operation: "all" | "get" | "set" | "delete",
+        operation: "all" | "get" | "allows" | "set" | "delete",
         name?: Name,
         value?: Exclude<PermissionInput<Name>, null>
     ) {

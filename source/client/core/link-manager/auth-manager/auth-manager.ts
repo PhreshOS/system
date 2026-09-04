@@ -8,8 +8,7 @@ import LinkManager from "../link-manager"
 import {
     type PermissionChange,
     type PermissionName,
-    type PermissionRequest,
-    type PermissionValue
+    type PermissionRequest
 } from "@phreshos/core"
 import ShellManager from "./shell-manager"
 
@@ -78,7 +77,7 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/permission/get", process, name)
     }
 
-    public async grantsPermission<Name extends PermissionName>(process: string, name: Name, requested: readonly PermissionValue<Name>[]) {
+    public async grantsPermission<Name extends PermissionName>(process: string, name: Name, requested: PermissionRequest<Name>) {
 
         return await this.$outbound.publishFirst("/permission/grants", process, name, requested) as boolean
     }
