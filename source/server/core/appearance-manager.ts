@@ -30,7 +30,12 @@ const surfaceSchema = z.strictObject({
 export const appearanceSchema: z.ZodType<Appearance> = z.strictObject({
     background: themed(z.string().min(1)),
     foreground: themed(z.string().min(1)),
-    accent: themed(z.string().min(1)),
+    primary: themed(z.string().min(1)),
+    secondary: themed(z.string().min(1)),
+    success: themed(z.string().min(1)),
+    warning: themed(z.string().min(1)),
+    danger: themed(z.string().min(1)),
+    info: themed(z.string().min(1)),
     spacing: shared(bounded(appearanceLimits.spacing)),
     radius: shared(bounded(appearanceLimits.radius)),
     surface: themed(surfaceSchema),
