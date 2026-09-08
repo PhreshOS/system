@@ -26,6 +26,14 @@ const surfaceSchema = z.strictObject({
     brightness: bounded(appearanceLimits.surface.brightness)
 })
 
+const shadowSchema = z.strictObject({
+    x: bounded(appearanceLimits.shadow.x),
+    y: bounded(appearanceLimits.shadow.y),
+    blur: bounded(appearanceLimits.shadow.blur),
+    spread: bounded(appearanceLimits.shadow.spread),
+    opacity: bounded(appearanceLimits.shadow.opacity)
+})
+
 /** The sole schema for authoritative System Appearance state. */
 export const appearanceSchema: z.ZodType<Appearance> = z.strictObject({
     background: themed(z.string().min(1)),
@@ -38,6 +46,7 @@ export const appearanceSchema: z.ZodType<Appearance> = z.strictObject({
     info: themed(z.string().min(1)),
     spacing: shared(bounded(appearanceLimits.spacing)),
     radius: shared(bounded(appearanceLimits.radius)),
+    shadow: themed(shadowSchema),
     surface: themed(surfaceSchema),
     signInWallpaper: themed(wallpaperSchema),
     desktopWallpaper: themed(wallpaperSchema)

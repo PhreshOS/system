@@ -46,6 +46,19 @@ for (const role of ["background", "foreground", "primary", "secondary", "success
 const reopened = await AppearanceManager.open(store, new UploadManager(new FileManager(directory)))
 assert.deepEqual(reopened.value, manager.value)
 
+const shadow = {
+  light: { x: -3, y: 12, blur: 30, spread: 2, opacity: 0.25 },
+  dark: { x: 2, y: 6, blur: 18, spread: -1, opacity: 0.12 }
+}
+await manager.update({ ...manager.value, shadow })
+assert.deepEqual(manager.value.shadow, shadow)
+assert.deepEqual(await store.get("appearance:shadow"), shadow)
+assert.deepEqual((await AppearanceManager.open(store, new UploadManager(new FileManager(directory)))).value.shadow, shadow)
+for (const invalid of [{ ...shadow.light, blur: -1 }, { ...shadow.light, opacity: 1.1 }, { ...shadow.light, x: Infinity }]) {
+  await assert.rejects(manager.update({ ...manager.value, shadow: { ...shadow, light: invalid } }))
+  assert.deepEqual(manager.value.shadow, shadow)
+}
+
 const updated = {
   ...standardAppearance,
   background: { light: "white", dark: "black" }
