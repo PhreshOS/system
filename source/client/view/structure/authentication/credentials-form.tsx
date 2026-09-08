@@ -1,7 +1,7 @@
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface } from "@phreshos/react-ui"
+import { Panel } from "@phreshos/react-ui"
 import Spinner from "../../components/spinner"
 import Alert from "../../components/alert"
 import { type SyntheticEvent, useLayoutEffect, useRef } from "react"
@@ -45,7 +45,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             ref={surface}
 
-            className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] text-slate-800"
+            className="relative m-auto w-[min(24rem,calc(100%-2rem))]"
 
             aria-busy={pending}
 
@@ -53,17 +53,13 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Surface aria-hidden="true" className="pointer-events-none absolute inset-0" />
-
-            <div className="relative grid gap-1 px-5 py-4">
+            <Panel header={<div className="relative grid gap-1 px-5 py-4">
 
                 <h1 className="text-xl font-semibold">{title}</h1>
 
                 <p className="text-sm leading-5 text-slate-600/90">{description}</p>
 
-            </div>
-
-            <Surface className="relative m-1.5 mt-0 grid gap-5 p-5">
+            </div>} contentProps={{ className: "grid gap-5 p-5" }}>
 
                 <div className="grid gap-4">
 
@@ -145,7 +141,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                 </button>
 
-            </Surface>
+            </Panel>
 
         </form>
 

@@ -1,7 +1,6 @@
-import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
+import { type ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -68,7 +67,7 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
         </TaskbarButton>
 
-        <TaskbarSurface
+        <div
 
             {...props}
 
@@ -81,12 +80,6 @@ export default function ({ label, trigger, children, className, ...props }: Laun
             popover="auto"
 
             aria-labelledby={`${id}-label`}
-
-            label={label}
-
-            labelId={`${id}-label`}
-
-            contentClassName=""
 
             tabIndex={-1}
 
@@ -118,14 +111,18 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
         >
 
-            {children(close)}
+            <TaskbarSurface label={label} labelId={`${id}-label`}>
 
-        </TaskbarSurface>
+                {children(close)}
+
+            </TaskbarSurface>
+
+        </div>
 
     </>
 }
 
-export interface LauncherProps extends Omit<SurfaceProps, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
+export interface LauncherProps extends Omit<ComponentPropsWithoutRef<"div">, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
 
     label: string
 

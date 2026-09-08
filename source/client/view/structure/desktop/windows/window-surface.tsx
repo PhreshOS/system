@@ -4,8 +4,6 @@ import { useLayoutEffect, useRef } from "react"
 import { type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
 import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
 
-const paintSelector = "[data-surface-backdrop], [data-surface-border], [data-surface-material]"
-
 /** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
 
@@ -17,22 +15,11 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
     const reducedMotion = useReducedMotion()
 
-    // The configured material and border opacity remain the visible targets;
-    // visibility animation must not replace those values with a root opacity.
-    const visibleOpacity = useRef(new Map<Element, number>())
-
     useLayoutEffect(function () {
 
         const surface = element.current
 
         if (!surface) return
-
-        const layers = [...surface.querySelectorAll(paintSelector)]
-
-        for (const layer of layers) {
-
-            if (!visibleOpacity.current.has(layer)) visibleOpacity.current.set(layer, Number(getComputedStyle(layer).opacity))
-        }
 
         const revision = transition?.revision ?? null
 
@@ -46,29 +33,28 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         const duration = transaction?.duration ?? motionDurations.presence
 
-        gsap.killTweensOf(layers)
+        // Desktop owns visibility of the whole Surface; React UI owns its
+        // material. Never capture or overwrite opacity on internal paint layers.
+        gsap.killTweensOf(surface)
 
         if (!transaction || !changed || reducedMotion || duration === 0) {
 
-            for (const layer of layers) gsap.set(layer, { opacity: visible ? visibleOpacity.current.get(layer) : 0 })
+            gsap.set(surface, { opacity: visible ? 1 : 0 })
 
             if (transaction && changed) onComplete(revision!)
 
             return
         }
 
-        const animation = gsap.timeline({
-            onComplete: () => onComplete(revision!)
-        })
-
-        for (const layer of layers) animation.fromTo(layer, {
-            opacity: initial && visible ? 0 : Number(getComputedStyle(layer).opacity)
+        const animation = gsap.fromTo(surface, {
+            opacity: initial && visible ? 0 : Number(getComputedStyle(surface).opacity)
         }, {
-            opacity: visible ? visibleOpacity.current.get(layer) : 0,
+            opacity: visible ? 1 : 0,
             duration: motionDuration(duration),
             ease: motionEase(transaction.easing),
-            overwrite: "auto"
-        }, 0)
+            overwrite: "auto",
+            onComplete: () => onComplete(revision!)
+        })
 
         return function () {
 

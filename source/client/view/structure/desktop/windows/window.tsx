@@ -1,7 +1,7 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
-import { Surface, useAppearance, useResolveTheme } from "@phreshos/react-ui"
+import { Panel } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
@@ -59,10 +59,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     const surfaceElement = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
-
-    const appearance = useAppearance()
-
-    const foreground = useResolveTheme(appearance.foreground)
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
 
@@ -707,28 +703,21 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : "grid-rows-[auto_minmax(0,1fr)]"}`}>
+            {bare ? <div data-window-container ref={surfaceElement} className="absolute isolate inset-0 grid grid-rows-1">
 
-                {/* Material is paint, not the interaction container. Keeping
-                    it as a sibling behind the window contents prevents plain
-                    overlays such as the inactive-window click catcher from
-                    entering the Surface tree or receiving its effects. */}
-                {!bare && <Surface
+                {/* A bare Client controls its own host surface, separate from
+                    its content and without the header/content Panel shell. */}
+                {localSurface && <WindowSurface state={localSurface} onComplete={revision => onLocalAnimationComplete?.("surface", revision)} />}
 
-                    data-window-frame-surface
+                <div data-window-content className="relative min-h-0">{children}</div>
 
-                    aria-hidden="true"
-
-                    className="pointer-events-none absolute inset-0 -z-1"
-
-                />}
-
-                {/* A bare Client controls its own host surface. It remains a
-                    sibling behind the frame, with its own radius and no
-                    clipping parent. */}
-                {bare && localSurface && <WindowSurface state={localSurface} onComplete={revision => onLocalAnimationComplete?.("surface", revision)} />}
-
-                {!bare && <WindowHeader
+            </div> : <Panel
+                data-window-container
+                ref={surfaceElement}
+                style={paintedInsets}
+                className="absolute"
+                contentProps={{ className: "p-px" }}
+                header={<WindowHeader
 
                     title={title}
 
@@ -751,24 +740,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                     stopping={stopping || closing}
 
                 />}
-
-                {/* Where the program is. Bare, it is the whole of the
-                    box and wears none of the system's own edges. */}
-                {bare
-
-                    ? <div data-window-content className="relative min-h-0">
-
-                        {children}
-
-                    </div>
-
-                    : <Surface data-window-content className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px">
-
-                        {children}
-
-                    </Surface>}
-
-            </div>
+            >{children}</Panel>}
 
             {!bare && edges.map(handle => <div
 
