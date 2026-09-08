@@ -1,7 +1,7 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
-import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
+import { Surface, useAppearance, useResolveTheme } from "@phreshos/react-ui"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
@@ -62,19 +62,11 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const appearance = useAppearance()
 
-    const radius = useScale(useResolveTheme(appearance.radius))
-
     const foreground = useResolveTheme(appearance.foreground)
-
-    const outerRadius = radius.large
-
-    const innerRadius = radius.medium
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
 
     const [renderedGeometry, setRenderedGeometry] = useState<WindowGeometry>({ position, size })
-
-    const [renderedActive, setRenderedActive] = useState(active)
 
     const morphStart = useRef<WindowRegion | null>(null)
 
@@ -228,37 +220,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     }, [gesture?.morph, reducedMotion])
 
-    useLayoutEffect(function () {
-
-        const element = surfaceElement.current
-
-        if (!element || renderedActive === active) return
-
-        const property = active ? "--shadow-window-active" : "--shadow-window-inactive"
-        const target = getComputedStyle(element).getPropertyValue(property).trim() || "none"
-
-        gsap.killTweensOf(element, "boxShadow")
-
-        if (reducedMotion) {
-
-            gsap.set(element, { boxShadow: target })
-            setRenderedActive(active)
-
-            return
-        }
-
-        const animation = gsap.to(element, {
-            boxShadow: target,
-            duration: motionDuration(motionDurations.feedback),
-            ease: motionEase("ease-out"),
-            overwrite: "auto",
-            onComplete: () => setRenderedActive(active)
-        })
-
-        return () => { animation.kill() }
-
-    }, [active, reducedMotion, renderedActive])
-
     const closureCompleted = useRef(false)
 
     function completeClosure() {
@@ -285,7 +246,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     // restored windows look newly opened.
     //
     // Bare, there is no entrance. Motion is a visual effect like the
-    // surface and the shadow, and `under` and `over` are the layers where
+    // surface, and `under` and `over` are the layers where
     // the system paints nothing — so what would scale and drift here is
     // the program's own content, which reads as the program stumbling
     // rather than as a window opening. It showed on every refresh,
@@ -696,12 +657,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             transform: "none"
         }
 
-    const surface = renderedActive
-
-        ? "shadow-window-active"
-
-        : "shadow-window-inactive"
-
     const paintedInsets = windowPaintInsets(position, size, paintSurfaceSize, windowPaintInset, gesture?.current)
 
     return <>
@@ -712,7 +667,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             visible={gesture.zone !== null}
             bare={bare}
             paintSurfaceSize={paintSurfaceSize}
-            radius={outerRadius}
             reducedMotion={reducedMotion}
             zIndex={style?.zIndex}
         />}
@@ -753,7 +707,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, borderRadius: outerRadius, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : `grid-rows-[auto_minmax(0,1fr)] ${surface}`}`}>
+            <div data-window-container ref={surfaceElement} style={bare ? undefined : { ...paintedInsets, color: foreground }} className={`absolute isolate grid ${bare ? "inset-0 grid-rows-1" : "grid-rows-[auto_minmax(0,1fr)]"}`}>
 
                 {/* Material is paint, not the interaction container. Keeping
                     it as a sibling behind the window contents prevents plain
@@ -765,7 +719,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                     aria-hidden="true"
 
-                    className="pointer-events-none absolute inset-0 -z-1 rounded-[inherit]"
+                    className="pointer-events-none absolute inset-0 -z-1"
 
                 />}
 
@@ -808,7 +762,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                     </div>
 
-                    : <Surface data-window-content opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px">
+                    : <Surface data-window-content className="relative m-1.5 mt-0 min-h-0 overflow-hidden p-px">
 
                         {children}
 

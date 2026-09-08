@@ -2,7 +2,6 @@ import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } 
 import { ReactTunnel } from "@the-link/react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
 import { useEffect, useId, useRef } from "react"
 import { AuthManagerContext } from "@client/view/contexts"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
@@ -32,8 +31,6 @@ export default function SystemDialogs() {
     const description = useId()
 
     const reducedMotion = useReducedMotion()
-
-    const radius = useScale(useResolveTheme(useAppearance().radius)).large
 
     useEffect(function () {
 
@@ -69,8 +66,6 @@ export default function SystemDialogs() {
         aria-labelledby={title}
 
         aria-describedby={description}
-
-        style={{ borderRadius: radius }}
 
         onCancel={event => event.preventDefault()}
 

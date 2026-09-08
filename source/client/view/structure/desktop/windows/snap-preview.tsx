@@ -6,7 +6,7 @@ import { type Position, type Size } from "@phreshos/core"
 import { Surface } from "@phreshos/react-ui"
 
 /** GSAP-owned preview of the placement currently offered by a drag. */
-export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, radius, reducedMotion, zIndex }: SnapPreviewProps) {
+export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, reducedMotion, zIndex }: SnapPreviewProps) {
 
     const element = useRef<HTMLDivElement>(null)
     const firstRender = useRef(true)
@@ -78,9 +78,9 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, ra
     >
         <Surface
             data-snap-preview-frame
-            opacity="xsmall"
+            opacity="small"
             className={`absolute ${bare ? "inset-0" : ""}`}
-            style={bare ? undefined : { ...windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset), borderRadius: radius }}
+            style={bare ? undefined : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset)}
         />
     </div>
 }
@@ -95,7 +95,6 @@ interface SnapPreviewProps {
     visible: boolean
     bare: boolean
     paintSurfaceSize: WindowSurfaceSize
-    radius: number
     reducedMotion: boolean
     zIndex: CSSProperties["zIndex"]
 }

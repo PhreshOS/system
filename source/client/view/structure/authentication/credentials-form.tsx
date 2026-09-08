@@ -1,8 +1,7 @@
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
-import { obscuredBackground } from "../../components/loading"
+import { Surface } from "@phreshos/react-ui"
 import Spinner from "../../components/spinner"
 import Alert from "../../components/alert"
 import { type SyntheticEvent, useLayoutEffect, useRef } from "react"
@@ -13,12 +12,6 @@ export default function CredentialsForm({ title, description, submitLabel, passw
     const surface = useRef<HTMLFormElement>(null)
 
     const reducedMotion = useReducedMotion()
-
-    const radius = useScale(useResolveTheme(useAppearance().radius))
-
-    const outerRadius = radius.large
-
-    const innerRadius = radius.medium
 
     useLayoutEffect(function () {
 
@@ -46,15 +39,13 @@ export default function CredentialsForm({ title, description, submitLabel, passw
         onSubmit(String(data.get("username") ?? ""), String(data.get("password") ?? ""))
     }
 
-    return <div className={`absolute inset-0 grid ${obscuredBackground}`}>
+    return <div className="absolute inset-0 grid backdrop-blur-md">
 
         <form
 
             ref={surface}
 
-            style={{ borderRadius: outerRadius }}
-
-            className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] text-slate-800 shadow-window-active"
+            className="relative isolate m-auto grid w-[min(24rem,calc(100%-2rem))] grid-rows-[auto_minmax(0,1fr)] text-slate-800"
 
             aria-busy={pending}
 
@@ -62,7 +53,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Surface aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-[inherit]" />
+            <Surface aria-hidden="true" className="pointer-events-none absolute inset-0" />
 
             <div className="relative grid gap-1 px-5 py-4">
 
@@ -72,7 +63,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             </div>
 
-            <Surface opacity="small" style={{ borderRadius: innerRadius }} className="relative m-1.5 mt-0 grid gap-5 p-5">
+            <Surface className="relative m-1.5 mt-0 grid gap-5 p-5">
 
                 <div className="grid gap-4">
 

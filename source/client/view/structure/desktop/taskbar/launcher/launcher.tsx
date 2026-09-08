@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { useAppearance, useResolveTheme, useScale, type SurfaceProps } from "@phreshos/react-ui"
+import { type SurfaceProps } from "@phreshos/react-ui"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
@@ -9,17 +9,13 @@ import TaskbarButton from "../taskbar-button"
  * A button and the dismissible surface it opens. Placement, contents and
  * what selecting an item means belong to the caller.
  */
-export default function ({ label, trigger, children, className, style, ...props }: LauncherProps) {
+export default function ({ label, trigger, children, className, ...props }: LauncherProps) {
 
     const id = useId()
 
     const surface = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
-
-    const appearance = useAppearance()
-
-    const radius = useScale(useResolveTheme(appearance.radius)).large
 
     const [open, setOpen] = useState(false)
 
@@ -93,8 +89,6 @@ export default function ({ label, trigger, children, className, style, ...props 
             contentClassName=""
 
             tabIndex={-1}
-
-            style={{ ...style, borderRadius: radius }}
 
             className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
 
