@@ -716,7 +716,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 ref={surfaceElement}
                 style={paintedInsets}
                 className="absolute"
-                contentProps={{ className: "p-px" }}
                 header={<WindowHeader
 
                     title={title}

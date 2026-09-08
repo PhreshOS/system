@@ -27,6 +27,8 @@ const window = markup(<Window icon="/icon.svg" title="Window"><iframe title="Con
 panel(window)
 assert.match(window, /data-window-container/)
 assert.match(window, /<iframe title="Content"/)
+assert.doesNotMatch(window, /class="p-px"/)
+assert.match(window, /data-surface-border=""[^>]*z-index:1/)
 
 const bare = markup(<Window bare icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
 assert.doesNotMatch(bare, /data-surface-material/)
