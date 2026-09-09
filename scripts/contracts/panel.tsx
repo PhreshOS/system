@@ -50,7 +50,7 @@ const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close
 assert.equal(launcher.match(/data-surface-material=""/g)?.length, 3)
 assert.match(launcher, /grid-cols-2/)
 assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\);min-height:0/)
-assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:6px;padding:6px;padding-top:0/)
+assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:8px;padding:8px;padding-top:0/)
 assert.match(launcher, /grid-cols-2" style="gap:inherit"/)
 assert.match(launcher, /<button>Programs<\/button>/)
 assert.match(launcher, /<p>Processes<\/p>/)

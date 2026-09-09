@@ -21,13 +21,13 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
     const programs = usePrograms().filter(program => matchesProgram(program, terms))
 
-    return <div role="group" aria-label="Programs" className="grid min-h-0 max-h-full gap-1 overflow-y-auto p-2">
+    return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] p-2">
 
         <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
 
         {programs.length
 
-            ? programs.map(record => <ProgramItem
+            ? <div className="grid min-h-0 content-start gap-1 overflow-y-auto">{programs.map(record => <ProgramItem
 
                 key={record.identity}
 
@@ -37,9 +37,9 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
                 onChoose={onChoose}
 
-            />)
+            />)}</div>
 
-            : <p className="px-3 py-8 text-center text-sm opacity-60">{terms.length ? "No matching Programs" : "No installed programs"}</p>}
+            : <p className="m-0 grid min-h-32 place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Programs" : "No installed programs"}</p>}
 
     </div>
 }

@@ -1,13 +1,11 @@
 import { type ReactNode } from "react"
-import { Surface, useAppearance, useResolveTheme, useScale } from "@phreshos/react-ui"
+import { Surface } from "@phreshos/react-ui"
 import logo from "@/assets/bundled/logo.png"
 
 /** Start menu shell: one outer material and two independently scrolling halves. */
 export default function StartMenuPanel({ labelId, name, version, left, right, footer }: Readonly<{ labelId: string, name: string, version: string, left: ReactNode, right: ReactNode, footer: ReactNode }>) {
 
-    const appearance = useAppearance()
-
-    const spacing = useScale(useResolveTheme(appearance.spacing)).small
+    const spacing = 8
 
     return <Surface style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, height: "100%", maxHeight: "inherit", overflow: "hidden" }}>
 
