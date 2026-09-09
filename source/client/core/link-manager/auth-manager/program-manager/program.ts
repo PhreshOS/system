@@ -29,6 +29,10 @@ export default class Program {
 
     public readonly description: string | null
 
+    public readonly categories: readonly string[]
+
+    public readonly keywords: readonly string[]
+
     public readonly hasAgent: boolean
 
     public readonly server: ProgramRecord["server"]
@@ -52,6 +56,10 @@ export default class Program {
         this.version = payload.version
 
         this.description = payload.description
+
+        this.categories = payload.categories
+
+        this.keywords = payload.keywords
 
         this.hasAgent = payload.hasAgent
 

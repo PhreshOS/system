@@ -233,6 +233,8 @@ export default class AuthManager extends TheLink {
 
         return {
 
+            username: this.linkManager.application.authentication.username,
+
             programManager: this.programManager,
 
             processManager: this.processManager,
@@ -243,6 +245,8 @@ export default class AuthManager extends TheLink {
 }
 
 export interface AuthManagerSnapshot {
+
+    username: string | null
 
     programManager: ReturnType<ProgramManager["toJSON"]>
 

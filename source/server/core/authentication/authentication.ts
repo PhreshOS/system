@@ -66,6 +66,11 @@ export default class Authentication {
         }
     }
 
+    public get username(): string | null {
+
+        return this.owner?.username ?? null
+    }
+
     public state(): AuthenticationState {
 
         return {

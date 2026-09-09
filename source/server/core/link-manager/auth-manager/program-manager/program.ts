@@ -209,6 +209,10 @@ export default class Program {
 
             description: description ?? null,
 
+            categories: this.config.categories ?? [],
+
+            keywords: this.config.keywords ?? [],
+
             hasAgent: this.agentPath !== null,
 
             server: server && {

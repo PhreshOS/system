@@ -5,18 +5,21 @@ import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
+import { matchesProgram } from "../search"
 
 interface ProgramsProps {
 
     onChoose: () => void
+
+    terms: readonly string[]
 }
 
 /** The installed-program section of the Start Menu. */
-export default function Programs({ onChoose }: ProgramsProps) {
+export default function Programs({ onChoose, terms }: ProgramsProps) {
 
     const application = ApplicationContext.useValue()
 
-    const programs = usePrograms()
+    const programs = usePrograms().filter(program => matchesProgram(program, terms))
 
     return <div role="group" aria-label="Programs" className="grid min-h-0 max-h-full gap-1 overflow-y-auto p-2">
 
@@ -36,7 +39,7 @@ export default function Programs({ onChoose }: ProgramsProps) {
 
             />)
 
-            : <p className="px-3 py-8 text-center text-sm opacity-60">No installed programs</p>}
+            : <p className="px-3 py-8 text-center text-sm opacity-60">{terms.length ? "No matching Programs" : "No installed programs"}</p>}
 
     </div>
 }

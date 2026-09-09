@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { standardAppearance } from "@phreshos/core"
 import { AppearanceProvider } from "@phreshos/react-ui"
 import CredentialsForm from "@client/view/structure/authentication/credentials-form"
-import TaskbarSurface from "@client/view/structure/desktop/taskbar/taskbar-surface"
+import TaskbarSurface, { taskbarSurfaceClassName } from "@client/view/structure/desktop/taskbar/taskbar-surface"
 import Launcher from "@client/view/structure/desktop/taskbar/launcher/launcher"
 import Window from "@client/view/structure/desktop/windows/window"
 import StartMenuPanel from "@client/view/structure/desktop/taskbar/launcher/start-menu-panel"
@@ -46,16 +46,24 @@ assert.match(authentication, /name="username"/)
 assert.match(authentication, /name="password"/)
 assert.match(authentication, /type="submit"/)
 
-const launcher = markup(<Launcher label="PhreshOS" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} />}</Launcher>)
+const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />}</Launcher>)
 assert.equal(launcher.match(/data-surface-material=""/g)?.length, 3)
 assert.match(launcher, /grid-cols-2/)
+assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\);min-height:0/)
+assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:6px;padding:6px;padding-top:0/)
+assert.match(launcher, /grid-cols-2" style="gap:inherit"/)
 assert.match(launcher, /<button>Programs<\/button>/)
 assert.match(launcher, /<p>Processes<\/p>/)
-assert.match(launcher, /<h2[^>]*>PhreshOS<\/h2>/)
+assert.match(launcher, /<h2[^>]*>Example System<\/h2>/)
 assert.match(launcher, /System version 1.2.3/)
+assert.match(launcher, /type="search"/)
+assert.doesNotMatch(launcher, /<(?:main|section|article|aside|nav|header|footer)\b/)
 assert.match(launcher, /size-4 rounded-sm object-contain/)
 // Native popover visibility belongs to the outer host, not Panel's grid.
 const popover = launcher.match(/<div[^>]*popover="auto"[^>]*>/)?.[0]
 assert(popover)
+assert.match(popover, /overflow-visible/)
+// Popovers and native dialogs share a non-clipping host for Surface shadows.
+assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
 assert.doesNotMatch(popover, /style=/)
 assert.match(launcher, /popovertarget=/i)

@@ -18,6 +18,8 @@ export default class AuthManager extends TheLink {
 
     public readonly authorization: string
 
+    public readonly username: string | null
+
     public readonly programManager: ProgramManager
 
     public readonly processManager: ProcessManager
@@ -33,6 +35,8 @@ export default class AuthManager extends TheLink {
         this.linkManager = linkManager
 
         this.authorization = authorization
+
+        this.username = payload.username
 
         this.connectTo(this.linkManager, "/auth")
 

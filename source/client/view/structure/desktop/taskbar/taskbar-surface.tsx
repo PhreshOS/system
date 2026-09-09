@@ -2,7 +2,7 @@ import { forwardRef, ReactNode } from "react"
 import { Panel, type PanelProps } from "@phreshos/react-ui"
 
 /** The window-material shell shared by surfaces opened from the taskbar. */
-export const taskbarSurfaceClassName = "m-0 isolate border-0 bg-transparent p-0 outline-none"
+export const taskbarSurfaceClassName = "m-0 isolate overflow-visible border-0 bg-transparent p-0 outline-none"
 
 export default forwardRef<HTMLDivElement, TaskbarSurfaceProps>(function TaskbarSurface({ label, labelId, contentClassName = "", className, children, ...props }, ref) {
 
