@@ -1,6 +1,6 @@
 import { ComponentProps, ReactNode } from "react"
 
-/** One action in a launcher, without knowing what it launches. */
+/** One action in the Programs half of the launcher. */
 export default function ({ icon, label, description, children, className, ...props }: LauncherItemProps) {
 
     return <button

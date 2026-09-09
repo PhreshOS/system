@@ -1,7 +1,7 @@
 import { type ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
+import { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 
 /**
@@ -111,11 +111,7 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
         >
 
-            <TaskbarSurface label={label} labelId={`${id}-label`}>
-
-                {children(close)}
-
-            </TaskbarSurface>
+            {children(close, `${id}-label`)}
 
         </div>
 
@@ -128,5 +124,5 @@ export interface LauncherProps extends Omit<ComponentPropsWithoutRef<"div">, "ch
 
     trigger: ReactNode
 
-    children: (close: () => void) => ReactNode
+    children: (close: () => void, labelId: string) => ReactNode
 }

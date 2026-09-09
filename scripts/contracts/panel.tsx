@@ -7,6 +7,7 @@ import CredentialsForm from "@client/view/structure/authentication/credentials-f
 import TaskbarSurface from "@client/view/structure/desktop/taskbar/taskbar-surface"
 import Launcher from "@client/view/structure/desktop/taskbar/launcher/launcher"
 import Window from "@client/view/structure/desktop/windows/window"
+import StartMenuPanel from "@client/view/structure/desktop/taskbar/launcher/start-menu-panel"
 
 function markup(children: ReactNode) {
     return renderToStaticMarkup(<AppearanceProvider appearance={standardAppearance} theme="light">{children}</AppearanceProvider>)
@@ -24,7 +25,11 @@ assert.match(taskbar, /<h2 id="title"/)
 assert.match(taskbar, /<button>Action<\/button>/)
 
 const window = markup(<Window icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
-panel(window)
+assert.equal(window.match(/data-surface-material=""/g)?.length, 1)
+assert.match(window, /grid-template-rows:auto minmax\(0, 1fr\)/)
+assert.match(window, /data-window-content="true"/)
+assert.doesNotMatch(window, /border-top:1px solid yellow/)
+assert.doesNotMatch(window, /margin:6px;margin-top:0/)
 assert.match(window, /data-window-container/)
 assert.match(window, /<iframe title="Content"/)
 assert.doesNotMatch(window, /class="p-px"/)
@@ -41,8 +46,14 @@ assert.match(authentication, /name="username"/)
 assert.match(authentication, /name="password"/)
 assert.match(authentication, /type="submit"/)
 
-const launcher = markup(<Launcher label="Menu" trigger="Open">{() => <button>Action</button>}</Launcher>)
-panel(launcher)
+const launcher = markup(<Launcher label="PhreshOS" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} />}</Launcher>)
+assert.equal(launcher.match(/data-surface-material=""/g)?.length, 3)
+assert.match(launcher, /grid-cols-2/)
+assert.match(launcher, /<button>Programs<\/button>/)
+assert.match(launcher, /<p>Processes<\/p>/)
+assert.match(launcher, /<h2[^>]*>PhreshOS<\/h2>/)
+assert.match(launcher, /System version 1.2.3/)
+assert.match(launcher, /size-4 rounded-sm object-contain/)
 // Native popover visibility belongs to the outer host, not Panel's grid.
 const popover = launcher.match(/<div[^>]*popover="auto"[^>]*>/)?.[0]
 assert(popover)

@@ -1,7 +1,7 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
-import { Panel } from "@phreshos/react-ui"
+import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
 import WindowHeader from "./window-header"
@@ -30,8 +30,8 @@ import { windowPaintInset } from "../geometry"
  * GSAP owns every structural interpolation: frame geometry, local Surface
  * replacement, and the scale and drift of presence. It never owns state.
  *
- * The chrome uses the shared system material and content sits on an inset
- * sheet. The close control requests — the window leaves only when the truth
+ * The chrome uses the shared system material. Content currently uses the
+ * plain WindowPanel test. The close control requests — the window leaves only when the truth
  * drops its process.
  */
 const edges: { edge: WindowEdge, className: string }[] = [
@@ -711,7 +711,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 <div data-window-content className="relative min-h-0">{children}</div>
 
-            </div> : <Panel
+            </div> : <WindowPanel
                 data-window-container
                 ref={surfaceElement}
                 style={paintedInsets}
@@ -739,7 +739,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                     stopping={stopping || closing}
 
                 />}
-            >{children}</Panel>}
+            >{children}</WindowPanel>}
 
             {!bare && edges.map(handle => <div
 

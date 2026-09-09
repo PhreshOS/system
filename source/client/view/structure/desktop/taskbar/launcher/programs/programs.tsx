@@ -1,24 +1,26 @@
 import LauncherItem from "./launcher-item"
-import programIcon from "../../programs/program-icon"
-import usePrograms from "../../programs/programs"
+import programIcon from "../../../programs/program-icon"
+import usePrograms from "../../../programs/programs"
 import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
 
-interface ProgramsSectionProps {
+interface ProgramsProps {
 
     onChoose: () => void
 }
 
 /** The installed-program section of the Start Menu. */
-export default function ProgramsSection({ onChoose }: ProgramsSectionProps) {
+export default function Programs({ onChoose }: ProgramsProps) {
 
     const application = ApplicationContext.useValue()
 
     const programs = usePrograms()
 
     return <div role="group" aria-label="Programs" className="grid min-h-0 max-h-full gap-1 overflow-y-auto p-2">
+
+        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
 
         {programs.length
 
