@@ -20,10 +20,7 @@ const surfaceSchema = z.strictObject({
     backdrop: bounded(appearanceLimits.surface.backdrop),
     opacity: bounded(appearanceLimits.surface.opacity),
     distortion: bounded(appearanceLimits.surface.distortion),
-    waves: bounded(appearanceLimits.surface.waves),
-    ripples: bounded(appearanceLimits.surface.ripples),
-    saturation: bounded(appearanceLimits.surface.saturation),
-    brightness: bounded(appearanceLimits.surface.brightness)
+    saturation: bounded(appearanceLimits.surface.saturation)
 })
 
 const shadowSchema = z.strictObject({
