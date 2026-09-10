@@ -63,7 +63,7 @@ assert.match(launcher, /size-4 rounded-sm object-contain/)
 const popover = launcher.match(/<div[^>]*popover="auto"[^>]*>/)?.[0]
 assert(popover)
 assert.match(popover, /overflow-visible/)
-// Popovers and native dialogs share a non-clipping host for Surface shadows.
+// Popovers and native dialogs share a non-clipping host for independently owned outer effects.
 assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
 assert.doesNotMatch(popover, /style=/)
 assert.match(launcher, /popovertarget=/i)
