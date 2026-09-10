@@ -11,7 +11,7 @@ import { useDesktopPreferences } from "../appearance/desktop-preferences"
 import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness"
-import { standardAppearance, type DesktopPreferencesUpdate } from "@phreshos/core"
+import { defaultAppearance, type DesktopPreferencesUpdate } from "@phreshos/core"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
@@ -31,7 +31,7 @@ export default function () {
                     ? "opacity-100"
                     : "pointer-events-none opacity-0 transition-opacity duration-200 ease-out"}
 
-                style={{ backgroundColor: standardAppearance.background.light }}
+                style={{ backgroundColor: defaultAppearance.background.light }}
 
             />}
 

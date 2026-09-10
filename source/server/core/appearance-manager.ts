@@ -4,7 +4,7 @@ import { z } from "zod"
 import {
     appearanceLimits,
     createAppearanceSnapshot,
-    standardAppearance,
+    defaultAppearance,
     type Appearance,
     type AppearanceRange
 } from "@phreshos/core"
@@ -14,13 +14,13 @@ const servedFileSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-
 const wallpaperSchema = servedFileSchema.nullable()
 const wallpaperExtensions = new Set(["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"])
 
-const surfaceSchema = z.strictObject({
-    grain: bounded(appearanceLimits.surface.grain),
-    grainAmount: bounded(appearanceLimits.surface.grainAmount),
-    backdrop: bounded(appearanceLimits.surface.backdrop),
-    opacity: bounded(appearanceLimits.surface.opacity),
-    distortion: bounded(appearanceLimits.surface.distortion),
-    saturation: bounded(appearanceLimits.surface.saturation)
+const materialSchema = z.strictObject({
+    grain: bounded(appearanceLimits.material.grain),
+    grainAmount: bounded(appearanceLimits.material.grainAmount),
+    backdrop: bounded(appearanceLimits.material.backdrop),
+    opacity: bounded(appearanceLimits.material.opacity),
+    distortion: bounded(appearanceLimits.material.distortion),
+    saturation: bounded(appearanceLimits.material.saturation)
 })
 
 const shadowSchema = z.strictObject({
@@ -44,12 +44,12 @@ export const appearanceSchema: z.ZodType<Appearance> = z.strictObject({
     spacing: shared(bounded(appearanceLimits.spacing)),
     radius: shared(bounded(appearanceLimits.radius)),
     shadow: themed(shadowSchema),
-    surface: themed(surfaceSchema),
+    material: themed(materialSchema),
     signInWallpaper: themed(wallpaperSchema),
     desktopWallpaper: themed(wallpaperSchema)
 })
 
-const properties = Object.keys(standardAppearance) as (keyof Appearance)[]
+const properties = Object.keys(defaultAppearance) as (keyof Appearance)[]
 
 /** Durable, complete Appearance state owned by Server Core. */
 export default class AppearanceManager {
@@ -66,7 +66,7 @@ export default class AppearanceManager {
         })))
         const stored = Object.fromEntries(entries.map(({ property, value }) => [
             property,
-            value === undefined ? standardAppearance[property] : value
+            value === undefined ? defaultAppearance[property] : value
         ]))
         const appearance = createAppearanceSnapshot(appearanceSchema.parse(stored))
 
