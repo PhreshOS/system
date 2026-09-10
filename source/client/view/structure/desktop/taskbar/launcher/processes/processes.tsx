@@ -22,7 +22,7 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
     const matching = processes.filter(process => matchesProcess(process.name, programsByIdentity.get(process.program), terms))
 
-    return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] p-2">
+    return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
 
         <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
 

@@ -4,7 +4,7 @@ import Launcher from "./launcher"
 import Programs from "./programs/programs"
 import Processes from "./processes/processes"
 import StartMenuPanel from "./start-menu-panel"
-import { ApplicationContext, AuthManagerContext } from "@client/view/contexts"
+import { ApplicationContext } from "@client/view/contexts"
 import SearchBar from "./search-bar"
 import { searchTerms } from "./search"
 
@@ -12,8 +12,6 @@ import { searchTerms } from "./search"
 export default memo(function StartMenu() {
 
     const application = ApplicationContext.useValue()
-
-    const { username } = AuthManagerContext.useValue()
 
     const [query, setQuery] = useState("")
 
@@ -41,7 +39,7 @@ export default memo(function StartMenu() {
             version={application.version}
             left={<Programs onChoose={close} terms={terms} />}
             right={<Processes terms={terms} />}
-            footer={<SearchBar query={query} onChange={setQuery} username={username} />}
+            footer={<SearchBar query={query} onChange={setQuery} />}
         />}
 
     </Launcher>

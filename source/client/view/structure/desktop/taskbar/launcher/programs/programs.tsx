@@ -21,7 +21,7 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
     const programs = usePrograms().filter(program => matchesProgram(program, terms))
 
-    return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] p-2">
+    return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
 
         <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
 
