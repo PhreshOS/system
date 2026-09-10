@@ -2,7 +2,8 @@ import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef } from "react"
 import { type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
+import gsap from "@client/view/appearance/motion"
+import { enterSurface, leaveSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 
 /** Projects one representation-local target and animates explicit replacements. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
@@ -31,34 +32,40 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
 
         const transaction = transition?.transaction
 
-        const duration = transaction?.duration ?? motionDurations.presence
+        // Desktop owns presence of the whole Surface; React UI owns its
+        // material. The Program's transaction controls the shared entrance
+        // pose without reaching into paint, border or backdrop layers.
+        if (!transaction || !changed) {
 
-        // Desktop owns visibility of the whole Surface; React UI owns its
-        // material. Never capture or overwrite opacity on internal paint layers.
-        gsap.killTweensOf(surface)
+            restSurface(surface)
 
-        if (!transaction || !changed || reducedMotion || duration === 0) {
-
-            gsap.set(surface, { opacity: visible ? 1 : 0 })
-
-            if (transaction && changed) onComplete(revision!)
+            gsap.set(surface, { visibility: visible ? "visible" : "hidden" })
 
             return
         }
 
-        const animation = gsap.fromTo(surface, {
-            opacity: initial && visible ? 0 : Number(getComputedStyle(surface).opacity)
-        }, {
-            opacity: visible ? 1 : 0,
-            duration: motionDuration(duration),
-            ease: motionEase(transaction.easing),
-            overwrite: "auto",
-            onComplete: () => onComplete(revision!)
-        })
+        const hidden = getComputedStyle(surface).visibility === "hidden"
+
+        if (visible && (initial || hidden)) prepareSurfaceEntrance(surface, reducedMotion)
+
+        gsap.set(surface, { visibility: "visible" })
+
+        const complete = function () {
+
+            if (!visible) gsap.set(surface, { visibility: "hidden" })
+
+            onComplete(revision!)
+        }
+
+        const animation = visible
+
+            ? enterSurface(surface, reducedMotion, { ...transaction, onComplete: complete })
+
+            : leaveSurface(surface, reducedMotion, { ...transaction, onComplete: complete })
 
         return function () {
 
-            animation.kill()
+            animation?.kill()
         }
 
     }, [reducedMotion, transition?.revision, visible])
