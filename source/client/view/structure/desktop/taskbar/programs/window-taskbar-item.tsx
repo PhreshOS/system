@@ -15,7 +15,7 @@ export default memo(function ({ record, title, icon, active, onElement, onMinimi
 
     const source = useCallback((element: HTMLButtonElement | null) => onElement(record, element), [onElement, record])
 
-    return <TaskbarItem ref={source} active={active} icon={icon} onClick={press}>
+    return <TaskbarItem ref={source} active={active} icon={icon} onPress={press}>
 
         {title}
 

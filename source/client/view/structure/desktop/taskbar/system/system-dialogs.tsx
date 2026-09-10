@@ -106,11 +106,11 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
         <div className="col-span-full flex flex-wrap justify-end gap-2">
 
-            <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute(false)}>Deny</TaskbarButton>
+            <TaskbarButton small disabled={decision.isPending} onPress={() => decision.safeExecute(false)}>Deny</TaskbarButton>
 
-            <TaskbarButton small autoFocus disabled={decision.isPending} onClick={() => decision.safeExecute(null)}>Later</TaskbarButton>
+            <TaskbarButton small autoFocus disabled={decision.isPending} onPress={() => decision.safeExecute(null)}>Later</TaskbarButton>
 
-            <TaskbarButton small disabled={decision.isPending} onClick={() => decision.safeExecute(true)}>Allow for this Program</TaskbarButton>
+            <TaskbarButton small disabled={decision.isPending} onPress={() => decision.safeExecute(true)}>Allow for this Program</TaskbarButton>
 
         </div>
 
@@ -143,7 +143,7 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
 
             disabled={acknowledgment.isPending}
 
-            onClick={() => acknowledgment.safeExecute()}
+            onPress={() => acknowledgment.safeExecute()}
 
             className="col-span-full justify-self-end font-medium"
 

@@ -47,7 +47,7 @@ assert.match(authentication, /name="password"/)
 assert.match(authentication, /type="submit"/)
 
 const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />}</Launcher>)
-assert.equal(launcher.match(/data-surface-material=""/g)?.length, 3)
+assert.equal(launcher.match(/data-surface-material=""/g)?.length, 4)
 assert.match(launcher, /grid-cols-2/)
 assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\);min-height:0/)
 assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:8px;padding:8px;padding-top:0/)
@@ -66,4 +66,3 @@ assert.match(popover, /overflow-visible/)
 // Popovers and native dialogs share a non-clipping host for independently owned outer effects.
 assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
 assert.doesNotMatch(popover, /style=/)
-assert.match(launcher, /popovertarget=/i)

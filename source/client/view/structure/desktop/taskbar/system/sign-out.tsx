@@ -10,9 +10,7 @@ export default memo(function (props: ComponentProps<typeof TaskbarButton>) {
 
         aria-label="Sign out"
 
-        title="Sign out"
-
-        onClick={authorization.remove}
+        onPress={authorization.remove}
 
         {...props}
 

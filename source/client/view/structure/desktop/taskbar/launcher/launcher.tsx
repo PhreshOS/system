@@ -26,6 +26,18 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
     }, [])
 
+    const toggle = useCallback(function () {
+
+        const element = surface.current
+
+        if (!element) return
+
+        if (element.matches(":popover-open")) element.hidePopover()
+
+        else element.showPopover()
+
+    }, [])
+
     useEffect(function () {
 
         // A Program frame is a separate document, so its pointer events cannot
@@ -57,9 +69,7 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
             aria-label={label}
 
-            title={label}
-
-            popoverTarget={id}
+            onPress={toggle}
 
         >
 

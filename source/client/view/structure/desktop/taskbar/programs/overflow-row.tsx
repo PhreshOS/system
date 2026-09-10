@@ -1,5 +1,6 @@
 import { ComponentProps, useId, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
+import { Button } from "@phreshos/react-ui"
 
 /** A horizontal row that reveals its own overflow without owning its items. */
 export default function OverflowRow({ children, backwardLabel = "Scroll backward", forwardLabel = "Scroll forward", className, ...props }: OverflowRowProps) {
@@ -81,7 +82,7 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
     return <div ref={container} role="group" className={`flex min-w-0 items-center gap-1 ${className ?? ""}`} {...props}>
 
-        {edges.overflowing && <ScrollButton label={backwardLabel} controls={viewportId} direction="backward" disabled={edges.start} reducedMotion={reducedMotion} onClick={() => scroll(-1)} />}
+        {edges.overflowing && <ScrollButton label={backwardLabel} controls={viewportId} direction="backward" disabled={edges.start} onClick={() => scroll(-1)} />}
 
         <div id={viewportId} ref={viewport} className="-m-2 min-w-0 flex-1 overflow-x-auto p-2">
 
@@ -93,26 +94,21 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
         </div>
 
-        {edges.overflowing && <ScrollButton label={forwardLabel} controls={viewportId} direction="forward" disabled={edges.end} reducedMotion={reducedMotion} onClick={() => scroll(1)} />}
+        {edges.overflowing && <ScrollButton label={forwardLabel} controls={viewportId} direction="forward" disabled={edges.end} onClick={() => scroll(1)} />}
 
     </div>
 }
 
-function ScrollButton({ label, controls, direction, disabled, reducedMotion, onClick }: ScrollButtonProps) {
+function ScrollButton({ label, controls, direction, disabled, onClick }: ScrollButtonProps) {
 
-    return <button
-
-        type="button"
-
+    return <Button
         aria-label={label}
-
         aria-controls={controls}
-
         disabled={disabled}
-
-        onClick={onClick}
-
-        className={`grid size-7 shrink-0 place-items-center rounded-lg border border-white/45 bg-white/55 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-white disabled:opacity-35 ${reducedMotion ? "" : "transition-colors hover:bg-white/80 active:scale-95"}`}
+        onPress={onClick}
+        size="xsmall"
+        className="shrink-0"
+        style={{ inlineSize: 28, paddingInline: 0 }}
 
     >
 
@@ -122,7 +118,7 @@ function ScrollButton({ label, controls, direction, disabled, reducedMotion, onC
 
         </svg>
 
-    </button>
+    </Button>
 }
 
 interface OverflowRowProps extends ComponentProps<"div"> {
@@ -141,8 +137,6 @@ interface ScrollButtonProps {
     direction: "backward" | "forward"
 
     disabled: boolean
-
-    reducedMotion: boolean
 
     onClick: () => void
 }
