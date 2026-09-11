@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import FileArea, { FileSystem } from "@libs/file-area"
@@ -21,7 +21,7 @@ try {
     }).storage
 
     assert.equal(await systemStorage.call(authManager, "path", []), home.path)
-    assert.equal(await systemStorage.call(authManager, "resolve", ["..", "outside"]), outside)
+    assert.equal(await systemStorage.call(authManager, "path", ["..", "outside"]), outside)
 
     mkdirSync(join(root, "kept"), { recursive: true })
     mkdirSync(join(root, "nested"), { recursive: true })
@@ -32,6 +32,27 @@ try {
 
     assert.deepEqual(readdirSync(join(root, "nested")), [])
     assert.deepEqual(readdirSync(join(root, "kept")), ["value.txt"])
+
+    storage.create(["created"])
+    await storage.write(["created", "value.txt"], new Blob(["storage"]).stream(), undefined, false)
+    await storage.append(["created", "value.txt"], new Blob([" file"]).stream())
+    assert.equal(readFileSync(join(root, "created", "value.txt"), "utf8"), "storage file")
+    assert.equal(await new Response(storage.stream(["created", "value.txt"], [8, 4])).text(), "file")
+    assert.deepEqual(storage.list([], [true]), [
+        { kind: "storage", path: ["created"] },
+        { kind: "file", path: ["created", "value.txt"] },
+        { kind: "storage", path: ["kept"] },
+        { kind: "file", path: ["kept", "value.txt"] },
+        { kind: "storage", path: ["nested"] }
+    ])
+    assert.ok(storage.space().capacity > 0)
+
+    const changes = storage.watch(["created"])
+    const changed = changes.next()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    writeFileSync(join(root, "created", "watched.txt"), "changed")
+    assert.match((await changed).value?.event ?? "", /^(change|rename)$/)
+    await changes.return(undefined)
     assert.throws(() => storage.resolve(["..", "outside"]), /configured directory/)
 
     mkdirSync(outside, { recursive: true })

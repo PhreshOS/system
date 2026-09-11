@@ -1,7 +1,7 @@
-import { createReadStream, createWriteStream, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs"
+import { createReadStream, createWriteStream, linkSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statfsSync, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
-import { rm } from "node:fs/promises"
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
+import { rm, watch as watchPath } from "node:fs/promises"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { type ReadableStream as NodeReadableStream } from "node:stream/web"
@@ -52,6 +52,18 @@ export default class FileArea {
         return path
     }
 
+    public name(joins: string[] = []) {
+
+        const path = this.resolve(joins)
+
+        return basename(path) || path
+    }
+
+    public create(joins: string[] = []) {
+
+        mkdirSync(this.resolve(joins), { recursive: true })
+    }
+
     public clear(joins: string[] = []) {
 
         const path = this.resolve(joins)
@@ -90,9 +102,44 @@ export default class FileArea {
         return { kind: "other", modifiedAt }
     }
 
-    public list(joins: string[]) {
+    public list(joins: string[], options: StorageListOptions = []) {
 
-        return readdirSync(this.resolve(joins)).sort()
+        const [recursive = false, configuredDepth] = options
+
+        if (configuredDepth !== undefined && (!Number.isSafeInteger(configuredDepth) || configuredDepth < 0)) {
+
+            throw new Error("A Storage list depth must be a non-negative safe integer")
+        }
+
+        if (configuredDepth !== undefined && !recursive) throw new Error("A Storage list depth requires recursive listing")
+
+        const depth = recursive ? configuredDepth ?? Number.POSITIVE_INFINITY : 1
+
+        const entries: StorageEntry[] = []
+
+        this.collect(joins, [], depth, entries)
+
+        return entries
+    }
+
+    private collect(joins: string[], relative: string[], depth: number, entries: StorageEntry[]) {
+
+        if (depth === 0) return
+
+        for (const name of readdirSync(this.resolve([...joins, ...relative])).sort()) {
+
+            const path = [...relative, name]
+
+            const found = this.stat([...joins, ...path])
+
+            if (!found) continue
+
+            if (found.kind === "other") throw new Error(`${this.resolve([...joins, ...path])} is neither a file nor a Storage directory`)
+
+            entries.push({ kind: found.kind === "directory" ? "storage" : "file", path })
+
+            if (found.kind === "directory" && depth > 1) this.collect(joins, path, depth - 1, entries)
+        }
     }
 
     public delete(joins: string[]) {
@@ -102,7 +149,7 @@ export default class FileArea {
         rmSync(this.resolve(joins), { recursive: true, force: true })
     }
 
-    public stream(joins: string[]) {
+    public stream(joins: string[], options: StorageReadOptions = []) {
 
         const found = this.stat(joins)
 
@@ -110,10 +157,25 @@ export default class FileArea {
 
         if (found.kind !== "file") throw new NotFileError(`${joins.join("/")} is not a file`)
 
-        return Readable.toWeb(createReadStream(this.resolve(joins))) as ReadableStream<Uint8Array>
+        const [offset = 0, length] = options
+
+        if (!Number.isSafeInteger(offset) || offset < 0) throw new Error("A Storage read offset must be a non-negative safe integer")
+
+        if (length !== undefined && (!Number.isSafeInteger(length) || length < 0)) throw new Error("A Storage read length must be a non-negative safe integer")
+
+        if (length !== undefined && !Number.isSafeInteger(offset + length)) throw new Error("A Storage byte range must use safe integers")
+
+        if (length === 0) return new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
+
+        return Readable.toWeb(createReadStream(this.resolve(joins), {
+
+            start: offset,
+
+            ...(length === undefined ? {} : { end: offset + length - 1 })
+        })) as ReadableStream<Uint8Array>
     }
 
-    public async write(joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+    public async write(joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
 
         if (joins.length === 0) throw new Error("Writing takes a file name and what to write")
 
@@ -136,7 +198,14 @@ export default class FileArea {
                 { signal }
             )
 
-            renameSync(temporary, path)
+            if (overwrite) renameSync(temporary, path)
+
+            else {
+
+                linkSync(temporary, path)
+
+                rmSync(temporary, { force: true })
+            }
         }
 
         catch (exception) {
@@ -144,6 +213,45 @@ export default class FileArea {
             await rm(temporary, { force: true }).catch(() => undefined)
 
             throw exception
+        }
+    }
+
+    public async append(joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+
+        if (joins.length === 0) throw new Error("Appending takes a file name and what to append")
+
+        if (!content) throw new Error("Appending takes a byte stream")
+
+        const path = this.resolve(joins)
+
+        mkdirSync(dirname(path), { recursive: true })
+
+        await pipeline(
+
+            Readable.fromWeb(content as unknown as NodeReadableStream<Uint8Array>),
+
+            createWriteStream(path, { flags: "a" }),
+
+            { signal }
+        )
+    }
+
+    public space(joins: string[] = []) {
+
+        const value = statfsSync(this.resolve(joins))
+
+        const capacity = value.blocks * value.bsize
+
+        const available = value.bavail * value.bsize
+
+        return { capacity, available, used: capacity - value.bfree * value.bsize }
+    }
+
+    public async *watch(joins: string[] = [], recursive = false, signal?: AbortSignal) {
+
+        for await (const change of watchPath(this.resolve(joins), { recursive, signal })) {
+
+            yield { event: change.eventType, path: change.filename === null ? null : String(change.filename) } as const
         }
     }
 }
@@ -181,6 +289,17 @@ export interface OtherStat {
 
     modifiedAt: number
 }
+
+export interface StorageEntry {
+
+    kind: "storage" | "file"
+
+    path: string[]
+}
+
+export type StorageListOptions = [recursive?: boolean, depth?: number]
+
+export type StorageReadOptions = [offset?: number, length?: number]
 
 export class MissingAreaEntryError extends Error { }
 

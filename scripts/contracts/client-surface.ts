@@ -92,6 +92,28 @@ const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, wait
 await first.move("bare", { x: 120, y: 130 })
 await assert.rejects(interrupted, /interrupted/)
 
+const following = first.follow("bare", "ordinary", transaction)
+const followRevision = represented(first, "bare:0").geometryAnimation!.revision
+first.reconcile(clients)
+assert.equal(represented(first, "bare:0").geometryAnimation!.revision, followRevision)
+first.complete("bare", "geometry", followRevision)
+await following
+assert.deepEqual(first.state("bare").position, first.state("ordinary").position)
+
+await first.move("ordinary", { x: 150, y: 160 })
+assert.deepEqual(first.state("bare").position, { x: 150, y: 160 })
+
+const unfollowing = first.unfollow("bare", transaction)
+const unfollowRevision = represented(first, "bare:0").geometryAnimation!.revision
+first.complete("bare", "geometry", unfollowRevision)
+await unfollowing
+assert.deepEqual(first.state("bare").position, { x: 120, y: 130 })
+
+await first.follow("bare", "ordinary")
+await first.move("bare", { x: 125, y: 135 })
+await first.move("ordinary", { x: 155, y: 165 })
+assert.deepEqual(first.state("bare").position, { x: 125, y: 135 })
+
 const surfaceWaiting = first.addSurface("bare", visibility)
 const surfaceRevision = surface(first, "bare:0").transition!.revision
 first.complete("bare", "surface", surfaceRevision)
@@ -146,6 +168,8 @@ const calls: unknown[][] = []
 const localWindow = {
     state(identity: string) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
     move(identity: string, value: unknown, motion: Transaction | undefined) { calls.push(["move", identity, value, motion]) },
+    follow(identity: string, followed: string, motion: Transaction | undefined) { calls.push(["follow", identity, followed, motion]) },
+    unfollow(identity: string, motion: Transaction | undefined) { calls.push(["unfollow", identity, motion]) },
     addSurface(identity: string, motion: Transaction) { calls.push(["add", identity, motion]) },
     removeSurface(identity: string, motion: Transaction) { calls.push(["remove", identity, motion]) }
 }
@@ -182,11 +206,15 @@ assert(Array.isArray(parentAnswer))
 const retainedParent = parentAnswer[0] as { identity: string }
 assert.equal(retainedParent.identity, parent.identity)
 await request("windowLocalMove", requesterAddress, { x: 70, y: 80 })
+await request("windowLocalFollow", requesterAddress, targetAddress, visibility)
+await request("windowLocalUnfollow", requesterAddress, visibility)
 await request("windowLocalSurfaceAdd", requesterAddress, undefined, visibility)
 await request("windowLocalSurfaceRemove", requesterAddress, undefined, visibility)
 
 assert.deepEqual(calls, [
     ["move", "requester", { x: 70, y: 80 }, undefined],
+    ["follow", "requester", "target", visibility],
+    ["unfollow", "requester", visibility],
     ["add", "requester", visibility],
     ["remove", "requester", visibility]
 ])

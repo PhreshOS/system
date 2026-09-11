@@ -3,7 +3,7 @@ import { type ProxyOutcome, type ProxyRequest, type ProxyResponse, proxyMediaTyp
 import { storageMediaType, type StorageRequest } from "@server/core/protocol/storage"
 import { frame, frameBlob, unframe } from "@libs/framing"
 import messagepack from "@the-link/messagepack"
-import type { Upload } from "@phreshos/core"
+import type { FileStat, Upload } from "@phreshos/core"
 
 export default class Application {
 
@@ -66,7 +66,7 @@ export default class Application {
         return response.body
     }
 
-    public async uploadStat(file: string): Promise<Upload | null> {
+    public async uploadStat(file: string): Promise<FileStat | null> {
 
         const response = await fetch(`${this.doors.uploads}/${encodeURIComponent(file)}/stat`)
 
@@ -120,18 +120,23 @@ export default class Application {
         }
     }
 
-    public async storageStream(request: StorageTarget, authorization: string, signal?: AbortSignal) {
+    public async storageStream(request: StorageTarget, authorization: string, signal?: AbortSignal, options: { offset?: number, length?: number } = {}) {
 
-        const response = await this.storage({ ...request, operation: "stream" }, null, authorization, signal)
+        const response = await this.storage({ ...request, operation: "stream", ...options }, null, authorization, signal)
 
         if (!response.body) throw new Error("The storage response has no body")
 
         return response.body
     }
 
-    public async storageWrite(request: StorageTarget, body: ClientBody, authorization: string, signal?: AbortSignal) {
+    public async storageWrite(request: StorageTarget, body: ClientBody, authorization: string, signal?: AbortSignal, overwrite = true) {
 
-        await this.storage({ ...request, operation: "write" }, body, authorization, signal)
+        await this.storage({ ...request, operation: "write", overwrite }, body, authorization, signal)
+    }
+
+    public async storageAppend(request: StorageTarget, body: ClientBody, authorization: string, signal?: AbortSignal) {
+
+        await this.storage({ ...request, operation: "append" }, body, authorization, signal)
     }
 
     private async storage(request: StorageRequest, body: ClientBody | null, authorization: string, signal?: AbortSignal) {

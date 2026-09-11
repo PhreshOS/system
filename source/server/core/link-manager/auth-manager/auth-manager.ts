@@ -11,6 +11,8 @@ import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
 
+    private readonly storageWatches = new Map<string, AbortController>()
+
     public readonly linkManager: LinkManager
 
     public readonly programManager: ProgramManager
@@ -83,7 +85,7 @@ export default class AuthManager extends TheLink {
 
         const file = await this.uploads.write(extension, content, signal)
 
-        return this.uploads.stat(file)!
+        return { file, ...this.uploads.stat(file)! }
     }
 
     /** Perform a server-side request after the desktop door proves authorization. */
@@ -94,28 +96,106 @@ export default class AuthManager extends TheLink {
         return fetch(input, init)
     }
 
-    public streamArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[]) {
+    public streamArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], options: [offset?: number, length?: number] = []) {
 
         this.verify(authorization)
 
-        return this.programManager.streamArea(program, area, path)
+        return this.programManager.streamArea(program, area, path, options)
     }
 
     @Connect("/storage")
-    protected async storage(operation: unknown, values: unknown) {
+    protected async storage(operation: unknown, values: unknown, input?: unknown) {
 
         if (typeof operation !== "string" || !Array.isArray(values) || values.some(value => typeof value !== "string")) throw new Error("A System storage operation is invalid")
 
         const area = this.linkManager.application.home
 
-        if (operation === "path") return area.path
-        if (operation === "resolve") return area.resolve(values)
-        if (operation === "stat") return area.stat(values)
-        if (operation === "list") return area.list(values)
-        if (operation === "delete") return area.delete(values)
+        if (operation === "path") return area.resolve(values)
+        if (operation === "name") return area.name(values)
+        if (operation === "create") return area.create(values)
+
+        if (operation === "stat-storage" || operation === "stat-file") {
+
+            const found = area.stat(values)
+
+            if (!found) return null
+
+            if (operation === "stat-storage") {
+
+                if (found.kind !== "directory") throw new Error(`${area.resolve(values)} is not a Storage directory`)
+
+                return { modifiedAt: found.modifiedAt }
+            }
+
+            if (found.kind !== "file") throw new Error(`${area.resolve(values)} is not a file`)
+
+            return { size: found.size, modifiedAt: found.modifiedAt }
+        }
+
+        if (operation === "list") {
+
+            const options = storageListOptions(input)
+
+            return area.list(values, [options.recursive, options.depth])
+        }
+
+        if (operation === "delete-storage" || operation === "delete-file") {
+
+            const found = area.stat(values)
+
+            if (found && operation === "delete-storage" && found.kind !== "directory") throw new Error(`${area.resolve(values)} is not a Storage directory`)
+
+            if (found && operation === "delete-file" && found.kind !== "file") throw new Error(`${area.resolve(values)} is not a file`)
+
+            return area.delete(values)
+        }
+
         if (operation === "clear") return area.clear(values)
+        if (operation === "space") return area.space(values)
 
         throw new Error(`System storage does not know "${operation}"`)
+    }
+
+    @Connect("/storage-watch")
+    protected async watchStorage(stream: unknown, target: unknown) {
+
+        if (typeof stream !== "string" || !stream) throw new Error("A Storage watch needs an identity")
+
+        const request = storageWatchTarget(target)
+
+        const connection = this.connection()
+
+        const key = `${connection}:${stream}`
+
+        if (this.storageWatches.has(key)) throw new Error("A Storage watch identity must be unique")
+
+        const controller = new AbortController()
+
+        const signal = AbortSignal.any([controller.signal, this.connectionSignal()])
+
+        this.storageWatches.set(key, controller)
+
+        try {
+
+            const operation = request.scope === "system"
+                ? this.linkManager.application.home.watch(request.path, request.recursive, signal)
+                : this.programManager.watchArea(request.program, request.area, request.path, request.recursive, signal)
+
+            for await (const change of operation) await this.publishToConnection(connection, "/storage-change", stream, change)
+        }
+
+        finally {
+
+            this.storageWatches.delete(key)
+        }
+    }
+
+    @Subscribe("/storage-watch-cancel")
+    protected cancelStorageWatch(stream: unknown) {
+
+        if (typeof stream !== "string") return
+
+        this.storageWatches.get(`${this.connection()}:${stream}`)?.abort()
     }
 
     @Connect("/uploads/path")
@@ -199,11 +279,18 @@ export default class AuthManager extends TheLink {
         if (typeof request === "string" && typeof process === "string") await this.processManager.cancelPermission(process, request)
     }
 
-    public async writeArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+    public async writeArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
 
         this.verify(authorization)
 
-        await this.programManager.writeArea(program, area, path, content, signal)
+        await this.programManager.writeArea(program, area, path, content, signal, overwrite)
+    }
+
+    public async appendArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+
+        this.verify(authorization)
+
+        await this.programManager.appendArea(program, area, path, content, signal)
     }
 
     // A targeted client observation belongs to one authorized desktop
@@ -242,6 +329,41 @@ export default class AuthManager extends TheLink {
             dialogManager: this.dialogManager
         }
     }
+}
+
+function storageListOptions(value: unknown) {
+
+    if (value === undefined) return { recursive: false, depth: undefined }
+
+    if (!value || typeof value !== "object") throw new Error("Storage list options must be an object")
+
+    const options = value as { recursive?: unknown, depth?: unknown }
+
+    if (options.recursive !== undefined && typeof options.recursive !== "boolean") throw new Error("Storage recursive must be boolean")
+
+    if (options.depth !== undefined && (!Number.isSafeInteger(options.depth) || (options.depth as number) < 0)) throw new Error("Storage depth must be a non-negative safe integer")
+
+    if (options.depth !== undefined && options.recursive !== true) throw new Error("A Storage list depth requires recursive listing")
+
+    return { recursive: options.recursive === true, depth: options.depth as number | undefined }
+}
+
+function storageWatchTarget(value: unknown) {
+
+    if (!value || typeof value !== "object") throw new Error("A Storage watch target is required")
+
+    const target = value as { scope?: unknown, path?: unknown, recursive?: unknown, program?: unknown, area?: unknown }
+
+    if ((target.scope !== "system" && target.scope !== "program") || !Array.isArray(target.path) || target.path.some(part => typeof part !== "string") || typeof target.recursive !== "boolean") {
+
+        throw new Error("A Storage watch target is invalid")
+    }
+
+    if (target.scope === "system") return { scope: "system" as const, path: target.path as string[], recursive: target.recursive }
+
+    if ((target.area !== "data" && target.area !== "cache") || !target.program || typeof target.program !== "object") throw new Error("A Program Storage watch target is invalid")
+
+    return { scope: "program" as const, program: target.program, area: target.area as "data" | "cache", path: target.path as string[], recursive: target.recursive }
 }
 
 export interface AuthManagerSnapshot {

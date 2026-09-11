@@ -131,6 +131,8 @@ export default function Workspace() {
 
             geometryAnimation={local.geometryAnimation}
 
+            minimizeAnimation={local.minimizeAnimation}
+
             onLocalAnimationComplete={(kind, revision) => windows.localWindow.complete(record.identity, kind, revision)}
 
             onLocalRepresentation={windows.localWindow.represent}

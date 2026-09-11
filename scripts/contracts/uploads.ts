@@ -15,9 +15,8 @@ try {
     const upload = uploads.stat(file)
 
     assert(upload)
-    assert.equal(upload.file, file)
-    assert.equal(upload.type, "text/plain")
     assert.equal(upload.size, 13)
+    assert.equal(typeof upload.modifiedAt, "number")
     assert.equal(await readFile(uploads.path(file), "utf8"), "hello uploads")
     assert.equal(uploads.stat("00000000-0000-0000-0000-000000000000.txt"), null)
     assert.throws(() => uploads.stat("../outside.txt"), /not an upload file/)
@@ -36,7 +35,7 @@ try {
                     const written = await uploads.write(extension, content, signal)
                     const upload = uploads.stat(written)
                     assert(upload)
-                    return upload
+                    return { file: written, ...upload }
                 }
             }
         }
@@ -55,13 +54,15 @@ try {
     assert.equal(response.status, 200)
     const created = await response.json()
 
-    assert.equal(created.type, "application/json")
+    assert.equal(created.file.endsWith(".json"), true)
+    assert.equal(created.size, 14)
+    assert.equal(typeof created.modifiedAt, "number")
     const described = await view.request(`http://system/uploads/${created.file}/stat`)
     const downloaded = await view.request(`http://system/uploads/${created.file}`)
 
     assert.equal(described.status, 200)
     assert.equal(downloaded.status, 200)
-    assert.deepEqual(await described.json(), created)
+    assert.deepEqual(await described.json(), { size: created.size, modifiedAt: created.modifiedAt })
     assert.deepEqual(JSON.parse(await downloaded.text()), { ready: true })
     assert.equal((await view.request("http://system/uploads/not-a-key")).status, 400)
     assert.equal((await view.request("http://system/uploads/00000000-0000-0000-0000-000000000000.txt")).status, 404)

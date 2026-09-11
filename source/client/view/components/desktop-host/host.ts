@@ -769,6 +769,47 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             return []
         }
 
+        if (word === "windowLocalMinimize") {
+
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+
+            if (typeof args[1] !== "boolean") throw new Error("Local Window minimize takes a boolean state")
+
+            await localWindow.minimize(target.identity, args[1], visualTransaction(args[2]))
+
+            return []
+        }
+
+        if (word === "windowLocalFollow") {
+
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            const followed = await permittedProcess(args[1])
+            clientOf(followed)
+            await localWindow.follow(target.identity, followed.identity, visualTransaction(args[2]))
+
+            return []
+        }
+
+        if (word === "windowLocalUnfollow") {
+
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            await localWindow.unfollow(target.identity, visualTransaction(args[1]))
+
+            return []
+        }
+
+        if (word === "windowLocalRaise") {
+
+            const target = localProcess(args[0])
+            requireLocalWindowLayer(target.client!.window.layer)
+            localWindow.raise(target.identity)
+
+            return []
+        }
+
         if (word === "changeTitle") {
 
             await clientOf(await permittedProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
@@ -816,18 +857,18 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const program = await permittedProgram(args[0])
 
-            if (operation === "path" || operation === "resolve") {
+            if (operation === "path" || operation === "name") {
 
                 const path = await programManager.area(address(program), word, operation, args.slice(2))
 
-                if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
+                if (typeof path !== "string") throw new Error("The System returned invalid Storage text")
 
-                await access.requireStorage(path)
+                if (operation === "path") await access.requireStorage(path)
 
                 return [path]
             }
 
-            if (operation === "stream" || operation === "write") {
+            if (operation === "stream" || operation === "write" || operation === "append") {
 
                 const joins = args[2]
 
@@ -839,11 +880,24 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 try {
 
-                    if (operation === "write") {
+                    if (operation === "write" || operation === "append") {
 
                         if (!clientBody(args[3])) throw new Error("Writing takes bytes")
 
-                        await authManager.linkManager.application.storageWrite(request, args[3], authManager.authorization, controller.signal)
+                        if (operation === "append") await authManager.linkManager.application.storageAppend(request, args[3], authManager.authorization, controller.signal)
+
+                        else await authManager.linkManager.application.storageWrite(
+
+                            request,
+
+                            args[3],
+
+                            authManager.authorization,
+
+                            controller.signal,
+
+                            storageWriteOptions(args[5]).overwrite
+                        )
 
                         control.close()
 
@@ -852,7 +906,16 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                     const body = controlled(
 
-                        await authManager.linkManager.application.storageStream(request, authManager.authorization, controller.signal),
+                        await authManager.linkManager.application.storageStream(
+
+                            request,
+
+                            authManager.authorization,
+
+                            controller.signal,
+
+                            storageReadOptions(args[5])
+                        ),
 
                         controller,
 
@@ -888,47 +951,40 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         if (word === "host-storage") {
 
             const operation = String(args[0])
-            const paths = args.slice(1)
+            const paths = args[1]
 
-            if (paths.some(path => typeof path !== "string")) throw new Error("A storage path is a list of names")
+            if (!Array.isArray(paths) || paths.some(path => typeof path !== "string")) throw new Error("A Storage path is a list of names")
 
-            if (operation === "path") {
-
-                const path = await authManager.storage(operation, [])
-
-                if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
-
-                await access.requireStorage(path)
-
-                return [path]
-            }
-
-            const path = await authManager.storage("resolve", paths as string[])
+            const path = await authManager.storage("path", paths)
 
             if (typeof path !== "string") throw new Error("The System returned an invalid Storage path")
 
-            if (operation === "resolve") {
+            if (operation === "path" || operation === "name") {
 
                 await access.requireStorage(path)
 
-                return [path]
+                return [await authManager.storage(operation, paths, args[2])]
             }
 
-            const required = operation === "delete" || operation === "clear" ? "delete" : "read"
+            const required = operation === "delete-storage" || operation === "delete-file" || operation === "clear"
+                ? "delete"
+                : operation === "create"
+                    ? "write"
+                    : "read"
 
             await access.requireStorage(path, required)
 
-            return [await authManager.storage(operation, paths as string[])]
+            return [await authManager.storage(operation, paths, args[2])]
         }
 
-        if (word === "host-storage-stream" || word === "host-storage-write") {
+        if (word === "host-storage-stream" || word === "host-storage-write" || word === "host-storage-append") {
 
             const path = args[0]
 
             if (!Array.isArray(path) || path.some(part => typeof part !== "string")) throw new Error("A storage path is a list of names")
 
-            const writing = word === "host-storage-write"
-            const resolved = await authManager.storage("resolve", path)
+            const writing = word !== "host-storage-stream"
+            const resolved = await authManager.storage("path", path)
 
             if (typeof resolved !== "string") throw new Error("The System returned an invalid Storage path")
 
@@ -941,13 +997,35 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
                 if (writing) {
 
                     if (!clientBody(args[1])) throw new Error("Writing takes bytes")
-                    await authManager.linkManager.application.storageWrite(request, args[1], authManager.authorization, controller.signal)
+                    if (word === "host-storage-append") await authManager.linkManager.application.storageAppend(request, args[1], authManager.authorization, controller.signal)
+
+                    else await authManager.linkManager.application.storageWrite(
+
+                        request,
+
+                        args[1],
+
+                        authManager.authorization,
+
+                        controller.signal,
+
+                        storageWriteOptions(args[3]).overwrite
+                    )
                     control.close()
                     return []
                 }
 
                 const body = controlled(
-                    await authManager.linkManager.application.storageStream(request, authManager.authorization, controller.signal),
+                    await authManager.linkManager.application.storageStream(
+
+                        request,
+
+                        authManager.authorization,
+
+                        controller.signal,
+
+                        storageReadOptions(args[3])
+                    ),
                     controller,
                     control
                 )
@@ -1156,6 +1234,36 @@ function isHandleAddress(value: unknown): value is HandleAddress {
 function clientBody(value: unknown): value is ClientBody {
 
     return value instanceof Blob || value instanceof ReadableStream
+}
+
+function storageReadOptions(value: unknown) {
+
+    if (value === undefined) return {}
+
+    if (!value || typeof value !== "object") throw new Error("Storage read options must be an object")
+
+    const options = value as { offset?: unknown, length?: unknown }
+
+    if (options.offset !== undefined && (!Number.isSafeInteger(options.offset) || (options.offset as number) < 0)) throw new Error("A Storage read offset must be a non-negative safe integer")
+
+    if (options.length !== undefined && (!Number.isSafeInteger(options.length) || (options.length as number) < 0)) throw new Error("A Storage read length must be a non-negative safe integer")
+
+    if (typeof options.offset === "number" && typeof options.length === "number" && !Number.isSafeInteger(options.offset + options.length)) throw new Error("A Storage byte range must use safe integers")
+
+    return { offset: options.offset as number | undefined, length: options.length as number | undefined }
+}
+
+function storageWriteOptions(value: unknown) {
+
+    if (value === undefined) return { overwrite: true }
+
+    if (!value || typeof value !== "object") throw new Error("Storage write options must be an object")
+
+    const overwrite = (value as { overwrite?: unknown }).overwrite
+
+    if (overwrite !== undefined && typeof overwrite !== "boolean") throw new Error("Storage overwrite must be boolean")
+
+    return { overwrite: overwrite !== false }
 }
 
 function cancellation(value: unknown, operation: string) {

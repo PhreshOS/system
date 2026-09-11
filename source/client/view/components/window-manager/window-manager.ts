@@ -236,7 +236,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        localWindow.minimize(process.identity, minimized)
+        void localWindow.minimize(process.identity, minimized)
 
         commit(window.minimize(minimized))
 

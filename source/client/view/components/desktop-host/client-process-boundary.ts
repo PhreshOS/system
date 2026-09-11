@@ -607,6 +607,54 @@ export default class ClientProcessBoundary extends TheLink {
 
                 iterator = operation[Symbol.asyncIterator]()
             }
+            else if (args[0] === "storage-watch") {
+
+                const scope = args[1]
+
+                const path = storagePath(scope === "program" ? args[4] : args[2])
+
+                const options = storageWatchOptions(scope === "program" ? args[5] : args[3])
+
+                if (scope === "system") {
+
+                    const resolved = await this.authManager.storage("path", path)
+
+                    if (typeof resolved !== "string") throw new Error("The System returned an invalid Storage path")
+
+                    await this.systemAccess.requireStorage(resolved, "read")
+
+                    iterator = this.authManager.watchStorage({ scope, path, recursive: options.recursive })[Symbol.asyncIterator]()
+                }
+
+                else if (scope === "program") {
+
+                    if (!isHandleAddress(args[2])) throw new Error("A Program handle is required")
+
+                    if (args[3] !== "data" && args[3] !== "cache") throw new Error("A Program Storage area is data or cache")
+
+                    const program = this.authManager.programManager.programs.get(args[2].identity)
+
+                    if (!program || program.reference !== args[2].reference) throw new Error("The Program represented by this handle does not exist")
+
+                    await this.systemAccess.program(program)
+
+                    iterator = this.authManager.watchStorage({
+
+                        scope,
+
+                        program: args[2],
+
+                        area: args[3],
+
+                        path,
+
+                        recursive: options.recursive
+
+                    })[Symbol.asyncIterator]()
+                }
+
+                else throw new Error("A Storage watch scope is system or program")
+            }
             else {
 
                 if (args[0] !== "install" && args[0] !== "uninstall" && args[0] !== "run") throw new Error(`The desktop does not know the stream operation "${String(args[0])}"`)
@@ -936,6 +984,26 @@ export default class ClientProcessBoundary extends TheLink {
         this.pending.length = 0
     }
 
+}
+
+function storagePath(value: unknown) {
+
+    if (!Array.isArray(value) || value.some(part => typeof part !== "string")) throw new Error("A Storage path is a list of names")
+
+    return value as string[]
+}
+
+function storageWatchOptions(value: unknown) {
+
+    if (value === undefined) return { recursive: false }
+
+    if (!value || typeof value !== "object") throw new Error("Storage watch options must be an object")
+
+    const recursive = (value as { recursive?: unknown }).recursive
+
+    if (recursive !== undefined && typeof recursive !== "boolean") throw new Error("Storage recursive must be boolean")
+
+    return { recursive: recursive === true }
 }
 
 function runEvent(authManager: AuthManager, value: unknown) {

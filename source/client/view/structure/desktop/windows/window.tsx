@@ -1,6 +1,6 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
+import { enterSurface, leaveSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, resolveWindowGeometry, resolveWindowValue, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size, type WindowGeometry } from "@phreshos/core"
@@ -52,7 +52,7 @@ const surfacePose = {
     closing: { scale: 0.86, y: 12 }
 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
     const frame = useRef<HTMLDivElement>(null)
 
@@ -325,11 +325,42 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (minimized) onUnavailable?.("minimize")
 
-        // Bare, hiding is hiding: the visibility changes and nothing
-        // travels. There is no taskbar for it to drift toward — a
-        // program in `under` or `over` is not listed — so the drift
-        // would be motion toward nowhere.
-        if (bare || reducedMotion) {
+        if (bare) {
+
+            const revision = minimizeAnimation?.revision
+            const transaction = minimizeAnimation?.transaction
+
+            if (!transaction) {
+
+                restSurface(surfaceElement.current)
+                gsap.set(surfaceElement.current, { visibility: minimized ? "hidden" : "visible" })
+
+                if (revision !== undefined) onLocalAnimationComplete?.("minimize", revision)
+
+                return
+            }
+
+            if (!minimized) {
+
+                prepareSurfaceEntrance(surfaceElement.current, reducedMotion)
+                gsap.set(surfaceElement.current, { visibility: "visible" })
+            }
+
+            const complete = function () {
+
+                if (minimized) gsap.set(surfaceElement.current, { visibility: "hidden" })
+
+                onLocalAnimationComplete?.("minimize", revision!)
+            }
+
+            const animation = minimized
+                ? leaveSurface(surfaceElement.current, reducedMotion, { ...transaction, onComplete: complete })
+                : enterSurface(surfaceElement.current, reducedMotion, { ...transaction, onComplete: complete })
+
+            return () => { animation?.kill() }
+        }
+
+        if (reducedMotion) {
 
             gsap.set(surfaceElement.current, { ...surfacePose.resting, visibility: minimized ? "hidden" : "visible" })
 
@@ -349,7 +380,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         return () => { animation.kill() }
 
-    }, [minimized])
+    }, [minimized, minimizeAnimation?.revision])
 
     // Closing is a handshake: the exit plays, onClosed reports the
     // element may be unmounted.
@@ -818,7 +849,9 @@ interface WindowProps extends Omit<ComponentProps<"div">, "title"> {
 
     geometryAnimation?: LocalAnimation | null
 
-    onLocalAnimationComplete?: (kind: "geometry" | "surface", revision: number) => void
+    minimizeAnimation?: LocalAnimation | null
+
+    onLocalAnimationComplete?: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
     onLocalRepresentation?: (reader: LocalGeometryReader | null) => void
 

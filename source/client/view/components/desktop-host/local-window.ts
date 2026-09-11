@@ -24,6 +24,7 @@ export type LocalWindowState = WindowState & Readonly<{
     depth: number
     surface: LocalSurfaceState | null
     geometryAnimation: LocalAnimation | null
+    minimizeAnimation: LocalAnimation | null
 }>
 
 /** The only interface through which an iframe changes its local representation. */
@@ -32,12 +33,14 @@ export interface LocalWindowHost {
     move(identity: string, position: Position, transaction?: Transaction): Promise<void>
     resize(identity: string, size: Size, transaction?: Transaction): Promise<void>
     geometry(identity: string, geometry: WindowGeometry, transaction?: Transaction): Promise<void>
-    minimize(identity: string, minimized: boolean): void
+    minimize(identity: string, minimized: boolean, transaction?: Transaction): Promise<void>
+    follow(identity: string, target: string, transaction?: Transaction): Promise<void>
+    unfollow(identity: string, transaction?: Transaction): Promise<void>
     title(identity: string, title: string): void
     raise(identity: string): void
     addSurface(identity: string, transaction?: Transaction): Promise<void>
     removeSurface(identity: string, transaction?: Transaction): Promise<void>
-    complete(identity: string, kind: "geometry" | "surface", revision: number): void
+    complete(identity: string, kind: "geometry" | "minimize" | "surface", revision: number): void
     release(identity: string): void
 }
 

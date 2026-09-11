@@ -1,9 +1,12 @@
 export const storageMediaType = "application/x-storage-stream"
 
 type StorageOperation = Readonly<{
-    operation: "stream" | "write"
     path: string[]
-}>
+}> & (
+    | Readonly<{ operation: "stream", offset?: number, length?: number }>
+    | Readonly<{ operation: "write", overwrite?: boolean }>
+    | Readonly<{ operation: "append" }>
+)
 
 export type ProgramAddress = Readonly<{
     identity: string

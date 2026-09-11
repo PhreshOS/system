@@ -1,5 +1,5 @@
 import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth-manager"
-import { Intercept } from "@the-link/core/decorators"
+import { Intercept, Subscribe } from "@the-link/core/decorators"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
 import DialogManager from "./dialog-manager"
@@ -11,6 +11,8 @@ import {
     type PermissionRequest
 } from "@phreshos/core"
 import ShellManager from "./shell-manager"
+import StreamRelay from "@client/core/link-manager/stream-relay"
+import { type StorageChange } from "@phreshos/core"
 
 export default class AuthManager extends TheLink {
 
@@ -27,6 +29,8 @@ export default class AuthManager extends TheLink {
     public readonly dialogManager: DialogManager
 
     public readonly shellManager: ShellManager
+
+    private readonly storageChanges = new StreamRelay("Storage changes", storageChange)
 
     public constructor(linkManager: LinkManager, authorization: string, payload: AuthManagerSnapshot) {
 
@@ -61,9 +65,25 @@ export default class AuthManager extends TheLink {
         this.linkManager.emitToSession(`/auth${event}`, this.authorization, ...values)
     }
 
-    public async storage(operation: string, values: string[]) {
+    public async storage(operation: string, path: string[], input?: unknown) {
 
-        return await this.$outbound.publishFirst("/storage", operation, values)
+        return await this.$outbound.publishFirst("/storage", operation, path, input)
+    }
+
+    public watchStorage(target: StorageWatchTarget) {
+
+        return this.storageChanges.open(
+
+            stream => this.$outbound.publishFirst("/storage-watch", stream, target),
+
+            stream => this.$outbound.publish("/storage-watch-cancel", stream)
+        )
+    }
+
+    @Subscribe("/storage-change")
+    protected storageChange(stream: string, value: unknown) {
+
+        this.storageChanges.receive(stream, value)
     }
 
     public async uploadsPath() {
@@ -110,4 +130,20 @@ export default class AuthManager extends TheLink {
 
         this.disconnectFrom(this.linkManager, "/auth")
     }
+}
+
+export type StorageWatchTarget =
+    | Readonly<{ scope: "system", path: string[], recursive: boolean }>
+    | Readonly<{ scope: "program", program: { identity: string, reference: string }, area: "data" | "cache", path: string[], recursive: boolean }>
+
+function storageChange(value: unknown): StorageChange {
+
+    const change = value as Partial<StorageChange> | null
+
+    if (!change || (change.event !== "change" && change.event !== "rename") || change.path !== null && typeof change.path !== "string") {
+
+        throw new Error("The System returned an invalid Storage change")
+    }
+
+    return Object.freeze({ event: change.event, path: change.path })
 }

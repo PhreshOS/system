@@ -705,9 +705,20 @@ export default class ProgramManager extends TheLink {
 
         const place = this.areaOf(program, area)
 
-        const joins = args.map(String)
+        const joins = storagePath(args[0])
 
-        if (operation === "path") return place.path
+        const input = args[1]
+
+        if (operation === "path") return place.resolve(joins)
+
+        if (operation === "name") return place.name(joins)
+
+        if (operation === "create") {
+
+            place.create(joins)
+
+            return undefined
+        }
 
         if (operation === "clear") {
 
@@ -716,32 +727,71 @@ export default class ProgramManager extends TheLink {
             return undefined
         }
 
-        if (operation === "stat") return place.stat(joins)
+        if (operation === "stat-storage" || operation === "stat-file") {
+
+            const found = place.stat(joins)
+
+            if (!found) return null
+
+            if (operation === "stat-storage") {
+
+                if (found.kind !== "directory") throw new Error(`${place.resolve(joins)} is not a Storage directory`)
+
+                return { modifiedAt: found.modifiedAt }
+            }
+
+            if (found.kind !== "file") throw new Error(`${place.resolve(joins)} is not a file`)
+
+            return { size: found.size, modifiedAt: found.modifiedAt }
+        }
 
         // Sorted, so two runs of the same program see the same order and
         // a program showing a list does not have to sort it again.
-        if (operation === "list") return place.list(joins)
+        if (operation === "list") {
+
+            const options = storageListOptions(input)
+
+            return place.list(joins, [options.recursive, options.depth])
+        }
 
         // Removing a place is `clear`, and one act with two names is how
         // a program empties everything meaning to remove one thing.
-        if (operation === "delete") {
+        if (operation === "delete-storage" || operation === "delete-file") {
+
+            const found = place.stat(joins)
+
+            if (found && operation === "delete-storage" && found.kind !== "directory") throw new Error(`${place.resolve(joins)} is not a Storage directory`)
+
+            if (found && operation === "delete-file" && found.kind !== "file") throw new Error(`${place.resolve(joins)} is not a file`)
 
             place.delete(joins)
 
             return undefined
         }
 
+        if (operation === "space") return place.space(joins)
+
         throw new Error(`The host does not know the storage operation "${operation}"`)
     }
 
-    public streamArea(subject: unknown, area: Area, joins: string[]) {
+    public streamArea(subject: unknown, area: Area, joins: string[], options: [offset?: number, length?: number] = []) {
 
-        return this.areaOf(this.held(subject), area).stream(joins)
+        return this.areaOf(this.held(subject), area).stream(joins, options)
     }
 
-    public async writeArea(subject: unknown, area: Area, joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+    public async writeArea(subject: unknown, area: Area, joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
 
-        await this.areaOf(this.held(subject), area).write(joins, content, signal)
+        await this.areaOf(this.held(subject), area).write(joins, content, signal, overwrite)
+    }
+
+    public async appendArea(subject: unknown, area: Area, joins: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+
+        await this.areaOf(this.held(subject), area).append(joins, content, signal)
+    }
+
+    public watchArea(subject: unknown, area: Area, joins: string[], recursive: boolean, signal?: AbortSignal) {
+
+        return this.areaOf(this.held(subject), area).watch(joins, recursive, signal)
     }
 
     // ── Installing and uninstalling ──────────────────────────────────
@@ -1458,6 +1508,32 @@ export type Options = Record<string, string>
 // may be emptied at any moment; both are the program's, shared by every
 // process of it.
 export type Area = "data" | "cache"
+
+function storagePath(value: unknown) {
+
+    if (value === undefined) return []
+
+    if (!Array.isArray(value) || value.some(part => typeof part !== "string")) throw new Error("A Storage path is a list of names")
+
+    return value as string[]
+}
+
+function storageListOptions(value: unknown) {
+
+    if (value === undefined) return { recursive: false, depth: undefined }
+
+    if (!value || typeof value !== "object") throw new Error("Storage list options must be an object")
+
+    const options = value as { recursive?: unknown, depth?: unknown }
+
+    if (options.recursive !== undefined && typeof options.recursive !== "boolean") throw new Error("Storage recursive must be boolean")
+
+    if (options.depth !== undefined && (!Number.isSafeInteger(options.depth) || (options.depth as number) < 0)) throw new Error("Storage depth must be a non-negative safe integer")
+
+    if (options.depth !== undefined && options.recursive !== true) throw new Error("A Storage list depth requires recursive listing")
+
+    return { recursive: options.recursive === true, depth: options.depth as number | undefined }
+}
 
 // Someone listening to a process from outside it. Given at launch
 // because that is when the child's pipes are decided, and they cannot be

@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { type ReadableStream as NodeReadableStream } from "node:stream/web"
-import { isUploadFile, type Upload } from "@phreshos/core"
+import { isUploadFile, type FileStat } from "@phreshos/core"
 
 export const uploadLimit = 1024 * 1024 * 1024
 
@@ -101,7 +101,7 @@ export default class UploadManager {
         return file
     }
 
-    public stat(file: string): Upload | null {
+    public stat(file: string): FileStat | null {
 
         let stat
 
@@ -114,36 +114,7 @@ export default class UploadManager {
 
         if (!stat.isFile()) throw new Error("That upload key does not identify a file")
 
-        return { file, type: mediaType(file), size: stat.size, time: Math.round(stat.mtimeMs) }
+        return { size: stat.size, modifiedAt: Math.round(stat.mtimeMs) }
     }
 
-}
-
-function mediaType(file: string) {
-
-    return types[file.slice(file.lastIndexOf(".") + 1)] ?? null
-}
-
-const types: Readonly<Record<string, string>> = {
-    avif: "image/avif",
-    bin: "application/octet-stream",
-    bmp: "image/bmp",
-    css: "text/css",
-    csv: "text/csv",
-    gif: "image/gif",
-    gz: "application/gzip",
-    html: "text/html",
-    jpeg: "image/jpeg",
-    jpg: "image/jpeg",
-    js: "text/javascript",
-    json: "application/json",
-    mp3: "audio/mpeg",
-    mp4: "video/mp4",
-    pdf: "application/pdf",
-    png: "image/png",
-    svg: "image/svg+xml",
-    txt: "text/plain",
-    wasm: "application/wasm",
-    webp: "image/webp",
-    zip: "application/zip"
 }
