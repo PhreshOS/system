@@ -33,7 +33,7 @@ export default function ProcessItem({ process, program }: Readonly<{ process: Pr
 
         <Button
             size="xsmall"
-            color="danger"
+            color="danger:base"
             pending={ending.isPending}
             aria-label={`End process ${process.name ?? process.identity}`}
             onPress={() => void ending.safeExecute()}

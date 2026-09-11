@@ -10,7 +10,10 @@ import { join } from "node:path"
 
 assert.deepEqual(appearanceSchema.parse(defaultAppearance), defaultAppearance)
 assert.throws(() => appearanceSchema.parse({}))
-assert.throws(() => appearanceSchema.parse({ ...defaultAppearance, accent: defaultAppearance.primary }))
+assert.throws(() => appearanceSchema.parse({
+  ...defaultAppearance,
+  colors: { ...defaultAppearance.colors, accent: defaultAppearance.colors.primary }
+}))
 assert.throws(() => appearanceSchema.parse({ ...defaultAppearance, spacing: { light: 12, dark: 12 } }))
 assert.throws(() => appearanceSchema.parse({
   ...defaultAppearance,
@@ -28,18 +31,20 @@ assert.deepEqual(manager.value, defaultAppearance)
 assert(Object.isFrozen(manager.value))
 
 for (const role of ["background", "foreground", "primary", "secondary", "success", "warning", "danger", "info"] as const) {
-  assert.deepEqual(await store.get(`appearance:${role}`), defaultAppearance[role])
+
+  assert.deepEqual((await store.get("appearance:colors"))[role], defaultAppearance.colors[role])
   const color = { light: "oklch(60% 0.2 260)", dark: "var(--custom-color)" }
-  await manager.update({ ...manager.value, [role]: color })
-  assert.deepEqual(manager.value[role], color)
-  assert.deepEqual(await store.get(`appearance:${role}`), color)
-  assert(Object.isFrozen(manager.value[role]))
+  await manager.update({ ...manager.value, colors: { ...manager.value.colors, [role]: color } })
+  assert.deepEqual(manager.value.colors[role], color)
+  assert.deepEqual((await store.get("appearance:colors"))[role], color)
+  assert(Object.isFrozen(manager.value.colors[role]))
 
   const current = manager.value
   for (const invalid of [undefined, { light: "red" }, { light: "red", dark: "" }]) {
-    await assert.rejects(manager.update({ ...current, [role]: invalid }))
+
+    await assert.rejects(manager.update({ ...current, colors: { ...current.colors, [role]: invalid } }))
     assert.equal(manager.value, current)
-    assert.deepEqual(await store.get(`appearance:${role}`), color)
+    assert.deepEqual((await store.get("appearance:colors"))[role], color)
   }
 }
 
@@ -55,19 +60,20 @@ assert.deepEqual(manager.value.shadow, shadow)
 assert.deepEqual(await store.get("appearance:shadow"), shadow)
 assert.deepEqual((await AppearanceManager.open(store, new UploadManager(new FileManager(directory)))).value.shadow, shadow)
 for (const invalid of [{ ...shadow.light, blur: -1 }, { ...shadow.light, opacity: 1.1 }, { ...shadow.light, x: Infinity }]) {
+
   await assert.rejects(manager.update({ ...manager.value, shadow: { ...shadow, light: invalid } }))
   assert.deepEqual(manager.value.shadow, shadow)
 }
 
 const updated = {
   ...defaultAppearance,
-  background: { light: "white", dark: "black" }
+  colors: { ...defaultAppearance.colors, background: { light: "white", dark: "black" } }
 }
 
 await manager.update(updated)
 
-assert.deepEqual(manager.value.background, updated.background)
-assert.deepEqual(await store.get("appearance:background"), updated.background)
+assert.deepEqual(manager.value.colors.background, updated.colors.background)
+assert.deepEqual((await store.get("appearance:colors")).background, updated.colors.background)
 assert.equal(await store.get("appearance:theme"), undefined)
 
 await rm(directory, { recursive: true, force: true })

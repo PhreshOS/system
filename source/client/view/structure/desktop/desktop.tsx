@@ -29,7 +29,7 @@ export default function Workspace() {
 
     const desktopWallpaper = useResolveTheme(appearance.desktopWallpaper)
 
-    const foreground = useResolveTheme(appearance.foreground)
+    const foreground = useResolveTheme(appearance.colors.foreground)
 
     const theme = useTheme()
 

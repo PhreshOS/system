@@ -31,7 +31,7 @@ export default function () {
                     ? "opacity-100"
                     : "pointer-events-none opacity-0 transition-opacity duration-200 ease-out"}
 
-                style={{ backgroundColor: defaultAppearance.background.light }}
+                style={{ backgroundColor: defaultAppearance.colors.background.light }}
 
             />}
 
@@ -132,7 +132,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
 function ConnectedAppearance({ children }: { children: React.ReactNode }) {
 
-    const background = useResolveTheme(LinkManagerContext.useValue().appearance.value.background)
+    const background = useResolveTheme(LinkManagerContext.useValue().appearance.value.colors.background)
 
     return <div className="grid min-h-0" style={{ backgroundColor: background }}>{children}</div>
 }
