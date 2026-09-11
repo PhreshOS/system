@@ -78,7 +78,7 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, re
     >
         <Surface
             data-snap-preview-frame
-            material={{ opacity: "small" }}
+            opacity="small"
             className={`absolute ${bare ? "inset-0" : ""}`}
             style={bare ? undefined : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset)}
         />
