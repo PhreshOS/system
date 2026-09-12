@@ -4,7 +4,9 @@ import { ApplicationContext } from "@client/view/contexts"
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type TransitionEvent } from "react"
 import Loading from "@client/view/components/loading"
 import { useReady } from "@libs/readiness"
-import { useTheme } from "@phreshos/react-ui"
+import { useAppearance, useTheme } from "@phreshos/react-ui"
+import { useReducedMotion } from "@libs/react-motion"
+import { cssEasing } from "@client/view/appearance/motion"
 
 const bundledWallpapers = [darkWallpaper, lightWallpaper] as const
 
@@ -30,6 +32,7 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
     const application = ApplicationContext.useValue()
 
     const theme = useTheme()
+    const reducedMotion = useReducedMotion()
 
     const desired = file === null
         ? theme === "dark" ? darkWallpaper : lightWallpaper
@@ -49,7 +52,7 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
     const display = useEffectEvent((source: string) => {
         const shown = current.current
 
-        if (!shown.displayed) {
+        if (!shown.displayed || reducedMotion) {
             setLayers({ displayed: source, incoming: null, switching: false })
             return
         }
@@ -121,10 +124,18 @@ function WallpaperLayer({ source, visible, onTransitionEnd }: {
     visible: boolean
     onTransitionEnd?: (event: TransitionEvent<HTMLDivElement>) => void
 }) {
+    const transaction = useAppearance().transaction
+    const reducedMotion = useReducedMotion()
+
     return <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 ease-out ${visible ? "opacity-100" : "opacity-0"}`}
-        style={{ backgroundImage: `url(${source})` }}
+        className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat ${visible ? "opacity-100" : "opacity-0"}`}
+        style={{
+            backgroundImage: `url(${source})`,
+            transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
+            transitionTimingFunction: cssEasing(transaction.easing),
+            transitionProperty: "opacity"
+        }}
         onTransitionEnd={onTransitionEnd}
     />
 }

@@ -23,7 +23,7 @@ import {
     localPosition,
     localSize,
     requireLocalWindowLayer,
-    visualTransaction,
+    parseLocalWindowTransaction,
     type LocalWindowHost
 } from "./local-window"
 import SystemAccess from "./system-access"
@@ -728,7 +728,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.move(target.identity, localPosition(args[1]), visualTransaction(args[2]))
+            await localWindow.move(target.identity, localPosition(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -737,7 +737,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.resize(target.identity, localSize(args[1]), visualTransaction(args[2]))
+            await localWindow.resize(target.identity, localSize(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -746,7 +746,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.geometry(target.identity, localGeometry(args[1]), visualTransaction(args[2]))
+            await localWindow.geometry(target.identity, localGeometry(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -755,7 +755,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.addSurface(target.identity, visualTransaction(args[2]))
+            await localWindow.addSurface(target.identity, parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -764,7 +764,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.removeSurface(target.identity, visualTransaction(args[2]))
+            await localWindow.removeSurface(target.identity, parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -776,7 +776,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             if (typeof args[1] !== "boolean") throw new Error("Local Window minimize takes a boolean state")
 
-            await localWindow.minimize(target.identity, args[1], visualTransaction(args[2]))
+            await localWindow.minimize(target.identity, args[1], parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -787,7 +787,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             requireLocalWindowLayer(target.client!.window.layer)
             const followed = await permittedProcess(args[1])
             clientOf(followed)
-            await localWindow.follow(target.identity, followed.identity, visualTransaction(args[2]))
+            await localWindow.follow(target.identity, followed.identity, parseLocalWindowTransaction(args[2]))
 
             return []
         }
@@ -796,7 +796,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
             const target = localProcess(args[0])
             requireLocalWindowLayer(target.client!.window.layer)
-            await localWindow.unfollow(target.identity, visualTransaction(args[1]))
+            await localWindow.unfollow(target.identity, parseLocalWindowTransaction(args[1]))
 
             return []
         }

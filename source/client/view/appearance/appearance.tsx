@@ -15,7 +15,7 @@ export default function ({ children }: PropsWithChildren) {
 
 function AppearanceRoot({ children }: PropsWithChildren) {
     const { preferences } = useDesktopPreferences()
-    const background = defaultAppearance.colors.background[preferences.theme]
+    const background = defaultAppearance.colors[preferences.theme].background
 
     return <ReducedMotion reduced={!preferences.animations}>
 

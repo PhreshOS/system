@@ -31,27 +31,45 @@ const shadowSchema = z.strictObject({
     opacity: bounded(appearanceLimits.shadow.opacity)
 })
 
+const easingSchema = z.union([
+    z.enum(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]),
+    z.tuple([
+        z.number().min(0).max(1),
+        z.number(),
+        z.number().min(0).max(1),
+        z.number()
+    ])
+])
+
+const transactionSchema = z.strictObject({
+    duration: bounded(appearanceLimits.transaction.duration),
+    easing: easingSchema
+})
+
+const colorsSchema = z.strictObject({
+    background: z.string().min(1),
+    foreground: z.string().min(1),
+    primary: z.string().min(1),
+    secondary: z.string().min(1),
+    success: z.string().min(1),
+    warning: z.string().min(1),
+    danger: z.string().min(1),
+    info: z.string().min(1)
+})
+
 /** The sole schema for authoritative System Appearance state. */
 export const appearanceSchema: z.ZodType<Appearance> = z.strictObject({
-    colors: z.strictObject({
-        background: themed(z.string().min(1)),
-        foreground: themed(z.string().min(1)),
-        primary: themed(z.string().min(1)),
-        secondary: themed(z.string().min(1)),
-        success: themed(z.string().min(1)),
-        warning: themed(z.string().min(1)),
-        danger: themed(z.string().min(1)),
-        info: themed(z.string().min(1))
-    }),
-    spacing: shared(bounded(appearanceLimits.spacing)),
-    radius: shared(bounded(appearanceLimits.radius)),
+    colors: themed(colorsSchema),
+    spacing: bounded(appearanceLimits.spacing),
+    radius: bounded(appearanceLimits.radius),
     shadow: themed(shadowSchema),
     material: themed(materialSchema),
+    transaction: transactionSchema,
     signInWallpaper: themed(wallpaperSchema),
     desktopWallpaper: themed(wallpaperSchema)
 })
 
-const properties = Object.keys(defaultAppearance) as (keyof Appearance)[]
+const storageKey = "appearance"
 
 /** Durable, complete Appearance state owned by Server Core. */
 export default class AppearanceManager {
@@ -62,19 +80,10 @@ export default class AppearanceManager {
     ) { }
 
     public static async open(store: Keyv, uploads: UploadManager) {
-        const entries = await Promise.all(properties.map(async property => ({
-            property,
-            value: await store.get(`appearance:${property}`)
-        })))
-        const stored = Object.fromEntries(entries.map(({ property, value }) => [
-            property,
-            value === undefined ? defaultAppearance[property] : value
-        ]))
-        const appearance = createAppearanceSnapshot(appearanceSchema.parse(stored))
+        const stored = await store.get(storageKey)
+        const appearance = createAppearanceSnapshot(appearanceSchema.parse(stored ?? defaultAppearance))
 
-        await Promise.all(entries
-            .filter(({ value }) => value === undefined)
-            .map(({ property }) => store.set(`appearance:${property}`, appearance[property])))
+        if (stored === undefined) await store.set(storageKey, appearance)
 
         return new AppearanceManager(store, uploads, appearance)
     }
@@ -89,7 +98,7 @@ export default class AppearanceManager {
         this.validateWallpaper(appearance.desktopWallpaper.light)
         this.validateWallpaper(appearance.desktopWallpaper.dark)
 
-        await Promise.all(properties.map(property => storeProperty(this.store, property, appearance[property])))
+        await this.store.set(storageKey, appearance)
         this.current = appearance
 
         return appearance
@@ -102,18 +111,10 @@ export default class AppearanceManager {
     }
 }
 
-function shared<Schema extends z.ZodType>(schema: Schema) {
-    return z.strictObject({ light: schema })
-}
-
 function themed<Schema extends z.ZodType>(schema: Schema) {
     return z.strictObject({ light: schema, dark: schema })
 }
 
 function bounded(range: AppearanceRange) {
     return z.number().min(range.minimum).max(range.maximum)
-}
-
-function storeProperty(store: Keyv, property: keyof Appearance, value: Appearance[keyof Appearance]) {
-    return store.set(`appearance:${property}`, value)
 }

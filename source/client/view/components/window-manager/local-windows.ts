@@ -1,5 +1,10 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
-import { type Transaction, type WindowGeometry, type WindowState } from "@phreshos/core"
+import {
+    type AppearanceTransaction,
+    type WaitedTransaction,
+    type WindowGeometry,
+    type WindowState
+} from "@phreshos/core"
 import { type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
 
 export interface LocalWindowEntry {
@@ -115,35 +120,35 @@ export default class LocalWindows implements LocalWindowHost {
         else this.readers.delete(identity)
     }
 
-    public move(process: string, position: WindowState["position"], transaction?: Transaction) {
+    public move(process: string, position: WindowState["position"], transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
         this.following.delete(identity)
         return this.changeGeometry(identity, { position, size: state.size }, transaction)
     }
 
-    public resize(process: string, size: WindowState["size"], transaction?: Transaction) {
+    public resize(process: string, size: WindowState["size"], transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
         this.following.delete(identity)
         return this.changeGeometry(identity, { position: state.position, size }, transaction)
     }
 
-    public geometry(process: string, value: WindowGeometry, transaction?: Transaction) {
+    public geometry(process: string, value: WindowGeometry, transaction?: RequestedTransaction) {
 
         const { identity } = this.existing(process)
         this.following.delete(identity)
         return this.changeGeometry(identity, value, transaction)
     }
 
-    public minimize(process: string, minimized: boolean, transaction?: Transaction) {
+    public minimize(process: string, minimized: boolean, transaction?: RequestedTransaction) {
 
         const { identity } = this.existing(process)
         this.following.delete(identity)
         return this.changeMinimized(identity, minimized, transaction)
     }
 
-    public follow(process: string, targetProcess: string, transaction?: Transaction) {
+    public follow(process: string, targetProcess: string, transaction?: RequestedTransaction) {
 
         const follower = this.existing(process)
         const target = this.existing(targetProcess)
@@ -184,7 +189,7 @@ export default class LocalWindows implements LocalWindowHost {
         ]).then(() => undefined)
     }
 
-    public unfollow(process: string, transaction?: Transaction) {
+    public unfollow(process: string, transaction?: RequestedTransaction) {
 
         const { identity } = this.existing(process)
         const relation = this.following.get(identity)
@@ -216,26 +221,26 @@ export default class LocalWindows implements LocalWindowHost {
         this.replace(identity, { ...state, depth: depth + 1 })
     }
 
-    public addSurface(process: string, transaction?: Transaction) {
+    public addSurface(process: string, transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
         if (state.surface?.visible) return Promise.resolve()
 
         this.cancel(identity, "surface")
-        const transition = transaction ? { revision: ++this.revision, transaction } : null
+        const transition = transaction ? localAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, surface: { visible: true, transition } })
-        return this.waitFor(identity, "surface", transition)
+        return this.waitFor(identity, "surface", transition, transaction)
     }
 
-    public removeSurface(process: string, transaction?: Transaction) {
+    public removeSurface(process: string, transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
         if (!state.surface || !state.surface.visible) return Promise.resolve()
 
         this.cancel(identity, "surface")
-        const transition = transaction ? { revision: ++this.revision, transaction } : null
+        const transition = transaction ? localAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, surface: { visible: false, transition } })
-        return this.waitFor(identity, "surface", transition)
+        return this.waitFor(identity, "surface", transition, transaction)
     }
 
     public complete(process: string, kind: AnimationKind, revision: number) {
@@ -296,33 +301,33 @@ export default class LocalWindows implements LocalWindowHost {
         this.publish(next)
     }
 
-    private changeGeometry(identity: string, value: WindowGeometry, transaction?: Transaction, project = true) {
+    private changeGeometry(identity: string, value: WindowGeometry, transaction?: RequestedTransaction, project = true) {
 
         const state = this.windows.get(identity)
         if (!state) throw new Error("This Client has no local Window representation")
         if (JSON.stringify([state.position, state.size]) === JSON.stringify([value.position, value.size])) return Promise.resolve()
 
         this.cancel(identity, "geometry")
-        const animation = transaction ? { revision: ++this.revision, transaction } : null
+        const animation = transaction ? localAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, position: value.position, size: value.size, geometryAnimation: animation })
         if (project) this.projectFollowers(identity, transaction)
-        return this.waitFor(identity, "geometry", animation)
+        return this.waitFor(identity, "geometry", animation, transaction)
     }
 
-    private changeMinimized(identity: string, minimized: boolean, transaction?: Transaction, project = true) {
+    private changeMinimized(identity: string, minimized: boolean, transaction?: RequestedTransaction, project = true) {
 
         const state = this.windows.get(identity)
         if (!state) throw new Error("This Client has no local Window representation")
         if (state.minimized === minimized) return Promise.resolve()
 
         this.cancel(identity, "minimize")
-        const animation = transaction ? { revision: ++this.revision, transaction } : null
+        const animation = transaction ? localAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, minimized, minimizeAnimation: animation })
         if (project) this.projectFollowers(identity, transaction)
-        return this.waitFor(identity, "minimize", animation)
+        return this.waitFor(identity, "minimize", animation, transaction)
     }
 
-    private projectFollowers(target: string, transaction?: Transaction, visited = new Set<string>()) {
+    private projectFollowers(target: string, transaction?: RequestedTransaction, visited = new Set<string>()) {
 
         if (visited.has(target)) return
         visited.add(target)
@@ -330,7 +335,7 @@ export default class LocalWindows implements LocalWindowHost {
         const targetState = this.windows.get(target)
         if (!targetState) return
 
-        const selected = transaction ? { ...transaction, wait: false } : undefined
+        const selected = transaction ? baseTransaction(transaction) : undefined
 
         for (const [identity, relation] of this.following) {
 
@@ -364,9 +369,9 @@ export default class LocalWindows implements LocalWindowHost {
         waiting.reject(new Error(reason))
     }
 
-    private waitFor(identity: string, kind: AnimationKind, animation: LocalWindowState["geometryAnimation"]) {
+    private waitFor(identity: string, kind: AnimationKind, animation: LocalWindowState["geometryAnimation"], transaction?: RequestedTransaction) {
 
-        if (!animation?.transaction.wait) return Promise.resolve()
+        if (!animation || !transaction || !("wait" in transaction)) return Promise.resolve()
         return new Promise<void>((resolve, reject) => {
 
             this.waiting.set(animationKey(identity, kind), { revision: animation.revision, resolve, reject })
@@ -375,6 +380,7 @@ export default class LocalWindows implements LocalWindowHost {
 }
 
 type AnimationKind = "geometry" | "minimize" | "surface"
+type RequestedTransaction = AppearanceTransaction | WaitedTransaction
 
 interface WaitingAnimation {
     revision: number
@@ -394,6 +400,16 @@ interface FollowingWindow {
 function animationKey(identity: string, kind: AnimationKind) {
 
     return `${identity}:${kind}`
+}
+
+function baseTransaction(transaction: RequestedTransaction): AppearanceTransaction {
+
+    return Object.freeze({ duration: transaction.duration, easing: transaction.easing })
+}
+
+function localAnimation(revision: number, transaction: RequestedTransaction) {
+
+    return Object.freeze({ revision, transaction: baseTransaction(transaction) })
 }
 
 function localState(client: ClientState): LocalWindowState {

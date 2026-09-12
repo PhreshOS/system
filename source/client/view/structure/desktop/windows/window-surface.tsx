@@ -1,86 +1,52 @@
 import { useReducedMotion } from "@libs/react-motion"
 import { Surface } from "@phreshos/react-ui"
-import { useLayoutEffect, useRef } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
+import { motion } from "motion/react"
 import { type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import gsap from "@client/view/appearance/motion"
-import { enterSurface, leaveSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
+import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 
-/** Projects one representation-local target and animates explicit replacements. */
+/** Projects one representation-local Surface without animating its material host. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
 
     const { transition, visible } = state
-
-    const element = useRef<HTMLDivElement>(null)
-
-    const firstRender = useRef(true)
-
     const reducedMotion = useReducedMotion()
+    const revision = transition?.revision
+    const transaction = transition?.transaction
+    const animated = revision !== undefined && transaction !== undefined
+    const [hidden, setHidden] = useState(!visible)
+    const completed = useRef<number | null>(null)
 
     useLayoutEffect(function () {
 
-        const surface = element.current
+        if (visible) setHidden(false)
 
-        if (!surface) return
+        else if (!animated || reducedMotion) setHidden(true)
 
-        const revision = transition?.revision ?? null
+    }, [visible, animated, reducedMotion])
 
-        const changed = revision !== null
+    function finish() {
 
-        const initial = firstRender.current
+        if (revision === undefined || completed.current === revision) return
 
-        firstRender.current = false
+        completed.current = revision
 
-        const transaction = transition?.transaction
+        if (!visible) setHidden(true)
 
-        // Desktop owns presence of the whole Surface; React UI owns its
-        // material. The Program's transaction controls the shared entrance
-        // pose without reaching into paint, border or backdrop layers.
-        if (!transaction || !changed) {
+        onComplete(revision)
+    }
 
-            restSurface(surface)
-
-            gsap.set(surface, { visibility: visible ? "visible" : "hidden" })
-
-            return
-        }
-
-        const hidden = getComputedStyle(surface).visibility === "hidden"
-
-        if (visible && (initial || hidden)) prepareSurfaceEntrance(surface, reducedMotion)
-
-        gsap.set(surface, { visibility: "visible" })
-
-        const complete = function () {
-
-            if (!visible) gsap.set(surface, { visibility: "hidden" })
-
-            onComplete(revision!)
-        }
-
-        const animation = visible
-
-            ? enterSurface(surface, reducedMotion, { ...transaction, onComplete: complete })
-
-            : leaveSurface(surface, reducedMotion, { ...transaction, onComplete: complete })
-
-        return function () {
-
-            animation?.kill()
-        }
-
-    }, [reducedMotion, transition?.revision, visible])
-
-    return <Surface
-
-        ref={element}
-
-        data-window-surface
-
-        aria-hidden="true"
-
+    return <motion.div
+        initial={animated && visible && !reducedMotion ? surfacePresencePose.entering : surfacePresencePose.entered}
+        animate={visible ? surfacePresencePose.entered : surfacePresencePose.entering}
+        transition={animated
+            ? surfacePresenceTransition(reducedMotion, transaction)
+            : { duration: 0 }}
+        onAnimationComplete={finish}
         className="pointer-events-none absolute inset-0"
-
-    />
+        style={{ visibility: !visible && hidden ? "hidden" : "visible" }}
+    >
+        <Surface aria-hidden="true" style={{ position: "absolute", inset: 0 }} />
+    </motion.div>
 }
 
 interface WindowSurfaceProps {

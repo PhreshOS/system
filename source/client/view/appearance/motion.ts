@@ -1,52 +1,31 @@
-import { type Easing } from "@phreshos/core"
-import gsap from "gsap"
-import { CustomEase } from "gsap/CustomEase"
+import { type AppearanceTransaction, type Easing } from "@phreshos/core"
+import { type Transition } from "motion/react"
 
-gsap.registerPlugin(CustomEase)
-
-const curves: Record<Exclude<Easing, readonly number[]>, readonly [number, number, number, number]> = {
-    linear: [0, 0, 1, 1],
+const easings: Record<Exclude<Easing, readonly number[]>, Transition["ease"]> = {
+    linear: "linear",
     ease: [0.25, 0.1, 0.25, 1],
-    "ease-in": [0.42, 0, 1, 1],
-    "ease-out": [0, 0, 0.58, 1],
-    "ease-in-out": [0.42, 0, 0.58, 1]
+    "ease-in": "easeIn",
+    "ease-out": "easeOut",
+    "ease-in-out": "easeInOut"
 }
 
-const registered = new Map<string, gsap.EaseFunction>()
+/** Translates the public Appearance timing contract into Motion's units. */
+export function motionTransition(transaction: AppearanceTransaction, reduced = false): Transition {
 
-/** Shared interaction timings in the same millisecond unit as public transactions. */
-export const motionDurations = Object.freeze({
-    control: 100,
-    minimize: 110,
-    close: 160,
-    snap: 180,
-    feedback: 200,
-    morph: 220,
-    presence: 240,
-    restore: 240,
-    geometry: 300
-})
-
-/** Preserves public CSS timing curves while GSAP owns their interpolation. */
-export function motionEase(value: Easing | undefined, fallback: Easing = "ease-out") {
-
-    const selected = value ?? fallback
-    const points = typeof selected === "string" ? curves[selected] : selected
-    const key = points.join(",")
-    const existing = registered.get(key)
-
-    if (existing) return existing
-
-    const easing = CustomEase.create(`phresh-${registered.size}`, key)
-
-    registered.set(key, easing)
-
-    return easing
+    return {
+        type: "tween",
+        duration: reduced ? 0 : transaction.duration / 1_000,
+        ease: motionEase(transaction.easing)
+    }
 }
 
-export default gsap
+/** Translates the public easing vocabulary into a CSS timing function. */
+export function cssEasing(easing: Easing) {
 
-export function motionDuration(milliseconds: number) {
+    return typeof easing === "string" ? easing : "cubic-bezier(" + easing.join(", ") + ")"
+}
 
-    return milliseconds / 1_000
+function motionEase(easing: Easing): Transition["ease"] {
+
+    return typeof easing === "string" ? easings[easing] : [...easing]
 }

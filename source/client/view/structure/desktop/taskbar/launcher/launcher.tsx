@@ -1,22 +1,28 @@
 import { type ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
+import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { cssEasing } from "@client/view/appearance/motion"
 import { useReducedMotion } from "@libs/react-motion"
+import { motion } from "motion/react"
 import { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
+import { useAppearance } from "@phreshos/react-ui"
 
 /**
  * A button and the dismissible surface it opens. Placement, contents and
  * what selecting an item means belong to the caller.
  */
-export default function ({ label, trigger, children, className, ...props }: LauncherProps) {
+export default function ({ label, trigger, children, className, style, ...props }: LauncherProps) {
 
     const id = useId()
 
     const surface = useRef<HTMLDivElement>(null)
 
     const reducedMotion = useReducedMotion()
+    const transaction = useAppearance().transaction
 
     const [open, setOpen] = useState(false)
+
+    const openAtPressStart = useRef(false)
 
     const close = useCallback(function () {
 
@@ -26,15 +32,26 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
     }, [])
 
+    const beginToggle = useCallback(function () {
+
+        openAtPressStart.current = surface.current?.matches(":popover-open") ?? false
+
+    }, [])
+
     const toggle = useCallback(function () {
 
         const element = surface.current
 
         if (!element) return
 
-        if (element.matches(":popover-open")) element.hidePopover()
+        if (openAtPressStart.current) {
 
-        else element.showPopover()
+            if (element.matches(":popover-open")) element.hidePopover()
+
+            return
+        }
+
+        if (!element.matches(":popover-open")) element.showPopover()
 
     }, [])
 
@@ -69,6 +86,8 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
             aria-label={label}
 
+            onPressStart={beginToggle}
+
             onPress={toggle}
 
         >
@@ -77,7 +96,7 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
         </TaskbarButton>
 
-        <div
+        <motion.div
 
             {...props}
 
@@ -93,29 +112,37 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
             tabIndex={-1}
 
+            style={{
+                ...style,
+                transitionBehavior: "allow-discrete",
+                transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
+                transitionTimingFunction: cssEasing(transaction.easing),
+                transitionProperty: "display, overlay"
+            }}
+
             className={`${taskbarSurfaceClassName} hidden open:block ${className ?? ""}`}
+
+            initial={false}
+
+            animate={open ? { scale: 1, opacity: 1 } : { scale: 1.05, opacity: 0 }}
+
+            transition={surfacePresenceTransition(reducedMotion, transaction)}
 
             onBeforeToggle={event => {
 
-                if (event.newState === "open") prepareSurfaceEntrance(event.currentTarget, reducedMotion)
+                setOpen(event.newState === "open")
             }}
 
             onToggle={event => {
 
                 const opening = event.newState === "open"
 
-                setOpen(opening)
-
                 if (opening) {
-
-                    enterSurface(event.currentTarget, reducedMotion)
 
                     const focusTarget = event.currentTarget.querySelector<HTMLElement>("button:not(:disabled),a[href]") ?? event.currentTarget
 
                     focusTarget.focus()
                 }
-
-                else restSurface(event.currentTarget)
 
             }}
 
@@ -123,12 +150,12 @@ export default function ({ label, trigger, children, className, ...props }: Laun
 
             {children(close, `${id}-label`)}
 
-        </div>
+        </motion.div>
 
     </>
 }
 
-export interface LauncherProps extends Omit<ComponentPropsWithoutRef<"div">, "children" | "id" | "onBeforeToggle" | "onToggle" | "popover"> {
+export interface LauncherProps extends Omit<ComponentPropsWithoutRef<"div">, "children" | "id" | "onAnimationStart" | "onBeforeToggle" | "onDrag" | "onDragEnd" | "onDragStart" | "onToggle" | "popover"> {
 
     label: string
 

@@ -1,88 +1,41 @@
-import { type CSSProperties, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
-import { resolveWindowGeometry, resolveWindowValue, windowPaintInsets, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { type CSSProperties } from "react"
+import { motion } from "motion/react"
+import { windowPaintInsets, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
-import { Surface } from "@phreshos/react-ui"
+import { Surface, useAppearance } from "@phreshos/react-ui"
+import { motionTransition } from "@client/view/appearance/motion"
+import useWindowGeometryMotion from "./window-geometry-motion"
 
-/** GSAP-owned preview of the placement currently offered by a drag. */
+/** Preview of the placement currently offered by a drag. */
 export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, reducedMotion, zIndex }: SnapPreviewProps) {
 
-    const element = useRef<HTMLDivElement>(null)
-    const firstRender = useRef(true)
-    const [rendered, setRendered] = useState(shown)
+    const transaction = useAppearance().transaction
 
-    useLayoutEffect(function () {
+    const geometry = useWindowGeometryMotion({
+        position: shown.position,
+        size: shown.size,
+        animation: null,
+        immediate: reducedMotion
+    })
 
-        const preview = element.current
-        const parent = preview?.offsetParent
-
-        if (!preview || !parent) return
-
-        const parentBounds = parent.getBoundingClientRect()
-        const shownBounds = preview.getBoundingClientRect()
-        const current = {
-            x: shownBounds.left - parentBounds.left,
-            y: shownBounds.top - parentBounds.top,
-            width: shownBounds.width,
-            height: shownBounds.height
-        }
-        const target = resolveWindowGeometry(shown.position, shown.size, parentBounds)
-        const fromOpacity = firstRender.current ? 0 : Number(getComputedStyle(preview).opacity)
-
-        firstRender.current = false
-
-        gsap.killTweensOf(preview)
-
-        if (reducedMotion) {
-
-            gsap.set(preview, { left: target.x, top: target.y, width: target.width, height: target.height, opacity: visible ? 1 : 0 })
-            setRendered(shown)
-
-            return
-        }
-
-        const animation = gsap.fromTo(preview, {
-            left: current.x,
-            top: current.y,
-            width: current.width,
-            height: current.height,
-            opacity: fromOpacity
-        }, {
-            left: target.x,
-            top: target.y,
-            width: target.width,
-            height: target.height,
-            opacity: visible ? 1 : 0,
-            duration: motionDuration(motionDurations.snap),
-            ease: motionEase([0.33, 1, 0.68, 1]),
-            overwrite: "auto",
-            onComplete: () => setRendered(shown)
-        })
-
-        return () => { animation.kill() }
-
-    }, [shown.position.x, shown.position.y, shown.size.width, shown.size.height, visible, reducedMotion])
-
-    return <div
-        ref={element}
+    return <motion.div
+        ref={geometry.frame}
         className="pointer-events-none absolute"
-        style={{
-            left: resolveWindowValue(rendered.position.x),
-            top: resolveWindowValue(rendered.position.y),
-            width: resolveWindowValue(rendered.size.width),
-            height: resolveWindowValue(rendered.size.height),
-            opacity: visible ? 1 : 0,
-            zIndex
-        }}
+        initial={false}
+        animate={{ scale: visible ? 1 : 0.98, opacity: visible ? 1 : 0 }}
+        transition={motionTransition(transaction, reducedMotion)}
+        style={{ left: 0, top: 0, transformOrigin: "center", zIndex, ...geometry.style }}
     >
         <Surface
             data-snap-preview-frame
-            opacity="small"
-            className={`absolute ${bare ? "inset-0" : ""}`}
-            style={bare ? undefined : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset)}
+            material={{ opacity: "small" }}
+            style={{
+                position: "absolute",
+                ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset))
+            }}
         />
-    </div>
+    </motion.div>
 }
 
 export interface SnapTarget {

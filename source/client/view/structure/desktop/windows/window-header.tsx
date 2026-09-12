@@ -1,5 +1,7 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useLayoutEffect, useRef, useState } from "react"
-import gsap, { motionDuration, motionDurations, motionEase } from "@client/view/appearance/motion"
+import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useState } from "react"
+import { motion } from "motion/react"
+import { motionTransition } from "@client/view/appearance/motion"
+import { useAppearance } from "@phreshos/react-ui"
 
 const control = {
     base: { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 },
@@ -10,43 +12,7 @@ const control = {
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
 
-    const iconElement = useRef<HTMLImageElement>(null)
-    const titleElement = useRef<HTMLSpanElement>(null)
-    const [renderedActive, setRenderedActive] = useState(active)
-
-    useLayoutEffect(function () {
-
-        const icon = iconElement.current
-        const title = titleElement.current
-
-        if (!icon || !title || renderedActive === active) return
-
-        const opacity = active ? 1 : 0.6
-
-        gsap.killTweensOf([icon, title])
-
-        if (reducedMotion) {
-
-            gsap.set([icon, title], { opacity })
-            setRenderedActive(active)
-
-            return
-        }
-
-        const timeline = gsap.timeline({
-            defaults: {
-                duration: motionDuration(motionDurations.feedback),
-                ease: motionEase("ease-out"),
-                overwrite: "auto"
-            },
-            onComplete: () => setRenderedActive(active)
-        })
-
-        timeline.to([icon, title], { opacity }, 0)
-
-        return () => { timeline.kill() }
-
-    }, [active, reducedMotion, renderedActive])
+    const transition = motionTransition(useAppearance().transaction, reducedMotion)
 
     return <div
 
@@ -58,9 +24,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
     >
 
-        <img
-
-            ref={iconElement}
+        <motion.img
 
             src={icon}
 
@@ -70,17 +34,22 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
             className="size-4 rounded-sm object-contain"
 
-            style={{ opacity: renderedActive ? 1 : 0.6 }}
+            initial={false}
+
+            animate={{ opacity: active ? 1 : 0.6 }}
+
+            transition={transition}
 
         />
 
         {/* Focus is said on the chrome and nowhere else. Content stays
             equally legible when another window owns the keyboard. */}
-        <span
-            ref={titleElement}
+        <motion.span
             className="truncate text-window-title font-medium"
-            style={{ opacity: renderedActive ? 1 : 0.6 }}
-        >{title}</span>
+            initial={false}
+            animate={{ opacity: active ? 1 : 0.6 }}
+            transition={transition}
+        >{title}</motion.span>
 
         <div className="grid shrink-0 grid-flow-col auto-cols-max gap-1" onPointerDown={event => event.stopPropagation()}>
 
@@ -116,8 +85,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 // assistive technology still use the button's native click activation.
 function Control({ label, danger = false, focusOnPointerDown = true, reducedMotion, children, onClick, ...props }: ControlProps) {
 
-    const element = useRef<HTMLButtonElement>(null)
-    const hovering = useRef(false)
+    const [interaction, setInteraction] = useState<"base" | "hover" | "pressed">("base")
 
     const hover = danger ? control.danger : control.hover
 
@@ -127,42 +95,28 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
         scale: 0.95
     }
 
-    function react(values: typeof control.base) {
+    const values = interaction === "pressed" ? pressed : interaction === "hover" ? hover : control.base
 
-        const button = element.current
-
-        if (!button) return
-
-        gsap.killTweensOf(button)
-
-        if (reducedMotion) gsap.set(button, values)
-
-        else gsap.to(button, {
-            ...values,
-            duration: motionDuration(motionDurations.control),
-            ease: motionEase("ease-out"),
-            overwrite: "auto"
-        })
-    }
-
-    return <button
+    return <motion.button
 
         {...props}
 
-        ref={element}
-
         aria-label={label}
+
+        initial={false}
+
+        animate={values}
+
+            transition={motionTransition(useAppearance().transaction, reducedMotion)}
 
         onPointerEnter={() => {
 
-            hovering.current = true
-            react(hover)
+            setInteraction("hover")
         }}
 
         onPointerLeave={() => {
 
-            hovering.current = false
-            react(control.base)
+            setInteraction("base")
         }}
 
         onPointerDown={event => {
@@ -171,7 +125,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
             if (event.button !== 0) return
 
-            react(pressed)
+            setInteraction("pressed")
 
             if (focusOnPointerDown) event.currentTarget.focus({ preventScroll: true })
 
@@ -182,18 +136,18 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
             onClick?.()
         }}
 
-        onPointerUp={() => react(hovering.current ? hover : control.base)}
+        onPointerUp={() => setInteraction("hover")}
 
-        onPointerCancel={() => react(hovering.current ? hover : control.base)}
+        onPointerCancel={() => setInteraction("base")}
 
         onKeyDown={event => {
 
-            if (event.key === "Enter" || event.key === " ") react(pressed)
+            if (event.key === "Enter" || event.key === " ") setInteraction("pressed")
         }}
 
         onKeyUp={event => {
 
-            if (event.key === "Enter" || event.key === " ") react(hovering.current ? hover : control.base)
+            if (event.key === "Enter" || event.key === " ") setInteraction("base")
         }}
 
         onClick={event => {
@@ -213,7 +167,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
         </svg>
 
-    </button>
+    </motion.button>
 }
 
 interface WindowHeaderProps {
@@ -239,7 +193,7 @@ interface WindowHeaderProps {
     onClose?: () => void
 }
 
-interface ControlProps extends Omit<ComponentProps<"button">, "onClick"> {
+interface ControlProps extends Omit<ComponentProps<"button">, "onAnimationStart" | "onClick" | "onDrag" | "onDragEnd" | "onDragStart"> {
 
     label: string
 

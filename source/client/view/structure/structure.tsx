@@ -2,7 +2,7 @@ import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { AppearanceProvider, useResolveTheme } from "@phreshos/react-ui"
+import { AppearanceProvider, useThemedValue } from "@phreshos/react-ui"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
@@ -12,6 +12,7 @@ import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness"
 import { defaultAppearance, type DesktopPreferencesUpdate } from "@phreshos/core"
+import { cssEasing } from "../appearance/motion"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
@@ -27,12 +28,15 @@ export default function () {
 
                 aria-hidden={pending.length === 0}
 
-                className={pending.length
-                    ? "opacity-100"
-                    : "pointer-events-none opacity-0 transition-opacity duration-200 ease-out"}
 
-                style={{ backgroundColor: defaultAppearance.colors.background.light }}
+                className={pending.length ? "opacity-100" : "pointer-events-none opacity-0"}
 
+                style={{
+                    backgroundColor: defaultAppearance.colors.light.background,
+                    transitionDuration: String(defaultAppearance.transaction.duration) + "ms",
+                    transitionTimingFunction: cssEasing(defaultAppearance.transaction.easing),
+                    transitionProperty: "opacity"
+                }}
             />}
 
         </Readiness.Pending>
@@ -132,7 +136,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
 function ConnectedAppearance({ children }: { children: React.ReactNode }) {
 
-    const background = useResolveTheme(LinkManagerContext.useValue().appearance.value.colors.background)
+    const background = useThemedValue(LinkManagerContext.useValue().appearance.value.colors).background
 
     return <div className="grid min-h-0" style={{ backgroundColor: background }}>{children}</div>
 }

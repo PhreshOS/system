@@ -1,13 +1,15 @@
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
-import { visualTransaction } from "@client/view/components/desktop-host/local-window"
+import { parseLocalWindowTransaction } from "@client/view/components/desktop-host/local-window"
 import host from "@client/view/components/desktop-host/host"
 import LocalWindows from "@client/view/components/window-manager/local-windows"
 import type { LocalWindowEntry } from "@client/view/components/window-manager/local-windows"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
 import type { LocalWindowState } from "@client/view/components/desktop-host/local-window"
-import type { Transaction, WindowLayer } from "@phreshos/core"
+import type { AppearanceTransaction, WaitedTransaction, WindowLayer } from "@phreshos/core"
+
+type RequestedTransaction = AppearanceTransaction | WaitedTransaction
 
 const authoritativeWindow = new ServerWindow(
     { title: "Target", layer: "over", location: "/" },
@@ -20,13 +22,15 @@ const authoritativeWindow = new ServerWindow(
 assert.equal("surface" in authoritativeWindow, false)
 assert.equal("surface" in authoritativeWindow.toJSON(), false)
 
-const transaction = visualTransaction({ duration: 240, easing: "ease-out", wait: true })
-const visibility = visualTransaction({ duration: 240, easing: "ease-out", wait: true })!
+const transaction = parseLocalWindowTransaction({ duration: 240, easing: "ease-out", wait: true })
+const visibility = parseLocalWindowTransaction({ duration: 240, easing: "ease-out", wait: true })!
 
-assert.throws(() => visualTransaction({}), /must provide duration or easing/)
-assert.throws(() => visualTransaction({ wait: true }), /must provide duration or easing/)
-assert.throws(() => visualTransaction({ duration: 60_001 }), /0 to 60000/)
-assert.throws(() => visualTransaction({ unknown: true }), /no "unknown" field/)
+assert.throws(() => parseLocalWindowTransaction({}), /must provide duration and easing/)
+assert.throws(() => parseLocalWindowTransaction({ wait: true }), /must provide duration and easing/)
+assert.throws(() => parseLocalWindowTransaction({ duration: 60_001, easing: "linear" }), /0 to 60000/)
+assert.throws(() => parseLocalWindowTransaction({ duration: 120 }), /must provide duration and easing/)
+assert.throws(() => parseLocalWindowTransaction({ duration: 120, easing: "linear", wait: false }), /must be true/)
+assert.throws(() => parseLocalWindowTransaction({ unknown: true }), /no "unknown" field/)
 
 const ordinary = client("window")
 const bare = client("over")
@@ -71,7 +75,7 @@ first.reconcile(clients)
 assert.deepEqual(first.state("ordinary").position, { x: 15, y: 25 })
 assert.deepEqual(first.state("bare").position, { x: 60, y: 70 })
 
-const matchingAuthority = first.move("ordinary", { x: 30, y: 40 }, { duration: 120, wait: true })
+const matchingAuthority = first.move("ordinary", { x: 30, y: 40 }, { duration: 120, easing: "ease-out", wait: true })
 const matchingRevision = represented(first, "ordinary:0").geometryAnimation!.revision
 ordinary.window.position = { x: 30, y: 40 }
 first.reconcile(clients)
@@ -88,7 +92,7 @@ first.complete("bare", "geometry", geometryRevision)
 await waiting
 assert.equal(represented(first, "bare:0").geometryAnimation, null)
 
-const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, wait: true })
+const interrupted = first.move("bare", { x: 100, y: 110 }, { duration: 200, easing: "ease-out", wait: true })
 await first.move("bare", { x: 120, y: 130 })
 await assert.rejects(interrupted, /interrupted/)
 
@@ -134,7 +138,7 @@ first.release("bare")
 assert.deepEqual(first.state("bare").position, bare.window.position)
 assert.equal(represented(first, "bare:0").surface, null)
 
-const removed = first.move("bare", { x: 140, y: 150 }, { duration: 200, wait: true })
+const removed = first.move("bare", { x: 140, y: 150 }, { duration: 200, easing: "ease-out", wait: true })
 const remaining = clients.get("ordinary")
 assert(remaining)
 first.reconcile(new Map([["ordinary", remaining]]))
@@ -167,11 +171,11 @@ const processes = new Map<string, object>([[parent.identity, parent], [requester
 const calls: unknown[][] = []
 const localWindow = {
     state(identity: string) { return { position: identity === "target" ? { x: 70, y: 80 } : { x: 0, y: 0 } } },
-    move(identity: string, value: unknown, motion: Transaction | undefined) { calls.push(["move", identity, value, motion]) },
-    follow(identity: string, followed: string, motion: Transaction | undefined) { calls.push(["follow", identity, followed, motion]) },
-    unfollow(identity: string, motion: Transaction | undefined) { calls.push(["unfollow", identity, motion]) },
-    addSurface(identity: string, motion: Transaction) { calls.push(["add", identity, motion]) },
-    removeSurface(identity: string, motion: Transaction) { calls.push(["remove", identity, motion]) }
+    move(identity: string, value: unknown, motion: RequestedTransaction | undefined) { calls.push(["move", identity, value, motion]) },
+    follow(identity: string, followed: string, motion: RequestedTransaction | undefined) { calls.push(["follow", identity, followed, motion]) },
+    unfollow(identity: string, motion: RequestedTransaction | undefined) { calls.push(["unfollow", identity, motion]) },
+    addSurface(identity: string, motion: RequestedTransaction) { calls.push(["add", identity, motion]) },
+    removeSurface(identity: string, motion: RequestedTransaction) { calls.push(["remove", identity, motion]) }
 }
 const processManager = {
     processes,

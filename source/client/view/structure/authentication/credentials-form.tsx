@@ -1,32 +1,17 @@
 import { type AuthenticationState } from "@server/core/authentication/authentication"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "../../appearance/surface-presence"
+import { surfacePresencePose, surfacePresenceTransition } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
-import { Panel } from "@phreshos/react-ui"
+import { motion } from "motion/react"
+import { Panel, useAppearance } from "@phreshos/react-ui"
 import Spinner from "../../components/spinner"
 import Alert from "../../components/alert"
-import { type SyntheticEvent, useLayoutEffect, useRef } from "react"
+import { type SyntheticEvent } from "react"
 
 /** The common username-and-password surface for registration and sign-in. */
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onSubmit }: CredentialsFormProps) {
 
-    const surface = useRef<HTMLFormElement>(null)
-
     const reducedMotion = useReducedMotion()
-
-    useLayoutEffect(function () {
-
-        prepareSurfaceEntrance(surface.current, reducedMotion)
-
-        const entrance = enterSurface(surface.current, reducedMotion)
-
-        return () => {
-
-            entrance?.kill()
-
-            restSurface(surface.current)
-        }
-
-    }, [reducedMotion])
+    const transaction = useAppearance().transaction
 
     function submit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
 
@@ -41,9 +26,13 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
     return <div className="absolute inset-0 grid backdrop-blur-md">
 
-        <form
+        <motion.form
 
-            ref={surface}
+            initial={reducedMotion ? surfacePresencePose.entered : surfacePresencePose.entering}
+
+            animate={surfacePresencePose.entered}
+
+            transition={surfacePresenceTransition(reducedMotion, transaction)}
 
             className="relative m-auto w-[min(24rem,calc(100%-2rem))]"
 
@@ -143,7 +132,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             </Panel>
 
-        </form>
+        </motion.form>
 
     </div>
 }

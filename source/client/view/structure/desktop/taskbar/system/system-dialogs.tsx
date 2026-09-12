@@ -1,13 +1,15 @@
 import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } from "@server/core/dialog-manager"
 import { ReactTunnel } from "@the-link/react"
-import { enterSurface, prepareSurfaceEntrance, restSurface } from "@client/view/appearance/surface-presence"
+import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
+import { motion } from "motion/react"
 import { useEffect, useId, useRef } from "react"
 import { AuthManagerContext } from "@client/view/contexts"
 import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
 import TaskbarButton from "../taskbar-button"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
+import { useAppearance } from "@phreshos/react-ui"
 
 /** Taskbar-owned presentation of the system's authoritative dialog queue. */
 export default function SystemDialogs() {
@@ -31,6 +33,7 @@ export default function SystemDialogs() {
     const description = useId()
 
     const reducedMotion = useReducedMotion()
+    const transaction = useAppearance().transaction
 
     useEffect(function () {
 
@@ -38,15 +41,9 @@ export default function SystemDialogs() {
 
         if (!dialog || !element || element.open) return
 
-        prepareSurfaceEntrance(element, reducedMotion)
-
         element.showModal()
 
-        enterSurface(element, reducedMotion)
-
         return function () {
-
-            restSurface(element)
 
             if (element.open) element.close()
         }
@@ -55,7 +52,7 @@ export default function SystemDialogs() {
 
     if (!dialog) return null
 
-    return <dialog
+    return <motion.dialog
 
         ref={surface}
 
@@ -66,6 +63,12 @@ export default function SystemDialogs() {
         aria-labelledby={title}
 
         aria-describedby={description}
+
+        initial={reducedMotion ? surfacePresencePose.entered : surfacePresencePose.entering}
+
+        animate={surfacePresencePose.entered}
+
+        transition={surfacePresenceTransition(reducedMotion, transaction)}
 
         onCancel={event => event.preventDefault()}
 
@@ -83,7 +86,7 @@ export default function SystemDialogs() {
 
         </TaskbarSurface>
 
-    </dialog>
+    </motion.dialog>
 }
 
 function PermissionRequest({ dialog, description, decide }: PermissionRequestProps) {
