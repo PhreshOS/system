@@ -62,6 +62,6 @@ assert.match(launcher, /size-4 rounded-sm object-contain/)
 const popover = launcher.match(/<div[^>]*popover="auto"[^>]*>/)?.[0]
 assert(popover)
 assert.match(popover, /overflow-visible/)
+assert.doesNotMatch(popover, /\bgrid\b/)
 // Popovers and native dialogs share a non-clipping host for independently owned outer effects.
 assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
-assert.doesNotMatch(popover, /style=/)
