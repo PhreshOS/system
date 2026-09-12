@@ -13,7 +13,6 @@ const manager = {
 
 const program = {
   client: {},
-  clientLocation: "/client",
   title: "Declared title"
 }
 

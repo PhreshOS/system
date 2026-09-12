@@ -21,7 +21,7 @@ try {
     let accessUpdates = 0
 
     const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic, false)
-    process.startClient(new Window({ title: "Client", layer: "window", location: "/" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false), false)
+    process.startClient(new Window({ title: "Client", layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false), false)
 
     const authManager = {
         dialogManager: {

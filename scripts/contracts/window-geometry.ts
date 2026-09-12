@@ -10,7 +10,7 @@ const initial = {
 }
 
 const authority = new ServerWindow(
-    { title: "Geometry", layer: "window", location: "/" },
+    { title: "Geometry", layer: "window" },
     initial.position,
     initial.size,
     1,

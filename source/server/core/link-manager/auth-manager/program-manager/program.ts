@@ -131,17 +131,6 @@ export default class Program {
         return location && /^https?:\/\//i.test(location) ? location : null
     }
 
-    public get clientLocation() {
-
-        const location = this.clientUrl
-
-        if (!location) return "/"
-
-        const url = new URL(location)
-
-        return `/${url.pathname.slice(url.pathname.lastIndexOf("/") + 1)}${url.search}${url.hash}`
-    }
-
     // The three places, resolved. A client that is a URL has no
     // directory, and a half that was not declared has no place.
     public get serverPath() {

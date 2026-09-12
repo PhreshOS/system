@@ -1,5 +1,5 @@
 import {
-    type DesktopSurfaceSnapshot,
+    type DesktopViewportSnapshot,
     type Launch
 } from "@phreshos/core"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
@@ -35,7 +35,7 @@ export class TransferredAnswer {
 }
 
 /** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
-export default function host(authManager: AuthManager, pane: string, desktop: () => DesktopSurfaceSnapshot, frameOwner: () => string | null, localWindow: LocalWindowHost) {
+export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, localWindow: LocalWindowHost) {
 
     const { processManager, programManager } = authManager
 
@@ -435,7 +435,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             const target = args[1] === null ? process() : resolveProcess(args[1])
 
             // Callback subscriptions are synchronous and remain silent when
-            // their source is unavailable. waitFor() and events() identify
+            // their source is unavailable. wait() and events() identify
             // themselves as fallible, giving their boundary a real rejection
             // path when this synchronized Process record proves impossibility.
             if (!owner || !target) {
@@ -558,14 +558,6 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
             await processManager.askOf(pane, (await permittedProcess(args[0])).identity, args.slice(2))
 
             return []
-        }
-
-        // What a launch said. An empty subject is this frame's Process.
-        if (word === "option") {
-
-            const found = await permittedProcess(args[0])
-
-            return [found.options[String(args[1])]]
         }
 
         // The Program belonging to the current Client Context.
@@ -692,14 +684,8 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
 
                 front: processManager.front(shown.layer) === target.identity,
 
-                // Which layer it lives in, and which of its own pages it
-                // was opened at. Both are the system's answers about
-                // this window: a launch may put the same program in a
-                // different layer or at a different page, so a program
-                // cannot read either off its own description.
-                layer: shown.layer,
-
-                location: shown.location
+                // Which structurally isolated Desktop layer contains it.
+                layer: shown.layer
             }]
         }
 
@@ -1042,7 +1028,7 @@ export default function host(authManager: AuthManager, pane: string, desktop: ()
         // One desktop can frame many Client layers, but its complete area is
         // one host fact. It is this desktop's answer rather than a machine
         // fact, and the gutter remains private desktop layout state.
-        if (word === "desktopSurface") return [desktop()]
+        if (word === "desktopViewport") return [viewport()]
 
         // Completed uploads are public values. Creating one has its own
         // permission; exposing the native directory requires complete access.

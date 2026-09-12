@@ -25,7 +25,7 @@ const process = new Process(
 
 process.startClient(new Window(
 
-    { title: "Client", layer: "window", location: "/" },
+    { title: "Client", layer: "window" },
 
     { x: 0, y: 0 },
 

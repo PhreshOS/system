@@ -111,10 +111,10 @@ async function register(manager: ProcessManager, identity: string) {
         null,
         client,
         {},
-        { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", location: "/", minimize: false, service: false } },
+        { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", minimize: false, service: false } },
         null,
         true,
-        { title: "Partial", position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", location: "/", minimize: false },
+        { title: "Partial", position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false },
         null
     ), /creation publication failed/)
 

@@ -5,7 +5,7 @@ import type Process from "@client/core/link-manager/auth-manager/process-manager
 import type ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 
 const record = { identity: "process", program: "program" } as Process
-const client = { sameOrigin: false, window: { location: "/" } } as ClientState
+const client = { sameOrigin: false, window: {} } as ClientState
 const common = {
     record,
     assetId: "00000000-0000-4000-8000-000000000000",

@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceKey, type DesktopSurfaceSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
+import { isServiceKey, type DesktopViewportSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -19,7 +19,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly authManager: AuthManager
 
-    private readonly desktop: () => DesktopSurfaceSnapshot
+    private readonly viewport: () => DesktopViewportSnapshot
 
     private readonly traffic: ClientTraffic
 
@@ -60,7 +60,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, desktop: () => DesktopSurfaceSnapshot, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: () => DesktopViewportSnapshot, traffic: ClientTraffic, localWindow: LocalWindowHost) {
 
         super()
 
@@ -70,7 +70,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.authManager = authManager
 
-        this.desktop = desktop
+        this.viewport = viewport
 
         this.traffic = traffic
 
@@ -233,7 +233,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.trackSystemSubscription(values)
 
-        host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
+        host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -532,14 +532,14 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.answerRequest(
                 question,
-                host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(args[0], ...args.slice(1)),
+                host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(args[0], ...args.slice(1)),
                 () => { this.authManager.cancelPermission(this.pane, args[1] as string).catch(() => undefined) }
             )
 
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.desktop, () => this.owner, this.localWindow)(args[0], ...args.slice(1)))
+        this.answerRequest(question, host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(args[0], ...args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {

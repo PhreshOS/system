@@ -384,8 +384,6 @@ export interface ProcessLaunch {
 
         layer: Layer
 
-        location: string
-
         minimize: boolean
 
         service: boolean

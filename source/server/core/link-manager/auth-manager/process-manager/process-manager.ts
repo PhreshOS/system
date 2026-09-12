@@ -168,8 +168,7 @@ export default class ProcessManager extends TheLink {
             size: window.size,
             minimized: window.minimized,
             front: this.front(window.layer) === process.identity,
-            layer: window.layer,
-            location: window.location
+            layer: window.layer
         })
     }
 
@@ -901,7 +900,7 @@ export default class ProcessManager extends TheLink {
 
     private window(shape: Shape) {
 
-        const shown = { title: shape.title, layer: shape.layer, location: shape.location }
+        const shown = { title: shape.title, layer: shape.layer }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
     }
@@ -2140,14 +2139,6 @@ export default class ProcessManager extends TheLink {
             return []
         }
 
-        // What a launch said, carried by the process it launched.
-        if (word === "option") {
-
-            const asked = this.system.holdProcess(rest[0], process)
-
-            return [asked.options[String(rest[1])]]
-        }
-
         // A server SDK asks the host only where a Program's area begins;
         // every filesystem operation belongs to the SDK after that. The
         // area is shared by every Process, so the Program is named rather
@@ -2839,8 +2830,6 @@ interface ShapeBase {
     position: Position
 
     size: Size
-
-    location: string
 
     minimize: boolean
 }

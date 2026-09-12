@@ -28,7 +28,6 @@ const program = {
     minimize: undefined
   },
   title: "Example",
-  clientLocation: "/",
   async validate() {}
 } as unknown as Program
 

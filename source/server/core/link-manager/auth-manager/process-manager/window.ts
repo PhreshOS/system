@@ -19,18 +19,15 @@ import { isRelativeValue, type Position, type Size, type Value, type WindowGeome
  * fields are gone: they existed to undo `maximize`, and filling the
  * surface is a size like any other now.
  *
- * **What is shown lives here, not on the process.** A title and
- * where the frame is filled from are all "how this is shown", the same
- * kind of fact as a size — and `client.size` already becomes
- * `window.size`, so `title` becomes `window.title` by the same road. A
- * process with no window needs none of them, and had to carry them all
- * while they sat on the process.
+ * **What is shown lives here, not on the process.** A title is "how this
+ * is shown", the same kind of fact as a size — and `client.size` already
+ * becomes `window.size`, so `title` becomes `window.title` by the same
+ * road. A process with no window needs none of them, and had to carry them
+ * all while they sat on the process.
  *
  * The title is the window's own from the moment it opens: born from what
  * the client half declared, or the program's name when it declared
- * nothing, and changeable afterwards. A window showing one file of many
- * is the ordinary case, and a program that cannot say so has to put the
- * whole story in its own frame.
+ * nothing, and changeable afterwards.
  *
  * **Front is not kept here.** Which window is at the front is a fact about
  * all of them at once — the un-minimized one with the greatest depth —
@@ -49,9 +46,6 @@ export interface Shown {
     // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
 
-    // Which page of the client half to open, beneath its declared root.
-    // `/` is the root itself, so absence never has a second meaning.
-    location: string
 }
 
 export default class Window {
@@ -74,16 +68,11 @@ export default class Window {
     // The Window's authoritative Desktop layer.
     public readonly layer: WindowLayer
 
-    // Which of the half's own pages the frame opens on.
-    public readonly location: string
-
     public constructor(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean) {
 
         this.title = shown.title
 
         this.layer = shown.layer
-
-        this.location = shown.location
 
         this.position = position
 
@@ -167,8 +156,6 @@ export default class Window {
             title: this.title,
 
             layer: this.layer,
-
-            location: this.location,
 
             position: this.position,
 

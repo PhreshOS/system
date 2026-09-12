@@ -90,11 +90,9 @@ export type ServerConfig = ServerConfigBase & ({
 export interface ClientConfig {
 
     // Where this half is: a directory holding index.html, or a URL.
-    // Empty names the program's own root. For a URL, its last slash
-    // ends the launch root and the remainder is the default location.
-    // Not `path`, because a path cannot be a URL and this is one field
-    // with both readings — which is what lets a program under
-    // development be framed from a live dev server.
+    // Empty names the program's own root. Not `path`, because a path cannot
+    // be a URL; one field accepts both readings so a program under development
+    // can be framed from a live dev server.
     location: string
 
     // Whether a Process starts this endpoint by default. True when omitted.

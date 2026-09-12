@@ -12,7 +12,7 @@ import type { AppearanceTransaction, WaitedTransaction, WindowLayer } from "@phr
 type RequestedTransaction = AppearanceTransaction | WaitedTransaction
 
 const authoritativeWindow = new ServerWindow(
-    { title: "Target", layer: "over", location: "/" },
+    { title: "Target", layer: "over" },
     { x: 0, y: 0 },
     { width: 100, height: 100 },
     1,
@@ -201,7 +201,7 @@ const authManager = {
 }
 const request = host(authManager as never, requester.identity, () => ({ size: { width: 1, height: 1 } }), () => "owner", localWindow as never)
 
-assert.deepEqual(await request("desktopSurface"), [{ size: { width: 1, height: 1 } }])
+assert.deepEqual(await request("desktopViewport"), [{ size: { width: 1, height: 1 } }])
 const targetAddress = { identity: target.identity, reference: target.reference }
 const requesterAddress = { identity: requester.identity, reference: requester.reference }
 processes.delete(parent.identity)
@@ -254,7 +254,6 @@ function client(layer: WindowLayer) {
             size: { width: 300, height: 200 },
             minimized: false,
             layer,
-            location: "/",
             depth: 1
         }
     }

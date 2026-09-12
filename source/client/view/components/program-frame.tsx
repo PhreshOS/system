@@ -4,9 +4,9 @@ import { blockedProgramDocument, type ProgramAccess } from "./program-access"
 import { type Theme } from "@phreshos/core"
 import { type ReactEventHandler, useCallback } from "react"
 
-export function programFrameSource(assetId: string, client: ClientState, door: string) {
+export function programFrameSource(assetId: string, door: string) {
 
-    return `${door}/${assetId}/assets/${client.window.location.slice(1)}`
+    return `${door}/${assetId}/assets/`
 }
 
 /** The document representation shared by every Client role. */
@@ -30,7 +30,7 @@ export default function ProgramFrame({ record, assetId, client, title, door, acc
 
         style={{ colorScheme: theme }}
 
-        src={programFrameSource(assetId, client, door)}
+        src={programFrameSource(assetId, door)}
 
         title={title}
 

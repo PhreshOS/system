@@ -422,7 +422,6 @@ function localState(client: ClientState): LocalWindowState {
         minimized: window.minimized,
         front: false,
         layer: window.layer,
-        location: window.location,
         depth: window.depth,
         surface: null,
         geometryAnimation: null,
@@ -440,7 +439,6 @@ function projectAuthoritative(local: LocalWindowState, client: ClientState, repl
         size: window.size,
         minimized: window.minimized,
         layer: window.layer,
-        location: window.location,
         depth: window.depth,
         geometryAnimation: replaceGeometry ? null : local.geometryAnimation,
         minimizeAnimation: local.minimizeAnimation
@@ -456,7 +454,6 @@ function windowState(local: LocalWindowState, front: boolean, geometry?: Readonl
         minimized: local.minimized,
         front,
         layer: local.layer,
-        location: local.location
     }
 }
 
@@ -468,7 +465,7 @@ export type LocalGeometryReader = () => Readonly<{
 function authoritativeSignature(client: ClientState) {
 
     const window = client.window
-    return JSON.stringify([window.title, window.position, window.size, window.minimized, window.layer, window.location, window.depth])
+    return JSON.stringify([window.title, window.position, window.size, window.minimized, window.layer, window.depth])
 }
 
 function frontmost(windows: ReadonlyMap<string, LocalWindowState>, layer: LocalWindowState["layer"]) {

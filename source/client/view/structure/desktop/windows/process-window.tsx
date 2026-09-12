@@ -39,7 +39,7 @@ export default memo(function ({ identity, record, assetId, client, title, icon, 
 
     const represent = useCallback((reader: LocalGeometryReader | null) => onLocalRepresentation(record.identity, reader), [onLocalRepresentation, record])
 
-    const frameSource = programFrameSource(assetId, client, door)
+    const frameSource = programFrameSource(assetId, door)
 
     const [loading, setLoading] = useState<LoadingState>({ source: null, phase: "loading" })
 

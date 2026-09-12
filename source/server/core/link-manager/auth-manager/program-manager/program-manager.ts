@@ -1445,8 +1445,6 @@ export default class ProgramManager extends TheLink {
 
         if (asked.layer !== undefined && !layers.includes(asked.layer)) throw new Error(`A launch client's layer is one of ${layers.join(", ")}`)
 
-        if (asked.location !== undefined && typeof asked.location !== "string") throw new Error("A launch client's location must be text")
-
         if (asked.minimize !== undefined && typeof asked.minimize !== "boolean") throw new Error("A launch client's minimize state must be true or false")
 
         const shift = this.authManager.processManager.processes.size % 8 * 32
@@ -1460,8 +1458,6 @@ export default class ProgramManager extends TheLink {
             size: asked.size ?? client.size ?? { width: 520, height: 340 },
 
             layer: asked.layer ?? client.layer ?? "window",
-
-            location: page(asked.location, program.clientLocation),
 
             minimize: asked.minimize ?? client.minimize ?? false
         }
@@ -1477,26 +1473,6 @@ export default class ProgramManager extends TheLink {
 }
 
 export type ProgramManagerSnapshot = ReturnType<ProgramManager["toJSON"]>
-
-// Which of a half's own pages a launch asked for.
-//
-// A launch location is rooted in the client half's declared place,
-// whether that place is the program's assets or a URL directory. The
-// artificial prefix lets the URL parser normalise every spelling of a
-// path before the boundary is checked; what comes back is the client's
-// own location, always beginning at `/` and never naming its root.
-function page(said: string | undefined, fallback: string) {
-
-    if (said === undefined) return fallback
-
-    const root = "http://client.invalid/client/"
-
-    const asked = new URL(said.replace(/^\/+/, ""), root)
-
-    if (!asked.href.startsWith(root)) throw new Error("A client half's location cannot leave its declared root")
-
-    return `/${asked.pathname.slice("/client/".length)}${asked.search}${asked.hash}`
-}
 
 // What a launcher may say at the start. Named rather than ordered,
 // because an order is invisible where it is written — and text, because

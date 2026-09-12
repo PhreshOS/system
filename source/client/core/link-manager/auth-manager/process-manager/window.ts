@@ -34,16 +34,11 @@ export default class Window {
     // The authoritative Desktop layer.
     public layer: WindowLayer
 
-    // Which of the half's own pages the frame opens on.
-    public location: string
-
     public constructor(processManager: ProcessManager, process: string, payload: WindowSnapshot) {
 
         this.title = payload.title
 
         this.layer = payload.layer
-
-        this.location = payload.location
 
         this.processManager = processManager
 
@@ -65,8 +60,6 @@ export default class Window {
         this.title = payload.title
 
         this.layer = payload.layer
-
-        this.location = payload.location
 
         this.position = payload.position
 
