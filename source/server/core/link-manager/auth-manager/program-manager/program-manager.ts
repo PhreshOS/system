@@ -20,7 +20,7 @@ import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import LaunchStorage from "./launch-storage"
 import { permissionCatalog } from "@server/core/permissions"
-import { readPermissions, writePermissions } from "./permissions"
+import { applyDeclaredPermissions, readPermissions, writePermissions } from "./permissions"
 import {
     parsePermissionName,
     type Permission,
@@ -366,7 +366,8 @@ export default class ProgramManager extends TheLink {
         // that currently owns this public identity.
         await program.validate()
 
-        this.declaredLaunch(program)
+        this.declaredLaunch(program, "startup")
+        this.declaredLaunch(program, "launch")
 
         return await this.change(program.identity, async () => {
 
@@ -451,17 +452,9 @@ export default class ProgramManager extends TheLink {
 
         const entry = new Entry(program, installed, restoreInstalled)
 
-        // Publish a new Program only after its complete permission state exists.
-        // Reconstructing an existing Program reads its authoritative stored state.
-        if (origin === "creation") {
-            const launch = this.declaredLaunch(program)
-            const rollback = launch === null ? null : new LaunchStorage(program, "launch").replace(launch)
-            try { writePermissions(program, program.declaredPermissions) }
-            catch (error) {
-                rollback?.()
-                throw error
-            }
-        }
+        // Creation applies declaration decisions before publishing the Program.
+        // Reconstruction reads its authoritative stored state without writes.
+        if (origin === "creation") this.applyDeclaration(program)
 
         this.programs.set(entry.identity, entry)
 
@@ -622,12 +615,33 @@ export default class ProgramManager extends TheLink {
         return this.held(subject).agent()
     }
 
-    private declaredLaunch(program: Program) {
-        const value = program.config.launch
-        if (value === undefined) return null
+    private declaredLaunch(program: Program, name: "startup" | "launch") {
+        const value = program.config[name]
+        if (value === undefined) return undefined
         const launch = parseLaunch(value === true ? {} : value)
         this.resolveLaunch(program, launch)
         return launch
+    }
+
+    /** Applies creation/installation decisions to this Program's storage as one reversible unit. */
+    private applyDeclaration(program: Program) {
+        const startup = this.declaredLaunch(program, "startup")
+        const launch = this.declaredLaunch(program, "launch")
+        const rollbacks: (() => void)[] = []
+        const rollback = () => {
+            for (let index = rollbacks.length - 1; index >= 0; index--) rollbacks[index]!()
+        }
+        try {
+            const permissions = applyDeclaredPermissions(program)
+            if (permissions) rollbacks.push(permissions)
+            if (startup !== undefined) rollbacks.push(new LaunchStorage(program, "startup").replace(startup))
+            if (launch !== undefined) rollbacks.push(new LaunchStorage(program, "launch").replace(launch))
+            return rollback
+        }
+        catch (error) {
+            rollback()
+            throw error
+        }
     }
 
     /** Read or replace the saved icon launch without executing it. */
@@ -664,8 +678,6 @@ export default class ProgramManager extends TheLink {
         }
 
         if (operation === "enable") {
-
-            if (!this.installed(program)) throw new Error("Only an installed program can start with the system")
 
             await program.validate()
 
@@ -1036,7 +1048,7 @@ export default class ProgramManager extends TheLink {
 
             let createdHere = false
 
-            let restoreStartup: (() => void) | null = null
+            let restoreSettings: (() => void) | undefined
 
             try {
 
@@ -1050,9 +1062,8 @@ export default class ProgramManager extends TheLink {
                 // because they are wherever the system puts them.
                 const stagedProgram = new Program(join(staged, "program.json"))
                 await stagedProgram.validate()
-                const startup = stagedProgram.config.startup
-                const startupLaunch = startup === true ? {} : startup || null
-                if (startupLaunch !== null) this.resolveLaunch(stagedProgram, startupLaunch)
+                this.declaredLaunch(stagedProgram, "startup")
+                this.declaredLaunch(stagedProgram, "launch")
 
                 // A process may have retained an absolute server,
                 // client, or storage path. Its ending is part of the
@@ -1078,11 +1089,11 @@ export default class ProgramManager extends TheLink {
                 // the registry claims the install succeeded.
                 await installed.installServer(output)
 
-                if (startupLaunch !== null) restoreStartup = new LaunchStorage(installed, "startup").replace(startupLaunch)
-
                 let entry = this.programs.get(source.identity)
 
                 if (entry) {
+
+                    restoreSettings = this.applyDeclaration(installed)
 
                     entry.program.replace(installed)
 
@@ -1099,8 +1110,6 @@ export default class ProgramManager extends TheLink {
                 }
 
                 committed = true
-
-                restoreStartup = null
 
                 if (createdHere) await this.created(entry)
 
@@ -1126,12 +1135,12 @@ export default class ProgramManager extends TheLink {
 
             catch (exception) {
 
-                // Restore the prior program files and startup configuration after
-                // any failure in the swap or install command. Other storage
+                // Restore the prior program files and declaration settings after
+                // any failure before commit. Other storage
                 // never enters the transaction and is neither copied nor moved.
                 if (swapping && !committed) {
 
-                    restoreStartup?.()
+                    restoreSettings?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
 

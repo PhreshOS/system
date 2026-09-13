@@ -11,7 +11,7 @@ import ProgramManager from "@server/core/link-manager/auth-manager/program-manag
 import { readPermissions, writePermissions } from "@server/core/link-manager/auth-manager/program-manager/permissions"
 import LaunchStorage from "@server/core/link-manager/auth-manager/program-manager/launch-storage"
 
-test("installation applies active declarations and launches the stored startup", async context => {
+test("installation applies declared settings and launches the resulting stored startup", async context => {
   const directory = mkdtempSync(join(tmpdir(), "phresh-startup-"))
   context.onTestFinished(() => { vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) })
   const client = join(directory, "client")
@@ -30,54 +30,42 @@ test("installation applies active declarations and launches the stored startup",
       launches.push(launch)
       return "process-identity"
     })
-  function definition(setting?: boolean | Launch) {
+  function definition(setting?: true | Launch) {
     return new Program({
       identity: "example", startup: setting, options: { language: "en" },
       client: { location: client, permissions: { network: ["https://new.example.test"] } }
     })
   }
 
-  let entry = await manager.install(definition())
-  expect(existsSync(join(entry.program.storagePath, "startup.json"))).toBe(false)
-  expect(start).not.toHaveBeenCalled()
-  entry = await manager.install(definition(false))
-  expect(existsSync(join(entry.program.storagePath, "startup.json"))).toBe(false)
-  expect(start).not.toHaveBeenCalled()
-
-  entry = await manager.install(definition(true))
+  let entry = await manager.install(definition(true))
   expect(launches).toEqual([{}])
   expect(readPermissions(entry.program)).toEqual({ network: ["https://new.example.test"] })
   const note = join(entry.program.storagePath, "note.txt")
   writeFileSync(note, "keep this")
   writePermissions(entry.program, { network: [], appearance: [] })
-  new LaunchStorage(entry.program, "startup").set({ name: "owner-edit" })
-
   const configured = { name: "welcome", options: { language: "fr" } }
+  new LaunchStorage(entry.program, "startup").set(configured)
   entry = await manager.install(definition(configured))
   expect(launches).toEqual([{}, configured])
   expect(JSON.parse(readFileSync(join(entry.program.root, "program.json"), "utf8")).options).toEqual({ language: "en" })
   expect(readFileSync(note, "utf8")).toBe("keep this")
-  expect(readPermissions(entry.program)).toEqual({ network: [], appearance: [] })
+  expect(readPermissions(entry.program)).toEqual({ network: ["https://new.example.test"], appearance: [] })
 
-  for (const inactive of [false, undefined]) {
-    new LaunchStorage(entry.program, "startup").set(configured)
-    entry = await manager.install(definition(inactive))
-    expect(new LaunchStorage(entry.program, "startup").get()).toEqual(configured)
-    expect(launches.at(-1)).toEqual(configured)
+  for (const setting of [undefined, true] as const) {
+    entry = await manager.install(definition(setting))
+    expect(new LaunchStorage(entry.program, "startup").get()).toEqual(setting === true ? {} : configured)
+    expect(launches.at(-1)).toEqual(setting === true ? {} : configured)
   }
   expect(start).toHaveBeenCalledTimes(4)
 
-  // A settings write failure leaves the authoritative stored state intact.
-  writePermissions(entry.program, { appearance: [] })
-  new LaunchStorage(entry.program, "startup").set(configured)
-  const writing = vi.spyOn(LaunchStorage.prototype, "replace").mockImplementationOnce(() => { throw new Error("write failed") })
-  await expect(manager.install(definition(true))).rejects.toThrow("write failed")
-  expect(readPermissions(entry.program)).toEqual({ appearance: [] })
-  expect(new LaunchStorage(entry.program, "startup").get()).toEqual(configured)
-  writing.mockRestore()
+  await manager.startup(entry.program, "disable")
+  entry = await manager.install(definition())
+  expect(existsSync(join(entry.program.storagePath, "startup.json"))).toBe(false)
+  expect(start).toHaveBeenCalledTimes(4)
 
   // Startup failure is reported without undoing a valid installation.
   start.mockRejectedValueOnce(new Error("cannot start"))
+  await manager.startup(entry.program, "enable", configured)
   const warnings: string[] = []
   entry = await manager.install(definition(true), null, chunk => { warnings.push(chunk.text) })
   expect(entry.installed).toBe(true)

@@ -103,7 +103,7 @@ export default class Program {
         } : null
     }
 
-    /** Canonical permissions written into authoritative storage at creation. */
+    /** Canonical permission entries applied to storage at creation and installation. */
     public get declaredPermissions(): DeclaredPermissions {
 
         return permissionCatalog.declarations(this.config.client?.permissions)
@@ -314,7 +314,9 @@ function storedDefinition(value: unknown): ProgramConfig {
 // not whether they are true.
 function coherent(config: ProgramConfig) {
 
-    if (config?.launch !== undefined && config.launch !== true) parseLaunch(config.launch)
+    for (const value of [config?.startup, config?.launch]) {
+        if (value !== undefined && value !== true) parseLaunch(value)
+    }
 
     // A name is also the name of a directory, so it is checked as a path
     // component before it is anything else — a program calling itself
