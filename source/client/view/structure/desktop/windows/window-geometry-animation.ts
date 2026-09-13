@@ -11,14 +11,17 @@ type Flight = {
     control?: AnimationPlaybackControls
 }
 
-/** Retargets geometry without interrupting axes that are already travelling to their destination. */
+/** Interpolates visible geometry while the viewport is laid out at its destination size. */
 export class WindowGeometryAnimation {
 
     private flights = new Map<Axis, Flight>()
     private complete?: () => void
     private updating = false
 
-    constructor(private values: Record<Axis, MotionValue<number>>) {}
+    constructor(
+        private values: Record<Axis, MotionValue<number>>,
+        private layout: Pick<Record<Axis, MotionValue<number>>, "width" | "height">
+    ) {}
 
     stop() {
 
@@ -26,12 +29,14 @@ export class WindowGeometryAnimation {
         const flights = [...this.flights.values()]
         this.flights.clear()
         for (const flight of flights) flight.control?.stop()
+        this.settleLayout()
     }
 
     set(region: WindowRegion) {
 
         this.stop()
         for (const axis of axes) this.values[axis].set(region[axis])
+        this.settleLayout()
     }
 
     transition(region: WindowRegion, transaction: AppearanceTransaction, complete?: () => void) {
@@ -45,6 +50,11 @@ export class WindowGeometryAnimation {
         this.complete = complete
         this.updating = true
         const timing = JSON.stringify([transaction.duration, transaction.easing])
+
+        // A nonzero backing viewport permits scaling to or from zero size.
+        // Only these destination changes reflow content, not every tween frame.
+        this.layout.width.set(region.width || Math.max(this.values.width.get(), 1))
+        this.layout.height.set(region.height || Math.max(this.values.height.get(), 1))
 
         for (const axis of axes) {
 
@@ -76,8 +86,14 @@ export class WindowGeometryAnimation {
     private finish() {
 
         if (this.updating || this.flights.size) return
+        this.settleLayout()
         const complete = this.complete
         this.complete = undefined
         complete?.()
+    }
+
+    private settleLayout() {
+        this.layout.width.set(this.values.width.get())
+        this.layout.height.set(this.values.height.get())
     }
 }

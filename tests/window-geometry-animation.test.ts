@@ -5,8 +5,10 @@ import { WindowGeometryAnimation } from "@client/view/structure/desktop/windows/
 vi.mock("motion/react", async importOriginal => ({
     ...await importOriginal<typeof import("motion/react")>(),
     animate: vi.fn((value: MotionValue<number>, target: number, options: ValueAnimationTransition<number>) => {
+        const start = value.get()
         const run = {
             stop: vi.fn(),
+            progress: (fraction: number) => value.set(start + (target - start) * fraction),
             finish: () => { value.set(target); options.onComplete?.() }
         }
         runs.push(run)
@@ -14,7 +16,7 @@ vi.mock("motion/react", async importOriginal => ({
     })
 }))
 
-const runs: { stop: ReturnType<typeof vi.fn>, finish: () => void }[] = []
+const runs: { stop: ReturnType<typeof vi.fn>, progress: (fraction: number) => void, finish: () => void }[] = []
 const timing = { duration: 120, easing: "ease-out" } as const
 const initial = { x: 10, y: 20, width: 300, height: 200 }
 
@@ -28,8 +30,54 @@ function create() {
         x: motionValue(initial.x), y: motionValue(initial.y),
         width: motionValue(initial.width), height: motionValue(initial.height)
     }
-    return { values, animator: new WindowGeometryAnimation(values) }
+    const layout = { width: motionValue(initial.width), height: motionValue(initial.height) }
+    return { values, layout, animator: new WindowGeometryAnimation(values, layout) }
 }
+
+test("resize keeps destination layout fixed while visible dimensions interpolate", () => {
+    const { animator, values, layout } = create()
+    animator.transition({ ...initial, width: 600, height: 400 }, timing)
+    expect(layout.width.get()).toBe(600)
+    expect(layout.height.get()).toBe(400)
+    expect(values.width.get() / layout.width.get()).toBe(0.5)
+    for (const run of runs) run.progress(0.5)
+    expect(values.width.get()).toBe(450)
+    expect(values.height.get()).toBe(300)
+    expect(layout.width.get()).toBe(600)
+    expect(layout.height.get()).toBe(400)
+    expect(values.width.get() / layout.width.get()).toBe(0.75)
+    for (const run of runs) run.finish()
+    expect(values.width.get() / layout.width.get()).toBe(1)
+    expect(values.height.get() / layout.height.get()).toBe(1)
+})
+
+test("retargeting preserves visible size and pointer interruption restores unscaled layout", () => {
+    const { animator, values, layout } = create()
+    animator.transition({ ...initial, width: 600 }, timing)
+    runs[0].progress(0.5)
+    animator.transition({ ...initial, width: 900 }, timing)
+    expect(values.width.get()).toBe(450)
+    expect(layout.width.get()).toBe(900)
+    animator.stop()
+    expect(values.width.get()).toBe(450)
+    expect(layout.width.get()).toBe(450)
+    animator.set({ ...initial, width: 480 })
+    expect(values.width.get()).toBe(480)
+    expect(layout.width.get()).toBe(480)
+})
+
+test("zero-size destinations retain finite backing dimensions until completion", () => {
+    const { animator, values, layout } = create()
+    animator.transition({ ...initial, width: 0, height: 0 }, timing)
+    expect(layout.width.get()).toBe(300)
+    expect(layout.height.get()).toBe(200)
+    for (const run of runs) run.finish()
+    expect(values.width.get()).toBe(0)
+    expect(layout.width.get()).toBe(0)
+    animator.transition(initial, timing)
+    expect(layout.width.get()).toBe(300)
+    expect(values.width.get()).toBe(0)
+})
 
 test("a stream of width targets does not restart the position or height animation", () => {
     const { animator } = create()

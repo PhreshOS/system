@@ -1,7 +1,7 @@
 import { resolveWindowGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type LocalAnimation } from "@client/view/components/desktop-host/local-window"
 import { type AppearanceTransaction, type Position, type Size } from "@phreshos/core"
-import { useMotionValue, type MotionStyle } from "motion/react"
+import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
 import { useAppearance } from "@phreshos/react-ui"
@@ -29,8 +29,12 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
     const y = useMotionValue(typeof position.y === "number" ? position.y : 0)
     const width = useMotionValue(typeof size.width === "number" ? size.width : 0)
     const height = useMotionValue(typeof size.height === "number" ? size.height : 0)
+    const layoutWidth = useMotionValue(width.get())
+    const layoutHeight = useMotionValue(height.get())
+    const scaleX = useTransform(() => layoutWidth.get() === 0 ? 1 : width.get() / layoutWidth.get())
+    const scaleY = useTransform(() => layoutHeight.get() === 0 ? 1 : height.get() / layoutHeight.get())
     const animator = useRef<WindowGeometryAnimation | null>(null)
-    if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height })
+    if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height }, { width: layoutWidth, height: layoutHeight })
     const gesturing = useRef(false)
     const initialized = useRef(false)
     const values = useRef({ position, size, animation, immediate, onComplete })
@@ -139,10 +143,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     function updateGesture(region: WindowRegion) {
 
-        x.set(region.x)
-        y.set(region.y)
-        width.set(region.width)
-        height.set(region.height)
+        set(region)
     }
 
     function finishGesture(region?: WindowRegion) {
@@ -163,7 +164,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     return {
         frame,
-        style: { x, y, width, height } satisfies MotionStyle,
+        style: { x, y, width: layoutWidth, height: layoutHeight, scaleX, scaleY, transformOrigin: "0 0" } satisfies MotionStyle,
         read,
         beginGesture,
         updateGesture,

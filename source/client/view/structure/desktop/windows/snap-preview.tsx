@@ -22,19 +22,23 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, re
     return <motion.div
         ref={geometry.frame}
         className="pointer-events-none absolute"
-        initial={false}
-        animate={{ scale: visible ? 1 : 0.98, opacity: visible ? 1 : 0 }}
-        transition={motionTransition(transaction, reducedMotion)}
-        style={{ left: 0, top: 0, transformOrigin: "center", zIndex, ...geometry.style }}
+        style={{ left: 0, top: 0, zIndex, ...geometry.style }}
     >
-        <Surface
-            data-snap-preview-frame
-            material={{ opacity: "small" }}
-            style={{
-                position: "absolute",
-                ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset))
-            }}
-        />
+        <motion.div
+            initial={false}
+            animate={{ scale: visible ? 1 : 0.98, opacity: visible ? 1 : 0 }}
+            transition={motionTransition(transaction, reducedMotion)}
+            style={{ position: "absolute", inset: 0, transformOrigin: "center" }}
+        >
+            <Surface
+                data-snap-preview-frame
+                material={{ opacity: "small" }}
+                style={{
+                    position: "absolute",
+                    ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset))
+                }}
+            />
+        </motion.div>
     </motion.div>
 }
 
