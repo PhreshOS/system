@@ -24,7 +24,7 @@ export default class CommandServerRuntime implements ServerRuntime {
 
             shell: true,
 
-            detached: process.platform !== "win32",
+            detached: true,
 
             cwd: directory,
 

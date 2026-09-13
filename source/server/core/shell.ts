@@ -46,7 +46,7 @@ export default function shell(command: string, options: ShellOptions = {}): Asyn
         }
         const child = spawn(input.command, {
             shell: true,
-            detached: process.platform !== "win32",
+            detached: true,
             cwd: input.cwd,
             env: { ...process.env, ...input.env },
             stdio: ["ignore", "pipe", "pipe"]
