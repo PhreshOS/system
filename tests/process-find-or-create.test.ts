@@ -14,12 +14,13 @@ test("process find or create contract", async () => {
 
   interface FixtureManager {
     start(owner: Program, launch: Launch, watching?: unknown, parent?: unknown, transition?: boolean, prepared?: { intent: unknown }): Promise<`${string}-${string}-${string}-${string}-${string}`>
-    resolveLaunch(owner: Program, launch: Launch): { intent: { server: { service: boolean } | null, client: { position: unknown, size: unknown, service: boolean } | null } }
+    resolveLaunch(owner: Program, launch: Launch): { options: Record<string, string>, intent: { server: { service: boolean } | null, client: { position: unknown, size: unknown, service: boolean } | null } }
   }
 
   const processes = new Map<string, FixtureProcess>()
   const program = {
     identity: "example",
+    config: { options: { language: "en", document: "default.txt" } },
     reference: "example-reference",
     server: { start: true },
     client: {
@@ -90,6 +91,9 @@ test("process find or create contract", async () => {
   )
 
   const omitted = fixture.resolveLaunch(program, { name: "defaults" }).intent
+  assert.deepEqual(fixture.resolveLaunch(program, {}).options, { document: "default.txt", language: "en" })
+  assert.deepEqual(fixture.resolveLaunch(program, { options: { document: "chosen.txt", extra: "" } }).options, { document: "chosen.txt", extra: "", language: "en" })
+  assert.deepEqual(program.config.options, { document: "default.txt", language: "en" })
   processes.set("unrelated", { identity: "unrelated", name: null, program, launch: null })
   const explicit = fixture.resolveLaunch(program, {
     name: "defaults",

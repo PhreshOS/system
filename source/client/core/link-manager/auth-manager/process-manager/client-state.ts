@@ -9,10 +9,14 @@ export default class ClientState {
 
     public sameOrigin: boolean
 
+    public readonly service: NonNullable<ProcessSnapshot["client"]>["service"]
+
     public constructor(processManager: ProcessManager, process: string, payload: NonNullable<ProcessSnapshot["client"]>) {
 
         this.window = new Window(processManager, process, payload.window)
 
         this.sameOrigin = payload.sameOrigin
+
+        this.service = payload.service
     }
 }

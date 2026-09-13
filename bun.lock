@@ -7,7 +7,7 @@
       "dependencies": {
         "@fontsource/roboto": "^5.3.0",
         "@hono/node-server": "^2.1.1",
-        "@phreshos/core": "^0.1.43",
+        "@phreshos/core": "^0.1.44",
         "@phreshos/react-ui": "^0.1.19",
         "@the-link/core": "^0.3.0",
         "@the-link/http": "^0.1.1",
@@ -235,7 +235,7 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.43", "", {}, "sha512-Z424mPzQ02azTsBDamBrxe+4iHW3UuromKqyvWBdZteGaPJff+XHXaRY4YJNruIXIuoe+vXz1Bni5ULTlXu/NQ=="],
+    "@phreshos/core": ["@phreshos/core@0.1.44", "", {}, "sha512-0Qo4SlNg9fi2xfpDMbMucHQrDhzE8hhzOy7n5rQPjpj4UIWPUU5ZuEGEON6bfQM6nKJ4ogNJF7KFp4RhMxf5PA=="],
 
     "@phreshos/react-ui": ["@phreshos/react-ui@0.1.19", "", { "dependencies": { "@phreshos/core": "^0.1.43", "colorjs.io": "^0.7.1", "motion": "^13.2.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-F4xiDGvOrgEomSSy3HwieFOI3eiyhDQAbJeQNWHVXXVekT1lUonr86z0crEQigXEIqdFWBQg+GKf9mkcjlYKOw=="],
 

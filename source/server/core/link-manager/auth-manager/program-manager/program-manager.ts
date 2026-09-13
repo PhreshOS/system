@@ -11,14 +11,14 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseProgramDefinition, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
+import { parseLaunch, parseProgramDefinition, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type ProgramRecord } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
-import { readStartup, removeStartup, writeStartup } from "./startup"
+import { installStartup, readStartup, removeStartup, writeStartup } from "./startup"
 import { permissionCatalog } from "@server/core/permissions"
 import { installPermissions, readPermissions, writePermissions } from "./permissions"
 import {
@@ -630,9 +630,10 @@ export default class ProgramManager extends TheLink {
 
             await program.validate()
 
-            this.resolveLaunch(program, value)
+            const launch = parseLaunch(value === undefined ? {} : value)
+            this.resolveLaunch(program, launch)
 
-            writeStartup(program, value)
+            writeStartup(program, launch)
 
             return
         }
@@ -997,6 +998,7 @@ export default class ProgramManager extends TheLink {
             let createdHere = false
 
             let restorePermissions: (() => void) | null = null
+            let restoreStartup: (() => void) | null = null
 
             try {
 
@@ -1008,7 +1010,11 @@ export default class ProgramManager extends TheLink {
                 // guard this and no longer can — a copied program's
                 // description says nothing about where its parts are,
                 // because they are wherever the system puts them.
-                await new Program(join(staged, "program.json")).validate()
+                const stagedProgram = new Program(join(staged, "program.json"))
+                await stagedProgram.validate()
+                const startup = stagedProgram.config.startup
+                const startupLaunch = startup === true ? {} : startup || null
+                if (startupLaunch !== null) this.resolveLaunch(stagedProgram, startupLaunch)
 
                 // A process may have retained an absolute server,
                 // client, or storage path. Its ending is part of the
@@ -1037,6 +1043,7 @@ export default class ProgramManager extends TheLink {
                 // Installation establishes the only permission source of
                 // truth. Reinstalling deliberately replaces prior owner edits.
                 restorePermissions = installPermissions(installed)
+                restoreStartup = installStartup(installed, startupLaunch)
 
                 let entry = this.programs.get(source.identity)
 
@@ -1059,6 +1066,7 @@ export default class ProgramManager extends TheLink {
                 committed = true
 
                 restorePermissions = null
+                restoreStartup = null
 
                 if (createdHere) await this.created(entry)
 
@@ -1071,6 +1079,13 @@ export default class ProgramManager extends TheLink {
                 // yesterday's list.
                 await this.$outbound.publish("/install", entry.record())
 
+                if (startupLaunch !== null) {
+                    try { await this.start(entry.program, startupLaunch, undefined, null, true) }
+                    catch (exception) {
+                        await output({ stream: "stderr", text: `Program installed, but startup failed: ${exception instanceof Error ? exception.message : String(exception)}\n` })
+                    }
+                }
+
                 return entry
             }
 
@@ -1081,6 +1096,7 @@ export default class ProgramManager extends TheLink {
                 // never enters the transaction and is neither copied nor moved.
                 if (swapping && !committed) {
 
+                    restoreStartup?.()
                     restorePermissions?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
@@ -1279,28 +1295,12 @@ export default class ProgramManager extends TheLink {
     // name occupancy and capacity remain in `start`.
     private resolveLaunch(program: Program, value: unknown) {
 
-        if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("A launch must be a named shape")
+        const launch = parseLaunch(value)
 
-        const launch = value as Launch
-
-        if (launch.name !== undefined && (typeof launch.name !== "string" || !launch.name)) throw new Error("A process name must be non-empty text")
-
-        const suppliedOptions = launch.options ?? {}
-
-        if (typeof suppliedOptions !== "object" || suppliedOptions === null || Array.isArray(suppliedOptions) || Object.values(suppliedOptions).some(value => typeof value !== "string")) throw new Error("A launch's options must be text values")
-
-        const options = Object.fromEntries(Object.entries(suppliedOptions).sort(([left], [right]) => left.localeCompare(right)))
-
-        if (launch.server !== undefined && typeof launch.server !== "boolean" && (typeof launch.server !== "object" || launch.server === null || Array.isArray(launch.server))) throw new Error("A launch's server must be true, false, or a server shape")
-
-        if (launch.client !== undefined && typeof launch.client !== "boolean" && (typeof launch.client !== "object" || launch.client === null || Array.isArray(launch.client))) throw new Error("A launch's client must be true, false, or a client shape")
+        const options = Object.fromEntries(Object.entries({ ...program.config.options, ...launch.options }).sort(([left], [right]) => left.localeCompare(right)))
 
         const askedServer = typeof launch.server === "object" ? launch.server : {}
         const askedClient = typeof launch.client === "object" ? launch.client : {}
-
-        if (askedServer.service !== undefined && typeof askedServer.service !== "boolean") throw new Error("A launch server's service role must be true or false")
-
-        if (askedClient.service !== undefined && typeof askedClient.service !== "boolean") throw new Error("A launch client's service role must be true or false")
 
         if ((launch.server === true || typeof launch.server === "object") && !program.server) throw new Error("This program declared no server half — a launch cannot add one")
 

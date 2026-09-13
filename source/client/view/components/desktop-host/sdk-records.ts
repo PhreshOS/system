@@ -1,38 +1,11 @@
-export interface SdkProgramSource {
+import type { ProcessSnapshot, ProgramSnapshot } from "@phreshos/core"
 
-    reference: string
-    identity: string
-    assetId: string
-    installed: boolean
-    name: string
-    version: string | null
-    description: string | null
-    hasAgent: boolean
-    server: unknown | null
-    client: unknown | null
-}
+export type SdkProgramSource = ProgramSnapshot
 
-export interface SdkProcessSource {
-
-    reference: string
-
-    identity: string
-
-    name: string | null
-
-    program: string
-
-    options: Record<string, string>
-
-    startedAt: Date
-
-    server: unknown | null
-
-    client: unknown | null
-}
+export type SdkProcessSource = Omit<ProcessSnapshot, "program"> & { program: string }
 
 /** Plain SDK Program state carried across the iframe boundary. */
-export function sdkProgram(program: SdkProgramSource) {
+export function sdkProgram(program: SdkProgramSource): ProgramSnapshot {
 
     return {
 
@@ -59,7 +32,7 @@ export function sdkProgram(program: SdkProgramSource) {
 }
 
 /** Plain Process state with its ownership chain embedded for synchronous navigation. */
-export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource) {
+export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource): ProcessSnapshot {
 
     return {
 
@@ -75,8 +48,8 @@ export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource)
 
         startedAt: process.startedAt,
 
-        server: process.server ? {} : null,
+        server: process.server ? { service: process.server.service } : null,
 
-        client: process.client ? {} : null
+        client: process.client ? { service: process.client.service } : null
     }
 }

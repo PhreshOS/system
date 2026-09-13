@@ -58,6 +58,9 @@ test("program install contract", async () => {
       rollbackPermissions()
       assert.deepEqual(readPermissions(installedProgram), { network: ["https://old.example.test"], appearance: [] })
       installPermissions(installedProgram)
+      const withoutPermissions = new Program({ ...installedProgram.config, client: { location: "client" } }, installedProgram.root)
+      installPermissions(withoutPermissions)
+      assert.deepEqual(readPermissions(installedProgram), {})
       const installation: ProgramCommandChunk[] = []
       const uninstallation: ProgramCommandChunk[] = []
 
