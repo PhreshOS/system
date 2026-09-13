@@ -54,6 +54,12 @@ bun run pack
 `verify` checks the source contracts and validates the packed System from a
 clean installation.
 
+`check` performs static checks, `build` creates distributable output, and `test`
+runs Vitest assertions from `tests/`. Run `build` before testing built artifacts.
+`verify` runs `check`, `build`, and `test` in order. Operational tooling belongs
+in `scripts/`; tests and their fixtures belong in `tests/`. Verification uses
+the committed dependency graph without local package substitutions.
+
 ## Related repositories
 
 - [`@phreshos/core`](https://github.com/PhreshOS/core) owns the public contracts

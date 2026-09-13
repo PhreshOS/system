@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.63",
+  "version": "0.1.64",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -30,15 +30,14 @@
     "build": "vite-node scripts/build.ts",
     "start": "node --run build && NODE_ENV=development node dist/server/main.js",
     "pack": "node --run build && vite-node scripts/pack.ts",
-    "verify:contracts": "vite-node scripts/verify-contracts.ts",
-    "verify:distribution": "node scripts/verify-distribution.mjs",
-    "verify": "node --run check && node --run verify:contracts && node --run verify:distribution"
+    "verify": "node --run check && node --run build && node --run test",
+    "test": "vitest run --project default"
   },
   "dependencies": {
     "@fontsource/roboto": "^5.3.0",
     "@hono/node-server": "^2.1.1",
-    "@phreshos/core": "^0.1.42",
-    "@phreshos/react-ui": "^0.1.18",
+    "@phreshos/core": "^0.1.43",
+    "@phreshos/react-ui": "^0.1.19",
     "@the-link/core": "^0.3.0",
     "@the-link/http": "^0.1.1",
     "@the-link/ipc": "^0.2.1",
@@ -71,6 +70,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.2.1",
-    "vite-node": "^6.0.0"
+    "vite-node": "^6.0.0",
+    "vitest": "^4.1.10"
   }
 }
