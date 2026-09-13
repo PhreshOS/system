@@ -84,7 +84,7 @@ test("worker runtime contract", async () => {
 
       assert.equal(ending.signal, null)
 
-      const command = new CommandServerRuntime(`node ${JSON.stringify(commandEntry)}`, directory)
+      const command = new CommandServerRuntime(`"${process.execPath}" "${commandEntry}"`, directory)
       const commandMessages: unknown[][] = []
       const commandOutput: ["out" | "err", string][] = []
 
