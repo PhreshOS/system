@@ -20,7 +20,7 @@ test("process find or create contract", async () => {
   const processes = new Map<string, FixtureProcess>()
   const program = {
     identity: "example",
-    config: { options: { language: "en", document: "default.txt" } },
+    config: { options: { language: "en", document: "default.txt" }, launch: { options: { document: "icon.txt" } } },
     reference: "example-reference",
     server: { start: true },
     client: {

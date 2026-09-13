@@ -667,7 +667,8 @@ export default class ClientProcessBoundary extends TheLink {
 
                 await this.systemAccess.program(program)
 
-                const operation = this.authManager.programManager.command(args[1], args[0], args[2], this.pane)
+                const value = args[0] === "run" ? await this.systemAccess.launch(args[2]) : args[2]
+                const operation = this.authManager.programManager.command(args[1], args[0], value, this.pane)
 
                 iterator = operation[Symbol.asyncIterator]()
             }

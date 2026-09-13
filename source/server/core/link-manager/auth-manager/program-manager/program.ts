@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { parseProgramDefinition, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
+import { parseLaunch, parseProgramDefinition, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -53,18 +53,8 @@ export default class Program {
 
         this.identity = this.config.identity
 
-        // Given only when a program is made from another: the same
-        // description standing in the same place, which an object alone
-        // cannot say because an object's relative paths resolve against
-        // whatever directory the system was started in.
+        // An explicit root keeps relative declaration paths anchored to their source.
         this.root = root ?? where
-    }
-
-    // The same description and place under an explicitly different
-    // identity. A fork is another program, never an alias for this one.
-    public fork(identity: string) {
-
-        return new Program({ ...this.config, identity }, this.root)
     }
 
     // Installation lays the same logical program out in the system's
@@ -113,8 +103,8 @@ export default class Program {
         } : null
     }
 
-    /** Canonical permissions copied into authoritative storage when installed. */
-    public get installationPermissions(): DeclaredPermissions {
+    /** Canonical permissions written into authoritative storage at creation. */
+    public get declaredPermissions(): DeclaredPermissions {
 
         return permissionCatalog.declarations(this.config.client?.permissions)
     }
@@ -323,6 +313,8 @@ function storedDefinition(value: unknown): ProgramConfig {
 // here touches a disk: it asks whether the words agree with each other,
 // not whether they are true.
 function coherent(config: ProgramConfig) {
+
+    if (config?.launch !== undefined && config.launch !== true) parseLaunch(config.launch)
 
     // A name is also the name of a directory, so it is checked as a path
     // component before it is anything else — a program calling itself

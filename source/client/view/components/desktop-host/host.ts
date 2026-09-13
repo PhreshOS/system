@@ -183,7 +183,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "host-program-create" || word === "host-program-force-create") {
 
-            await access.requirePrograms()
+            await access.requireAll()
 
             const identity = word === "host-program-create"
                 ? await programManager.create(args[0])
@@ -252,7 +252,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (args[1] !== "server" && args[1] !== "client") throw new Error("A Process endpoint is server or client")
 
-            await processManager.startEndpoint(target.identity, args[1], args[2] as never)
+            const launch = args[1] === "client" ? await access.clientLaunch(args[2]) : args[2]
+
+            await processManager.startEndpoint(target.identity, args[1], launch as never)
 
             return [target.identity]
         }
@@ -400,7 +402,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "program-process-create") {
 
             const program = await permittedProgram(args[0])
-            const started = await programManager.createProcess(address(program), args[1] as Launch, process().identity)
+            const launch = await access.launch(args[1])
+            const started = await programManager.createProcess(address(program), launch, process().identity)
 
             return [record(requireProcess(started))]
         }
@@ -408,7 +411,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "program-process-find-or-create") {
 
             const program = await permittedProgram(args[0])
-            const launch = args[1] as Launch & { name: string }
+            const launch = await access.launch(args[1]) as Launch & { name: string }
 
             const found = await programManager.findOrCreateProcess(address(program), launch, process().identity)
 
@@ -626,23 +629,26 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
+        if (word === "launch") {
+
+            const program = await permittedProgram(args[0])
+            const operation = String(args[1])
+
+            if (operation === "set" && args[2] === undefined) throw new Error("A Launch is required")
+
+            const launch = operation === "set" ? await access.launch(args[2]) : args[2]
+
+            return [await programManager.launch(address(program), operation, launch)]
+        }
+
         if (word === "startup") {
 
             const program = await permittedProgram(args[0])
 
-            return [await programManager.startup(address(program), String(args[1]), args[2])]
-        }
+            const operation = String(args[1])
+            const launch = operation === "enable" ? await access.launch(args[2]) : args[2]
 
-        if (word === "fork") {
-
-            await access.requirePrograms()
-
-            const identity = await programManager.fork(args[0], String(args[1]))
-            const program = programManager.programs.get(identity)
-
-            if (!program) throw new Error("The forked Program was not synchronized")
-
-            return [sdkProgram(program)]
+            return [await programManager.startup(address(program), operation, launch)]
         }
 
         if (word === "program-agent") return [await programManager.agent(address(await permittedProgram(args[0])))]

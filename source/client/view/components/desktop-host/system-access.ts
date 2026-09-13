@@ -1,7 +1,7 @@
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import type { PermissionName, PermissionValue, ServiceKey } from "@phreshos/core"
+import { parseLaunch, type ClientLaunch, type PermissionName, type PermissionValue, type ServiceKey } from "@phreshos/core"
 
 const denied = "Execution is not permitted"
 
@@ -25,11 +25,6 @@ export default class SystemAccess {
         return service.program ?? this.authManager.processManager.processes.get(service.process)?.program ?? null
     }
 
-    public ownsService(service: ServiceKey) {
-
-        return this.serviceProgram(service) === this.owner().program
-    }
-
     public async all() {
 
         return await this.authManager.grantsPermission(this.pane, "all", [])
@@ -51,10 +46,7 @@ export default class SystemAccess {
 
         const program = this.serviceProgram(service)
 
-        if (program === null) return await this.all()
-        if (program === this.owner().program) return true
-
-        return await this.authManager.grantsPermission(this.pane, "services", [program])
+        return await this.authManager.grantsPermission(this.pane, "services", program === null ? [] : [program])
     }
 
     public async program(program: Program) {
@@ -83,9 +75,31 @@ export default class SystemAccess {
         if (!await this.all()) throw new Error(denied)
     }
 
-    public async requirePrograms() {
+    /** Authorize the layer explicitly selected by this Client's Process request. */
+    public async launch(value: unknown = {}) {
 
-        await this.require("programs", [])
+        const launch = parseLaunch(value)
+
+        if (typeof launch.client === "object") await this.clientLayer(launch.client)
+
+        return launch
+    }
+
+    /** Authorize one fresh Client Endpoint incarnation in an existing Process. */
+    public async clientLaunch(value: unknown = {}) {
+
+        const launch = parseLaunch({ client: value }).client
+
+        if (!launch || typeof launch !== "object") throw new Error("A Client launch must be an object")
+
+        await this.clientLayer(launch)
+
+        return launch
+    }
+
+    private async clientLayer(launch: ClientLaunch) {
+
+        if (launch.layer === "under" || launch.layer === "over") await this.require("layers", [launch.layer])
     }
 
     public async requireNetwork(scope: string) {

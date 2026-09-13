@@ -1670,6 +1670,13 @@ export default class ProcessManager extends TheLink {
             return [await this.system.programIcon(this.system.holdProgram(rest[0], process.program), rest[1])]
         }
 
+        if (word === "launch") {
+
+            const program = this.system.holdProgram(rest[0], process.program)
+
+            return [await this.system.programLaunch(program, String(rest[1]), rest[2])]
+        }
+
         if (word === "startup") {
 
             const program = this.system.holdProgram(rest[0], process.program)
@@ -1721,15 +1728,6 @@ export default class ProcessManager extends TheLink {
             await this.system.updateAppearance(rest[0])
 
             return []
-        }
-
-        if (word === "fork") {
-
-            const program = this.system.holdProgram(rest[0])
-
-            const forked = await this.system.forkProgram(program, String(rest[1]))
-
-            return [this.system.requireProgram(forked.identity)]
         }
 
         if (word === "installed") {

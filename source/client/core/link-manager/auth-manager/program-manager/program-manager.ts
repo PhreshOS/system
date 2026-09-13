@@ -70,14 +70,14 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/force-create-program", source, asker) as string
     }
 
-    public async fork(subject: unknown, identity: string) {
-
-        return await this.$outbound.publishFirst("/fork-program", subject, identity) as string
-    }
-
     public async startup(subject: unknown, operation: string, value?: unknown) {
 
         return await this.$outbound.publishFirst("/startup", subject, operation, value)
+    }
+
+    public async launch(subject: unknown, operation: string, value?: unknown) {
+
+        return await this.$outbound.publishFirst("/launch", subject, operation, value)
     }
 
     public async permissions<Name extends PermissionName>(

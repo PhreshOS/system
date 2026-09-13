@@ -73,6 +73,13 @@ export default class Program {
         await this.programManager.$outbound.publish("/create-process", this.address, launch)
     }
 
+    public async open() {
+
+        const launch = await this.programManager.launch(this.address, "get")
+
+        await this.createProcess(launch ?? {})
+    }
+
     public install(asker: string) {
 
         return this.programManager.command(this.address, "install", undefined, asker)

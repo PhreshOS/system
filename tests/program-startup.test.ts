@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { TheLink } from "@the-link/core"
@@ -9,9 +9,9 @@ import type AuthManager from "@server/core/link-manager/auth-manager/auth-manage
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import { readPermissions, writePermissions } from "@server/core/link-manager/auth-manager/program-manager/permissions"
-import * as startup from "@server/core/link-manager/auth-manager/program-manager/startup"
+import LaunchStorage from "@server/core/link-manager/auth-manager/program-manager/launch-storage"
 
-test("installation replaces startup and permissions before launching exactly once", async context => {
+test("installation applies active declarations and launches the stored startup", async context => {
   const directory = mkdtempSync(join(tmpdir(), "phresh-startup-"))
   context.onTestFinished(() => { vi.restoreAllMocks(); rmSync(directory, { recursive: true, force: true }) })
   const client = join(directory, "client")
@@ -26,8 +26,7 @@ test("installation replaces startup and permissions before launching exactly onc
   const launches: Launch[] = []
   const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start")
     .mockImplementation(async (program, launch) => {
-      expect(startup.readStartup(program)).toEqual(launch)
-      expect(readPermissions(program)).toEqual({ network: ["https://new.example.test"] })
+      expect(new LaunchStorage(program, "startup").get()).toEqual(launch)
       launches.push(launch)
       return "process-identity"
     })
@@ -38,33 +37,43 @@ test("installation replaces startup and permissions before launching exactly onc
     })
   }
 
-  let entry = await manager.install(definition(true))
+  let entry = await manager.install(definition())
+  expect(existsSync(join(entry.program.storagePath, "startup.json"))).toBe(false)
+  expect(start).not.toHaveBeenCalled()
+  entry = await manager.install(definition(false))
+  expect(existsSync(join(entry.program.storagePath, "startup.json"))).toBe(false)
+  expect(start).not.toHaveBeenCalled()
+
+  entry = await manager.install(definition(true))
   expect(launches).toEqual([{}])
+  expect(readPermissions(entry.program)).toEqual({ network: ["https://new.example.test"] })
   const note = join(entry.program.storagePath, "note.txt")
   writeFileSync(note, "keep this")
   writePermissions(entry.program, { network: [], appearance: [] })
-  startup.writeStartup(entry.program, { name: "owner-edit" })
+  new LaunchStorage(entry.program, "startup").set({ name: "owner-edit" })
 
   const configured = { name: "welcome", options: { language: "fr" } }
   entry = await manager.install(definition(configured))
   expect(launches).toEqual([{}, configured])
   expect(JSON.parse(readFileSync(join(entry.program.root, "program.json"), "utf8")).options).toEqual({ language: "en" })
   expect(readFileSync(note, "utf8")).toBe("keep this")
+  expect(readPermissions(entry.program)).toEqual({ network: [], appearance: [] })
 
-  for (const disabled of [false, undefined]) {
-    startup.writeStartup(entry.program, configured)
-    entry = await manager.install(definition(disabled))
-    expect(startup.readStartup(entry.program)).toBeNull()
-    expect(start).toHaveBeenCalledTimes(2)
+  for (const inactive of [false, undefined]) {
+    new LaunchStorage(entry.program, "startup").set(configured)
+    entry = await manager.install(definition(inactive))
+    expect(new LaunchStorage(entry.program, "startup").get()).toEqual(configured)
+    expect(launches.at(-1)).toEqual(configured)
   }
+  expect(start).toHaveBeenCalledTimes(4)
 
-  // A settings write failure restores permissions and leaves the old startup intact.
+  // A settings write failure leaves the authoritative stored state intact.
   writePermissions(entry.program, { appearance: [] })
-  startup.writeStartup(entry.program, configured)
-  const writing = vi.spyOn(startup, "installStartup").mockImplementationOnce(() => { throw new Error("write failed") })
+  new LaunchStorage(entry.program, "startup").set(configured)
+  const writing = vi.spyOn(LaunchStorage.prototype, "replace").mockImplementationOnce(() => { throw new Error("write failed") })
   await expect(manager.install(definition(true))).rejects.toThrow("write failed")
   expect(readPermissions(entry.program)).toEqual({ appearance: [] })
-  expect(startup.readStartup(entry.program)).toEqual(configured)
+  expect(new LaunchStorage(entry.program, "startup").get()).toEqual(configured)
   writing.mockRestore()
 
   // Startup failure is reported without undoing a valid installation.
@@ -72,11 +81,11 @@ test("installation replaces startup and permissions before launching exactly onc
   const warnings: string[] = []
   entry = await manager.install(definition(true), null, chunk => { warnings.push(chunk.text) })
   expect(entry.installed).toBe(true)
-  expect(startup.readStartup(entry.program)).toEqual({})
+  expect(new LaunchStorage(entry.program, "startup").get()).toEqual({})
   expect(warnings.join("")).toContain("Program installed, but startup failed: cannot start")
 
   await expect(manager.install(definition({ server: true }))).rejects.toThrow("no server")
-  expect(startup.readStartup(entry.program)).toEqual({})
+  expect(new LaunchStorage(entry.program, "startup").get()).toEqual({})
 })
 
 test("startup rollback preserves the exact previous file", context => {
@@ -85,8 +94,8 @@ test("startup rollback preserves the exact previous file", context => {
   const program = new Program({ identity: "example", storage: directory, client: { location: "." } })
   const file = join(directory, "startup.json")
   writeFileSync(file, "invalid prior content")
-  const rollback = startup.installStartup(program, {})
-  expect(startup.readStartup(program)).toEqual({})
+  const rollback = new LaunchStorage(program, "startup").replace({})
+  expect(new LaunchStorage(program, "startup").get()).toEqual({})
   rollback()
   expect(readFileSync(file, "utf8")).toBe("invalid prior content")
 })

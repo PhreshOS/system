@@ -169,10 +169,6 @@ export class PermissionCatalog {
         // permission. Broader fallback grants must never undo a restriction.
         if (assigned !== undefined && assigned !== null) return this.grants(name, assigned, requested)
 
-        if (name === "services" && Array.isArray(permissions.programs)) {
-            return this.grants(name, permissions.programs, requested)
-        }
-
         if (name !== "all" && this.granted(permissions.all ?? null)) return true
 
         return false
@@ -253,7 +249,7 @@ function unique(values: readonly string[]) {
 
 function valued(domain: PermissionValueDomain) {
 
-    if (domain === "program" || domain === "network" || domain === "storage") return true
+    if (domain === "program" || domain === "layer" || domain === "network" || domain === "storage") return true
     if (domain === "none") return false
 
     domain satisfies never
@@ -263,7 +259,7 @@ function valued(domain: PermissionValueDomain) {
 
 function valueCovers(domain: PermissionValueDomain, grant: string, requested: string) {
 
-    if (domain === "program") return grant === requested
+    if (domain === "program" || domain === "layer") return grant === requested
     if (domain === "network") return networkScopeCovers(grant, requested)
     if (domain === "storage") return nativeStorageScopeCovers(grant, requested)
     if (domain === "none") return false
@@ -288,7 +284,12 @@ export const permissionCatalog = new PermissionCatalog({
     programs: {
         default: [],
         title: "Programs",
-        description: "Access every Program or selected Programs and their Services."
+        description: "Access every Program or selected Programs."
+    },
+    layers: {
+        default: [],
+        title: "Window layers",
+        description: "Select the under and over layers in Client Endpoint launches."
     },
     network: {
         default: [],

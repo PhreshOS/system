@@ -85,11 +85,6 @@ export default class System {
         return this.programManager.forceCreate(source, asker)
     }
 
-    public forkProgram(program: Program, identity: string) {
-
-        return this.programManager.fork(program, identity)
-    }
-
     public programPermissions(program: Program) {
 
         return this.programManager.permissions(program)
@@ -378,6 +373,11 @@ export default class System {
     public programStartup(program: Program, operation: string, value?: unknown) {
 
         return this.programManager.startup(program, operation, value)
+    }
+
+    public programLaunch(program: Program, operation: string, value?: unknown) {
+
+        return this.programManager.launch(program, operation, value)
     }
 
     public programInstalled(program: Program) {

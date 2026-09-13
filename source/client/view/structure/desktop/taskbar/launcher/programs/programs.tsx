@@ -50,7 +50,7 @@ function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program
 
         onChoose()
 
-        await record.createProcess()
+        await record.open()
     })
 
     return <>

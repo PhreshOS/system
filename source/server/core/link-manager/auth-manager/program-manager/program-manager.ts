@@ -18,9 +18,9 @@ import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type ProgramRecord } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
-import { installStartup, readStartup, removeStartup, writeStartup } from "./startup"
+import LaunchStorage from "./launch-storage"
 import { permissionCatalog } from "@server/core/permissions"
-import { installPermissions, readPermissions, writePermissions } from "./permissions"
+import { readPermissions, writePermissions } from "./permissions"
 import {
     parsePermissionName,
     type Permission,
@@ -32,6 +32,13 @@ import {
 } from "@phreshos/core"
 
 const maximumProcessesPerProgram = 20
+
+type Registration = {
+    origin: "creation" | "reconstruction"
+    installed: boolean
+    transitionOwnsIdentity?: boolean
+    restoreInstalled?: boolean
+}
 
 function clonePermission<Name extends PermissionName>(permission: Permission<Name>): Permission<Name> {
 
@@ -114,7 +121,7 @@ export default class ProgramManager extends TheLink {
 
             try {
 
-                await this.register(new Program(declaration), true, true)
+                await this.register(new Program(declaration), { origin: "reconstruction", installed: true, transitionOwnsIdentity: true })
             }
 
             catch (exception) { console.log(`programs: ${found.name} was not read — ${exception instanceof Error ? exception.message : "unreadable"}`) }
@@ -291,16 +298,16 @@ export default class ProgramManager extends TheLink {
         return (await this.forceCreate(source, asker)).identity
     }
 
-    @Connect("/fork-program")
-    protected async forkProgram(subject: unknown, identity: string) {
-
-        return (await this.fork(this.held(subject), identity)).identity
-    }
-
     @Connect("/startup")
     protected async startupProgram(subject: unknown, operation: string, value?: unknown) {
 
         return await this.startup(this.held(subject), operation, value)
+    }
+
+    @Connect("/launch")
+    protected async savedProgramLaunch(subject: unknown, operation: string, value?: unknown) {
+
+        return await this.launch(this.held(subject), operation, value)
     }
 
     public reach(identity: string) {
@@ -341,7 +348,7 @@ export default class ProgramManager extends TheLink {
     // absolute itself.
     public async create(source: ProgramDefinition | string) {
 
-        const entry = await this.register(this.runtimeProgram(source), false)
+        const entry = await this.register(this.runtimeProgram(source), { origin: "creation", installed: false })
 
         await this.created(entry)
 
@@ -359,6 +366,8 @@ export default class ProgramManager extends TheLink {
         // that currently owns this public identity.
         await program.validate()
 
+        this.declaredLaunch(program)
+
         return await this.change(program.identity, async () => {
 
             const existing = this.programs.get(program.identity)
@@ -370,7 +379,7 @@ export default class ProgramManager extends TheLink {
                 await this.forgetEntry(existing, false)
             }
 
-            const entry = this.remember(program, false, true, restoreInstalled)
+            const entry = this.remember(program, { origin: "creation", installed: false, transitionOwnsIdentity: true, restoreInstalled })
 
             try {
 
@@ -422,34 +431,37 @@ export default class ProgramManager extends TheLink {
         return new Program(definition)
     }
 
-    public async fork(program: Program, identity: string) {
-
-        const entry = await this.register(program.fork(identity), false)
-
-        await this.created(entry)
-
-        return entry.program
-    }
-
-    private async register(program: Program, installed: boolean, transitionOwnsIdentity = false) {
+    private async register(program: Program, registration: Registration) {
 
         await program.validate()
 
-        return this.remember(program, installed, transitionOwnsIdentity)
+        return this.remember(program, registration)
     }
 
     /** Commit one already validated Program to the authoritative registry. */
-    private remember(program: Program, installed: boolean, transitionOwnsIdentity = false, restoreInstalled = false) {
+    private remember(program: Program, { origin, installed, transitionOwnsIdentity = false, restoreInstalled = false }: Registration) {
 
         // The runtime map is the live registry, while an installed
         // declaration is the durable reservation reconstructed on boot.
         // Forgetting an installed Program removes the former but cannot
-        // make its identity available to an ordinary create or fork while the
+        // make its identity available to ordinary creation while the
         // latter still exists. Attached replacement is the one transition
         // that deliberately owns this identity across both representations.
         if (this.programs.has(program.identity) || (!transitionOwnsIdentity && (this.changing.has(program.identity) || existsSync(this.fileManager.join(program.identity, "program.json"))))) throw new Error("The system already knows this program identity")
 
         const entry = new Entry(program, installed, restoreInstalled)
+
+        // Publish a new Program only after its complete permission state exists.
+        // Reconstructing an existing Program reads its authoritative stored state.
+        if (origin === "creation") {
+            const launch = this.declaredLaunch(program)
+            const rollback = launch === null ? null : new LaunchStorage(program, "launch").replace(launch)
+            try { writePermissions(program, program.declaredPermissions) }
+            catch (error) {
+                rollback?.()
+                throw error
+            }
+        }
 
         this.programs.set(entry.identity, entry)
 
@@ -610,12 +622,39 @@ export default class ProgramManager extends TheLink {
         return this.held(subject).agent()
     }
 
+    private declaredLaunch(program: Program) {
+        const value = program.config.launch
+        if (value === undefined) return null
+        const launch = parseLaunch(value === true ? {} : value)
+        this.resolveLaunch(program, launch)
+        return launch
+    }
+
+    /** Read or replace the saved icon launch without executing it. */
+    public async launch(program: Program, operation: string, value?: unknown): Promise<Launch | null | void> {
+        const storage = new LaunchStorage(program, "launch")
+        if (operation === "get") {
+            const launch = storage.get()
+            if (launch !== null) this.resolveLaunch(program, launch)
+            return launch
+        }
+        if (operation === "set") {
+            const launch = parseLaunch(value)
+            this.resolveLaunch(program, launch)
+            storage.set(launch)
+            return
+        }
+        throw new Error(`The host does not know the launch operation "${operation}"`)
+    }
+
     /** Read or change the system-managed startup launch for one Program. */
     public async startup(program: Program, operation: string, value?: unknown): Promise<Launch | null | void> {
 
+        const storage = new LaunchStorage(program, "startup")
+
         if (operation === "get") {
 
-            const launch = readStartup(program)
+            const launch = storage.get()
 
             if (launch === null) return null
 
@@ -633,14 +672,14 @@ export default class ProgramManager extends TheLink {
             const launch = parseLaunch(value === undefined ? {} : value)
             this.resolveLaunch(program, launch)
 
-            writeStartup(program, launch)
+            storage.set(launch)
 
             return
         }
 
         if (operation === "disable") {
 
-            removeStartup(program)
+            storage.remove()
 
             return
         }
@@ -997,7 +1036,6 @@ export default class ProgramManager extends TheLink {
 
             let createdHere = false
 
-            let restorePermissions: (() => void) | null = null
             let restoreStartup: (() => void) | null = null
 
             try {
@@ -1040,10 +1078,7 @@ export default class ProgramManager extends TheLink {
                 // the registry claims the install succeeded.
                 await installed.installServer(output)
 
-                // Installation establishes the only permission source of
-                // truth. Reinstalling deliberately replaces prior owner edits.
-                restorePermissions = installPermissions(installed)
-                restoreStartup = installStartup(installed, startupLaunch)
+                if (startupLaunch !== null) restoreStartup = new LaunchStorage(installed, "startup").replace(startupLaunch)
 
                 let entry = this.programs.get(source.identity)
 
@@ -1058,14 +1093,13 @@ export default class ProgramManager extends TheLink {
 
                 else {
 
-                    entry = await this.register(installed, true, true)
+                    entry = await this.register(installed, { origin: "creation", installed: true, transitionOwnsIdentity: true })
 
                     createdHere = true
                 }
 
                 committed = true
 
-                restorePermissions = null
                 restoreStartup = null
 
                 if (createdHere) await this.created(entry)
@@ -1079,11 +1113,12 @@ export default class ProgramManager extends TheLink {
                 // yesterday's list.
                 await this.$outbound.publish("/install", entry.record())
 
-                if (startupLaunch !== null) {
-                    try { await this.start(entry.program, startupLaunch, undefined, null, true) }
-                    catch (exception) {
-                        await output({ stream: "stderr", text: `Program installed, but startup failed: ${exception instanceof Error ? exception.message : String(exception)}\n` })
-                    }
+                try {
+                    const launch = await this.startup(entry.program, "get")
+                    if (launch) await this.start(entry.program, launch, undefined, null, true)
+                }
+                catch (exception) {
+                    await output({ stream: "stderr", text: `Program installed, but startup failed: ${exception instanceof Error ? exception.message : String(exception)}\n` })
                 }
 
                 return entry
@@ -1091,13 +1126,12 @@ export default class ProgramManager extends TheLink {
 
             catch (exception) {
 
-                // Restore the prior program files and permission source after
+                // Restore the prior program files and startup configuration after
                 // any failure in the swap or install command. Other storage
                 // never enters the transaction and is neither copied nor moved.
                 if (swapping && !committed) {
 
                     restoreStartup?.()
-                    restorePermissions?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
 
@@ -1201,7 +1235,7 @@ export default class ProgramManager extends TheLink {
 
             if (existsSync(declaration)) {
 
-                const installed = await this.register(new Program(declaration), true, true)
+                const installed = await this.register(new Program(declaration), { origin: "reconstruction", installed: true, transitionOwnsIdentity: true })
 
                 await this.created(installed)
             }

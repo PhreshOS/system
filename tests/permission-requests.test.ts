@@ -78,7 +78,7 @@ test("permission requests contract", async () => {
       assert(programManager.grantsPermission(program, "network", ["https://api.example.com/v1"]))
       assert(!programManager.grantsPermission(program, "network", ["https://other.example.com"]))
 
-      // Program declarations are installation input, never a second live source.
+      // Permission decisions read the authoritative stored state.
       const declared = new Program({ identity: "declared", storage: temporary, client: { location: ".", permissions: { programs: ["browser"] } } })
       writePermissions(declared, { services: ["editor"] })
       assert(!programManager.grantsPermission(declared, "services", ["browser"]))

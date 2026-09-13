@@ -18,7 +18,12 @@ test("permissions contract", async () => {
       programs: {
           default: [],
           title: "Programs",
-          description: "Access every Program or selected Programs and their Services."
+          description: "Access every Program or selected Programs."
+      },
+      layers: {
+          default: [],
+          title: "Window layers",
+          description: "Select the under and over layers in Client Endpoint launches."
       },
       network: {
           default: [],
@@ -57,7 +62,7 @@ test("permissions contract", async () => {
       valueDomain: "program",
       default: [],
       title: "Programs",
-      description: "Access every Program or selected Programs and their Services."
+      description: "Access every Program or selected Programs."
   })
   assert.deepEqual(catalog.definition("network"), {
       valueDomain: "network",
@@ -111,9 +116,9 @@ test("permissions contract", async () => {
   assert(!catalog.allows("all", [], {}))
   assert(catalog.allows("services", ["browser"], { all: [] }))
   assert(catalog.allows("services", ["browser"], { services: ["browser"] }))
-  assert(catalog.allows("services", ["browser"], { programs: [] }))
-  assert(catalog.allows("services", [], { programs: [] }))
-  assert(catalog.allows("services", ["browser"], { programs: ["browser"] }))
+  assert(!catalog.allows("services", ["browser"], { programs: [] }))
+  assert(!catalog.allows("services", [], { programs: [] }))
+  assert(!catalog.allows("services", ["browser"], { programs: ["browser"] }))
   assert(!catalog.allows("services", ["browser", "editor"], { programs: ["browser"], services: ["editor"] }))
   assert(catalog.allows("services", ["editor"], { programs: ["browser"], services: ["editor"] }))
   assert(!catalog.allows("services", ["editor"], { programs: ["browser"] }))
