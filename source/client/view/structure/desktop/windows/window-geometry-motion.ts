@@ -1,9 +1,9 @@
 import { resolveWindowGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type LocalAnimation } from "@client/view/components/desktop-host/local-window"
 import { type AppearanceTransaction, type Position, type Size } from "@phreshos/core"
-import { animate, useMotionValue, type AnimationPlaybackControls, type MotionStyle } from "motion/react"
+import { useMotionValue, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
-import { motionTransition } from "@client/view/appearance/motion"
+import { WindowGeometryAnimation } from "./window-geometry-animation"
 import { useAppearance } from "@phreshos/react-ui"
 
 interface WindowGeometryMotionOptions {
@@ -29,8 +29,8 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
     const y = useMotionValue(typeof position.y === "number" ? position.y : 0)
     const width = useMotionValue(typeof size.width === "number" ? size.width : 0)
     const height = useMotionValue(typeof size.height === "number" ? size.height : 0)
-    const controls = useRef<AnimationPlaybackControls[]>([])
-    const target = useRef<WindowRegion | null>(null)
+    const animator = useRef<WindowGeometryAnimation | null>(null)
+    if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height })
     const gesturing = useRef(false)
     const initialized = useRef(false)
     const values = useRef({ position, size, animation, immediate, onComplete })
@@ -44,27 +44,17 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     function stop() {
 
-        for (const control of controls.current) control.stop()
-
-        controls.current = []
+        animator.current!.stop()
     }
 
     function set(region: WindowRegion) {
 
-        stop()
-        target.current = region
-        x.set(region.x)
-        y.set(region.y)
-        width.set(region.width)
-        height.set(region.height)
+        animator.current!.set(region)
     }
 
     function transition(region: WindowRegion, transaction: AppearanceTransaction = appearanceTransaction, complete?: () => void) {
 
-        stop()
-        target.current = region
-
-        if (immediate || transaction?.duration === 0 || sameRegion(read(), region)) {
+        if (immediate) {
 
             set(region)
             complete?.()
@@ -72,19 +62,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
             return
         }
 
-        const options = motionTransition(transaction)
-
-        let remaining = 4
-        const completed = () => {
-            if (--remaining === 0) complete?.()
-        }
-        const timing = { ...options, onComplete: completed }
-        controls.current = [
-            animate(x, region.x, timing),
-            animate(y, region.y, timing),
-            animate(width, region.width, timing),
-            animate(height, region.height, timing)
-        ]
+        animator.current!.transition(region, transaction, complete)
     }
 
     function resolve() {
@@ -109,11 +87,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
             if (revision !== undefined) onComplete?.(revision)
 
-            return
-        }
-
-        if (target.current && sameRegion(target.current, region) && sameRegion(read(), region)) {
-            if (revision !== undefined) onComplete?.(revision)
             return
         }
 
@@ -160,7 +133,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         gesturing.current = true
         stop()
-        target.current = null
 
         return { bounds: parent.getBoundingClientRect(), region: read() }
     }
@@ -178,8 +150,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         gesturing.current = false
 
         if (region) transition(region)
-
-        else target.current = read()
     }
 
     function cancelGesture() {
@@ -200,12 +170,4 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         finishGesture,
         cancelGesture
     }
-}
-
-function sameRegion(left: WindowRegion, right: WindowRegion) {
-
-    return Math.abs(left.x - right.x) <= 0.5
-        && Math.abs(left.y - right.y) <= 0.5
-        && Math.abs(left.width - right.width) <= 0.5
-        && Math.abs(left.height - right.height) <= 0.5
 }
