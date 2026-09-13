@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import { copyProgram } from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import { installPermissions, readPermissions, writePermissions } from "@server/core/link-manager/auth-manager/program-manager/permissions"
 import type { ProgramCommandChunk } from "@phreshos/core"
 
 const temporary = mkdtempSync(join(tmpdir(), "phresh-program-install-"))
@@ -30,7 +31,8 @@ try {
             startCommand: "true"
         },
         client: {
-            location: join(source, "client")
+            location: join(source, "client"),
+            permissions: { network: ["https://api.example.test/**"] }
         }
     })
 
@@ -48,6 +50,12 @@ try {
     assert.equal(readFileSync(join(installed, "agent.md"), "utf8"), "Program operating knowledge")
 
     const installedProgram = new Program(join(installed, "program.json"))
+    writePermissions(installedProgram, { network: ["https://old.example.test/**"], appearance: [] })
+    const rollbackPermissions = installPermissions(installedProgram)
+    assert.deepEqual(readPermissions(installedProgram), { network: ["https://api.example.test"] })
+    rollbackPermissions()
+    assert.deepEqual(readPermissions(installedProgram), { network: ["https://old.example.test"], appearance: [] })
+    installPermissions(installedProgram)
     const installation: ProgramCommandChunk[] = []
     const uninstallation: ProgramCommandChunk[] = []
 

@@ -1,10 +1,8 @@
+import type { EndpointReference as CoreEndpointReference, ProcessSnapshot } from "@phreshos/core"
 import { type Half } from "./process-traffic"
-import Process, { type ProcessRecord } from "./process"
+import Process from "./process"
 
-export type ProcessReference = Omit<ProcessRecord, "program"> & Readonly<{
-
-    program: ReturnType<Process["program"]["record"]>
-}>
+export type ProcessReference = ProcessSnapshot
 
 /**
  * An endpoint identity carried only between trusted boundaries and SDKs.
@@ -13,12 +11,7 @@ export type ProcessReference = Omit<ProcessRecord, "program"> & Readonly<{
  * Program code can therefore receive a real Endpoint handle without being
  * able to forge the sender or destination attached to application traffic.
  */
-export interface EndpointReference {
-
-    readonly kind: Half
-
-    readonly process: ProcessReference
-}
+export type EndpointReference = CoreEndpointReference
 
 export function processReference(process: Process): ProcessReference {
 
@@ -27,5 +20,5 @@ export function processReference(process: Process): ProcessReference {
 
 export function endpointReference(process: Process, kind: Half): EndpointReference {
 
-    return { kind, process: processReference(process) }
+    return { kind, process: processReference(process) } satisfies CoreEndpointReference
 }

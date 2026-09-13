@@ -1,4 +1,5 @@
 import Program from "./program"
+import type { ProgramSnapshot } from "@phreshos/core"
 
 /**
  * One program in the runtime registry. Installation is a state of this
@@ -37,7 +38,7 @@ export default class Entry {
             ...this.program.record(),
 
             installed: this.installed
-        }
+        } satisfies ProgramSnapshot
     }
 
     public toJSON() {

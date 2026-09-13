@@ -27,7 +27,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, panes, traffic])
 
-    processes.useSubscribe("/created", useCallback((payload: ProcessRecord | null) => {
+    processes.useSubscribe("/created", useCallback((payload: HostedProcessRecord | null) => {
 
         if (!payload) return
 
@@ -38,7 +38,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, post]))
 
-    processes.useSubscribe("/exited", useCallback((payload: ProcessRecord | null, code: number | null, signal: string | null) => {
+    processes.useSubscribe("/exited", useCallback((payload: HostedProcessRecord | null, code: number | null, signal: string | null) => {
 
         if (!payload) return
 
@@ -50,7 +50,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, post]))
 
-    const endpoint = useCallback((event: "endpointStart" | "endpointStop", endpoint: "server" | "client", payload: ProcessRecord | null) => {
+    const endpoint = useCallback((event: "endpointStart" | "endpointStop", endpoint: "server" | "client", payload: HostedProcessRecord | null) => {
 
         if (!payload) return
 
@@ -58,10 +58,10 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, post])
 
-    processes.useSubscribe("/server-start", useCallback((_identity: unknown, payload: ProcessRecord | null) => endpoint("endpointStart", "server", payload), [endpoint]))
-    processes.useSubscribe("/server-stop", useCallback((_identity: unknown, payload: ProcessRecord | null) => endpoint("endpointStop", "server", payload), [endpoint]))
-    processes.useSubscribe("/client-start", useCallback((_identity: unknown, payload: ProcessRecord | null) => endpoint("endpointStart", "client", payload), [endpoint]))
-    processes.useSubscribe("/client-stop", useCallback((_identity: unknown, payload: ProcessRecord | null) => endpoint("endpointStop", "client", payload), [endpoint]))
+    processes.useSubscribe("/server-start", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStart", "server", payload), [endpoint]))
+    processes.useSubscribe("/server-stop", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStop", "server", payload), [endpoint]))
+    processes.useSubscribe("/client-start", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStart", "client", payload), [endpoint]))
+    processes.useSubscribe("/client-stop", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStop", "client", payload), [endpoint]))
 
     processes.useSubscribe("/said", useCallback((identity: string, event: string, value: unknown) => {
 
@@ -90,7 +90,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
 }
 
-function processRecord(authManager: AuthManager, process: ProcessRecord) {
+function processRecord(authManager: AuthManager, process: HostedProcessRecord) {
 
     return sdkProcess(process, program(authManager, process.program))
 }
@@ -104,7 +104,7 @@ function program(authManager: AuthManager, identity: string) {
     return found
 }
 
-type ProcessRecord = {
+type HostedProcessRecord = {
     reference: string
     identity: string
     program: string

@@ -104,19 +104,71 @@ first.complete("bare", "geometry", followRevision)
 await following
 assert.deepEqual(first.state("bare").position, first.state("ordinary").position)
 
+// Following reads authority, never another Desktop-local representation.
 await first.move("ordinary", { x: 150, y: 160 })
-assert.deepEqual(first.state("bare").position, { x: 150, y: 160 })
+assert.deepEqual(first.state("bare").position, ordinary.window.position)
+ordinary.window.position = { x: 170, y: 180 }
+first.reconcile(clients)
+assert.deepEqual(first.state("bare").position, { x: 170, y: 180 })
 
-const unfollowing = first.unfollow("bare", transaction)
-const unfollowRevision = represented(first, "bare:0").geometryAnimation!.revision
-first.complete("bare", "geometry", unfollowRevision)
-await unfollowing
-assert.deepEqual(first.state("bare").position, { x: 120, y: 130 })
+await first.unfollow("bare", transaction)
+assert.deepEqual(first.state("bare").position, { x: 170, y: 180 })
+ordinary.window.position = { x: 190, y: 200 }
+first.reconcile(clients)
+assert.deepEqual(first.state("bare").position, { x: 170, y: 180 })
 
+// Default following can be disabled on ordinary windows and enabled on bare ones.
+await first.unfollow("ordinary")
+ordinary.window.position = { x: 210, y: 220 }
+first.reconcile(clients)
+assert.deepEqual(first.state("ordinary").position, { x: 190, y: 200 })
+await first.follow("ordinary", "ordinary")
+assert.deepEqual(first.state("ordinary").position, { x: 210, y: 220 })
 await first.follow("bare", "ordinary")
 await first.move("bare", { x: 125, y: 135 })
-await first.move("ordinary", { x: 155, y: 165 })
+ordinary.window.title = "Renamed"
+first.reconcile(clients)
+assert.equal(first.state("bare").title, "Renamed")
 assert.deepEqual(first.state("bare").position, { x: 125, y: 135 })
+ordinary.window.position = { x: 230, y: 240 }
+first.reconcile(clients)
+assert.deepEqual(first.state("bare").position, ordinary.window.position)
+
+// Stored geometry cannot cancel an in-progress maximize presentation.
+const maximizing = first.maximize("bare", true, transaction)
+const maximizeRevision = represented(first, "bare:0").geometryAnimation!.revision
+await first.move("bare", { x: 9, y: 10 }, transaction)
+assert.equal(represented(first, "bare:0").geometryAnimation!.revision, maximizeRevision)
+first.complete("bare", "geometry", maximizeRevision)
+await maximizing
+await first.maximize("bare", false)
+const toInterrupt = first.maximize("bare", true, transaction)
+await first.minimize("bare", true)
+await assert.rejects(toInterrupt, /was minimized/)
+await first.minimize("bare", false)
+await first.maximize("bare", false)
+
+// Minimize and maximize never overwrite the retained geometry or each other.
+await first.maximize("bare", true)
+await first.minimize("bare", true)
+await first.geometry("bare", { position: { x: 11, y: 12 }, size: { width: 111, height: 112 } }, transaction)
+assert.equal(first.projection("bare").geometryAnimation, null)
+assert.equal(first.state("bare").maximized, true)
+assert.equal(first.state("bare").minimized, true)
+await first.minimize("bare", false)
+assert.equal(first.state("bare").maximized, true)
+await first.maximize("bare", false)
+assert.deepEqual(first.state("bare").position, { x: 11, y: 12 })
+assert.deepEqual(first.state("bare").size, { width: 111, height: 112 })
+await first.follow("bare", "ordinary")
+ordinary.window.maximized = true
+ordinary.window.minimized = true
+first.reconcile(clients)
+assert.equal(first.state("bare").maximized, true)
+assert.equal(first.state("bare").minimized, true)
+ordinary.window.maximized = false
+ordinary.window.minimized = false
+first.reconcile(clients)
 
 const surfaceWaiting = first.addSurface("bare", visibility)
 const surfaceRevision = surface(first, "bare:0").transition!.revision
@@ -227,7 +279,9 @@ await assert.rejects(request("windowLocalSurfaceAdd", requesterAddress, undefine
 await assert.rejects(request("windowLocalSurfaceAdd", targetAddress), /current Client Context/)
 await assert.rejects(request("windowLocalSurfaceAdd", { ...requesterAddress, reference: "wrong" }), /represented by this handle does not exist/)
 requester.client.window.layer = "window"
-await assert.rejects(request("windowLocalMove", requesterAddress, { x: 0, y: 0 }), /window-layer Process/)
+await request("windowLocalMove", requesterAddress, { x: 0, y: 0 })
+await assert.rejects(request("windowLocalSurfaceAdd", requesterAddress), /already owns its host Surface/)
+await assert.rejects(request("windowLocalSurfaceRemove", requesterAddress), /already owns its host Surface/)
 requester.client.window.layer = "over"
 
 const lifecycle: string[] = []
@@ -252,7 +306,7 @@ function client(layer: WindowLayer) {
             title: "Window",
             position: { x: 0, y: 0 },
             size: { width: 300, height: 200 },
-            minimized: false,
+            minimized: false, maximized: false,
             layer,
             depth: 1
         }

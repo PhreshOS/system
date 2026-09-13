@@ -1,6 +1,7 @@
 import {
     type DesktopViewportSnapshot,
-    type Launch
+    type Launch,
+    type WindowState
 } from "@phreshos/core"
 import { type ProxyRequest } from "@server/core/protocol/proxy"
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
@@ -22,7 +23,7 @@ import {
     localGeometry,
     localPosition,
     localSize,
-    requireLocalWindowLayer,
+    requireLocalSurfaceLayer,
     parseLocalWindowTransaction,
     type LocalWindowHost
 } from "./local-window"
@@ -681,12 +682,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                 size: shown.size,
 
                 minimized: shown.minimized,
+                maximized: shown.maximized,
 
                 front: processManager.front(shown.layer) === target.identity,
 
                 // Which structurally isolated Desktop layer contains it.
                 layer: shown.layer
-            }]
+            } satisfies WindowState]
         }
 
         if (word === "move") {
@@ -713,7 +715,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalMove") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             await localWindow.move(target.identity, localPosition(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
@@ -722,7 +723,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalResize") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             await localWindow.resize(target.identity, localSize(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
@@ -731,7 +731,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalGeometry") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             await localWindow.geometry(target.identity, localGeometry(args[1]), parseLocalWindowTransaction(args[2]))
 
             return []
@@ -740,7 +739,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalSurfaceAdd") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
+            requireLocalSurfaceLayer(target.client!.window.layer)
             await localWindow.addSurface(target.identity, parseLocalWindowTransaction(args[2]))
 
             return []
@@ -749,16 +748,30 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalSurfaceRemove") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
+            requireLocalSurfaceLayer(target.client!.window.layer)
             await localWindow.removeSurface(target.identity, parseLocalWindowTransaction(args[2]))
 
+            return []
+        }
+
+        if (word === "windowLocalTitle") {
+            const target = localProcess(args[0])
+            const title = String(args[1] ?? "").trim()
+            if (!title) throw new Error("A Window title must not be empty")
+            localWindow.title(target.identity, title)
+            return []
+        }
+
+        if (word === "windowLocalMaximize") {
+            const target = localProcess(args[0])
+            if (typeof args[1] !== "boolean") throw new Error("Local Window maximize takes a boolean state")
+            await localWindow.maximize(target.identity, args[1], parseLocalWindowTransaction(args[2]))
             return []
         }
 
         if (word === "windowLocalMinimize") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
 
             if (typeof args[1] !== "boolean") throw new Error("Local Window minimize takes a boolean state")
 
@@ -770,7 +783,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalFollow") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             const followed = await permittedProcess(args[1])
             clientOf(followed)
             await localWindow.follow(target.identity, followed.identity, parseLocalWindowTransaction(args[2]))
@@ -781,7 +793,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalUnfollow") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             await localWindow.unfollow(target.identity, parseLocalWindowTransaction(args[1]))
 
             return []
@@ -790,7 +801,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowLocalRaise") {
 
             const target = localProcess(args[0])
-            requireLocalWindowLayer(target.client!.window.layer)
             localWindow.raise(target.identity)
 
             return []
@@ -807,6 +817,11 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             await clientOf(await permittedProcess(args[0])).window.raise()
 
+            return [pane]
+        }
+
+        if (word === "maximize") {
+            await clientOf(await permittedProcess(args[0])).window.maximize(args[1] !== false)
             return [pane]
         }
 

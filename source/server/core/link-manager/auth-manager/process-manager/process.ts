@@ -385,6 +385,7 @@ export interface ProcessLaunch {
         layer: Layer
 
         minimize: boolean
+        maximize: boolean
 
         service: boolean
     }> | null

@@ -67,3 +67,22 @@ const counterpart = new ClientWindow(
 )
 await counterpart.setGeometry(next)
 assert.deepEqual(publications, [["/geometry", "process", next]])
+
+authority.minimized = true
+await ProcessManager.prototype.maximize.call(manager as unknown as ProcessManager, "process", true)
+assert.equal(authority.maximized, true)
+assert.equal(authority.minimized, true)
+assert.deepEqual(authority.position, next.position)
+assert.deepEqual(authority.size, next.size)
+assert.deepEqual(events.at(-1), ["process", "maximize", true])
+const stored = { position: { x: 44, y: 55 }, size: { width: 440, height: 550 } }
+authority.setGeometry(stored)
+await ProcessManager.prototype.maximize.call(manager as unknown as ProcessManager, "process", false)
+assert.equal(authority.minimized, true)
+assert.equal(authority.maximized, false)
+assert.deepEqual(authority.position, stored.position)
+assert.deepEqual(authority.size, stored.size)
+await counterpart.maximize(true)
+assert.deepEqual(publications.at(-1), ["/maximize", "process", true])
+counterpart.follow(authority.toJSON())
+assert.equal(counterpart.maximized, false)

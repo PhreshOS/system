@@ -74,11 +74,16 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         const options = motionTransition(transaction)
 
+        let remaining = 4
+        const completed = () => {
+            if (--remaining === 0) complete?.()
+        }
+        const timing = { ...options, onComplete: completed }
         controls.current = [
-            animate(x, region.x, { ...options, onComplete: complete }),
-            animate(y, region.y, options),
-            animate(width, region.width, options),
-            animate(height, region.height, options)
+            animate(x, region.x, timing),
+            animate(y, region.y, timing),
+            animate(width, region.width, timing),
+            animate(height, region.height, timing)
         ]
     }
 
@@ -107,7 +112,10 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
             return
         }
 
-        if (target.current && sameRegion(target.current, region)) return
+        if (target.current && sameRegion(target.current, region) && sameRegion(read(), region)) {
+            if (revision !== undefined) onComplete?.(revision)
+            return
+        }
 
         transition(region, animation?.transaction, revision === undefined ? undefined : () => onComplete?.(revision))
 

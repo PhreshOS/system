@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, icon, position, size, localSurface, geometryAnimation, minimizeAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, icon, position, size, localSurface, geometryAnimation, minimizeAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -115,6 +115,8 @@ export default memo(function ({ identity, record, assetId, client, title, icon, 
         bare={bare}
 
         minimized={minimized}
+
+        maximized={maximized}
 
         closing={closing}
 
@@ -227,6 +229,8 @@ interface ProcessWindowProps {
     active: boolean
 
     minimized: boolean
+
+    maximized: boolean
 
     closing: boolean
 

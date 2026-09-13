@@ -265,6 +265,11 @@ export default class System {
         await this.processManager.setGeometry(process.identity, geometry)
     }
 
+    public async maximizeWindow(process: Process, maximized: boolean) {
+
+        await this.processManager.maximize(process.identity, maximized)
+    }
+
     public async minimizeWindow(process: Process, minimized: boolean) {
 
         await this.processManager.minimize(process.identity, minimized)
@@ -302,7 +307,7 @@ export default class System {
                 position: program.client.position ?? null,
                 layer: program.client.layer ?? null,
                 minimize: program.client.minimize ?? null,
-                permissions: program.client.permissions
+                maximize: program.client.maximize ?? null
             }) : null
         })
     }

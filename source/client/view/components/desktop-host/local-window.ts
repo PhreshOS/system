@@ -35,6 +35,7 @@ export interface LocalWindowHost {
     move(identity: string, position: Position, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     resize(identity: string, size: Size, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     geometry(identity: string, geometry: WindowGeometry, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
+    maximize(identity: string, maximized: boolean, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     minimize(identity: string, minimized: boolean, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     follow(identity: string, target: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     unfollow(identity: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
@@ -92,9 +93,9 @@ export function parseLocalWindowTransaction(value: unknown): AppearanceTransacti
     return Object.freeze(result)
 }
 
-export function requireLocalWindowLayer(layer: WindowLayer) {
+export function requireLocalSurfaceLayer(layer: WindowLayer) {
 
-    if (layer === "window") throw new Error("A window-layer Process cannot change its local Window representation")
+    if (layer === "window") throw new Error("A standard Window already owns its host Surface")
 }
 
 function easing(value: unknown): Easing {

@@ -5,7 +5,6 @@ import { Layer } from "@server/core/link-manager/auth-manager/program-manager/co
 import { type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import { wholeWindowGeometry } from "./window-geometry"
 import LocalWindows from "./local-windows"
 
 /**
@@ -14,8 +13,8 @@ import LocalWindows from "./local-windows"
  * whether it is shown — nothing else is consulted.
  *
  * The local representation and authoritative counterpart are distinct.
- * Ordinary windows project authoritative changes automatically; under and
- * over windows retain their local projection after its initial seed.
+ * Following starts enabled for ordinary windows and disabled for under/over.
+ * Each Client can subsequently follow an authoritative Window or detach.
  *
  * Departure is representation. The truth drops a stopped client and its
  * Window at once; the exit still has to play, so the last desktop-owned
@@ -84,15 +83,6 @@ export default function useWindows(authManager: AuthManager) {
     // else moves it. Held rather than derived, because the two lists it
     // orders are not one list, and their concatenation is not this.
     const [order, setOrder] = useState<string[]>(() => [...initialClients.values()].map(({ identity }) => identity))
-
-    // Where a window was before it was made to fill the surface.
-    //
-    // The system stopped remembering this when `maximize` stopped being
-    // a state: filling the surface is a size like any other now, so
-    // nothing there can undo it. The button that offers the undo keeps
-    // what it needs to honour it — a ref rather than state, because
-    // nothing is drawn from it.
-    const filled = useRef(new Map<string, { position: Position, size: Size }>())
 
     // Departures are derived at the moment the truth arrives — the same
     // event updates both lists in one batch, so no render ever shows a
@@ -304,33 +294,12 @@ export default function useWindows(authManager: AuthManager) {
     }, [commit])
 
     const fill = useCallback(function (process: Process) {
-
         const window = process.client?.window
-
         if (!window || window.layer !== "window") return
-
-        const shown = localWindow.state(process.identity)
-
-        const projection = localWindow.projection(process.identity)
-
-        const was = filled.current.get(process.identity)
-
-        const whole = wholeWindowGeometry(projection.position, projection.size)
-
-        if (whole && was) {
-
-            filled.current.delete(process.identity)
-
-            snap(process, was.position, was.size)
-
-            return
-        }
-
-        filled.current.set(process.identity, { position: shown.position, size: shown.size })
-
-        snap(process, { x: "0/1", y: "0/1" }, { width: "1/1", height: "1/1" })
-
-    }, [snap])
+        const maximized = !localWindow.projection(process.identity).maximized
+        void localWindow.maximize(process.identity, maximized)
+        commit(window.maximize(maximized))
+    }, [commit])
 
     // Every window on the desktop, in one list and one order.
     //

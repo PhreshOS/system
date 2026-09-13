@@ -29,7 +29,8 @@ import {
     type ServerLaunch,
     type ServiceKey,
     type WindowGeometry,
-    type WindowLayer
+    type WindowLayer,
+    type WindowState
 } from "@phreshos/core"
 import type { ServerRuntime } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
@@ -157,7 +158,7 @@ export default class ProcessManager extends TheLink {
     private get system() { return this.authManager.linkManager.application.system }
 
     /** Complete public Window state, shared by every representation. */
-    public windowSnapshot(identity: string) {
+    public windowSnapshot(identity: string): WindowState {
 
         const process = this.find(identity)
         const window = this.windowOf(identity)
@@ -167,6 +168,7 @@ export default class ProcessManager extends TheLink {
             position: window.position,
             size: window.size,
             minimized: window.minimized,
+            maximized: window.maximized,
             front: this.front(window.layer) === process.identity,
             layer: window.layer
         })
@@ -902,7 +904,7 @@ export default class ProcessManager extends TheLink {
 
         const shown = { title: shape.title, layer: shape.layer }
 
-        return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize)
+        return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
 
     public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
@@ -945,14 +947,7 @@ export default class ProcessManager extends TheLink {
 
             this.hostTraffic,
 
-            permissionCatalog.granted(permissionCatalog.effective(
-
-                "all",
-
-                program.clientPermissions.all ?? null,
-
-                this.authManager.programManager.permission(program, "all")
-            ))
+            permissionCatalog.granted(this.authManager.programManager.permission(program, "all"))
         )
 
         this.processes.set(identity, process)
@@ -1540,7 +1535,7 @@ export default class ProcessManager extends TheLink {
         return this.authManager.programManager.grantsStorage(process.program, path, operation)
     }
 
-    /** Resolves one permission request through declarations, grants, then the owner. */
+    /** Requests owner approval and replaces the authoritative stored permission. */
     public async requestPermission<Name extends PermissionName>(
         identity: string,
         request: string,
@@ -1556,19 +1551,11 @@ export default class ProcessManager extends TheLink {
 
         if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
 
-        if (this.authManager.programManager.grantsPermission(process.program, name, requested)) return requested
-
-        const stored = this.authManager.programManager.permission(process.program, name)
-        const effective = this.authManager.programManager.effectivePermission(process.program, name, stored)
-
-        if (effective === false) return false
-
         const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
 
         if (choice === true) {
 
-            const permission = permissionCatalog.merge(name, this.authManager.programManager.permission(process.program, name), requested)
-            await this.authManager.programManager.setPermission(process.program, name, permission)
+            await this.authManager.programManager.setPermission(process.program, name, requested)
 
             return requested
         }
@@ -1579,7 +1566,7 @@ export default class ProcessManager extends TheLink {
     /** Keeps each live Client's iframe access policy aligned with its Program. */
     public async updateClientAccess(program: Program) {
 
-        const sameOrigin = permissionCatalog.granted(this.authManager.programManager.effectivePermission(program, "all"))
+        const sameOrigin = permissionCatalog.granted(this.authManager.programManager.permission(program, "all"))
 
         for (const process of this.processes.values()) {
 
@@ -1997,6 +1984,13 @@ export default class ProcessManager extends TheLink {
 
             await this.system.raiseWindow(target)
 
+            return [target.identity]
+        }
+
+        if (word === "maximize") {
+
+            const target = this.heldWindow(rest[0], process).process
+            await this.system.maximizeWindow(target, rest[1] !== false)
             return [target.identity]
         }
 
@@ -2639,9 +2633,20 @@ export default class ProcessManager extends TheLink {
     // Shown, or not shown. Nothing else: the order is untouched, so a
     // window hidden and shown again comes back exactly where it was in
     // its layer rather than on top of it.
+    @Connect("/maximize")
+    public async maximize(identity: string, maximized: boolean) {
+
+        if (typeof maximized !== "boolean") throw new Error("Window maximize takes a boolean state")
+        const window = this.mutableWindowOf(identity)
+        window.maximized = maximized
+        this.said(identity, "maximize", maximized)
+        return { identity, window }
+    }
+
     @Connect("/minimize")
     public async minimize(identity: string, minimized: boolean) {
 
+        if (typeof minimized !== "boolean") throw new Error("Window minimize takes a boolean state")
         const window = this.mutableWindowOf(identity)
 
         const front = this.front(window.layer)
@@ -2832,6 +2837,8 @@ interface ShapeBase {
     size: Size
 
     minimize: boolean
+
+    maximize: boolean
 }
 
 export interface StandardShape extends ShapeBase {

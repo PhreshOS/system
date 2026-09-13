@@ -1,5 +1,5 @@
 import { type WindowSnapshot, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { type WindowGeometry, type WindowLayer } from "@phreshos/core"
+import { type WindowGeometry, type WindowLayer, type WindowState } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
 /**
@@ -11,7 +11,7 @@ import ProcessManager from "./process-manager"
  * Its own instance, rebuilt from what crossed. It shares no code with
  * the core's window; they are alike because they are the same idea.
  */
-export default class Window {
+export default class Window implements Omit<WindowState, "front"> {
 
     public readonly processManager: ProcessManager
 
@@ -24,6 +24,8 @@ export default class Window {
     public depth: number
 
     public minimized: boolean
+
+    public maximized: boolean
 
     // What is shown on it, born from its program when the window was
     // made. Not looked up again: how a thing is shown is not a fact
@@ -52,6 +54,8 @@ export default class Window {
 
         this.minimized = payload.minimized
 
+        this.maximized = payload.maximized
+
     }
 
     // What the echo carries, applied whole: one shape for any change.
@@ -68,6 +72,8 @@ export default class Window {
         this.depth = payload.depth
 
         this.minimized = payload.minimized
+
+        this.maximized = payload.maximized
 
     }
 
@@ -97,6 +103,11 @@ export default class Window {
     public async raise() {
 
         await this.processManager.$outbound.publish("/raise", this.process)
+    }
+
+    public async maximize(maximized: boolean) {
+
+        await this.processManager.$outbound.publish("/maximize", this.process, maximized)
     }
 
     public async minimize(minimized: boolean) {

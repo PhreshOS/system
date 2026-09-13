@@ -18,7 +18,7 @@ export default class LocalWindows implements LocalWindowHost {
     public windows: ReadonlyMap<string, LocalWindowState>
 
     private readonly live = new Map<string, string>()
-    private readonly authoritative = new Map<string, string>()
+    private readonly authoritative = new Map<string, LocalWindowState>()
     private readonly waiting = new Map<string, WaitingAnimation>()
     private readonly readers = new Map<string, LocalGeometryReader>()
     private readonly following = new Map<string, FollowingWindow>()
@@ -36,49 +36,57 @@ export default class LocalWindows implements LocalWindowHost {
         this.changed = changed
     }
 
-    /** Projects new authority only where the ordinary Window layer delegates it. */
+    /** Following projects authoritative property changes, independent of Desktop layer. */
     public reconcile(current: ReadonlyMap<string, LocalWindowEntry>) {
-
         for (const [process, identity] of this.live) {
-
             if (current.get(process)?.identity === identity) continue
-
             this.cancel(identity, "geometry", "The local Window representation was removed")
-
             this.cancel(identity, "minimize", "The local Window representation was removed")
-
             this.cancel(identity, "surface", "The local Window representation was removed")
+            this.following.delete(identity)
+            this.authoritative.delete(identity)
         }
 
         this.live.clear()
         const next = new Map(this.windows)
-
         for (const [process, { identity, client }] of current) {
-
             this.live.set(process, identity)
-            const previous = next.get(identity)
-            const signature = authoritativeSignature(client)
-
-            if (!previous) next.set(identity, localState(client))
-            else if (client.window.layer === "window" && this.authoritative.get(identity) !== signature) {
-
-                const geometryChanged = JSON.stringify([previous.position, previous.size]) !== JSON.stringify([client.window.position, client.window.size])
-                if (geometryChanged) this.cancel(identity, "geometry", "The local Window animation was replaced by authoritative state")
-                next.set(identity, projectAuthoritative(previous, client, geometryChanged))
+            const snapshot = localState(client)
+            if (!this.authoritative.has(identity) && client.window.layer === "window") {
+                this.following.set(identity, { target: identity, snapshot })
             }
-
-            this.authoritative.set(identity, signature)
+            if (!next.has(identity)) next.set(identity, snapshot)
+            this.authoritative.set(identity, snapshot)
         }
 
-        const liveIdentities = new Set(this.live.values())
-
+        const alive = new Set(this.live.values())
         for (const [identity, relation] of this.following) {
-
-            if (!liveIdentities.has(identity) || !liveIdentities.has(relation.target)) this.following.delete(identity)
+            if (!alive.has(identity) || !alive.has(relation.target)) {
+                this.following.delete(identity)
+                continue
+            }
+            const state = next.get(identity)!
+            const target = this.authoritative.get(relation.target)!
+            const previous = relation.snapshot
+            const changes: { -readonly [Key in keyof LocalWindowState]?: LocalWindowState[Key] } = {}
+            for (const key of ["title", "position", "size", "minimized", "maximized", "depth"] as const) {
+                if (JSON.stringify(previous[key]) !== JSON.stringify(target[key])) Object.assign(changes, { [key]: target[key] })
+            }
+            const maximized = changes.maximized ?? state.maximized
+            const minimized = changes.minimized ?? state.minimized
+            const geometryChanged = ("position" in changes && JSON.stringify(state.position) !== JSON.stringify(changes.position))
+                || ("size" in changes && JSON.stringify(state.size) !== JSON.stringify(changes.size))
+            if (maximized !== state.maximized || (!maximized && geometryChanged) || (minimized && !state.minimized)) {
+                this.cancel(identity, "geometry", "The followed Window presentation changed")
+                changes.geometryAnimation = null
+            }
+            if ("minimized" in changes && state.minimized !== changes.minimized) {
+                this.cancel(identity, "minimize", "The followed Window visibility changed")
+                changes.minimizeAnimation = null
+            }
+            next.set(identity, { ...state, ...changes })
+            relation.snapshot = target
         }
-
-        projectFollowing(next, this.following, (identity, kind) => this.cancel(identity, kind, "The followed Window changed"))
-
         this.publish(next)
     }
 
@@ -123,88 +131,69 @@ export default class LocalWindows implements LocalWindowHost {
     public move(process: string, position: WindowState["position"], transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
-        this.following.delete(identity)
         return this.changeGeometry(identity, { position, size: state.size }, transaction)
     }
 
     public resize(process: string, size: WindowState["size"], transaction?: RequestedTransaction) {
 
         const { identity, state } = this.existing(process)
-        this.following.delete(identity)
         return this.changeGeometry(identity, { position: state.position, size }, transaction)
     }
 
     public geometry(process: string, value: WindowGeometry, transaction?: RequestedTransaction) {
 
         const { identity } = this.existing(process)
-        this.following.delete(identity)
         return this.changeGeometry(identity, value, transaction)
     }
 
     public minimize(process: string, minimized: boolean, transaction?: RequestedTransaction) {
 
         const { identity } = this.existing(process)
-        this.following.delete(identity)
         return this.changeMinimized(identity, minimized, transaction)
     }
 
+    public maximize(process: string, maximized: boolean, transaction?: RequestedTransaction) {
+        const { identity, state } = this.existing(process)
+        if (state.maximized === maximized) return Promise.resolve()
+        this.cancel(identity, "geometry")
+        const animation = transaction && !state.minimized ? localAnimation(++this.revision, transaction) : null
+        this.replace(identity, { ...state, maximized, geometryAnimation: animation })
+        return this.waitFor(identity, "geometry", animation, transaction)
+    }
+
     public follow(process: string, targetProcess: string, transaction?: RequestedTransaction) {
-
-        const follower = this.existing(process)
+        const { identity } = this.existing(process)
         const target = this.existing(targetProcess)
-
-        if (follower.identity === target.identity) throw new Error("A local Window cannot follow itself")
-
-        for (let identity: string | undefined = target.identity; identity; identity = this.following.get(identity)?.target) {
-
-            if (identity === follower.identity) throw new Error("Local Windows cannot form a following cycle")
-        }
-
-        const current = this.following.get(follower.identity)
-
-        if (current?.target === target.identity) return Promise.resolve()
-
-        this.following.set(follower.identity, {
-
-            target: target.identity,
-
-            restore: current?.restore ?? {
-
-                position: follower.state.position,
-
-                size: follower.state.size,
-
-                minimized: follower.state.minimized
-            }
+        const snapshot = this.authoritative.get(target.identity)!
+        this.following.set(identity, { target: target.identity, snapshot })
+        const current = this.windows.get(identity)!
+        const geometryChanged = JSON.stringify([current.position, current.size, current.maximized]) !== JSON.stringify([snapshot.position, snapshot.size, snapshot.maximized])
+        const visibilityChanged = current.minimized !== snapshot.minimized
+        this.cancel(identity, "geometry")
+        this.cancel(identity, "minimize")
+        const geometryAnimation = geometryChanged && !snapshot.minimized && transaction ? localAnimation(++this.revision, transaction) : null
+        const minimizeAnimation = visibilityChanged && transaction ? localAnimation(++this.revision, transaction) : null
+        this.replace(identity, {
+            ...current,
+            title: snapshot.title,
+            position: snapshot.position,
+            size: snapshot.size,
+            minimized: snapshot.minimized,
+            maximized: snapshot.maximized,
+            depth: snapshot.depth,
+            geometryAnimation,
+            minimizeAnimation
         })
-
-        const targetState = this.presented(target.identity, target.state)
-
         return Promise.all([
-
-            this.changeGeometry(follower.identity, { position: targetState.position, size: targetState.size }, transaction),
-
-            this.changeMinimized(follower.identity, targetState.minimized, transaction)
-
+            this.waitFor(identity, "geometry", geometryAnimation, transaction),
+            this.waitFor(identity, "minimize", minimizeAnimation, transaction)
         ]).then(() => undefined)
     }
 
-    public unfollow(process: string, transaction?: RequestedTransaction) {
-
+    public unfollow(process: string, _transaction?: RequestedTransaction) {
         const { identity } = this.existing(process)
-        const relation = this.following.get(identity)
-
-        if (!relation) return Promise.resolve()
-
         this.following.delete(identity)
-
-        return Promise.all([
-
-            this.changeGeometry(identity, { position: relation.restore.position, size: relation.restore.size }, transaction),
-
-            this.changeMinimized(identity, relation.restore.minimized, transaction)
-
-        ]).then(() => undefined)
+        return Promise.resolve()
     }
 
     public title(process: string, title: string) {
@@ -279,10 +268,10 @@ export default class LocalWindows implements LocalWindowHost {
 
         const client = this.client(process)
         if (!client) return
-        this.authoritative.set(identity, authoritativeSignature(client))
+        this.authoritative.set(identity, localState(client))
         this.following.delete(identity)
+        if (client.window.layer === "window") this.following.set(identity, { target: identity, snapshot: localState(client) })
         this.replace(identity, localState(client))
-        this.projectFollowers(identity)
     }
 
     private existing(process: string) {
@@ -301,57 +290,33 @@ export default class LocalWindows implements LocalWindowHost {
         this.publish(next)
     }
 
-    private changeGeometry(identity: string, value: WindowGeometry, transaction?: RequestedTransaction, project = true) {
+    private changeGeometry(identity: string, value: WindowGeometry, transaction?: RequestedTransaction) {
 
         const state = this.windows.get(identity)
         if (!state) throw new Error("This Client has no local Window representation")
         if (JSON.stringify([state.position, state.size]) === JSON.stringify([value.position, value.size])) return Promise.resolve()
 
+        if (state.minimized || state.maximized) {
+            this.replace(identity, { ...state, position: value.position, size: value.size })
+            return Promise.resolve()
+        }
         this.cancel(identity, "geometry")
         const animation = transaction ? localAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, position: value.position, size: value.size, geometryAnimation: animation })
-        if (project) this.projectFollowers(identity, transaction)
         return this.waitFor(identity, "geometry", animation, transaction)
     }
 
-    private changeMinimized(identity: string, minimized: boolean, transaction?: RequestedTransaction, project = true) {
+    private changeMinimized(identity: string, minimized: boolean, transaction?: RequestedTransaction) {
 
         const state = this.windows.get(identity)
         if (!state) throw new Error("This Client has no local Window representation")
         if (state.minimized === minimized) return Promise.resolve()
 
         this.cancel(identity, "minimize")
+        if (minimized) this.cancel(identity, "geometry", "The local Window was minimized")
         const animation = transaction ? localAnimation(++this.revision, transaction) : null
-        this.replace(identity, { ...state, minimized, minimizeAnimation: animation })
-        if (project) this.projectFollowers(identity, transaction)
+        this.replace(identity, { ...state, minimized, minimizeAnimation: animation, geometryAnimation: minimized ? null : state.geometryAnimation })
         return this.waitFor(identity, "minimize", animation, transaction)
-    }
-
-    private projectFollowers(target: string, transaction?: RequestedTransaction, visited = new Set<string>()) {
-
-        if (visited.has(target)) return
-        visited.add(target)
-
-        const targetState = this.windows.get(target)
-        if (!targetState) return
-
-        const selected = transaction ? baseTransaction(transaction) : undefined
-
-        for (const [identity, relation] of this.following) {
-
-            if (relation.target !== target) continue
-
-            void this.changeGeometry(identity, { position: targetState.position, size: targetState.size }, selected, false)
-            void this.changeMinimized(identity, targetState.minimized, selected, false)
-            this.projectFollowers(identity, selected, visited)
-        }
-    }
-
-    private presented(identity: string, state: LocalWindowState) {
-
-        const geometry = this.readers.get(identity)?.()
-
-        return geometry ? { ...state, position: geometry.position, size: geometry.size } : state
     }
 
     private publish(next: ReadonlyMap<string, LocalWindowState>) {
@@ -390,11 +355,7 @@ interface WaitingAnimation {
 
 interface FollowingWindow {
     target: string
-    restore: Readonly<{
-        position: WindowState["position"]
-        size: WindowState["size"]
-        minimized: boolean
-    }>
+    snapshot: LocalWindowState
 }
 
 function animationKey(identity: string, kind: AnimationKind) {
@@ -420,28 +381,13 @@ function localState(client: ClientState): LocalWindowState {
         position: window.position,
         size: window.size,
         minimized: window.minimized,
+        maximized: window.maximized,
         front: false,
         layer: window.layer,
         depth: window.depth,
         surface: null,
         geometryAnimation: null,
         minimizeAnimation: null
-    }
-}
-
-function projectAuthoritative(local: LocalWindowState, client: ClientState, replaceGeometry: boolean): LocalWindowState {
-
-    const window = client.window
-    return {
-        ...local,
-        title: window.title,
-        position: window.position,
-        size: window.size,
-        minimized: window.minimized,
-        layer: window.layer,
-        depth: window.depth,
-        geometryAnimation: replaceGeometry ? null : local.geometryAnimation,
-        minimizeAnimation: local.minimizeAnimation
     }
 }
 
@@ -452,6 +398,7 @@ function windowState(local: LocalWindowState, front: boolean, geometry?: Readonl
         position: geometry?.position ?? local.position,
         size: geometry?.size ?? local.size,
         minimized: local.minimized,
+        maximized: local.maximized,
         front,
         layer: local.layer,
     }
@@ -461,12 +408,6 @@ export type LocalGeometryReader = () => Readonly<{
     position: WindowState["position"]
     size: WindowState["size"]
 }>
-
-function authoritativeSignature(client: ClientState) {
-
-    const window = client.window
-    return JSON.stringify([window.title, window.position, window.size, window.minimized, window.layer, window.depth])
-}
 
 function frontmost(windows: ReadonlyMap<string, LocalWindowState>, layer: LocalWindowState["layer"]) {
 
@@ -478,49 +419,4 @@ function frontmost(windows: ReadonlyMap<string, LocalWindowState>, layer: LocalW
         if (!best || best[1].depth <= window.depth) best = candidate
     }
     return best?.[0] ?? null
-}
-
-function projectFollowing(
-    windows: Map<string, LocalWindowState>,
-    following: ReadonlyMap<string, FollowingWindow>,
-    changed: (identity: string, kind: "geometry" | "minimize") => void
-) {
-
-    const projected = new Set<string>()
-
-    function project(identity: string, stack = new Set<string>()): LocalWindowState | undefined {
-
-        const state = windows.get(identity)
-        const relation = following.get(identity)
-
-        if (!state || !relation) return state
-        if (stack.has(identity)) return state
-
-        stack.add(identity)
-        const target = project(relation.target, stack)
-        stack.delete(identity)
-
-        if (!target) return state
-
-        const geometryChanged = JSON.stringify([state.position, state.size]) !== JSON.stringify([target.position, target.size])
-        const minimizedChanged = state.minimized !== target.minimized
-
-        if (geometryChanged) changed(identity, "geometry")
-        if (minimizedChanged) changed(identity, "minimize")
-
-        const next = {
-            ...state,
-            position: target.position,
-            size: target.size,
-            minimized: target.minimized,
-            geometryAnimation: geometryChanged ? target.geometryAnimation : state.geometryAnimation,
-            minimizeAnimation: minimizedChanged ? target.minimizeAnimation : state.minimizeAnimation
-        }
-
-        windows.set(identity, next)
-        projected.add(identity)
-        return next
-    }
-
-    for (const identity of following.keys()) if (!projected.has(identity)) project(identity)
 }

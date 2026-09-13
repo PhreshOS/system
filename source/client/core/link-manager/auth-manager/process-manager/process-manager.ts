@@ -339,6 +339,13 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
+    @Subscribe("/maximize")
+    @Publish("/processes", "inbound")
+    protected async maximizeHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+
+        return this.followed(payload)
+    }
+
     @Subscribe("/minimize")
     @Publish("/processes", "inbound")
     protected async minimizeHandle(payload: { identity: string, window: WindowSnapshot } | null) {

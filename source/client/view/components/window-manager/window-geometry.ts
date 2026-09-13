@@ -43,12 +43,6 @@ export function absoluteWindowGeometry(position: Position, size: Size) {
     return [position.x, position.y, size.width, size.height].every(value => relative(value).relative === 0)
 }
 
-/** Returns whether the geometry exactly fills its containing block. */
-export function wholeWindowGeometry(position: Position, size: Size) {
-
-    return equal(position.x, 0, 0) && equal(position.y, 0, 0) && equal(size.width, 1, 0) && equal(size.height, 1, 0)
-}
-
 /** Resolves one declarative Window geometry inside a measured surface. */
 export function resolveWindowGeometry(position: Position, size: Size, surface: WindowSurfaceSize): WindowRegion {
 

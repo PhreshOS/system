@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useEffect
 import { useReducedMotion } from "@libs/react-motion"
 import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, resolveWindowGeometry, wholeWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
@@ -53,16 +53,22 @@ const surfacePose = {
     closing: { scale: 0.86, y: 12, opacity: 0 }
 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
 
+    // Hidden windows retain their last presentation while lower-priority state changes.
+    const presented = useRef({ position, size })
+    if (!minimized) presented.current = maximized
+        ? { position: { x: "0%", y: "0%" }, size: { width: "100%", height: "100%" } }
+        : { position, size }
+
     const geometryMotion = useWindowGeometryMotion({
-        position,
-        size,
+        position: presented.current.position,
+        size: presented.current.size,
         animation: geometryAnimation,
-        immediate: bare || reducedMotion,
+        immediate: reducedMotion || (bare && !geometryAnimation),
         onComplete: revision => onLocalAnimationComplete?.("geometry", revision)
     })
 
@@ -102,13 +108,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
     }
 
     // A window is absolute when none of its expressions depends on the surface.
-    const absolute = absoluteWindowGeometry(position, size)
+    const absolute = absoluteWindowGeometry(presented.current.position, presented.current.size)
 
-    // Whether it is filling the surface — read off the geometry, for
-    // this button's own label and nothing else. The system has no such
-    // state any more: filling the surface is a size like any other, and
-    // this is the interface recognising a size it offered to set.
-    const whole = wholeWindowGeometry(position, size)
+    const whole = maximized
 
     const [presenceHidden, setPresenceHidden] = useState(minimized)
 
@@ -144,7 +146,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         const revision = minimizeAnimation?.revision
 
-        if (!bare || revision === undefined || minimizeTransaction && !reducedMotion) return
+        if (revision === undefined || minimizeTransaction && !reducedMotion) return
 
         onLocalAnimationComplete?.("minimize", revision)
 
@@ -176,13 +178,15 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         const revision = minimizeAnimation?.revision
 
-        if (bare && revision !== undefined && minimizeTransaction && !reducedMotion) {
+        if (revision !== undefined && minimizeTransaction && !reducedMotion) {
 
             onLocalAnimationComplete?.("minimize", revision)
         }
     }
 
     function grab(event: ReactPointerEvent<HTMLElement>, edge: WindowEdge | null) {
+
+        if (maximized && edge !== null) return
 
         // A cancelled pointerdown suppresses double-click synthesis, and
         // a shared window restores by double-click; absolute ones keep
@@ -289,6 +293,12 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
                 const pointerY = motion.clientY - bounds!.top
 
                 const ratio = Math.min(Math.max((pointerX - origin.x) / origin.width, 0), 1)
+
+                if (maximized) {
+                    const stored = resolveWindowGeometry(position, size, bounds)
+                    origin = { ...origin, width: stored.width, height: stored.height }
+                    onMaximize?.()
+                }
 
                 origin = { x: pointerX - origin.width * ratio, y: pointerY - Math.min(Math.max(pointerY - origin.y, 0), 40), width: origin.width, height: origin.height }
 
@@ -407,7 +417,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     // ------------------------------------------------------------ render
 
-    const paintedInsets = windowPaintInsets(position, size, paintSurfaceSize, windowPaintInset, gesture?.current)
+    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, windowPaintInset, gesture?.current)
 
     return <>
 
@@ -573,6 +583,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     stopping?: boolean
 
     minimized?: boolean
+
+    maximized?: boolean
 
     // Whether mounting this element represents a newly opened window.
     animateEntrance?: boolean

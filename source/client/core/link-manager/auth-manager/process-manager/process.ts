@@ -31,7 +31,7 @@ export default class Process {
 
     // Retained lineage from creation. It remains sufficient to reconstruct
     // the same Process handle after the parent leaves the live registry.
-    public readonly parent: ProcessRecord | null
+    public readonly parent: ProcessLineage | null
 
     // What its launch said, carried for its whole life.
     public readonly options: Record<string, string>
@@ -113,7 +113,8 @@ export default class Process {
     }
 }
 
-export interface ProcessRecord {
+/** Retained identity needed only to reconstruct a departed parent handle. */
+export interface ProcessLineage {
 
     readonly reference: string
 

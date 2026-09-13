@@ -3,10 +3,7 @@ import {
     networkScopeCovers,
     parsePermission,
     parsePermissionName,
-    type ClientPermissions,
     type Permission,
-    type PermissionDefinition,
-    type PermissionDefinitions,
     type PermissionName,
     type PermissionValue,
     type PermissionValueDomain,
@@ -96,7 +93,7 @@ export class PermissionCatalog {
         throw new Error(`Permission "${name}" contains an unknown value`)
     }
 
-    public declarations(value: unknown): ClientPermissions {
+    public declarations(value: unknown): DeclaredPermissions {
 
         if (value === undefined) return Object.freeze({})
         if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A Client's permissions must be a record")
@@ -113,7 +110,7 @@ export class PermissionCatalog {
             resolved[name] = Object.freeze(permission)
         }
 
-        return Object.freeze(resolved) as ClientPermissions
+        return Object.freeze(resolved) as DeclaredPermissions
     }
 
     public stored(value: unknown): Permissions {
@@ -157,24 +154,28 @@ export class PermissionCatalog {
         return Array.isArray(permission)
     }
 
-    /** Tests complete authority, including grants implied by another permission. */
+    /** Tests one request against the authoritative permission state. */
     public allows<Name extends PermissionName>(
         name: Name,
         requested: readonly PermissionValue<Name>[],
-        ...sources: PermissionGrants[]
+        permissions: Permissions
     ) {
 
         this.definition(name)
 
-        const effective = (key: PermissionName) => this.effective(key, ...sources.map(source => source[key] ?? null))
+        const assigned = permissions[name]
 
-        if (this.granted(effective("all"))) return true
+        // An exact assignment is the owner's final decision for that
+        // permission. Broader fallback grants must never undo a restriction.
+        if (assigned !== undefined && assigned !== null) return this.grants(name, assigned, requested)
 
-        const permission = name === "services"
-            ? this.combine("services", effective("services"), effective("programs"))
-            : effective(name)
+        if (name === "services" && Array.isArray(permissions.programs)) {
+            return this.grants(name, permissions.programs, requested)
+        }
 
-        return this.grants(name, permission, requested)
+        if (name !== "all" && this.granted(permissions.all ?? null)) return true
+
+        return false
     }
 
     /** Tests one native Storage path against the complete effective authority. */
@@ -185,39 +186,18 @@ export class PermissionCatalog {
         operation?: StoragePermissionOperation
     ) {
 
-        if (this.granted(all)) return true
-        if (!Array.isArray(storage)) return false
-        if (storage.length === 0) return true
+        // Storage uses path-aware containment, but assignment priority remains
+        // identical to every other permission: an exact value is final and
+        // `all` is only a fallback when Storage is unassigned.
+        if (storage !== null) {
 
-        return storage.some(scope => nativeStorageScopeAccesses(scope, path, operation))
-    }
+            if (!Array.isArray(storage)) return false
+            if (storage.length === 0) return true
 
-    public combine<Name extends PermissionName>(name: Name, ...grants: PermissionGrant[]): Permission<Name> {
+            return storage.some(scope => nativeStorageScopeAccesses(scope, path, operation))
+        }
 
-        const present = grants.filter((grant): grant is readonly string[] => Array.isArray(grant))
-
-        if (present.length === 0) return null
-        if (!valued(this.definition(name).valueDomain)) return []
-        if (present.some(grant => grant.length === 0)) return []
-
-        return this.resolve(name, present.flat()) as PermissionValue<Name>[]
-    }
-
-    public effective<Name extends PermissionName>(name: Name, ...grants: PermissionGrant[]): Permission<Name> {
-
-        return this.combine(name, ...grants) ?? (grants.includes(false) ? false : null)
-    }
-
-    public merge<Name extends PermissionName>(
-        name: Name,
-        grant: PermissionGrant,
-        requested: readonly PermissionValue<Name>[]
-    ): PermissionValue<Name>[] {
-
-        if (!Array.isArray(grant)) return [...requested]
-        if (valued(this.definition(name).valueDomain) && (grant.length === 0 || requested.length === 0)) return []
-
-        return this.resolve(name, [...grant, ...requested]) as PermissionValue<Name>[]
+        return this.granted(all)
     }
 
     public changed<Name extends PermissionName>(left: Permission<Name>, right: Permission<Name>) {
@@ -231,7 +211,20 @@ export class PermissionCatalog {
 
 type PermissionGrant = readonly string[] | false | null
 
-type PermissionGrants = Readonly<Partial<Record<PermissionName, PermissionGrant>>>
+type PermissionDefinition<Name extends PermissionName = PermissionName> = Readonly<{
+    valueDomain: PermissionValueDomain<Name>
+    default: readonly PermissionValue<Name>[]
+    title: string
+    description: string
+}>
+
+type PermissionDefinitions = Readonly<{
+    [Name in PermissionName]: PermissionDefinition<Name>
+}>
+
+export type DeclaredPermissions = Readonly<{
+    [Name in PermissionName]?: readonly PermissionValue<Name>[]
+}>
 
 type PermissionRule<Name extends PermissionName> = Omit<PermissionDefinition<Name>, "valueDomain">
 

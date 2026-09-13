@@ -10,8 +10,8 @@ import AuthManager from "../auth-manager"
 import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
-import { isValue, layers, type ProgramConfig } from "./config"
-import { type ClientLaunch, type Launch, type ProgramCommandChunk } from "@phreshos/core"
+import { isValue, layers } from "./config"
+import { parseProgramDefinition, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
@@ -20,7 +20,7 @@ import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import { readStartup, removeStartup, writeStartup } from "./startup"
 import { permissionCatalog } from "@server/core/permissions"
-import { readPermissions, writePermissions } from "./permissions"
+import { installPermissions, readPermissions, writePermissions } from "./permissions"
 import {
     parsePermissionName,
     type Permission,
@@ -158,13 +158,13 @@ export default class ProgramManager extends TheLink {
         return entry
     }
 
-    /** Reads one Program's stored user grant without deriving effective access. */
+    /** Reads one Program's authoritative value for an exact permission. */
     public permission<Name extends PermissionName>(program: Program, name: Name): Permission<Name> {
 
         return clonePermission(readPermissions(program)[name] ?? null)
     }
 
-    /** Returns an independent snapshot of one Program's stored user grants. */
+    /** Returns an independent snapshot of one Program's permission state. */
     public permissions(program: Program): Permissions {
 
         return clonePermissions(readPermissions(program))
@@ -190,17 +190,7 @@ export default class ProgramManager extends TheLink {
         )
     }
 
-    /** Resolves one permission from this Program's declaration and stored value. */
-    public effectivePermission<Name extends PermissionName>(
-        program: Program,
-        name: Name,
-        stored = this.permission(program, name)
-    ) {
-
-        return permissionCatalog.effective(name, program.clientPermissions[name] ?? null, stored)
-    }
-
-    /** Tests one request against this Program's complete effective authority. */
+    /** Tests one request against this Program's authoritative stored permission. */
     public grantsPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
@@ -210,8 +200,6 @@ export default class ProgramManager extends TheLink {
         return permissionCatalog.allows(
             name,
             requested,
-            { programs: [program.identity] },
-            program.clientPermissions,
             readPermissions(program)
         )
     }
@@ -220,14 +208,14 @@ export default class ProgramManager extends TheLink {
     public grantsStorage(program: Program, path: string, operation?: "read" | "write" | "delete") {
 
         return permissionCatalog.allowsStorage(
-            this.effectivePermission(program, "all"),
-            this.effectivePermission(program, "storage"),
+            this.permission(program, "all"),
+            this.permission(program, "storage"),
             path,
             operation
         )
     }
 
-    /** Stores one canonical user grant and propagates its effective access change. */
+    /** Stores one canonical permission and propagates its access change. */
     public async setPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
@@ -247,7 +235,7 @@ export default class ProgramManager extends TheLink {
         }
     }
 
-    /** Removes one stored user grant without changing Program declarations. */
+    /** Removes one permission assignment from authoritative state. */
     public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<void> {
 
         const permissions = readPermissions(program)
@@ -292,13 +280,13 @@ export default class ProgramManager extends TheLink {
     }
 
     @Connect("/create-program")
-    protected async createProgram(source: ProgramConfig | string) {
+    protected async createProgram(source: ProgramDefinition | string) {
 
         return (await this.create(source)).identity
     }
 
     @Connect("/force-create-program")
-    protected async forceCreateProgram(source: ProgramConfig | string, asker: string) {
+    protected async forceCreateProgram(source: ProgramDefinition | string, asker: string) {
 
         return (await this.forceCreate(source, asker)).identity
     }
@@ -351,7 +339,7 @@ export default class ProgramManager extends TheLink {
     // into a repository through exactly that resolution. A path form
     // resolves against the program.json it names, so it only has to be
     // absolute itself.
-    public async create(source: ProgramConfig | string) {
+    public async create(source: ProgramDefinition | string) {
 
         const entry = await this.register(this.runtimeProgram(source), false)
 
@@ -361,7 +349,7 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Atomically replace the runtime occupant of one Program identity. */
-    public async forceCreate(source: ProgramConfig | string, asker: string | null = null) {
+    public async forceCreate(source: ProgramDefinition | string, asker: string | null = null) {
 
         const program = this.runtimeProgram(source)
 
@@ -401,7 +389,7 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Resolve one external runtime source without consulting System cwd. */
-    private runtimeProgram(source: ProgramConfig | string) {
+    private runtimeProgram(source: ProgramDefinition | string) {
 
         if (typeof source === "string") {
 
@@ -412,24 +400,26 @@ export default class ProgramManager extends TheLink {
             return new Program(path)
         }
 
+        const definition = parseProgramDefinition(source)
+
         // Storage is where what it keeps outlives its processes, and
         // "absent means the system decides" is an installed program's
         // deal — the system has no directory to decide for a program it
         // is not holding on disk.
-        if (typeof source.storage !== "string") throw new Error("A created program names its storage")
+        if (typeof definition.storage !== "string") throw new Error("A created program names its storage")
 
-        for (const [what, place] of [["storage", source.storage], ["icon", source.icon], ["agent", source.agent], ["server", source.server?.location]] as const) {
+        for (const [what, place] of [["storage", definition.storage], ["icon", definition.icon], ["agent", definition.agent], ["server", definition.server?.location]] as const) {
 
             if (place === undefined) continue
 
             if (!isAbsolute(place)) throw new Error(`A created program's ${what} must be an absolute filesystem path`)
         }
 
-        const client = source.client?.location
+        const client = definition.client?.location
 
         if (client !== undefined && !/^https?:\/\//i.test(client) && !isAbsolute(client)) throw new Error("A created program's client must be an absolute filesystem path or an HTTP(S) URL")
 
-        return new Program(source)
+        return new Program(definition)
     }
 
     public async fork(program: Program, identity: string) {
@@ -1006,6 +996,8 @@ export default class ProgramManager extends TheLink {
 
             let createdHere = false
 
+            let restorePermissions: (() => void) | null = null
+
             try {
 
                 copyProgram(source, staged)
@@ -1042,6 +1034,10 @@ export default class ProgramManager extends TheLink {
                 // the registry claims the install succeeded.
                 await installed.installServer(output)
 
+                // Installation establishes the only permission source of
+                // truth. Reinstalling deliberately replaces prior owner edits.
+                restorePermissions = installPermissions(installed)
+
                 let entry = this.programs.get(source.identity)
 
                 if (entry) {
@@ -1062,6 +1058,8 @@ export default class ProgramManager extends TheLink {
 
                 committed = true
 
+                restorePermissions = null
+
                 if (createdHere) await this.created(entry)
 
                 await this.authManager.processManager.announceHost("program", "install", entry.identity, entry)
@@ -1078,10 +1076,12 @@ export default class ProgramManager extends TheLink {
 
             catch (exception) {
 
-                // Restore the prior program files after any failure in
-                // the swap or install command. Storage never entered the
-                // transaction and is therefore neither copied nor moved.
+                // Restore the prior program files and permission source after
+                // any failure in the swap or install command. Other storage
+                // never enters the transaction and is neither copied nor moved.
                 if (swapping && !committed) {
+
+                    restorePermissions?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
 
@@ -1447,6 +1447,8 @@ export default class ProgramManager extends TheLink {
 
         if (asked.minimize !== undefined && typeof asked.minimize !== "boolean") throw new Error("A launch client's minimize state must be true or false")
 
+        if (asked.maximize !== undefined && typeof asked.maximize !== "boolean") throw new Error("A launch client's maximize state must be true or false")
+
         const shift = this.authManager.processManager.processes.size % 8 * 32
 
         return {
@@ -1459,7 +1461,9 @@ export default class ProgramManager extends TheLink {
 
             layer: asked.layer ?? client.layer ?? "window",
 
-            minimize: asked.minimize ?? client.minimize ?? false
+            minimize: asked.minimize ?? client.minimize ?? false,
+
+            maximize: asked.maximize ?? client.maximize ?? false
         }
     }
 

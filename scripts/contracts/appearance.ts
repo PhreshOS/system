@@ -1,28 +1,28 @@
 import assert from "node:assert/strict"
 import Keyv from "keyv"
-import { defaultAppearance } from "@phreshos/core"
-import AppearanceManager, { appearanceSchema } from "@server/core/appearance-manager"
+import { defaultAppearance, parseAppearance } from "@phreshos/core"
+import AppearanceManager from "@server/core/appearance-manager"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-assert.deepEqual(appearanceSchema.parse(defaultAppearance), defaultAppearance)
-assert.throws(() => appearanceSchema.parse({}))
-assert.throws(() => appearanceSchema.parse({
+assert.deepEqual(parseAppearance(defaultAppearance), defaultAppearance)
+assert.throws(() => parseAppearance({}))
+assert.throws(() => parseAppearance({
   ...defaultAppearance,
   colors: { ...defaultAppearance.colors, accent: defaultAppearance.colors.light.primary }
 }))
-assert.throws(() => appearanceSchema.parse({ ...defaultAppearance, spacing: { light: 12, dark: 12 } }))
-assert.throws(() => appearanceSchema.parse({
+assert.throws(() => parseAppearance({ ...defaultAppearance, spacing: { light: 12, dark: 12 } }))
+assert.throws(() => parseAppearance({
   ...defaultAppearance,
   material: {
     ...defaultAppearance.material,
     dark: { ...defaultAppearance.material.dark, grain: 1.01 }
   }
 }))
-assert.throws(() => appearanceSchema.parse({
+assert.throws(() => parseAppearance({
   ...defaultAppearance,
   transaction: { duration: 120 }
 }))

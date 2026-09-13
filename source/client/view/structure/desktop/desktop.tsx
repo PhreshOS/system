@@ -149,6 +149,8 @@ export default function Workspace() {
 
             minimized={local.minimized}
 
+            maximized={local.maximized}
+
             closing={closing}
 
             stopping={stopping}
@@ -211,11 +213,11 @@ export default function Workspace() {
 
                 record={record}
 
-                title={record.client!.window.title}
+                title={windows.localWindow.projection(record.identity).title}
 
                 icon={icon(record)}
 
-                active={!record.client!.window.minimized && fronts.window?.identity === record.identity}
+                active={fronts.window?.identity === record.identity}
 
                 onElement={focus.taskbarItem}
 

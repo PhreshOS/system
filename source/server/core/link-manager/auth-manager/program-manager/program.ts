@@ -3,10 +3,9 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:path"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { isDeepStrictEqual } from "node:util"
 import { validateIcon } from "./icon"
-import type { ClientPermissions, ProgramCommandChunk } from "@phreshos/core"
-import { permissionCatalog } from "@server/core/permissions"
+import { parseProgramDefinition, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
+import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
  * A program: a description, and the things it names.
@@ -46,15 +45,11 @@ export default class Program {
 
     public config: ProgramConfig
 
-    public readonly clientPermissions: ClientPermissions
-
     public constructor(source: string | ProgramConfig, root?: string) {
 
         const [config, where] = typeof source === "string" ? read(source) : [source, process.cwd()]
 
         this.config = coherent(config)
-
-        this.clientPermissions = permissionCatalog.declarations(this.config.client?.permissions)
 
         this.identity = this.config.identity
 
@@ -78,8 +73,6 @@ export default class Program {
     public replace(source: Program) {
 
         if (source.identity !== this.identity) throw new Error("A program cannot change its identity")
-
-        if (!isDeepStrictEqual(source.clientPermissions, this.clientPermissions)) throw new Error("A Program's Client permissions cannot change during its lifetime")
 
         this.config = source.config
 
@@ -117,8 +110,13 @@ export default class Program {
             ...this.config.client,
             start: this.config.client.start ?? true,
             service: this.config.client.service ?? false,
-            permissions: this.clientPermissions
         } : null
+    }
+
+    /** Canonical permissions copied into authoritative storage when installed. */
+    public get installationPermissions(): DeclaredPermissions {
+
+        return permissionCatalog.declarations(this.config.client?.permissions)
     }
 
     // A client half may name a URL instead of a directory. The Program asset
@@ -226,10 +224,9 @@ export default class Program {
                 layer: client.layer ?? null,
 
                 minimize: client.minimize ?? null,
-
-                permissions: client.permissions
+                maximize: client.maximize ?? null
             }
-        }
+        } satisfies ProgramSnapshot
     }
 
     private place(declared: string | undefined, fallback = "") {
@@ -299,9 +296,27 @@ function read(path: string): [ProgramConfig, string] {
 
     if (!existsSync(file)) throw new Error(`There is no program at ${file}`)
 
-    try { return [JSON.parse(readFileSync(file, "utf-8")) as ProgramConfig, dirname(file)] }
+    let value: unknown
+
+    try { value = JSON.parse(readFileSync(file, "utf-8")) }
 
     catch (exception) { throw new Error(`${file} is not valid JSON: ${exception instanceof Error ? exception.message : "unreadable"}`) }
+
+    return [storedDefinition(value), dirname(file)]
+}
+
+function storedDefinition(value: unknown): ProgramConfig {
+
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A stored Program definition must be an object")
+
+    const source = value as Record<string, unknown>
+    const definition = parseProgramDefinition({ ...source, storage: source.storage ?? "./storage" })
+
+    if (source.storage !== undefined) return definition
+
+    const { storage: _storage, ...installed } = definition
+
+    return installed satisfies ProgramConfig
 }
 
 // What a description must be for a program to exist at all. Nothing
@@ -374,6 +389,7 @@ function coherent(config: ProgramConfig) {
 
     if (config.client?.title !== undefined && typeof config.client.title !== "string") throw new Error("A client half's title must be text")
 
+    if (config.client?.maximize !== undefined && typeof config.client.maximize !== "boolean") throw new Error("A client half's maximize default must be true or false")
     if (config.client?.minimize !== undefined && typeof config.client.minimize !== "boolean") throw new Error("A client half's minimize default must be true or false")
 
     for (const [what, value] of [["size", config.client?.size], ["position", config.client?.position]] as const) {
