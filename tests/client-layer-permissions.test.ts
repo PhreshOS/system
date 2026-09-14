@@ -44,18 +44,15 @@ test.each(["under", "over", "wallpaper"] as const)("Client launch routes check %
         ["launch", program, "set", launch],
         ["start-endpoint", process, "client", { layer }]
     ] as const
-    const deniedPermissions: Permissions[] = layer === "wallpaper"
-        ? [{}, { programs: [] }, { layers: [] }, { all: [], wallpaper: false }]
-        : [{}, { programs: [] }, { layers: [layer === "under" ? "over" : "under"] }, { all: [], layers: false }, { wallpaper: [] }]
+    const anotherLayer = layer === "under" ? "over" : layer === "over" ? "wallpaper" : "under"
+    const deniedPermissions: Permissions[] = [{}, { programs: [] }, { layers: [anotherLayer] }, { all: [], layers: false }]
     for (const denied of deniedPermissions) {
         f.permissions(denied)
         for (const [operation, ...args] of operations) await expect(f.answer(operation, ...args)).rejects.toThrow("Execution is not permitted")
     }
     const delegates = [f.createProcess, f.findOrCreateProcess, f.startup, f.savedLaunch, f.startEndpoint]
     for (const delegate of delegates) expect(delegate).not.toHaveBeenCalled()
-    const grantedPermissions: Permissions[] = layer === "wallpaper"
-        ? [{ wallpaper: [] }, { wallpaper: [], layers: false }, { all: [] }]
-        : [{ layers: [layer] }, { layers: [] }, { all: [] }]
+    const grantedPermissions: Permissions[] = [{ layers: [layer] }, { layers: [] }, { all: [] }]
     for (const granted of grantedPermissions) {
         f.permissions(granted)
         for (const [operation, ...args] of operations) await f.answer(operation, ...args)
@@ -91,7 +88,7 @@ test.each(["under", "over", "wallpaper"] as const)("Client run streams authorize
     boundary.receive(["end-host", "stream", "denied", "run", program, launch])
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("host-end", "stream", "denied", "answer", { success: false, error: "Execution is not permitted" }))
     expect(f.command).not.toHaveBeenCalled()
-    f.permissions(layer === "wallpaper" ? { wallpaper: [] } : { layers: [layer] })
+    f.permissions({ layers: [layer] })
     boundary.receive(["boundary", "expect", "allowed"])
     boundary.receive(["end-host", "stream", "allowed", "run", program, launch])
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("host-end", "stream", "allowed", "answer", { success: true, result: undefined }))
@@ -104,6 +101,7 @@ test("the layer catalog uses exact assignments before all", () => {
     expect(permissionCatalog.allows("layers", ["over"], { layers: ["under"] })).toBe(false)
     expect(permissionCatalog.allows("layers", ["under"], { layers: ["under"] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["under", "over"], { layers: [] })).toBe(true)
+    expect(permissionCatalog.allows("layers", ["wallpaper"], { layers: [] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["over"], { all: [], layers: false })).toBe(false)
     expect(permissionCatalog.allows("layers", ["over"], { all: [] })).toBe(true)
     expect(() => permissionCatalog.declarations({ layers: false })).toThrow()

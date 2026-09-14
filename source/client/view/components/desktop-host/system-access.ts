@@ -99,8 +99,7 @@ export default class SystemAccess {
 
     private async clientLayer(launch: ClientLaunch) {
 
-        if (launch.layer === "under" || launch.layer === "over") await this.require("layers", [launch.layer])
-        if (launch.layer === "wallpaper") await this.require("wallpaper", [])
+        if (launch.layer !== undefined && launch.layer !== "window") await this.require("layers", [launch.layer])
     }
 
     public async requireNetwork(scope: string) {
