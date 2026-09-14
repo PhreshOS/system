@@ -23,15 +23,27 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
     const matching = processes.filter(process => matchesProcess(process.name, programsByIdentity.get(process.program), terms))
 
-    return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    if (!matching.length) return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
 
-        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
+        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · 0</h3>
 
-        {matching.length ? <ScrollArea className="min-h-0"><ul className="m-0 grid list-none content-start gap-1 p-2">
-
-            {matching.map(process => <ProcessItem key={process.identity} process={process} program={programsByIdentity.get(process.program)} />)}
-
-        </ul></ScrollArea> : <p className="m-0 grid min-h-32 place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Processes" : "No Processes"}</p>}
+        <p className="m-0 grid place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Processes" : "No Processes"}</p>
 
     </div>
+
+    return <ScrollArea role="group" aria-label="Processes" className="h-full min-h-0">
+
+        <div className="grid content-start">
+
+            <h3 className="sticky top-0 z-10 px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
+
+            <ul className="m-0 grid list-none content-start gap-1 p-2">
+
+                {matching.map(process => <ProcessItem key={process.identity} process={process} program={programsByIdentity.get(process.program)} />)}
+
+            </ul>
+
+        </div>
+
+    </ScrollArea>
 }
