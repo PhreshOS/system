@@ -13,12 +13,12 @@ test("permissions contract", async () => {
       services: {
           default: [],
           title: "Services",
-          description: "Access Services belonging to every Program or selected Programs."
+          description: "Access Services without broader authority over their Programs."
       },
       programs: {
           default: [],
           title: "Programs",
-          description: "Access every Program or selected Programs."
+          description: "Access every Program or selected Programs, including their Services."
       },
       layers: {
           default: [],
@@ -62,7 +62,7 @@ test("permissions contract", async () => {
       valueDomain: "program",
       default: [],
       title: "Programs",
-      description: "Access every Program or selected Programs."
+      description: "Access every Program or selected Programs, including their Services."
   })
   assert.deepEqual(catalog.definition("network"), {
       valueDomain: "network",
@@ -116,15 +116,15 @@ test("permissions contract", async () => {
   assert(!catalog.allows("all", [], {}))
   assert(catalog.allows("services", ["browser"], { all: [] }))
   assert(catalog.allows("services", ["browser"], { services: ["browser"] }))
-  assert(!catalog.allows("services", ["browser"], { programs: [] }))
-  assert(!catalog.allows("services", [], { programs: [] }))
-  assert(!catalog.allows("services", ["browser"], { programs: ["browser"] }))
-  assert(!catalog.allows("services", ["browser", "editor"], { programs: ["browser"], services: ["editor"] }))
+  assert(catalog.allows("services", ["browser"], { programs: [] }))
+  assert(catalog.allows("services", [], { programs: [] }))
+  assert(catalog.allows("services", ["browser"], { programs: ["browser"] }))
+  assert(catalog.allows("services", ["browser", "editor"], { programs: ["browser"], services: ["editor"] }))
   assert(catalog.allows("services", ["editor"], { programs: ["browser"], services: ["editor"] }))
   assert(!catalog.allows("services", ["editor"], { programs: ["browser"] }))
   assert(!catalog.allows("services", [], { programs: ["browser"] }))
   assert(!catalog.allows("programs", ["browser"], { services: [] }))
-  assert(!catalog.allows("services", ["browser"], { programs: [], services: false }))
+  assert(catalog.allows("services", ["browser"], { programs: [], services: false }))
   assert(!catalog.allows("network", ["https://elsewhere.example"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allows("network", ["https://api.example.com/v1"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allowsStorage([], null, "Documents/report.txt", "read"))

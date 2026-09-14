@@ -45,8 +45,8 @@ test("client system access contract", async () => {
   assert(access.ownsProcess(sibling))
   assert(!access.ownsProcess(outside))
   assert.equal(await access.program(ownProgram as never), ownProgram)
-  await assert.rejects(access.service(ownService), /Execution is not permitted/)
-  await assert.rejects(access.service(ownExactService), /Execution is not permitted/)
+  assert.equal(await access.service(ownService), ownService)
+  assert.equal(await access.service(ownExactService), ownExactService)
   await assert.rejects(access.program(outsideProgram as never), /Execution is not permitted/)
   await assert.rejects(access.process(outside), /Execution is not permitted/)
   await assert.rejects(access.service(outsideService), /Execution is not permitted/)
@@ -76,15 +76,15 @@ test("client system access contract", async () => {
 
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
   assert.equal(await access.process(outside), outside)
-  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
-  await assert.rejects(access.service({ process: outside.identity, endpoint: "server" }), /Execution is not permitted/)
+  assert.equal(await access.service(outsideService), outsideService)
+  assert.deepEqual(await access.service({ process: outside.identity, endpoint: "server" }), { process: outside.identity, endpoint: "server" })
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 
   permissions = { programs: [] }
 
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
-  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
+  assert.equal(await access.service(outsideService), outsideService)
 
   permissions = { appearance: [], desktopPreferences: [] }
 
@@ -130,8 +130,8 @@ test("client system access contract", async () => {
 
   const unresolvedService = { process: "ec99e1e8-d13b-4fc8-89ed-eaa3f394a42f", endpoint: "server" } as const
   permissions = { all: [], services: false }
-  await assert.rejects(access.service(ownService), /Execution is not permitted/)
-  await assert.rejects(access.service(ownExactService), /Execution is not permitted/)
+  assert.equal(await access.service(ownService), ownService)
+  assert.equal(await access.service(ownExactService), ownExactService)
   await assert.rejects(access.service(unresolvedService), /Execution is not permitted/)
   permissions = { services: [] }
   assert.equal(await access.service(unresolvedService), unresolvedService)

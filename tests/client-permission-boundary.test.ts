@@ -32,9 +32,31 @@ test("Client Program creation requires all before reaching the creation boundary
     expect(forceCreate).toHaveBeenCalledWith(source, "caller")
 })
 
-test.each(["owner", "outside"])("Service operations require permission for Services belonging to %s", async owningProgram => {
+test.each([
+    { owningProgram: "owner", denied: [], granted: [{}] },
+    {
+        owningProgram: "outside",
+        denied: [
+            {},
+            { all: [], services: false },
+            { services: ["unrelated"] },
+            { programs: ["unrelated"] }
+        ],
+        granted: [
+            { services: ["outside"] },
+            { services: [] },
+            { programs: ["outside"] },
+            { programs: [] },
+            { all: [] }
+        ]
+    }
+] satisfies ReadonlyArray<{
+    owningProgram: string
+    denied: Permissions[]
+    granted: Permissions[]
+}>)("Service operations follow the authority hierarchy for $owningProgram", async ({ owningProgram, denied, granted }) => {
     const destination = "6d138083-7a51-44ec-9abe-ff0194ad1e5b"
-    let permissions: Permissions = { programs: [] }
+    let permissions: Permissions = {}
     const serviceExists = vi.fn(async () => true)
     const waitServiceReady = vi.fn()
     const followService = vi.fn()
@@ -60,16 +82,18 @@ test.each(["owner", "outside"])("Service operations require permission for Servi
             ["service-send", key, "change", {}],
             ["service-ask", key, "read", {}]
         ] as const
-        for (const denied of [{}, { programs: [] }, { all: [], services: false }, { services: ["unrelated"] }] satisfies Permissions[]) {
-            permissions = denied
+        for (const assignment of denied) {
+            permissions = assignment
             for (const [operation, ...args] of operations) {
                 await expect(answer(operation, ...args)).rejects.toThrow("Execution is not permitted")
             }
         }
-        for (const granted of [{ services: [owningProgram] }, { services: [] }, { all: [] }] satisfies Permissions[]) {
-            permissions = granted
+        for (const assignment of granted) {
+            permissions = assignment
             for (const [operation, ...args] of operations) await answer(operation, ...args)
         }
     }
-    for (const call of [serviceExists, waitServiceReady, followService, sendService, askService]) expect(call).toHaveBeenCalledTimes(6)
+    for (const call of [serviceExists, waitServiceReady, followService, sendService, askService]) {
+        expect(call).toHaveBeenCalledTimes(granted.length * 2)
+    }
 })

@@ -46,6 +46,8 @@ export default class SystemAccess {
 
         const program = this.serviceProgram(service)
 
+        if (program !== null && this.owner().program === program) return true
+
         return await this.authManager.grantsPermission(this.pane, "services", program === null ? [] : [program])
     }
 

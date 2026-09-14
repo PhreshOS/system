@@ -163,6 +163,30 @@ export class PermissionCatalog {
 
         this.definition(name)
 
+        if (name === "services") {
+
+            const services = permissions.services
+            const programs = permissions.programs
+            const values = requested as readonly PermissionValue<"services">[]
+
+            const covered = values.length === 0
+                ? this.grants("services", services ?? null, values)
+                    || this.grants("programs", programs ?? null, values)
+                : values.every(value => (
+                    this.grants("services", services ?? null, [value])
+                    || this.grants("programs", programs ?? null, [value])
+                ))
+
+            if (covered) return true
+
+            // `programs` contributes authority to Services but does not become
+            // the Service permission's assignment. Only an exact `services`
+            // assignment replaces the `all` fallback for this capability.
+            if (services === undefined || services === null) return this.granted(permissions.all ?? null)
+
+            return false
+        }
+
         const assigned = permissions[name]
 
         // An exact assignment is the owner's final decision for that
@@ -279,12 +303,12 @@ export const permissionCatalog = new PermissionCatalog({
     services: {
         default: [],
         title: "Services",
-        description: "Access Services belonging to every Program or selected Programs."
+        description: "Access Services without broader authority over their Programs."
     },
     programs: {
         default: [],
         title: "Programs",
-        description: "Access every Program or selected Programs."
+        description: "Access every Program or selected Programs, including their Services."
     },
     layers: {
         default: [],
