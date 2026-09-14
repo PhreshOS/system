@@ -99,7 +99,7 @@ test("boot reconstruction preserves all stored settings and launches the saved s
 test("creation applies explicit launch decisions and preserves omitted ones", async context => {
     const { manager, definition } = fixture(context)
     const intent = { client: { layer: "over" as const }, options: { document: "icon.txt" } }
-    let program = await manager.create({ ...definition(), options: { language: "en" }, launch: intent, startup: intent })
+    let program = await manager.create({ ...definition(), launch: intent, startup: intent })
     expect(await manager.launch(program, "get")).toEqual(intent)
     expect(await manager.startup(program, "get")).toEqual(intent)
     expect(manager.authManager.processManager.processes.size).toBe(0)

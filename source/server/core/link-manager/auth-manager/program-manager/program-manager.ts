@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseLaunch, parseProgramDefinition, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
+import { parseLaunch, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
@@ -542,7 +542,7 @@ export default class ProgramManager extends TheLink {
     }
 
     // What this program has said. Its own file under `storage`, so it
-    // survives an update and goes with everything.
+    // survives an update and is removed by purge.
     public logsOf(program: Program) {
 
         const already = this.said.get(program.identity)
@@ -911,9 +911,9 @@ export default class ProgramManager extends TheLink {
             }
 
             const command = operation === "install"
-                ? this.installStreaming(program, asker)
+                ? this.installStreaming(program, parseProgramInstallOptions(value ?? {}), asker)
                 : operation === "uninstall"
-                    ? this.uninstallStreaming(program, value === true, asker)
+                    ? this.uninstallStreaming(program, parseProgramUninstallOptions(value ?? {}), asker)
                     : null
 
             if (!command) throw new Error(`The Program command API does not know "${operation}"`)
@@ -938,15 +938,15 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Install while exposing command output with consumer-driven backpressure. */
-    public installStreaming(source: Program, asker: string | null = null) {
+    public installStreaming(source: Program, options: ProgramInstallOptions = {}, asker: string | null = null) {
 
-        return this.commandStreaming(output => this.install(source, asker, output))
+        return this.commandStreaming(output => this.install(source, options, asker, output))
     }
 
     /** Uninstall a held Program while exposing cleanup command output. */
-    public uninstallStreaming(program: Program, everything = false, asker: string | null = null) {
+    public uninstallStreaming(program: Program, options: ProgramUninstallOptions = {}, asker: string | null = null) {
 
-        return this.commandStreaming(output => this.uninstall(program, everything, asker, output))
+        return this.commandStreaming(output => this.uninstall(program, options, asker, output))
     }
 
     /** Runs one lifecycle command while preserving output order and backpressure. */
@@ -1024,7 +1024,9 @@ export default class ProgramManager extends TheLink {
         }
     }
 
-    public async install(source: Program, asker: string | null = null, output: InstallOutput = () => undefined) {
+    public async install(source: Program, options: ProgramInstallOptions = {}, asker: string | null = null, output: InstallOutput = () => undefined) {
+
+        const decision = parseProgramInstallOptions(options)
 
         return await this.change(source.identity, async () => {
 
@@ -1050,6 +1052,8 @@ export default class ProgramManager extends TheLink {
 
             let restoreSettings: (() => void) | undefined
 
+            let purgedStorage = false
+
             try {
 
                 copyProgram(source, staged)
@@ -1064,13 +1068,8 @@ export default class ProgramManager extends TheLink {
                 await stagedProgram.validate()
                 this.declaredLaunch(stagedProgram, "startup")
                 this.declaredLaunch(stagedProgram, "launch")
-
-                // A process may have retained an absolute server,
-                // client, or storage path. Its ending is part of the
-                // install operation, not advice for the caller.
-                if (this.programs.has(source.identity)) await this.authManager.processManager.exitAll(source.identity, asker)
-
-                await this.release(source.identity)
+                const requestedLaunch = decision.launch === true ? {} : decision.launch
+                if (requestedLaunch !== undefined) this.resolveLaunch(stagedProgram, requestedLaunch)
 
                 swapping = true
 
@@ -1090,6 +1089,15 @@ export default class ProgramManager extends TheLink {
                 await installed.installServer(output)
 
                 let entry = this.programs.get(source.identity)
+
+                // Active callers can consume installation output until activation.
+                if (entry) await this.authManager.processManager.exitAll(source.identity, asker)
+                await this.release(source.identity)
+
+                if (decision.purge && existsSync(installed.storagePath)) {
+                    renameSync(installed.storagePath, join(backup, "storage"))
+                    purgedStorage = true
+                }
 
                 if (entry) {
 
@@ -1122,6 +1130,10 @@ export default class ProgramManager extends TheLink {
                 // yesterday's list.
                 await this.$outbound.publish("/install", entry.record())
 
+                if (requestedLaunch !== undefined) {
+                    await this.start(entry.program, requestedLaunch, undefined, null, true)
+                }
+
                 try {
                     const launch = await this.startup(entry.program, "get")
                     if (launch) await this.start(entry.program, launch, undefined, null, true)
@@ -1135,14 +1147,15 @@ export default class ProgramManager extends TheLink {
 
             catch (exception) {
 
-                // Restore the prior program files and declaration settings after
-                // any failure before commit. Other storage
-                // never enters the transaction and is neither copied nor moved.
+                // Restore the prior files, declaration settings, and any storage
+                // set aside for purge after a failure before commit.
                 if (swapping && !committed) {
 
                     restoreSettings?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
+
+                    if (purgedStorage) rmSync(join(home, "storage"), { recursive: true, force: true })
 
                     for (const what of readdirSync(backup)) renameSync(join(backup, what), join(home, what))
 
@@ -1161,11 +1174,10 @@ export default class ProgramManager extends TheLink {
         })
     }
 
-    // Without `everything`, only the installed description and program
-    // files leave. Processes and open storage handles remain alive. With
-    // it, everything the system owns for this program leaves: processes,
-    // files, storage, and finally the runtime registry entry.
-    public async uninstall(program: Program, everything = false, asker: string | null = null, output: CommandOutput = () => undefined) {
+    // Purge also ends Processes and removes storage and the runtime entry.
+    public async uninstall(program: Program, options: ProgramUninstallOptions = {}, asker: string | null = null, output: CommandOutput = () => undefined) {
+
+        const { purge = false } = parseProgramUninstallOptions(options)
 
         return await this.change(program.identity, async () => {
 
@@ -1173,13 +1185,13 @@ export default class ProgramManager extends TheLink {
 
             const entry = this.find(program.identity)
 
-            return await this.uninstallEntry(entry, everything, asker, output)
+            return await this.uninstallEntry(entry, purge, asker, output)
         })
     }
 
-    private async uninstallEntry(entry: Entry, everything: boolean, asker: string | null, output: CommandOutput) {
+    private async uninstallEntry(entry: Entry, purge: boolean, asker: string | null, output: CommandOutput) {
 
-        if (everything) {
+        if (purge) {
 
             await this.authManager.processManager.exitAll(entry.identity, asker)
 
@@ -1190,7 +1202,7 @@ export default class ProgramManager extends TheLink {
 
         const home = this.fileManager.join(entry.identity)
 
-        if (everything) rmSync(home, { recursive: true, force: true })
+        if (purge) rmSync(home, { recursive: true, force: true })
 
         else {
 
@@ -1201,13 +1213,13 @@ export default class ProgramManager extends TheLink {
 
         entry.installed = false
 
-        await this.authManager.processManager.announceHost("program", "uninstall", entry.identity, entry, everything)
+        await this.authManager.processManager.announceHost("program", "uninstall", entry.identity, entry, purge)
 
-        await this.authManager.processManager.announceSubject("program", "uninstall", entry.program.reference, everything)
+        await this.authManager.processManager.announceSubject("program", "uninstall", entry.program.reference, purge)
 
-        await this.$outbound.publish("/uninstall", entry.record(), everything)
+        await this.$outbound.publish("/uninstall", entry.record(), purge)
 
-        if (everything) await this.forgetEntry(entry)
+        if (purge) await this.forgetEntry(entry)
 
         return entry.identity
     }
@@ -1318,7 +1330,7 @@ export default class ProgramManager extends TheLink {
 
             const existing = [...this.authManager.processManager.processes.values()].find(process => process.program === program && process.name === launch.name)
 
-            if (existing) {
+            if (existing && !launch.replace) {
 
                 if (!isDeepStrictEqual(existing.launch, resolved.intent)) throw new Error(`The process "${launch.name}" already exists with a different launch`)
 
@@ -1340,7 +1352,7 @@ export default class ProgramManager extends TheLink {
 
         const launch = parseLaunch(value)
 
-        const options = Object.fromEntries(Object.entries({ ...program.config.options, ...launch.options }).sort(([left], [right]) => left.localeCompare(right)))
+        const options = Object.fromEntries(Object.entries(launch.options ?? {}).sort(([left], [right]) => left.localeCompare(right)))
 
         const askedServer = typeof launch.server === "object" ? launch.server : {}
         const askedClient = typeof launch.client === "object" ? launch.client : {}
@@ -1389,7 +1401,7 @@ export default class ProgramManager extends TheLink {
 
         if (!transitionOwnsIdentity && this.changing.has(program.identity)) throw new Error("This program is changing and cannot create a process")
 
-        // A retained Program survives uninstall(false), but its declared
+        // A retained Program survives uninstall(), but its declared
         // files do not. Refuse before a process identity or window is
         // allocated, so a failed launch never briefly exists.
         await program.validate()
@@ -1400,16 +1412,20 @@ export default class ProgramManager extends TheLink {
 
         const shape = client ? resolved.shape : null
 
-        // Recheck the program-local name immediately before registration,
-        // then create and register without yielding so concurrent launches
-        // cannot both claim it.
-        if (launch.name !== undefined && [...this.authManager.processManager.processes.values()].some(process => process.program === program && process.name === launch.name)) throw new Error("This program already has a process with that name")
+        // Program-local creation is serialized. Release a requested name before
+        // allocating its replacement, while retaining ownership of that queue.
+        if (launch.name !== undefined) {
+            const existing = [...this.authManager.processManager.processes.values()].find(process => process.program === program && process.name === launch.name)
+            if (existing) {
+                if (!launch.replace) throw new Error("This program already has a process with that name")
+                await this.authManager.processManager.exit(existing.identity)
+            }
+        }
 
         // Capacity belongs to the Program being executed, not to whichever
         // Process requested the launch. This is the final gate before identity
-        // allocation, endpoint spawning, and synchronous registration; no
-        // concurrent launch can pass it without the preceding one entering the
-        // authoritative Process map first.
+        // allocation and registration. The Program-local queue prevents another
+        // launch from passing before this one enters the authoritative map.
         let active = 0
 
         for (const process of this.authManager.processManager.processes.values()) {
@@ -1430,7 +1446,7 @@ export default class ProgramManager extends TheLink {
         // server incarnation attaches to the same Process-level listeners.
         const logs = this.logsOf(program)
 
-        const runtime = server ? this.serverRuntime(program) : null
+        const runtime = server ? (owner: Program) => this.serverRuntime(owner) : null
 
         // Lifecycle consumers are attached before either initial endpoint is
         // activated, so even a server command that exits immediately has a

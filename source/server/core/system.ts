@@ -5,6 +5,8 @@ import type Process from "./link-manager/auth-manager/process-manager/process"
 import type {
     ClientLaunch,
     Launch,
+    ProgramInstallOptions,
+    ProgramUninstallOptions,
     PermissionInput,
     PermissionName,
     Position,
@@ -390,14 +392,14 @@ export default class System {
         return this.programManager.forget(program, asker)
     }
 
-    public installProgram(program: Program, asker: string | null = null) {
+    public installProgram(program: Program, options: ProgramInstallOptions = {}, asker: string | null = null) {
 
-        return this.programManager.installStreaming(program, asker)
+        return this.programManager.installStreaming(program, options, asker)
     }
 
-    public uninstallProgram(program: Program, everything = false, asker: string | null = null) {
+    public uninstallProgram(program: Program, options: ProgramUninstallOptions = {}, asker: string | null = null) {
 
-        return this.programManager.uninstallStreaming(program, everything, asker)
+        return this.programManager.uninstallStreaming(program, options, asker)
     }
 
     public programArea(program: Program, area: Area, operation: string, args: unknown[]) {

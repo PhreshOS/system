@@ -19,6 +19,8 @@ import OutsideQuestions from "./outside-questions"
 import {
     isServiceKey,
     parsePermissionName,
+    parseProgramInstallOptions,
+    parseProgramUninstallOptions,
     type ClientLaunch,
     type Launch,
     type Permission,
@@ -32,7 +34,7 @@ import {
     type WindowLayer,
     type WindowState
 } from "@phreshos/core"
-import type { ServerRuntime } from "@server/core/server-runtime"
+import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
 /**
@@ -907,7 +909,21 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
 
-    /** Checks and claims the wallpaper role in one synchronous activation. */
+    private wallpaperChanges: Promise<unknown> = Promise.resolve()
+
+    private serializeClientLayer<Result>(layer: string | undefined, work: () => Promise<Result>): Promise<Result> {
+        if (layer !== "wallpaper") return work()
+        const next = this.wallpaperChanges.catch(() => undefined).then(work)
+        this.wallpaperChanges = next.catch(() => undefined)
+        return next
+    }
+
+    private async replaceWallpaper() {
+        const occupied = [...this.processes.values()].filter(process => process.client?.window.layer === "wallpaper")
+        for (const process of occupied) await this.exitProcess(process.identity, "complete")
+    }
+
+    /** Claims the role after serialized replacement has released its previous owner. */
     private activateClient(process: Process, window: Window, service: boolean) {
         if (window.layer === "wallpaper" && [...this.processes.values()].some(
             current => current.client?.window.layer === "wallpaper"
@@ -916,21 +932,25 @@ export default class ProcessManager extends TheLink {
         process.startClient(window, service)
     }
 
-    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
+    public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntimeFactory<Program> | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
+
+        return await this.serializeClientLayer(client ? shape?.layer : undefined, () =>
+            this.registerProcess(identity, name, program, options, launch, runtime, client, shape, parent, registration))
+    }
+
+    private async registerProcess(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, createRuntime: ServerRuntimeFactory<Program> | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
 
         if (this.processes.has(identity)) {
-
-            runtime?.stop()
 
             throw new Error("The host already knows this process identity")
         }
 
         if (name !== null && [...this.processes.values()].some(process => process.program === program && process.name === name)) {
 
-            runtime?.stop()
-
             throw new Error("This program already has a process with that name")
         }
+
+        if (client && shape?.layer === "wallpaper") await this.replaceWallpaper()
 
         // Who had focus before this one opened, in the layer it is
         // opening into. A window is born on top of its own layer and
@@ -965,9 +985,13 @@ export default class ProcessManager extends TheLink {
 
         process.onExit((code, signal) => { this.remove(identity, code, signal).catch(() => undefined) })
 
+        let runtime: ServerRuntime | null = null
+
         try {
 
             registration?.prepare?.(process)
+
+            runtime = createRuntime?.(program) ?? null
 
             // Initial activation is one endpoint transition too. A server that
             // exits immediately is queued behind it, preserving the only coherent
@@ -1183,6 +1207,15 @@ export default class ProcessManager extends TheLink {
 
         const process = this.find(identity)
 
+        const layer = launch.layer ?? process.program.client?.layer
+
+        return await this.serializeClientLayer(layer, () => this.startClientInLayer(identity, launch))
+    }
+
+    private async startClientInLayer(identity: string, launch: ClientLaunch) {
+
+        const process = this.find(identity)
+
         await this.transition(process, async () => {
 
             if (!process.program.client) throw new Error("This program declared no client half")
@@ -1196,6 +1229,8 @@ export default class ProcessManager extends TheLink {
             const window = this.window(shape)
 
             const before = this.front(window.layer)
+
+            if (window.layer === "wallpaper") await this.replaceWallpaper()
 
             this.activateClient(process, window, launch.service ?? process.program.client.service)
 
@@ -2382,9 +2417,9 @@ export default class ProcessManager extends TheLink {
             }
 
             const stream = operation === "install"
-                ? this.system.installProgram(program, process.identity)
+                ? this.system.installProgram(program, parseProgramInstallOptions(args[2] ?? {}), process.identity)
                 : operation === "uninstall"
-                    ? this.system.uninstallProgram(program, args[2] === true, process.identity)
+                    ? this.system.uninstallProgram(program, parseProgramUninstallOptions(args[2] ?? {}), process.identity)
                     : null
 
             if (!stream) throw new Error(`The host does not know the stream operation "${String(operation)}"`)

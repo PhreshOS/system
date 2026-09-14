@@ -7,8 +7,8 @@
       "dependencies": {
         "@fontsource/roboto": "^5.3.0",
         "@hono/node-server": "^2.1.1",
-        "@phreshos/core": "^0.1.45",
-        "@phreshos/react-ui": "^0.1.19",
+        "@phreshos/core": "^0.1.47",
+        "@phreshos/react-ui": "^0.1.20",
         "@the-link/core": "^0.3.0",
         "@the-link/http": "^0.1.1",
         "@the-link/ipc": "^0.2.1",
@@ -235,9 +235,9 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.144.0", "", {}, "sha512-nuhZIOLuI6TFQ32I/WnUx+SCPY7SdSKwgnFHydAuoS1+Z4BRcaP+RRJmGzl9lw+0OFF7UmaESf7KQRXaNLHypg=="],
 
-    "@phreshos/core": ["@phreshos/core@0.1.45", "", {}, "sha512-u/P6GJynoC8IaOjIHGCzsA1a2Mhwkg5qstuAKN70PsiHQ/ioE2inOUpEuL2JPhmvjcQslZnbLpZhfwMYIUW0+A=="],
+    "@phreshos/core": ["@phreshos/core@0.1.47", "", {}, "sha512-/0TrNk+7k8kHpMvnhzP1IS+tbdEILtCaE2gyewLIXl1oLfIzGeiBCTBqJhQ4E1i/iAgftlEYv9BQSwrn2P3PrA=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.19", "", { "dependencies": { "@phreshos/core": "^0.1.43", "colorjs.io": "^0.7.1", "motion": "^13.2.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-F4xiDGvOrgEomSSy3HwieFOI3eiyhDQAbJeQNWHVXXVekT1lUonr86z0crEQigXEIqdFWBQg+GKf9mkcjlYKOw=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.20", "", { "dependencies": { "@phreshos/core": "^0.1.47", "colorjs.io": "^0.7.1", "motion": "^13.2.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-jbXaXF4wac+a6e6iJxJrNMseG84FW4kKBsBKCbfQ3DADrUbJ+jc17cAM/zJBo1/fVco3rzZ5PEHXFmD7/rVntw=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 
@@ -558,8 +558,6 @@
     "ws": ["ws@8.21.3", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw=="],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
-
-    "@phreshos/react-ui/@phreshos/core": ["@phreshos/core@0.1.44", "", {}, "sha512-0Qo4SlNg9fi2xfpDMbMucHQrDhzE8hhzOy7n5rQPjpj4UIWPUU5ZuEGEON6bfQM6nKJ4ogNJF7KFp4RhMxf5PA=="],
 
     "@tailwindcss/node/lightningcss": ["lightningcss@1.32.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.32.0", "lightningcss-darwin-arm64": "1.32.0", "lightningcss-darwin-x64": "1.32.0", "lightningcss-freebsd-x64": "1.32.0", "lightningcss-linux-arm-gnueabihf": "1.32.0", "lightningcss-linux-arm64-gnu": "1.32.0", "lightningcss-linux-arm64-musl": "1.32.0", "lightningcss-linux-x64-gnu": "1.32.0", "lightningcss-linux-x64-musl": "1.32.0", "lightningcss-win32-arm64-msvc": "1.32.0", "lightningcss-win32-x64-msvc": "1.32.0" } }, "sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ=="],
 

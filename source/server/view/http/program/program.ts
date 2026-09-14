@@ -69,7 +69,7 @@ export default function (application: Application) {
 
         const root = found.clientPath
 
-        // A retained Program may outlive files removed by uninstall(false).
+        // A retained Program may outlive files removed by uninstall().
         if (!root || !existsSync(root)) return context.text("The program has no assets", 404)
 
         return await serveStatic({

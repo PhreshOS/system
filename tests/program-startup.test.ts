@@ -32,7 +32,7 @@ test("installation applies declared settings and launches the resulting stored s
     })
   function definition(setting?: true | Launch) {
     return new Program({
-      identity: "example", startup: setting, options: { language: "en" },
+      identity: "example", startup: setting,
       client: { location: client, permissions: { network: ["https://new.example.test"] } }
     })
   }
@@ -47,7 +47,6 @@ test("installation applies declared settings and launches the resulting stored s
   new LaunchStorage(entry.program, "startup").set(configured)
   entry = await manager.install(definition(configured))
   expect(launches).toEqual([{}, configured])
-  expect(JSON.parse(readFileSync(join(entry.program.root, "program.json"), "utf8")).options).toEqual({ language: "en" })
   expect(readFileSync(note, "utf8")).toBe("keep this")
   expect(readPermissions(entry.program)).toEqual({ network: ["https://new.example.test"], appearance: [] })
 
@@ -67,7 +66,7 @@ test("installation applies declared settings and launches the resulting stored s
   start.mockRejectedValueOnce(new Error("cannot start"))
   await manager.startup(entry.program, "enable", configured)
   const warnings: string[] = []
-  entry = await manager.install(definition(true), null, chunk => { warnings.push(chunk.text) })
+  entry = await manager.install(definition(true), {}, null, chunk => { warnings.push(chunk.text) })
   expect(entry.installed).toBe(true)
   expect(new LaunchStorage(entry.program, "startup").get()).toEqual({})
   expect(warnings.join("")).toContain("Program installed, but startup failed: cannot start")

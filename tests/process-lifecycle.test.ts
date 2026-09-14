@@ -77,8 +77,8 @@ test("process lifecycle contract", async () => {
   // unattached runtime behind in the registry.
   {
       const manager = processManager()
-      let stops = 0
-      const runtime = { stop() { stops++ } } as unknown as ServerRuntime
+      let starts = 0
+      const runtime = () => { starts++; return {} as ServerRuntime }
 
       await assert.rejects(manager.register(
           "failed-registration",
@@ -94,7 +94,7 @@ test("process lifecycle contract", async () => {
       ), /configuration failed/)
 
       assert.equal(manager.processes.has("failed-registration"), false)
-      assert.equal(stops, 1)
+      assert.equal(starts, 0)
   }
 
   // Failure after an endpoint has been activated still retracts the partially

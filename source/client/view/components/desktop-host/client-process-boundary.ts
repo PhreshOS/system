@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceKey, type DesktopViewportSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
+import { isServiceKey, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
 import { type LocalWindowHost } from "./local-window"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -667,7 +667,14 @@ export default class ClientProcessBoundary extends TheLink {
 
                 await this.systemAccess.program(program)
 
-                const value = args[0] === "run" ? await this.systemAccess.launch(args[2]) : args[2]
+                let value = args[0] === "run" ? await this.systemAccess.launch(args[2]) : args[2]
+                if (args[0] === "install") {
+                    const options = parseProgramInstallOptions(args[2] ?? {})
+                    value = options.launch === undefined ? options : {
+                        ...options,
+                        launch: await this.systemAccess.launch(options.launch === true ? {} : options.launch)
+                    }
+                }
                 const operation = this.authManager.programManager.command(args[1], args[0], value, this.pane)
 
                 iterator = operation[Symbol.asyncIterator]()

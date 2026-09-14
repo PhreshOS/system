@@ -18,7 +18,7 @@ import { dirname } from "node:path"
  * It lives at `storage/logs.sqlite`, beside the `store.sqlite` this
  * copies: a thing the system manages, that the program has no word for,
  * that survives an update because everything under `storage` does, and
- * that goes with `uninstall(true)`. Nothing new had to be said anywhere
+ * that goes with `uninstall({ purge: true })`. Nothing new had to be said anywhere
  * for any of that.
  *
  * **The system is the only writer.** Every process of every program

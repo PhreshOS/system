@@ -71,22 +71,22 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, post]))
 
-    const programEvent = useCallback((event: "create" | "install" | "uninstall" | "forget", entry: ProgramRecord | null, everything?: boolean) => {
+    const programEvent = useCallback((event: "create" | "install" | "uninstall" | "forget", entry: ProgramRecord | null, purge?: boolean) => {
 
         if (!entry) return
 
         const record = sdkProgram(entry)
 
-        post(entry.identity, "host-program", event, entry.identity, record, everything === true)
+        post(entry.identity, "host-program", event, entry.identity, record, purge === true)
 
-        if (event === "uninstall") post(entry.identity, "program-host", event, entry.reference, everything === true)
+        if (event === "uninstall") post(entry.identity, "program-host", event, entry.reference, purge === true)
         if (event === "forget") post(entry.identity, "program-host", event, entry.reference)
 
     }, [post])
 
     programs.useSubscribe("/create", useCallback((entry: ProgramRecord | null) => programEvent("create", entry), [programEvent]))
     programs.useSubscribe("/install", useCallback((entry: ProgramRecord | null) => programEvent("install", entry), [programEvent]))
-    programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, everything: boolean) => programEvent("uninstall", entry, everything), [programEvent]))
+    programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, purge: boolean) => programEvent("uninstall", entry, purge), [programEvent]))
     programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
 }
 

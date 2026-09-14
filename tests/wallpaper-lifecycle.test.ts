@@ -4,6 +4,7 @@ import type { ClientLaunch, Layer } from "@phreshos/core"
 import type AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
+import type { ServerRuntimeFactory } from "@server/core/server-runtime"
 
 function fixture() {
     const auth = new TheLink() as unknown as AuthManager
@@ -20,29 +21,46 @@ function fixture() {
             clientShape(_program: Program, launch: ClientLaunch) { return shape(launch.layer) }
         }
     })
-    const register = (identity: string, layer: Layer | null = "wallpaper") => manager.register(
+    const register = (identity: string, layer: Layer | null = "wallpaper", runtime: ServerRuntimeFactory<Program> | null = null) => manager.register(
         identity, null, program, {}, { server: null, client: null, options: {} },
-        null, layer !== null, layer === null ? null : shape(layer), null
+        runtime, layer !== null, layer === null ? null : shape(layer), null
     )
     return { manager, register }
 }
 
-test("concurrent wallpaper launches have one winner without stopping the incumbent", async () => {
+test("concurrent wallpaper launches replace the incumbent Process in order", async () => {
     const { manager, register } = fixture()
     const results = await Promise.allSettled([register("first"), register("second")])
-    expect(results.map(result => result.status).sort()).toEqual(["fulfilled", "rejected"])
-    const failure = results.find(result => result.status === "rejected") as PromiseRejectedResult
-    expect(failure.reason.message).toMatch(/already running in the wallpaper layer/)
+    expect(results.map(result => result.status)).toEqual(["fulfilled", "fulfilled"])
+    expect(manager.processes.has("first")).toBe(false)
+    expect(manager.processes.has("second")).toBe(true)
     expect(manager.processes.size).toBe(1)
     const incumbent = [...manager.processes.values()][0]!
     expect(incumbent.client?.window.layer).toBe("wallpaper")
     incumbent.client!.window.minimized = true
-    await expect(register("third")).rejects.toThrow(/already running/)
-    expect(incumbent.client).not.toBeNull()
+    await register("third")
+    expect(manager.processes.has(incumbent.identity)).toBe(false)
+    expect(incumbent.client).toBeNull()
     await register("ordinary", "window")
     await register("overlay", "over")
-    await manager.remove(incumbent.identity)
     expect((await register("replacement")).client?.window.layer).toBe("wallpaper")
+    expect(manager.processes.has("third")).toBe(false)
+    expect(manager.processes.has("ordinary")).toBe(true)
+    expect(manager.processes.has("overlay")).toBe(true)
+})
+
+test("wallpaper replacement finishes before the new Server runtime is created", async () => {
+    const { manager, register } = fixture()
+    await register("incumbent")
+    const runtime = vi.fn(() => {
+        expect(manager.processes.has("incumbent")).toBe(false)
+        throw new Error("runtime creation failed")
+    })
+    await expect(register("replacement", "wallpaper", runtime)).rejects.toThrow("runtime creation failed")
+    expect(runtime).toHaveBeenCalledOnce()
+    expect(manager.processes.size).toBe(0)
+    await register("next")
+    expect(manager.processes.has("next")).toBe(true)
 })
 
 test("starting an existing Client and creating a Process share the wallpaper claim", async () => {
@@ -51,19 +69,12 @@ test("starting an existing Client and creating a Process share the wallpaper cla
     const results = await Promise.allSettled([
         manager.startClient("existing", { layer: "wallpaper" }), register("new")
     ])
-    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1)
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(2)
     expect([...manager.processes.values()].filter(process => process.client?.window.layer === "wallpaper")).toHaveLength(1)
-    const incumbent = [...manager.processes.values()].find(process => process.client)!
-    if (incumbent.identity === "existing") {
-        await register("waiting", null)
-        await expect(manager.startClient("waiting", { layer: "wallpaper" })).rejects.toThrow(/already running/)
-        expect(manager.processes.get("waiting")!.client).toBeNull()
-    } else {
-        expect(manager.processes.get("existing")!.client).toBeNull()
-    }
-    await manager.remove(incumbent.identity)
-    const waiting = [...manager.processes.values()].find(process => !process.client)!
-    await manager.startClient(waiting.identity, { layer: "wallpaper" })
+    expect(manager.processes.has("existing")).toBe(false)
+    const waiting = await register("waiting", null)
+    await manager.startClient("waiting", { layer: "wallpaper" })
+    expect(manager.processes.has("new")).toBe(false)
     expect(waiting.client?.window.layer).toBe("wallpaper")
 })
 

@@ -1,5 +1,5 @@
 import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
-import { type Launch } from "@phreshos/core"
+import { type Launch, type ProgramInstallOptions, type ProgramUninstallOptions } from "@phreshos/core"
 import ProgramManager from "./program-manager"
 
 /**
@@ -80,16 +80,14 @@ export default class Program {
         await this.createProcess(launch ?? {})
     }
 
-    public install(asker: string) {
+    public install(options: ProgramInstallOptions = {}, asker = "") {
 
-        return this.programManager.command(this.address, "install", undefined, asker)
+        return this.programManager.command(this.address, "install", options, asker)
     }
 
-    // False removes only installed program files. True removes everything
-    // owned by the system and forgets the runtime Program.
-    public uninstall(everything = false, asker = "") {
+    public uninstall(options: ProgramUninstallOptions = {}, asker = "") {
 
-        return this.programManager.command(this.address, "uninstall", everything, asker)
+        return this.programManager.command(this.address, "uninstall", options, asker)
     }
 
     public async forget(asker: string) {
