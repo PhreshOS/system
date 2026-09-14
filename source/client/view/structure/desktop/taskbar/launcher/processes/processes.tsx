@@ -2,6 +2,7 @@ import { ReactTunnel } from "@the-link/react"
 import { AuthManagerContext } from "@client/view/contexts"
 import ProcessItem from "./process-item"
 import { matchesProcess } from "../search"
+import { ScrollArea } from "@phreshos/react-ui"
 
 /** All live Processes, including those without a Client window. */
 export default function Processes({ terms }: Readonly<{ terms: readonly string[] }>) {
@@ -26,11 +27,11 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
         <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
 
-        {matching.length ? <ul className="m-0 min-h-0 list-none overflow-y-auto p-0">
+        {matching.length ? <ScrollArea className="min-h-0"><ul className="m-0 grid list-none content-start gap-1 p-2">
 
             {matching.map(process => <ProcessItem key={process.identity} process={process} program={programsByIdentity.get(process.program)} />)}
 
-        </ul> : <p className="m-0 grid min-h-32 place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Processes" : "No Processes"}</p>}
+        </ul></ScrollArea> : <p className="m-0 grid min-h-32 place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Processes" : "No Processes"}</p>}
 
     </div>
 }

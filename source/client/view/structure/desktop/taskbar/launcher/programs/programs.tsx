@@ -5,6 +5,7 @@ import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
+import { ScrollArea } from "@phreshos/react-ui"
 import { matchesProgram } from "../search"
 
 interface ProgramsProps {
@@ -27,7 +28,7 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
         {programs.length
 
-            ? <div className="grid min-h-0 content-start gap-1 overflow-y-auto">{programs.map(record => <ProgramItem
+            ? <ScrollArea className="min-h-0"><div className="grid content-start gap-1 p-2">{programs.map(record => <ProgramItem
 
                 key={record.identity}
 
@@ -37,7 +38,7 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
                 onChoose={onChoose}
 
-            />)}</div>
+            />)}</div></ScrollArea>
 
             : <p className="m-0 grid min-h-32 place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Programs" : "No installed programs"}</p>}
 
