@@ -2,16 +2,18 @@ import { type AuthenticationState } from "@server/core/authentication/authentica
 import { surfacePresencePose, surfacePresenceTransition } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { Panel, useAppearance } from "@phreshos/react-ui"
-import Spinner from "../../components/spinner"
+import { Button, Input, Panel, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
 import { type SyntheticEvent } from "react"
+import { ApplicationContext } from "../../contexts"
+import SystemHeader from "../../components/system-header"
 
 /** The common username-and-password surface for registration and sign-in. */
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
     const transaction = useAppearance().transaction
+    const application = ApplicationContext.useValue()
 
     function submit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
 
@@ -24,7 +26,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
         onSubmit(String(data.get("username") ?? ""), String(data.get("password") ?? ""))
     }
 
-    return <div className="absolute inset-0 grid backdrop-blur-md">
+    return <div className="absolute inset-0 grid">
 
         <motion.form
 
@@ -42,93 +44,57 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Panel header={<div className="relative grid gap-1 px-5 py-4">
+            <Panel header={<SystemHeader name={application.displayName} version={application.version} />} contentProps={{ className: "grid gap-5 p-5" }}>
 
-                <h1 className="text-xl font-semibold">{title}</h1>
+                <div className="grid gap-1">
 
-                <p className="text-sm leading-5 text-slate-600/90">{description}</p>
+                    <h1 className="text-xl font-semibold">{title}</h1>
 
-            </div>} contentProps={{ className: "grid gap-5 p-5" }}>
-
-                <div className="grid gap-4">
-
-                    <label className="grid gap-1.5 text-sm font-medium">
-
-                        Username
-
-                        <input
-
-                            name="username"
-
-                            type="text"
-
-                            autoComplete="username"
-
-                            minLength={requirements?.username.minimumLength}
-
-                            maxLength={requirements?.username.maximumLength}
-
-                            required
-
-                            disabled={pending}
-
-                            autoFocus
-
-                            className="h-10 rounded-lg border border-white/70 bg-white/70 px-3 font-normal shadow-window-content outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/80"
-
-                        />
-
-                    </label>
-
-                    <label className="grid gap-1.5 text-sm font-medium">
-
-                        Password
-
-                        <input
-
-                            name="password"
-
-                            type="password"
-
-                            autoComplete={passwordAutocomplete}
-
-                            minLength={requirements?.password.minimumLength}
-
-                            maxLength={requirements?.password.maximumLength}
-
-                            required
-
-                            disabled={pending}
-
-                            className="h-10 rounded-lg border border-white/70 bg-white/70 px-3 font-normal shadow-window-content outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/80"
-
-                        />
-
-                        {requirements && <span className="font-normal text-slate-500">
-
-                            Use at least {requirements.password.minimumLength} characters.
-
-                        </span>}
-
-                    </label>
+                    <p className="text-sm leading-5 opacity-60">{description}</p>
 
                 </div>
 
-                {error && <Alert className="border-red-200/70 bg-red-50/70 text-sm text-red-700">{error}</Alert>}
+                <div className="grid gap-4">
 
-                <button
+                    <Input
+                        label="Username"
+                        name="username"
+                        type="text"
+                        autoComplete="username"
+                        minLength={requirements?.username.minimumLength}
+                        maxLength={requirements?.username.maximumLength}
+                        required
+                        disabled={pending}
+                        autoFocus
+                    />
+
+                    <Input
+                        label="Password"
+                        name="password"
+                        type="password"
+                        autoComplete={passwordAutocomplete}
+                        minLength={requirements?.password.minimumLength}
+                        maxLength={requirements?.password.maximumLength}
+                        required
+                        disabled={pending}
+                        description={requirements ? `Use at least ${requirements.password.minimumLength} characters.` : undefined}
+                    />
+
+                </div>
+
+                {error && <Alert className="text-sm">{error}</Alert>}
+
+                <Button
 
                     type="submit"
 
                     disabled={pending}
 
-                    className="h-10 cursor-pointer rounded-lg border border-sky-700/35 from-sky-500 to-sky-600 px-4 font-medium text-white shadow-taskbar-control outline-none hover:from-sky-400 hover:to-sky-500 focus-visible:ring-2 focus-visible:ring-white/90"
+                    pending={pending}
 
-                >
+                    style={{ width: "100%" }}
 
-                    {pending ? <Spinner className="m-auto size-5" /> : submitLabel}
-
-                </button>
+                >{pending ? `${submitLabel}…` : submitLabel}</Button>
 
             </Panel>
 

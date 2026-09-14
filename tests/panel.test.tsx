@@ -8,15 +8,27 @@ import TaskbarSurface, { taskbarSurfaceClassName } from "@client/view/structure/
 import Launcher from "@client/view/structure/desktop/taskbar/launcher/launcher"
 import Window from "@client/view/structure/desktop/windows/window"
 import StartMenuPanel from "@client/view/structure/desktop/taskbar/launcher/start-menu-panel"
+import { ApplicationContext } from "@client/view/contexts"
+import Application from "@client/core/application"
 import { test } from "vitest"
 
 test("panel contract", async () => {
+  const application = new Application("phreshos", "Example System", "1.2.3", {
+      link: "/link",
+      proxy: "/proxy",
+      storage: "/storage",
+      uploads: "/uploads",
+      program: "/program"
+  })
+
   function markup(children: ReactNode) {
-      return renderToStaticMarkup(<AppearanceProvider appearance={defaultAppearance} theme="light">{children}</AppearanceProvider>)
+      return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
+          <AppearanceProvider appearance={defaultAppearance} theme="light">{children}</AppearanceProvider>
+      </ApplicationContext.Provider>)
   }
 
-  function panel(html: string) {
-      assert.equal(html.match(/data-material=""/g)?.length, 2)
+  function panel(html: string, materials = 2) {
+      assert.equal(html.match(/data-material=""/g)?.length, materials)
       assert.match(html, /grid-template-rows:auto minmax\(0, 1fr\)/)
       assert.match(html, /margin:6px;margin-top:0/)
   }
@@ -41,11 +53,14 @@ test("panel contract", async () => {
   assert.doesNotMatch(bare, /grid-template-rows:auto minmax\(0, 1fr\)/)
 
   const authentication = markup(<CredentialsForm title="Sign in" description="Welcome" submitLabel="Continue" passwordAutocomplete="current-password" pending={false} onSubmit={() => {}} />)
-  panel(authentication)
+  panel(authentication, 5)
   assert.equal(authentication.match(/<form\b/g)?.length, 1)
   assert.match(authentication, /name="username"/)
   assert.match(authentication, /name="password"/)
   assert.match(authentication, /type="submit"/)
+  assert.match(authentication, /<h2[^>]*>Example System<\/h2>/)
+  assert.match(authentication, /System version 1.2.3/)
+  assert.doesNotMatch(authentication, /backdrop-blur/)
 
   const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />}</Launcher>)
   assert.equal(launcher.match(/data-material=""/g)?.length, 4)
