@@ -49,7 +49,6 @@ export interface LocalWindowHost {
 
 export function localPosition(value: unknown): Position {
     const record = plain(value, "Local Window position")
-    fields(record, ["x", "y"], "Local Window position")
     valueTerm(record.x, "x")
     valueTerm(record.y, "y")
     return Object.freeze({ x: record.x, y: record.y }) as Position
@@ -57,7 +56,6 @@ export function localPosition(value: unknown): Position {
 
 export function localSize(value: unknown): Size {
     const record = plain(value, "Local Window size")
-    fields(record, ["width", "height"], "Local Window size")
     valueTerm(record.width, "width")
     valueTerm(record.height, "height")
     return Object.freeze({ width: record.width, height: record.height }) as Size
@@ -65,7 +63,6 @@ export function localSize(value: unknown): Size {
 
 export function localGeometry(value: unknown): WindowGeometry {
     const record = plain(value, "Local Window geometry")
-    fields(record, ["position", "size"], "Local Window geometry")
     return Object.freeze({ position: localPosition(record.position), size: localSize(record.size) })
 }
 
@@ -73,7 +70,6 @@ export function parseLocalWindowTransaction(value: unknown): AppearanceTransacti
     if (value === undefined) return undefined
 
     const record = plain(value, "Appearance transaction")
-    fields(record, ["duration", "easing", "wait"], "Appearance transaction")
 
     if (!("duration" in record) || !("easing" in record)) throw new Error("An Appearance transaction must provide duration and easing")
     const { minimum, maximum } = appearanceLimits.transaction.duration
@@ -115,12 +111,6 @@ function plain(value: unknown, name: string): Record<string, unknown> {
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) throw new Error(`${name} must be an object`)
     return value as Record<string, unknown>
-}
-
-function fields(record: Record<string, unknown>, allowed: string[], name: string) {
-
-    const unknown = Object.keys(record).find(field => !allowed.includes(field))
-    if (unknown) throw new Error(`${name} has no "${unknown}" field`)
 }
 
 function finite(value: unknown): value is number {

@@ -1034,7 +1034,6 @@ function shellOptions(value: unknown): Omit<ShellOptions, "signal"> {
 
     const options = value as Record<string, unknown>
 
-    if (Object.keys(options).some(key => key !== "cwd" && key !== "env")) throw new Error("Shell options contain an unknown field")
     if (options.cwd !== undefined && (typeof options.cwd !== "string" || !options.cwd)) throw new Error("A shell working directory must be non-empty text")
     if (options.env !== undefined && (!options.env || typeof options.env !== "object" || Array.isArray(options.env) || Object.values(options.env).some(entry => typeof entry !== "string"))) {
 

@@ -32,7 +32,7 @@ test("client surface contract", async () => {
   assert.throws(() => parseLocalWindowTransaction({ duration: 60_001, easing: "linear" }), /0 to 60000/)
   assert.throws(() => parseLocalWindowTransaction({ duration: 120 }), /must provide duration and easing/)
   assert.throws(() => parseLocalWindowTransaction({ duration: 120, easing: "linear", wait: false }), /must be true/)
-  assert.throws(() => parseLocalWindowTransaction({ unknown: true }), /no "unknown" field/)
+  assert.equal(parseLocalWindowTransaction({ duration: 120, easing: "linear", extension: true })?.duration, 120)
 
   const ordinary = client("window")
   const bare = client("over")
@@ -278,7 +278,7 @@ test("client surface contract", async () => {
       ["remove", "requester", visibility]
   ])
   assert.deepEqual(target.client.window.position, { x: 10, y: 20 })
-  await assert.rejects(request("windowLocalSurfaceAdd", requesterAddress, undefined, { identity: "unexpected" }), /no "identity" field/)
+  await request("windowLocalSurfaceAdd", requesterAddress, undefined, { ...visibility, extension: true })
   await assert.rejects(request("windowLocalSurfaceAdd", targetAddress), /current Client Context/)
   await assert.rejects(request("windowLocalSurfaceAdd", { ...requesterAddress, reference: "wrong" }), /represented by this handle does not exist/)
   requester.client.window.layer = "window"

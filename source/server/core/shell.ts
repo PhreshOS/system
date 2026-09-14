@@ -138,7 +138,6 @@ function validate(command: string, options: ShellOptions) {
 
     if (typeof command !== "string" || !command.trim()) throw new Error("A shell command must be non-empty text")
     if (!options || typeof options !== "object" || Array.isArray(options)) throw new Error("Shell options must be an object")
-    if (Object.keys(options).some(key => key !== "cwd" && key !== "env" && key !== "signal")) throw new Error("Shell options contain an unknown field")
     if (options.signal !== undefined && !(options.signal instanceof AbortSignal)) throw new Error("A shell signal must be an AbortSignal")
 
     const cwd = options.cwd ?? homedir()

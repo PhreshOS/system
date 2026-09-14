@@ -12,10 +12,10 @@ import { test } from "vitest"
 test("appearance contract", async () => {
   assert.deepEqual(parseAppearance(defaultAppearance), defaultAppearance)
   assert.throws(() => parseAppearance({}))
-  assert.throws(() => parseAppearance({
+  assert.deepEqual(parseAppearance({
     ...defaultAppearance,
-    colors: { ...defaultAppearance.colors, accent: defaultAppearance.colors.light.primary }
-  }))
+    colors: { ...defaultAppearance.colors, extension: defaultAppearance.colors.light.primary }
+  }), defaultAppearance)
   assert.throws(() => parseAppearance({ ...defaultAppearance, spacing: { light: 12, dark: 12 } }))
   assert.throws(() => parseAppearance({
     ...defaultAppearance,

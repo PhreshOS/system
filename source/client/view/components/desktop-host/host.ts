@@ -1200,9 +1200,7 @@ function desktopPreferencesUpdate(value: unknown): DesktopPreferencesUpdate {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Desktop preferences must be an object")
 
     const preferences = value as Record<string, unknown>
-    const keys = Object.keys(preferences)
-
-    if (keys.length === 0 || keys.some(key => key !== "theme" && key !== "animations")) throw new Error("Desktop preferences must update theme, animations, or both")
+    if (!("theme" in preferences) && !("animations" in preferences)) throw new Error("Desktop preferences must update theme, animations, or both")
 
     if ("theme" in preferences && preferences.theme !== "light" && preferences.theme !== "dark" && preferences.theme !== "default") {
         throw new Error("The Desktop theme preference must be light, dark, or default")
@@ -1212,7 +1210,10 @@ function desktopPreferencesUpdate(value: unknown): DesktopPreferencesUpdate {
         throw new Error("The Desktop animations preference must be true, false, or default")
     }
 
-    return Object.freeze({ ...preferences }) as DesktopPreferencesUpdate
+    return Object.freeze({
+        ...(preferences.theme === undefined ? {} : { theme: preferences.theme }),
+        ...(preferences.animations === undefined ? {} : { animations: preferences.animations })
+    }) as DesktopPreferencesUpdate
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {

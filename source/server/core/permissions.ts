@@ -21,9 +21,7 @@ export class PermissionCatalog {
 
         const validated: Partial<Record<PermissionName, StoredDefinition>> = {}
 
-        for (const unknownName of Object.keys(rules)) {
-
-            const name = parsePermissionName(unknownName)
+        for (const name of Object.keys(clientPermissionCatalog) as PermissionName[]) {
             const rule = rules[name]
 
             if (!rule || typeof rule !== "object") throw new Error(`Permission "${name}" needs a definition`)
@@ -102,6 +100,7 @@ export class PermissionCatalog {
 
         for (const [unknownName, assignment] of Object.entries(value)) {
 
+            if (!Object.hasOwn(clientPermissionCatalog, unknownName)) continue
             const name = parsePermissionName(unknownName)
             const permission = this.resolve(name, assignment)
 
@@ -121,6 +120,7 @@ export class PermissionCatalog {
 
         for (const [unknownName, assignment] of Object.entries(value)) {
 
+            if (!Object.hasOwn(clientPermissionCatalog, unknownName)) continue
             const name = parsePermissionName(unknownName)
 
             if (assignment === true) throw new Error("The Program permissions file contains unresolved shorthand")
