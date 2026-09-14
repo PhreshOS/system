@@ -907,6 +907,15 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
 
+    /** Checks and claims the wallpaper role in one synchronous activation. */
+    private activateClient(process: Process, window: Window, service: boolean) {
+        if (window.layer === "wallpaper" && [...this.processes.values()].some(
+            current => current.client?.window.layer === "wallpaper"
+        )) throw new Error("A Client Endpoint is already running in the wallpaper layer")
+
+        process.startClient(window, service)
+    }
+
     public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntime | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
 
         if (this.processes.has(identity)) {
@@ -925,7 +934,7 @@ export default class ProcessManager extends TheLink {
 
         // Who had focus before this one opened, in the layer it is
         // opening into. A window is born on top of its own layer and
-        // takes focus from whoever held it there; the other two layers
+        // takes focus from whoever held it there; the other layers
         // do not hear about it.
         const front = shape && this.front(shape.layer)
 
@@ -965,7 +974,7 @@ export default class ProcessManager extends TheLink {
             // order: Process creation, endpoint start, endpoint stop, Process exit.
             await this.transition(process, async () => {
 
-                if (client && window) process.startClient(window, launch.client?.service ?? false)
+                if (client && window) this.activateClient(process, window, launch.client?.service ?? false)
 
                 if (runtime) this.activateServer(process, runtime, launch.server?.service ?? false)
 
@@ -1188,7 +1197,7 @@ export default class ProcessManager extends TheLink {
 
             const before = this.front(window.layer)
 
-            process.startClient(window, launch.service ?? process.program.client.service)
+            this.activateClient(process, window, launch.service ?? process.program.client.service)
 
             try {
 

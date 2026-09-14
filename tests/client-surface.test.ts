@@ -130,7 +130,8 @@ test("client surface contract", async () => {
   await first.move("bare", { x: 125, y: 135 })
   ordinary.window.title = "Renamed"
   first.reconcile(clients)
-  assert.equal(first.state("bare").title, "Renamed")
+  assert.equal(first.state("bare").title, "")
+  assert.throws(() => first.title("bare", "Local title"), /does not allow local title/)
   assert.deepEqual(first.state("bare").position, { x: 125, y: 135 })
   ordinary.window.position = { x: 230, y: 240 }
   first.reconcile(clients)

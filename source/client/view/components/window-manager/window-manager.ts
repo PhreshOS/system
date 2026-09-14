@@ -13,7 +13,7 @@ import LocalWindows from "./local-windows"
  * whether it is shown — nothing else is consulted.
  *
  * The local representation and authoritative counterpart are distinct.
- * Following starts enabled for ordinary windows and disabled for under/over.
+ * Following starts enabled for ordinary windows and disabled for the other layers.
  * Each Client can subsequently follow an authoritative Window or detach.
  *
  * Departure is representation. The truth drops a stopped client and its
@@ -112,11 +112,17 @@ export default function useWindows(authManager: AuthManager) {
 
         const gone = [...previousClients.current.values()].filter(previous => currentClients.get(previous.record.identity)?.client !== previous.client)
 
-        if (gone.length) setLeaving(function (current) {
+        const departed = new Set(gone.filter(({ client }) => client.window.layer === "wallpaper").map(({ identity }) => identity))
+
+        for (const identity of departed) localWindow.remove(identity)
+
+        const animated = gone.filter(({ identity }) => !departed.has(identity))
+
+        if (animated.length) setLeaving(function (current) {
 
             const retained = new Set(current.map(({ identity }) => identity))
 
-            return [...current, ...gone.filter(({ identity }) => !retained.has(identity))]
+            return [...current, ...animated.filter(({ identity }) => !retained.has(identity))]
         })
 
         setOrder(function (current) {
@@ -125,7 +131,7 @@ export default function useWindows(authManager: AuthManager) {
 
             const added = [...currentClients.values()].filter(({ identity }) => !retained.has(identity)).map(({ identity }) => identity)
 
-            return added.length ? [...current, ...added] : current
+            return added.length || departed.size ? [...current.filter(identity => !departed.has(identity)), ...added] : current
         })
 
         previousClients.current = currentClients
@@ -150,9 +156,8 @@ export default function useWindows(authManager: AuthManager) {
     // does not push a window's number up.
     const summit = useCallback((layer: Layer) => [...peer.processes.values()].reduce((highest, process) => process.client?.window.layer === layer ? Math.max(highest, process.client.window.depth) : highest, 0), [peer])
 
-    // The front window of each layer, resolved together. Three separate
-    // reductions walked every process three times on every window event.
-    const fronts: Record<Layer, Process | null> = { under: null, window: null, over: null }
+    // Resolve the front window of every layer in one pass.
+    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null }
 
     for (const process of records) {
 
@@ -323,7 +328,7 @@ export default function useWindows(authManager: AuthManager) {
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
 
-    const panesByLayer: Record<Layer, typeof panes> = { under: [], window: [], over: [] }
+    const panesByLayer: Record<Layer, typeof panes> = { wallpaper: [], under: [], window: [], over: [] }
 
     for (const pane of panes) {
 
@@ -362,11 +367,7 @@ export default function useWindows(authManager: AuthManager) {
         // nothing about the pairing.
         show,
 
-        // Filling the surface, and coming back from it. Not a state the
-        // system holds: there is no `maximized` any more, only a size —
-        // so the memory of where a window was before it filled the
-        // surface is kept here, in the interface that offers the button.
-        // Whoever offers an undo owns what it undoes.
+        // Toggle authoritative maximization and its local presentation.
         fill,
 
         move,

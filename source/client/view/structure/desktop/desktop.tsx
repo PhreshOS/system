@@ -45,7 +45,8 @@ export default function Workspace() {
 
     const [fileWallpaperReady, setFileWallpaperReady] = useState(false)
 
-    const wallpaperReady = fileWallpaperReady
+    const hasWallpaperClient = windows.records.some(record => record.client?.window.layer === "wallpaper")
+    const wallpaperReady = hasWallpaperClient || fileWallpaperReady
 
     const desktop = useRef<HTMLDivElement>(null)
 
@@ -155,7 +156,7 @@ export default function Workspace() {
 
             stopping={stopping}
 
-            entering={entering}
+            entering={layer === "wallpaper" ? false : entering}
 
             door={application.doors.program}
 
@@ -231,7 +232,9 @@ export default function Workspace() {
 
     </Taskbar>
 
-    const wallpaper = <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
+    const wallpaper = hasWallpaperClient
+        ? renderWindows("wallpaper")
+        : <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
     return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none" style={{ color: foreground }}>
 

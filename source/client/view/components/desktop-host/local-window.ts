@@ -96,6 +96,7 @@ export function parseLocalWindowTransaction(value: unknown): AppearanceTransacti
 export function requireLocalSurfaceLayer(layer: WindowLayer) {
 
     if (layer === "window") throw new Error("A standard Window already owns its host Surface")
+    if (layer === "wallpaper") throw new Error("The wallpaper layer does not allow a local Surface")
 }
 
 function easing(value: unknown): Easing {

@@ -32,7 +32,7 @@ function fixture() {
     }
 }
 
-test.each(["under", "over"] as const)("Client launch routes check %s before delegation", async layer => {
+test.each(["under", "over", "wallpaper"] as const)("Client launch routes check %s before delegation", async layer => {
     const f = fixture()
     const program = { identity: f.program.identity, reference: f.program.reference }
     const process = { identity: f.process.identity, reference: f.process.reference }
@@ -44,13 +44,19 @@ test.each(["under", "over"] as const)("Client launch routes check %s before dele
         ["launch", program, "set", launch],
         ["start-endpoint", process, "client", { layer }]
     ] as const
-    for (const denied of [{}, { programs: [] }, { layers: [layer === "under" ? "over" : "under"] }, { all: [], layers: false }] satisfies Permissions[]) {
+    const deniedPermissions: Permissions[] = layer === "wallpaper"
+        ? [{}, { programs: [] }, { layers: [] }, { all: [], wallpaper: false }]
+        : [{}, { programs: [] }, { layers: [layer === "under" ? "over" : "under"] }, { all: [], layers: false }, { wallpaper: [] }]
+    for (const denied of deniedPermissions) {
         f.permissions(denied)
         for (const [operation, ...args] of operations) await expect(f.answer(operation, ...args)).rejects.toThrow("Execution is not permitted")
     }
     const delegates = [f.createProcess, f.findOrCreateProcess, f.startup, f.savedLaunch, f.startEndpoint]
     for (const delegate of delegates) expect(delegate).not.toHaveBeenCalled()
-    for (const granted of [{ layers: [layer] }, { layers: [] }, { all: [] }] satisfies Permissions[]) {
+    const grantedPermissions: Permissions[] = layer === "wallpaper"
+        ? [{ wallpaper: [] }, { wallpaper: [], layers: false }, { all: [] }]
+        : [{ layers: [layer] }, { layers: [] }, { all: [] }]
+    for (const granted of grantedPermissions) {
         f.permissions(granted)
         for (const [operation, ...args] of operations) await f.answer(operation, ...args)
     }
@@ -73,7 +79,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
     expect(f.createProcess).toHaveBeenCalledOnce()
 })
 
-test.each(["under", "over"] as const)("Client run streams authorize %s before creating an iterator", async layer => {
+test.each(["under", "over", "wallpaper"] as const)("Client run streams authorize %s before creating an iterator", async layer => {
     const f = fixture()
     const boundary = new ClientProcessBoundary(f.process.identity, { contentWindow: null } as HTMLIFrameElement, f.auth,
         () => ({ size: { width: 100, height: 100 } }), {} as never, { release: vi.fn() } as never)
@@ -85,7 +91,7 @@ test.each(["under", "over"] as const)("Client run streams authorize %s before cr
     boundary.receive(["end-host", "stream", "denied", "run", program, launch])
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("host-end", "stream", "denied", "answer", { success: false, error: "Execution is not permitted" }))
     expect(f.command).not.toHaveBeenCalled()
-    f.permissions({ layers: [layer] })
+    f.permissions(layer === "wallpaper" ? { wallpaper: [] } : { layers: [layer] })
     boundary.receive(["boundary", "expect", "allowed"])
     boundary.receive(["end-host", "stream", "allowed", "run", program, launch])
     await vi.waitFor(() => expect(deliver).toHaveBeenCalledWith("host-end", "stream", "allowed", "answer", { success: true, result: undefined }))
