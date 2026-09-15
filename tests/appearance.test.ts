@@ -4,10 +4,12 @@ import { defaultAppearance, parseAppearance } from "@phreshos/core"
 import AppearanceManager from "@server/core/appearance-manager"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "vitest"
+import { randomUUID } from "node:crypto"
+import { wallpaperSizeLimit } from "@shared/wallpaper"
 
 test("appearance contract", async () => {
   assert.deepEqual(parseAppearance(defaultAppearance), defaultAppearance)
@@ -91,6 +93,31 @@ test("appearance contract", async () => {
   assert.deepEqual(await store.get("appearance"), updated)
   assert.equal(await store.get("appearance:colors"), undefined)
   assert.equal(await store.get("appearance:theme"), undefined)
+
+  const wallpaperFiles = await Promise.all(["png", "webm", "html"].map(extension =>
+    uploads.write(extension, new Blob(["wallpaper"]).stream())))
+
+  for (const file of wallpaperFiles) {
+    await manager.update({
+      ...manager.value,
+      desktopWallpaper: { ...manager.value.desktopWallpaper, light: file }
+    })
+    assert.equal(manager.value.desktopWallpaper.light, file)
+  }
+
+  const unsupported = await uploads.write("txt", new Blob(["wallpaper"]).stream())
+  await assert.rejects(manager.update({
+    ...manager.value,
+    desktopWallpaper: { ...manager.value.desktopWallpaper, light: unsupported }
+  }), /image, video, or HTML/)
+
+  const oversized = `${randomUUID()}.html`
+  await writeFile(uploads.path(oversized), "")
+  await truncate(uploads.path(oversized), wallpaperSizeLimit + 1)
+  await assert.rejects(manager.update({
+    ...manager.value,
+    desktopWallpaper: { ...manager.value.desktopWallpaper, light: oversized }
+  }), /50 MiB/)
 
   await rm(directory, { recursive: true, force: true })
 }, 120_000)

@@ -8,7 +8,7 @@
         "@fontsource/roboto": "^5.3.0",
         "@hono/node-server": "^2.1.1",
         "@phreshos/core": "^0.1.49",
-        "@phreshos/react-ui": "^0.1.22",
+        "@phreshos/react-ui": "^0.1.23",
         "@the-link/core": "^0.3.0",
         "@the-link/http": "^0.1.1",
         "@the-link/ipc": "^0.2.1",
@@ -249,7 +249,7 @@
 
     "@phreshos/core": ["@phreshos/core@0.1.49", "", {}, "sha512-WRVvFag4L2c/ooflnbyrB3WmFROMF6yF6Cz3ABt0UeyEZ2UIccQHJR125OvM5imVJNv+buTZIryXA5yooMn21Q=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.22", "", { "dependencies": { "@base-ui/react": "^1.7.0", "@phreshos/core": "^0.1.49", "colorjs.io": "^0.7.1", "motion": "^13.2.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-IeqFhcTWsUqBwHyRA4evuLHJG8EJrJoTihjFmo9DsD9C36fMA2iFxZc0qNy5St9JUFhwml4IVXQdqwSEeOcwww=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.1.23", "", { "dependencies": { "@base-ui/react": "^1.7.0", "@phreshos/core": "^0.1.49", "colorjs.io": "^0.7.1", "motion": "^13.2.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-ajmii1CiYVLRlWGy2XLAMwFWYXFbOvsEgN11B7AcTQpA05Y8CCT5ARRHckDkP5BIGZ+wA3mRppVcDlXJBugd2w=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 

@@ -23,7 +23,7 @@ test("panel contract", async () => {
 
   function markup(children: ReactNode) {
       return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
-          <AppearanceProvider appearance={defaultAppearance} theme="light">{children}</AppearanceProvider>
+          <AppearanceProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}>{children}</AppearanceProvider>
       </ApplicationContext.Provider>)
   }
 

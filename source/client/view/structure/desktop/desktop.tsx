@@ -17,7 +17,7 @@ import useWindows from "../../components/window-manager/window-manager"
 import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
-import { useAppearance, useThemedValue, useTheme } from "@phreshos/react-ui"
+import { useAppearance, usePreferences, useThemedValue } from "@phreshos/react-ui"
 
 export default function Workspace() {
 
@@ -31,7 +31,7 @@ export default function Workspace() {
 
     const foreground = useThemedValue(appearance.colors).foreground
 
-    const theme = useTheme()
+    const { theme } = usePreferences()
 
     const windows = useWindows(authManager)
 

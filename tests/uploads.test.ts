@@ -66,6 +66,18 @@ test("uploads contract", async () => {
       assert.equal(downloaded.status, 200)
       assert.deepEqual(await described.json(), { size: created.size, modifiedAt: created.modifiedAt })
       assert.deepEqual(JSON.parse(await downloaded.text()), { ready: true })
+
+      const htmlSource = "<!doctype html><script>document.body.textContent = 'offline wallpaper'</script>"
+      const htmlFile = await uploads.write("html", new Blob([htmlSource]).stream())
+      const wallpaper = await view.request(`http://system/uploads/wallpaper/${htmlFile}`)
+
+      assert.equal(wallpaper.status, 200)
+      assert.equal(wallpaper.headers.get("content-type"), "text/html; charset=utf-8")
+      assert.match(wallpaper.headers.get("content-security-policy") ?? "", /connect-src 'none'/)
+      assert.match(wallpaper.headers.get("content-security-policy") ?? "", /script-src 'unsafe-inline' data: blob:/)
+      assert.match(wallpaper.headers.get("content-security-policy") ?? "", /sandbox allow-scripts/)
+      assert.equal(await wallpaper.text(), htmlSource)
+      assert.equal((await view.request(`http://system/uploads/wallpaper/${created.file}`)).status, 400)
       assert.equal((await view.request("http://system/uploads/not-a-key")).status, 400)
       assert.equal((await view.request("http://system/uploads/00000000-0000-0000-0000-000000000000.txt")).status, 404)
   } finally {

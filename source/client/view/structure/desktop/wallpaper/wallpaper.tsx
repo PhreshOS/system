@@ -4,43 +4,34 @@ import { ApplicationContext } from "@client/view/contexts"
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type TransitionEvent } from "react"
 import Loading from "@client/view/components/loading"
 import { useReady } from "@libs/readiness"
-import { useAppearance, useTheme } from "@phreshos/react-ui"
+import { useAppearance, usePreferences } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
 import { cssEasing } from "@client/view/appearance/motion"
+import { wallpaperKind, type WallpaperKind } from "@shared/wallpaper"
 
 const bundledWallpapers = [darkWallpaper, lightWallpaper] as const
 
-const wallpaperImages = new Map<string, HTMLImageElement>()
-
-const wallpaperLoads = new Map<string, Promise<void>>()
+type WallpaperSource = Readonly<{
+    identity: string
+    kind: WallpaperKind
+    url: string
+}>
 
 type WallpaperLayers = Readonly<{
-    displayed: string | null
-    incoming: string | null
+    displayed: WallpaperSource | null
+    incoming: WallpaperSource | null
     switching: boolean
 }>
 
-/**
- * Displays one completely loaded wallpaper source.
- *
- * A filename asks for a served image and `null` selects the effective Theme's
- * bundled wallpaper. Both bundled sources remain preloaded so a Theme change
- * only replaces the source of this one visual layer.
- */
+/** Displays one completely loaded wallpaper source. */
 export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps) {
-
     const application = ApplicationContext.useValue()
-
-    const theme = useTheme()
+    const { theme } = usePreferences()
     const reducedMotion = useReducedMotion()
-
-    const desired = file === null
-        ? theme === "dark" ? darkWallpaper : lightWallpaper
-        : `${application.doors.uploads}/${encodeURIComponent(file)}`
-
+    const desired = resolveWallpaper(file, theme, application.doors.uploads)
     const [layers, setLayers] = useState<WallpaperLayers>({
         displayed: null,
-        incoming: null,
+        incoming: desired,
         switching: false
     })
     const current = useRef(layers)
@@ -49,165 +40,190 @@ export function WallpaperBackground({ file, onReady }: WallpaperBackgroundProps)
     current.current = layers
 
     const ready = useEffectEvent(() => onReady?.())
-    const display = useEffectEvent((source: string) => {
+
+    useEffect(() => {
+        for (const wallpaper of bundledWallpapers) {
+            const image = new Image()
+            image.src = wallpaper
+        }
+    }, [])
+
+    useEffect(() => {
+        cancelSwitch(frame)
+        setLayers(value => {
+            if (value.displayed?.identity === desired.identity) {
+                return value.incoming ? { displayed: value.displayed, incoming: null, switching: false } : value
+            }
+
+            if (value.incoming?.identity === desired.identity) return value
+
+            return { displayed: value.displayed, incoming: desired, switching: false }
+        })
+    }, [desired.identity])
+
+    useEffect(() => () => cancelSwitch(frame), [])
+
+    function loaded(source: WallpaperSource) {
         const shown = current.current
+
+        if (shown.incoming?.identity !== source.identity) return
+
+        ready()
 
         if (!shown.displayed || reducedMotion) {
             setLayers({ displayed: source, incoming: null, switching: false })
             return
         }
 
-        if (shown.displayed === source && !shown.incoming) return
-
-        if (frame.current !== null) cancelAnimationFrame(frame.current)
-        setLayers({ displayed: shown.incoming ?? shown.displayed, incoming: source, switching: false })
+        cancelSwitch(frame)
         frame.current = requestAnimationFrame(() => {
             frame.current = requestAnimationFrame(() => {
                 frame.current = null
-                setLayers(value => value.incoming === source ? { ...value, switching: true } : value)
+                setLayers(value => value.incoming?.identity === source.identity
+                    ? { ...value, switching: true }
+                    : value)
             })
         })
-    })
+    }
 
-    useEffect(() => () => {
-        if (frame.current !== null) cancelAnimationFrame(frame.current)
-    }, [])
+    function failed(source: WallpaperSource) {
+        if (current.current.incoming?.identity !== source.identity) return
 
-    useEffect(() => {
-        let active = true
-        const desiredLoad = loadWallpaper(desired)
-        const bundledLoads = bundledWallpapers.map(loadWallpaper)
-        const loading = file === null
-            ? Promise.allSettled(bundledLoads).then(() => desiredLoad)
-            : desiredLoad
+        setLayers(value => value.incoming?.identity === source.identity
+            ? { ...value, incoming: null, switching: false }
+            : value)
+        ready()
+    }
 
-        for (const preload of bundledLoads) void preload.catch(() => undefined)
-
-        loading.then(() => {
-            if (!active) return
-            display(desired)
-            ready()
-        }, () => {
-            if (active) ready()
-        })
-
-        return () => { active = false }
-    }, [desired, file])
-
-    function transitionEnded(event: TransitionEvent<HTMLDivElement>, source: string) {
-        if (event.propertyName !== "opacity" || layers.incoming !== source || !layers.switching) return
+    function transitionEnded(event: TransitionEvent<HTMLDivElement>, source: WallpaperSource) {
+        if (event.propertyName !== "opacity" || layers.incoming?.identity !== source.identity || !layers.switching) return
         setLayers({ displayed: source, incoming: null, switching: false })
     }
 
     const incoming = layers.incoming
 
     return <>
-
         {layers.displayed && <WallpaperLayer
-            key={layers.displayed}
+            key={layers.displayed.identity}
             source={layers.displayed}
             visible
         />}
 
         {incoming && <WallpaperLayer
-            key={incoming}
+            key={incoming.identity}
             source={incoming}
             visible={layers.switching}
+            onLoad={() => loaded(incoming)}
+            onError={() => failed(incoming)}
             onTransitionEnd={event => transitionEnded(event, incoming)}
         />}
-
     </>
 }
 
-function WallpaperLayer({ source, visible, onTransitionEnd }: {
-    source: string
+function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: Readonly<{
+    source: WallpaperSource
     visible: boolean
+    onLoad?: () => void
+    onError?: () => void
     onTransitionEnd?: (event: TransitionEvent<HTMLDivElement>) => void
-}) {
+}>) {
     const transaction = useAppearance().transaction
     const reducedMotion = useReducedMotion()
+    const interactive = source.kind === "html" && visible
 
     return <div
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat ${visible ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 ${interactive ? "pointer-events-auto" : "pointer-events-none"} ${visible ? "opacity-100" : "opacity-0"}`}
         style={{
-            backgroundImage: `url(${source})`,
             transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
             transitionTimingFunction: cssEasing(transaction.easing),
             transitionProperty: "opacity"
         }}
         onTransitionEnd={onTransitionEnd}
-    />
+    >
+        {source.kind === "image" && <img
+            aria-hidden="true"
+            alt=""
+            className="h-full w-full object-cover"
+            draggable={false}
+            src={source.url}
+            onLoad={event => void event.currentTarget.decode().then(onLoad, onError)}
+            onError={onError}
+        />}
+
+        {source.kind === "video" && <video
+            aria-hidden="true"
+            className="h-full w-full object-cover"
+            src={source.url}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            onCanPlay={onLoad}
+            onError={onError}
+        />}
+
+        {source.kind === "html" && <iframe
+            className="h-full w-full border-0"
+            src={source.url}
+            title="Wallpaper"
+            sandbox="allow-scripts"
+            referrerPolicy="no-referrer"
+            onLoad={onLoad}
+            onError={onError}
+        />}
+    </div>
 }
 
-function loadWallpaper(source: string) {
-    const existing = wallpaperLoads.get(source)
+function resolveWallpaper(file: string | null, theme: "light" | "dark", uploads: string): WallpaperSource {
+    if (file === null) {
+        const url = theme === "dark" ? darkWallpaper : lightWallpaper
 
-    if (existing) return existing
+        return { identity: `bundled:${theme}`, kind: "image", url }
+    }
 
-    const image = new Image()
-    const loading = new Promise<void>((resolve, reject) => {
-        const failed = () => {
-            wallpaperImages.delete(source)
-            wallpaperLoads.delete(source)
-            reject(new Error(`The wallpaper could not be loaded: ${source}`))
-        }
+    const kind = wallpaperKind(file) ?? "image"
+    const path = kind === "html" ? `${uploads}/wallpaper/${encodeURIComponent(file)}` : `${uploads}/${encodeURIComponent(file)}`
 
-        image.onload = () => void image.decode().then(resolve, failed)
-        image.onerror = failed
-    })
+    return { identity: `${kind}:${file}`, kind, url: path }
+}
 
-    wallpaperImages.set(source, image)
-    wallpaperLoads.set(source, loading)
-    image.src = source
+function cancelSwitch(frame: { current: number | null }) {
+    if (frame.current === null) return
 
-    return loading
+    cancelAnimationFrame(frame.current)
+    frame.current = null
 }
 
 /** A complete surface whose content sits above one file-backed wallpaper. */
 export function WallpaperStage({ file, children }: WallpaperStageProps) {
-
     const [readyFile, setReadyFile] = useState<string | null>()
-
     const ready = readyFile === file
 
     return <div className="relative isolate grid min-h-0">
+        <WallpaperBackground file={file} onReady={() => setReadyFile(file)} />
 
-        <WallpaperBackground file={file} onReady={() => {
-
-            setReadyFile(file)
-        }} />
-
-        <div className="relative z-1 grid min-h-0">
-
+        <div className="pointer-events-none relative z-1 grid min-h-0">
             {children}
-
         </div>
 
         {!ready && <Loading />}
-
         {ready && <ReadyWallpaper />}
-
     </div>
 }
 
 export function ReadyWallpaper() {
-
     useReady("wallpaper")
 
     return null
 }
 
 interface WallpaperStageProps {
-
     file: string | null
-
     children: ReactNode
 }
 
 interface WallpaperBackgroundProps {
-
     file: string | null
-
     onReady?: () => void
 }

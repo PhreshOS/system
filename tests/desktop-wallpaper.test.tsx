@@ -30,7 +30,7 @@ vi.mock("@client/view/structure/desktop/windows/process-window", () => ({
 }))
 
 test("Desktop replaces its default wallpaper with the running Client and restores the fallback after stop", () => {
-    const render = () => renderToStaticMarkup(<AppearanceProvider theme="light"><Workspace /></AppearanceProvider>)
+    const render = () => renderToStaticMarkup(<AppearanceProvider preferences={{ theme: "light", animations: true }}><Workspace /></AppearanceProvider>)
     fixture.processes.clear()
     fixture.pane.mockClear()
     fixture.fallback.mockClear()

@@ -121,7 +121,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     return <LinkManagerContext.Provider value={linkManager}>
 
-        <AppearanceProvider appearance={appearance} theme={preferences.theme}>
+        <AppearanceProvider appearance={appearance} preferences={preferences}>
 
             <ConnectedAppearance>
 

@@ -36,7 +36,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             transition={surfacePresenceTransition(reducedMotion, transaction)}
 
-            className="relative m-auto w-[min(24rem,calc(100%-2rem))]"
+            className="pointer-events-auto relative m-auto w-[min(24rem,calc(100%-2rem))]"
 
             aria-busy={pending}
 

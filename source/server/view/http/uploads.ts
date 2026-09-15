@@ -4,6 +4,24 @@ import Application from "@server/core/application"
 import doors from "./doors"
 import { Hono } from "hono"
 import { isUploadFile } from "@phreshos/core"
+import { readFile } from "node:fs/promises"
+import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
+
+const wallpaperPolicy = [
+    "default-src 'none'",
+    "script-src 'unsafe-inline' data: blob:",
+    "style-src 'unsafe-inline' data: blob:",
+    "img-src data: blob:",
+    "media-src data: blob:",
+    "font-src data:",
+    "connect-src 'none'",
+    "worker-src data: blob:",
+    "object-src 'none'",
+    "frame-src data: blob:",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "sandbox allow-scripts"
+].join("; ")
 
 /**
  * The door bytes come through, and the one they go back out of.
@@ -79,6 +97,30 @@ export default function (application: Application) {
         catch (error) {
 
             return context.text(error instanceof Error ? error.message : "Invalid upload", 400)
+        }
+    })
+
+    uploads.get("/wallpaper/:file", async function (context) {
+        const file = context.req.param("file")
+
+        if (!isUploadFile(file)) return context.text("That is not an upload file", 400)
+        if (wallpaperKind(file) !== "html") return context.text("That upload is not an HTML wallpaper", 400)
+
+        try {
+            const upload = application.uploads.stat(file)
+
+            if (!upload) return context.body(null, 404)
+            if (upload.size > wallpaperSizeLimit) return context.text("A wallpaper cannot exceed 50 MiB", 413)
+
+            context.header("Content-Security-Policy", wallpaperPolicy)
+            context.header("Content-Type", "text/html; charset=utf-8")
+            context.header("X-Content-Type-Options", "nosniff")
+
+            return context.body(Uint8Array.from(await readFile(application.uploads.path(file))))
+        }
+
+        catch (error) {
+            return context.text(error instanceof Error ? error.message : "Invalid wallpaper", 400)
         }
     })
 
