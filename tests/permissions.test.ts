@@ -49,6 +49,16 @@ test("permissions contract", async () => {
           default: [],
           title: "Desktop preferences",
           description: "Change this Desktop's preferences."
+      },
+      desktopConnection: {
+          default: [],
+          title: "Desktop connection",
+          description: "Access the browser Connection carrying this Desktop and its Session."
+      },
+      connections: {
+          default: [],
+          title: "Connections",
+          description: "Access every browser Connection and its Session."
       }
   })
 
@@ -125,6 +135,12 @@ test("permissions contract", async () => {
   assert(!catalog.allows("services", [], { programs: ["browser"] }))
   assert(!catalog.allows("programs", ["browser"], { services: [] }))
   assert(catalog.allows("services", ["browser"], { programs: [], services: false }))
+  assert(catalog.allows("desktopConnection", [], { desktopConnection: [] }))
+  assert(catalog.allows("desktopConnection", [], { connections: [] }))
+  assert(catalog.allows("desktopConnection", [], { connections: [], desktopConnection: false }))
+  assert(!catalog.allows("connections", [], { desktopConnection: [] }))
+  assert(catalog.allows("desktopConnection", [], { all: [], connections: false }))
+  assert(!catalog.allows("desktopConnection", [], { all: [], connections: false, desktopConnection: false }))
   assert(!catalog.allows("network", ["https://elsewhere.example"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allows("network", ["https://api.example.com/v1"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allowsStorage([], null, "Documents/report.txt", "read"))
@@ -157,7 +173,9 @@ test("permissions contract", async () => {
       storage: catalog.definition("storage"),
       uploads: catalog.definition("uploads"),
       appearance: catalog.definition("appearance"),
-      desktopPreferences: catalog.definition("desktopPreferences")
+      desktopPreferences: catalog.definition("desktopPreferences"),
+      desktopConnection: catalog.definition("desktopConnection"),
+      connections: catalog.definition("connections")
   } as never), /invalid default/)
 
   assert.deepEqual(permissionCatalog.resolve("all", true), [])

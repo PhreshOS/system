@@ -50,9 +50,9 @@ export default class AuthManager extends TheLink {
     // What being authorized means, decided once. Every road in asks
     // here: the link before it carries a message, and the uploads door
     // before it accepts bytes.
-    public verify(authorization: unknown) {
+    public verify(sessionToken: unknown) {
 
-        const session = typeof authorization === "string" ? this.linkManager.resolveAuthorization(authorization) : null
+        const session = typeof sessionToken === "string" ? this.linkManager.resolveSessionToken(sessionToken) : null
 
         if (!session) throw new Error("Unauthorized")
     }
@@ -70,18 +70,22 @@ export default class AuthManager extends TheLink {
     }
 
     @Intercept("inbound")
-    protected authenticate(authorization: string, ...values: unknown[]) {
+    protected authenticate(...values: unknown[]) {
 
-        this.verify(authorization)
+        if (this.linkManager.connection().external) return values
 
-        return values
+        const [sessionToken, ...authenticated] = values
+
+        this.verify(sessionToken)
+
+        return authenticated
     }
 
     // Writing a public value is authorized here; the uploads door is only the
     // Client transport that brings its bytes to this operation.
-    public async upload(authorization: unknown, content: ReadableStream<Uint8Array> | null, extension: string, signal?: AbortSignal) {
+    public async upload(sessionToken: unknown, content: ReadableStream<Uint8Array> | null, extension: string, signal?: AbortSignal) {
 
-        this.verify(authorization)
+        this.verify(sessionToken)
 
         const file = await this.uploads.write(extension, content, signal)
 
@@ -89,16 +93,16 @@ export default class AuthManager extends TheLink {
     }
 
     /** Perform a server-side request after the desktop door proves authorization. */
-    public fetch(authorization: unknown, input: string | URL | Request, init?: RequestInit) {
+    public fetch(sessionToken: unknown, input: string | URL | Request, init?: RequestInit) {
 
-        this.verify(authorization)
+        this.verify(sessionToken)
 
         return fetch(input, init)
     }
 
-    public streamArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], options: [offset?: number, length?: number] = []) {
+    public streamArea(sessionToken: unknown, program: unknown, area: "data" | "cache", path: string[], options: [offset?: number, length?: number] = []) {
 
-        this.verify(authorization)
+        this.verify(sessionToken)
 
         return this.programManager.streamArea(program, area, path, options)
     }
@@ -222,6 +226,92 @@ export default class AuthManager extends TheLink {
         return await this.updateAppearance(value)
     }
 
+    @Connect("/session/sign-out-current")
+    protected async signOutCurrentSession() {
+
+        const session = this.linkManager.connection().session
+
+        if (!session) throw new Error("The Connection has no Session")
+
+        await this.linkManager.signOutSession(session)
+    }
+
+    @Connect("/connection/list")
+    protected async connections() {
+
+        return this.linkManager.application.system.listConnections()
+
+            .map(connection => this.linkManager.connectionSnapshot(connection))
+    }
+
+    @Connect("/connection/current")
+    protected async currentConnection() {
+
+        return this.linkManager.connectionSnapshot(this.linkManager.connection())
+    }
+
+    @Connect("/connection/find")
+    protected async connectionFind(identity: unknown) {
+
+        const connection = this.linkManager.application.system.findConnection(domainIdentity(identity, "Connection"))
+
+        return connection ? this.linkManager.connectionSnapshot(connection) : null
+    }
+
+    @Connect("/connection/state")
+    protected async connectionState(identity: unknown) {
+
+        return this.linkManager.application.system.connectionSnapshot(domainIdentity(identity, "Connection"))
+    }
+
+    @Connect("/connection/session")
+    protected async connectionSession(identity: unknown) {
+
+        return this.linkManager.application.system.connectionSession(domainIdentity(identity, "Connection"))
+    }
+
+    @Connect("/connection/sign-in")
+    protected async connectionSignIn(identity: unknown) {
+
+        return this.linkManager.application.system.signInConnection(domainIdentity(identity, "Connection"))
+    }
+
+    @Connect("/session/list")
+    protected async sessions() {
+
+        return this.linkManager.application.system.listSessions()
+
+            .map(identity => this.linkManager.sessionSnapshot(identity))
+    }
+
+    @Connect("/session/find")
+    protected async sessionFind(identity: unknown) {
+
+        const session = this.linkManager.application.system.findSession(domainIdentity(identity, "Session"))
+
+        return session ? this.linkManager.sessionSnapshot(session) : null
+    }
+
+    @Connect("/session/state")
+    protected async sessionState(identity: unknown) {
+
+        return this.linkManager.application.system.sessionSnapshot(domainIdentity(identity, "Session"))
+    }
+
+    @Connect("/session/connections")
+    protected async sessionConnections(identity: unknown) {
+
+        return this.linkManager.application.system.sessionConnections(domainIdentity(identity, "Session"))
+
+            .map(connection => this.linkManager.connectionSnapshot(connection))
+    }
+
+    @Connect("/session/sign-out")
+    protected async sessionSignOut(identity: unknown) {
+
+        return this.linkManager.application.system.signOutSession(domainIdentity(identity, "Session"))
+    }
+
     /** Replace System Appearance through the authenticated boundary. */
     public async updateAppearance(value: unknown) {
 
@@ -279,16 +369,16 @@ export default class AuthManager extends TheLink {
         if (typeof request === "string" && typeof process === "string") await this.processManager.cancelPermission(process, request)
     }
 
-    public async writeArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
+    public async writeArea(sessionToken: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
 
-        this.verify(authorization)
+        this.verify(sessionToken)
 
         await this.programManager.writeArea(program, area, path, content, signal, overwrite)
     }
 
-    public async appendArea(authorization: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
+    public async appendArea(sessionToken: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {
 
-        this.verify(authorization)
+        this.verify(sessionToken)
 
         await this.programManager.appendArea(program, area, path, content, signal)
     }
@@ -298,7 +388,7 @@ export default class AuthManager extends TheLink {
     // broadcast and would widen one frame's interest to every session.
     public async publishToConnection(connectionIdentity: string, event: string, ...values: unknown[]) {
 
-        const connection = this.linkManager.connections.get(connectionIdentity)
+        const connection = this.linkManager.findConnection(connectionIdentity)
 
         if (!connection?.session) return
 
@@ -306,11 +396,11 @@ export default class AuthManager extends TheLink {
     }
 
     @Forward("outbound", undefined, "/auth")
-    protected async broadcastToConnections(event: string, ...values: unknown[]) {
+    protected async broadcastToAuthorizedBoundaries(event: string, ...values: unknown[]) {
 
-        for (const connection of this.linkManager.connections.values()) {
+        for (const connection of this.linkManager.boundaries.values()) {
 
-            if (!connection.session) continue
+            if (!connection.external && !connection.session) continue
 
             await connection.link.$outbound.publish(event, ...values)
         }
@@ -346,6 +436,13 @@ function storageListOptions(value: unknown) {
     if (options.depth !== undefined && options.recursive !== true) throw new Error("A Storage list depth requires recursive listing")
 
     return { recursive: options.recursive === true, depth: options.depth as number | undefined }
+}
+
+function domainIdentity(value: unknown, domain: "Connection" | "Session") {
+
+    if (typeof value !== "string") throw new Error(`A ${domain} identity is required`)
+
+    return value
 }
 
 function storageWatchTarget(value: unknown) {

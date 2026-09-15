@@ -13,8 +13,7 @@ test("gateway contract", async () => {
   const path = gatewayAddress(directory)
   const received: unknown[][] = []
   let removed = false
-  const session = {
-      authorization: "owner",
+  const snapshot = {
       linkManager: { appearance: { key: "appearance", value: {} } },
       authManager: {
           programManager: { programs: [] },
@@ -22,7 +21,7 @@ test("gateway contract", async () => {
       }
   }
   const linkManager = {
-      addConnection() {
+      addExternalConnection() {
           return {
               async publish(event: string, ...values: unknown[]) {
                   received.push([event, ...values])
@@ -30,10 +29,8 @@ test("gateway contract", async () => {
               }
           }
       },
-      async addSession(_connection: unknown, owner: boolean) {
-          assert.equal(owner, true)
-          return session
-      },
+      authManager: { ...snapshot.authManager, toJSON() { return snapshot.authManager } },
+      toJSON() { return snapshot.linkManager },
       async removeConnection() { removed = true }
   }
   const listener = await gateway(linkManager as unknown as LinkManager, path)
@@ -47,7 +44,7 @@ test("gateway contract", async () => {
   try {
       await client.connect()
 
-      assert.deepEqual(await ready, session)
+      assert.deepEqual(await ready, snapshot)
       assert.deepEqual(
           await client.$outbound.publishFirst("/auth/example", "authorization", { binary: new Uint8Array([1, 2, 3]) }),
           { event: "/auth/example", values: ["authorization", { binary: new Uint8Array([1, 2, 3]) }] }

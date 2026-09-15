@@ -1,16 +1,21 @@
-import useStorage from "@libs/storage-hook"
+import { AuthManagerContext } from "@client/view/contexts"
+import usePromise from "@libs/react-promise"
 import { ComponentProps, memo } from "react"
 import TaskbarButton from "../taskbar-button"
 
 export default memo(function (props: ComponentProps<typeof TaskbarButton>) {
 
-    const authorization = useStorage("authorization")
+    const authManager = AuthManagerContext.useValue()
+
+    const signOut = usePromise(() => authManager.signOut())
 
     return <TaskbarButton
 
         aria-label="Sign out"
 
-        onPress={authorization.remove}
+        disabled={signOut.isPending}
+
+        onPress={signOut.safeExecute}
 
         {...props}
 

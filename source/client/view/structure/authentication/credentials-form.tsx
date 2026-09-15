@@ -8,7 +8,7 @@ import { type SyntheticEvent } from "react"
 import { ApplicationContext } from "../../contexts"
 import SystemHeader from "../../components/system-header"
 
-/** The common username-and-password surface for registration and sign-in. */
+/** The common username-and-password surface for sign-up and sign-in. */
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()

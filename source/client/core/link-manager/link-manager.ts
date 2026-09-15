@@ -1,7 +1,7 @@
 import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth-manager"
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
-import { type RegistrationResponse } from "@server/core/link-manager/link-manager"
+import { type SignUpResponse } from "@server/core/link-manager/link-manager"
 import { type Appearance, type DesktopPreferences, type DesktopPreferencesUpdate } from "@phreshos/core"
 import { Forward } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
@@ -69,18 +69,18 @@ export default class LinkManager extends TheLink {
         return await this.$outbound.publishFirst<AuthenticationState>("/owner/state")
     }
 
-    public async register(username: string, password: string) {
+    public async signUp(username: string, password: string) {
 
-        return await this.$outbound.publishFirst<RegistrationResponse>("/owner/register", username, password)
+        return await this.$outbound.publishFirst<SignUpResponse>("/owner/sign-up", username, password)
     }
 
     public async signIn(username: string, password: string) {
 
-        return await this.$outbound.publishFirst<string | false>("/owner/sign-in", username, password)
+        return await this.$outbound.publishFirst<boolean>("/owner/sign-in", username, password)
     }
 
-    public async sessionAuthenticate(authorization: string | null) {
+    public async sessionAuthenticate(token: string | null) {
 
-        return await this.$outbound.publishFirst<[string, AuthManagerSnapshot] | false>("/session-authenticate", authorization)
+        return await this.$outbound.publishFirst<[string, AuthManagerSnapshot] | false>("/session-authenticate", token)
     }
 }

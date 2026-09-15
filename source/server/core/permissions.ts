@@ -187,6 +187,11 @@ export class PermissionCatalog {
             return false
         }
 
+        if (name === "desktopConnection") {
+
+            if (this.allows("connections", [], permissions)) return true
+        }
+
         const assigned = permissions[name]
 
         // An exact assignment is the owner's final decision for that
@@ -339,5 +344,15 @@ export const permissionCatalog = new PermissionCatalog({
         default: [],
         title: "Desktop preferences",
         description: "Change this Desktop's preferences."
+    },
+    desktopConnection: {
+        default: [],
+        title: "Desktop connection",
+        description: "Access the browser Connection carrying this Desktop and its Session."
+    },
+    connections: {
+        default: [],
+        title: "Connections",
+        description: "Access every browser Connection and its Session."
     }
 })

@@ -177,7 +177,7 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Observe one authoritative host fact without creating a Program boundary. */
-    public observeHost(domain: "program" | "process" | "window", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+    public observeHost(domain: "program" | "process" | "window" | "connection" | "session", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.hostTraffic.observe(domain, event, subject, (_delivery, word, ...values) => subscriber(word, ...values))
     }
@@ -378,7 +378,7 @@ export default class ProcessManager extends TheLink {
 
     private ownClient(connection: string, pane: string, owner: string) {
 
-        if (!this.authManager.linkManager.connections.has(connection) || !this.processes.get(pane)?.client) return
+        if (!this.authManager.linkManager.boundaries.has(connection) || !this.processes.get(pane)?.client) return
 
         const key = this.clientOwnerKey(connection, pane)
 
@@ -1010,7 +1010,12 @@ export default class ProcessManager extends TheLink {
                 //
                 // An unscoped listener — `host` — is built for no subject and so
                 // receives the subject as its first value.
-                await this.announce("process", "create", program.identity, program.reference, processReference(process))
+                await Promise.all([
+
+                    this.announceHost("process", "create", program.identity, processReference(process)),
+
+                    this.announceSubject("program", "processCreate", program.reference, processReference(process))
+                ])
 
                 await this.$outbound.publish("/created", process.hosted())
 
@@ -1099,7 +1104,12 @@ export default class ProcessManager extends TheLink {
             // the process, whole, not an identity a listener would have to look
             // up. It is already gone, which is what `exited()` answers and
             // why holding it is legitimate.
-            () => this.announce("process", "exit", process.program.identity, process.program.reference, processReference(process), code, signal),
+            () => Promise.all([
+
+                this.announceHost("process", "exit", process.program.identity, processReference(process), code, signal),
+
+                this.announceSubject("program", "processExit", process.program.reference, processReference(process), code, signal)
+            ]),
 
             // The same ending, said to whoever holds this one process rather
             // than to whoever watches the program. A launcher wants the
@@ -1538,21 +1548,14 @@ export default class ProcessManager extends TheLink {
         this.authManager.programManager.record(process.program, process.identity, "client", kind, content)
     }
 
-    // Host facts enter only the Process boundaries whose endpoint subscriptions
-    // established a matching the-link route.
-    public async announce(domain: "program" | "process", event: string, publicSubject: string, scopedSubject: string, ...values: unknown[]) {
-
-        await this.hostTraffic.emit(domain, event, publicSubject, scopedSubject, ...values)
-    }
-
     /** Announces one fact only through an authoritative Host registry. */
-    public async announceHost(domain: "program" | "process", event: string, subject: string, ...values: unknown[]) {
+    public async announceHost(domain: "program" | "process" | "connection" | "session", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitHost(domain, event, subject, ...values)
     }
 
     /** Announces one fact only to observers of an exact Program or Process subject. */
-    public async announceSubject(domain: "program" | "process", event: string, subject: string, ...values: unknown[]) {
+    public async announceSubject(domain: "program" | "process" | "connection" | "session", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
@@ -1656,6 +1659,53 @@ export default class ProcessManager extends TheLink {
 
         if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true)]
 
+        if (typeof word === "string" && (word.startsWith("host-connection-") || word.startsWith("host-session-"))) {
+
+            if (word === "host-connection-list") {
+
+                return [this.system.listConnections().map(connection => this.authManager.linkManager.connectionSnapshot(connection))]
+            }
+
+            if (word === "host-connection-find") {
+
+                const connection = this.system.findConnection(String(rest[0]))
+
+                return [connection ? this.authManager.linkManager.connectionSnapshot(connection) : null]
+            }
+
+            if (word === "host-connection-state") return [this.system.connectionSnapshot(String(rest[0]))]
+
+            if (word === "host-connection-session") return [this.system.connectionSession(String(rest[0]))]
+
+            if (word === "host-connection-sign-in") return [await this.system.signInConnection(String(rest[0]))]
+
+            if (word === "host-session-list") {
+
+                return [this.system.listSessions().map(identity => this.authManager.linkManager.sessionSnapshot(identity))]
+            }
+
+            if (word === "host-session-find") {
+
+                const session = this.system.findSession(String(rest[0]))
+
+                return [session ? this.authManager.linkManager.sessionSnapshot(session) : null]
+            }
+
+            if (word === "host-session-state") return [this.system.sessionSnapshot(String(rest[0]))]
+
+            if (word === "host-session-connections") {
+
+                return [this.system.sessionConnections(String(rest[0])).map(connection => this.authManager.linkManager.connectionSnapshot(connection))]
+            }
+
+            if (word === "host-session-sign-out") {
+
+                await this.system.signOutSession(String(rest[0]))
+
+                return []
+            }
+        }
+
         if (word === "host-program-find") {
 
             const identity = String(rest[0])
@@ -1728,7 +1778,7 @@ export default class ProcessManager extends TheLink {
             return [await this.system.programStartup(program, String(rest[1]), rest[2])]
         }
 
-        // Which exact process made this one through `program.process.create()`.
+        // Which exact process made this one through `program.createProcess()`.
         // Parentage is immutable lineage; liveness belongs to the returned
         // Process handle rather than to this relationship.
         if (word === "parent") {
@@ -1786,7 +1836,7 @@ export default class ProcessManager extends TheLink {
             return [await this.system.forgetProgram(program, process.identity)]
         }
 
-        if (word === "program-process-create") {
+        if (word === "program-create-process") {
 
             const program = this.system.holdProgram(rest[0])
 
@@ -1798,7 +1848,7 @@ export default class ProcessManager extends TheLink {
             return [processReference(this.system.requireProcess(await this.system.createProcess(program, rest[1] as Launch, process)))]
         }
 
-        if (word === "program-process-find-or-create") {
+        if (word === "program-find-or-create-process") {
 
             const program = this.system.holdProgram(rest[0])
 
@@ -1806,7 +1856,7 @@ export default class ProcessManager extends TheLink {
         }
 
         // Named, only that program's instances; unnamed, every one.
-        if (word === "host-process-list" || word === "program-process-list") {
+        if (word === "host-process-list" || word === "program-processes") {
 
             const living = this.system.listProcesses()
 
@@ -1823,7 +1873,7 @@ export default class ProcessManager extends TheLink {
             return [this.system.listProcesses(program).map(processReference)]
         }
 
-        if (word === "program-process-find") {
+        if (word === "program-find-process") {
 
             const program = this.system.holdProgram(rest[0])
 
@@ -2054,7 +2104,7 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
-        if (word === "program-process-exit-all") return [await this.system.exitProgramProcesses(this.system.holdProgram(rest[0]), process.identity)]
+        if (word === "program-exit-processes") return [await this.system.exitProgramProcesses(this.system.holdProgram(rest[0]), process.identity)]
 
         if (word === "observe") {
 

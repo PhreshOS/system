@@ -16,7 +16,7 @@ export default function gateway(linkManager: LinkManager, path: string) {
 
 async function connect(linkManager: LinkManager, peer: GatewayPeer) {
 
-    const connection = linkManager.addConnection(peer)
+    const connection = linkManager.addExternalConnection(peer)
     let closed = false
     const close = async () => {
 
@@ -34,9 +34,12 @@ async function connect(linkManager: LinkManager, peer: GatewayPeer) {
 
     try {
 
-        const session = await linkManager.addSession(connection, true)
+        await peer.$outbound.publish("/gateway/ready", {
 
-        await peer.$outbound.publish("/gateway/ready", session)
+            linkManager: linkManager.toJSON(),
+
+            authManager: linkManager.authManager.toJSON()
+        })
     }
 
     catch (error) {

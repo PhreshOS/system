@@ -18,7 +18,7 @@ export default class AuthManager extends TheLink {
 
     public readonly linkManager: LinkManager
 
-    public readonly authorization: string
+    public readonly sessionToken: string
 
     public readonly username: string | null
 
@@ -32,13 +32,13 @@ export default class AuthManager extends TheLink {
 
     private readonly storageChanges = new StreamRelay("Storage changes", storageChange)
 
-    public constructor(linkManager: LinkManager, authorization: string, payload: AuthManagerSnapshot) {
+    public constructor(linkManager: LinkManager, sessionToken: string, payload: AuthManagerSnapshot) {
 
         super()
 
         this.linkManager = linkManager
 
-        this.authorization = authorization
+        this.sessionToken = sessionToken
 
         this.username = payload.username
 
@@ -56,13 +56,29 @@ export default class AuthManager extends TheLink {
     @Intercept("outbound")
     protected authenticate(...values: unknown[]) {
 
-        return [this.authorization, ...values]
+        return [this.sessionToken, ...values]
+    }
+
+    /** Explicitly ends the Session authorizing this Desktop connection. */
+    public async signOut() {
+
+        await this.$outbound.publishFirst("/session/sign-out-current")
+    }
+
+    public connection(operation: "current" | "list" | "find" | "state" | "session" | "sign-in", identity?: string) {
+
+        return this.$outbound.publishFirst(`/connection/${operation}`, ...(identity === undefined ? [] : [identity]))
+    }
+
+    public session(operation: "list" | "find" | "state" | "connections" | "sign-out", identity?: string) {
+
+        return this.$outbound.publishFirst(`/session/${operation}`, ...(identity === undefined ? [] : [identity]))
     }
 
     /** Emit one authorized private fact without creating a response path. */
     public emit(event: string, ...values: unknown[]) {
 
-        this.linkManager.emitToSession(`/auth${event}`, this.authorization, ...values)
+        this.linkManager.emitToSession(`/auth${event}`, this.sessionToken, ...values)
     }
 
     public async storage(operation: string, path: string[], input?: unknown) {

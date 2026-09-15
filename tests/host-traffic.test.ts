@@ -8,11 +8,15 @@ test("host traffic contract", async () => {
   const ownProgram: unknown[][] = []
   const hostProcess: unknown[][] = []
   const programProcess: unknown[][] = []
+  const hostConnection: unknown[][] = []
+  const ownSession: unknown[][] = []
 
   traffic.observe("program", "uninstall", null, (_delivery, event, ...values) => hostProgram.push([event, ...values]))
   traffic.observe("program", "uninstall", "program-reference", (_delivery, event, ...values) => ownProgram.push([event, ...values]))
   traffic.observe("process", "create", null, (_delivery, event, ...values) => hostProcess.push([event, ...values]))
   traffic.observe("process", "create", "program-reference", (_delivery, event, ...values) => programProcess.push([event, ...values]))
+  traffic.observe("connection", "create", null, (_delivery, event, ...values) => hostConnection.push([event, ...values]))
+  traffic.observe("session", "connectionAttach", "session-identity", (_delivery, event, ...values) => ownSession.push([event, ...values]))
 
   const program = { identity: "counter", reference: "program-reference" }
   const process = { identity: "worker", reference: "process-reference" }
@@ -30,4 +34,10 @@ test("host traffic contract", async () => {
 
   assert.deepEqual(hostProcess, [["create", program.identity, process]])
   assert.deepEqual(programProcess, [["create", program.reference, process]])
+
+  await traffic.emitHost("connection", "create", "connection-identity", { identity: "connection-identity" })
+  await traffic.emitSubject("session", "connectionAttach", "session-identity", { identity: "connection-identity" })
+
+  assert.deepEqual(hostConnection, [["create", "connection-identity", { identity: "connection-identity" }]])
+  assert.deepEqual(ownSession, [["connectionAttach", "session-identity", { identity: "connection-identity" }]])
 }, 120_000)

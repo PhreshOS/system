@@ -217,9 +217,79 @@ export default class System {
         })
     }
 
-    public observe(domain: "program" | "process" | "window", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+    public observe(domain: "program" | "process" | "window" | "connection" | "session", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.processManager.observeHost(domain, event, subject, subscriber)
+    }
+
+    public listConnections() {
+
+        return this.application.linkManager.connections()
+    }
+
+    public findConnection(identity: string) {
+
+        return this.application.linkManager.findConnection(identity)
+    }
+
+    public connectionSnapshot(identity: string) {
+
+        const connection = this.findConnection(identity)
+
+        return connection
+
+            ? this.application.linkManager.connectionSnapshot(connection)
+
+            : Object.freeze({ identity, connected: false, session: null })
+    }
+
+    public connectionSession(identity: string) {
+
+        const connection = this.findConnection(identity)
+
+        if (!connection) return null
+
+        const session = this.application.linkManager.sessionOf(connection)
+
+        return session ? this.application.linkManager.sessionSnapshot(session) : null
+    }
+
+    public signInConnection(identity: string) {
+
+        const connection = this.findConnection(identity)
+
+        if (!connection) throw new Error("Connection not found")
+
+        return this.application.linkManager.signInConnection(connection)
+    }
+
+    public listSessions() {
+
+        return this.application.authentication.sessionsList()
+    }
+
+    public findSession(identity: string) {
+
+        return this.application.authentication.sessionFind(identity)
+    }
+
+    public sessionSnapshot(identity: string) {
+
+        return this.application.linkManager.sessionSnapshot(identity)
+    }
+
+    public sessionConnections(identity: string) {
+
+        return this.findSession(identity)
+
+            ? this.application.linkManager.sessionConnections(identity)
+
+            : []
+    }
+
+    public signOutSession(identity: string) {
+
+        return this.application.linkManager.signOutSession(identity)
     }
 
     public observeEndpoint(process: Process, endpoint: Half, event: string | null, subscriber: (payload: unknown, event: string) => void, impossible?: (reason: string) => void) {

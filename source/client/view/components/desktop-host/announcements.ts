@@ -12,6 +12,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     const processes = ReactTunnel.useFactory(authManager.processManager.$inbound)
     const programs = ReactTunnel.useFactory(authManager.programManager.$inbound)
+    const authentication = ReactTunnel.useFactory(authManager.$inbound)
 
     const post = useCallback(function (program: string, route: string, ...message: unknown[]) {
 
@@ -27,6 +28,86 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
 
     }, [authManager, panes, traffic])
 
+    const postVisible = useCallback(function (visible: (access: SystemAccess) => Promise<boolean>, route: string, ...message: unknown[]) {
+
+        for (const pane of panes.keys()) {
+
+            const access = new SystemAccess(authManager, pane)
+
+            visible(access).then(granted => {
+
+                if (granted) return traffic.emit(pane, route, ...message)
+            }).catch(() => undefined)
+        }
+
+    }, [authManager, panes, traffic])
+
+    const postConnection = useCallback(function (identity: string, route: string, ...message: unknown[]) {
+
+        postVisible(access => access.canConnection(identity), route, ...message)
+
+    }, [postVisible])
+
+    const postSession = useCallback(function (identity: string, route: string, ...message: unknown[]) {
+
+        postVisible(access => access.canSession(identity), route, ...message)
+
+    }, [postVisible])
+
+    authentication.useSubscribe("/connection/create", useCallback((value: unknown) => {
+
+        const identity = domainIdentity(value)
+        if (identity) postConnection(identity, "host-connection", "create", identity, value)
+    }, [postConnection]))
+    authentication.useSubscribe("/connection/disconnect", useCallback((value: unknown) => {
+
+        const identity = domainIdentity(value)
+        if (identity) postConnection(identity, "host-connection", "disconnect", identity, value)
+    }, [postConnection]))
+    authentication.useSubscribe("/connection/session-change", useCallback((value: unknown, session: unknown) => {
+
+        const identity = domainIdentity(value)
+        if (identity) postConnection(identity, "connection-host", "sessionChange", identity, session)
+    }, [postConnection]))
+    authentication.useSubscribe("/session/create", useCallback((value: unknown) => {
+
+        const identity = domainIdentity(value)
+        if (identity) postSession(identity, "host-session", "create", identity, value)
+    }, [postSession]))
+    authentication.useSubscribe("/session/connection-attach", useCallback((value: unknown, connection: unknown) => {
+
+        const session = domainIdentity(value)
+        const attached = domainIdentity(connection)
+        if (session && attached) postVisible(
+            async access => await access.canSession(session) && await access.canConnection(attached),
+            "session-host",
+            "connectionAttach",
+            session,
+            connection
+        )
+    }, [postVisible]))
+    authentication.useSubscribe("/session/connection-detach", useCallback((value: unknown, connection: unknown) => {
+
+        const session = domainIdentity(value)
+        const detached = domainIdentity(connection)
+        if (session && detached) postConnection(detached, "session-host", "connectionDetach", session, connection)
+    }, [postConnection]))
+    authentication.useSubscribe("/session/end", useCallback((value: unknown, reason: unknown, previousConnections: unknown) => {
+
+        const identity = domainIdentity(value)
+        if (!identity) return
+
+        const connections = Array.isArray(previousConnections)
+            ? previousConnections.map(domainIdentity).filter((entry): entry is string => entry !== null)
+            : []
+
+        const visible = async (access: SystemAccess) => await access.canSession(identity)
+            || await any(connections, connection => access.canConnection(connection))
+
+        postVisible(visible, "session-host", "end", identity, reason)
+        postVisible(visible, "host-session", "end", identity, value, reason)
+    }, [postVisible]))
+
     processes.useSubscribe("/created", useCallback((payload: HostedProcessRecord | null) => {
 
         if (!payload) return
@@ -34,7 +115,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         const record = processRecord(authManager, payload)
 
         post(payload.program, "host-process", "create", payload.program, record)
-        post(payload.program, "program-process", "create", program(authManager, payload.program).reference, record)
+        post(payload.program, "program-host", "processCreate", program(authManager, payload.program).reference, record)
 
     }, [authManager, post]))
 
@@ -45,7 +126,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         const record = processRecord(authManager, payload)
 
         post(payload.program, "host-process", "exit", payload.program, record, code, signal)
-        post(payload.program, "program-process", "exit", program(authManager, payload.program).reference, record, code, signal)
+        post(payload.program, "program-host", "processExit", program(authManager, payload.program).reference, record, code, signal)
         post(payload.program, "process-host", "exit", payload.reference, code, signal)
 
     }, [authManager, post]))
@@ -88,6 +169,22 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     programs.useSubscribe("/install", useCallback((entry: ProgramRecord | null) => programEvent("install", entry), [programEvent]))
     programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, purge: boolean) => programEvent("uninstall", entry, purge), [programEvent]))
     programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
+}
+
+function domainIdentity(value: unknown) {
+
+    if (!value || typeof value !== "object") return null
+
+    const identity = (value as { identity?: unknown }).identity
+
+    return typeof identity === "string" ? identity : null
+}
+
+async function any<Value>(values: readonly Value[], predicate: (value: Value) => Promise<boolean>) {
+
+    for (const value of values) if (await predicate(value)) return true
+
+    return false
 }
 
 function processRecord(authManager: AuthManager, process: HostedProcessRecord) {

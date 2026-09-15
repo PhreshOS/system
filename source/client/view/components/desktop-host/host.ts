@@ -162,6 +162,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         // only because it was added on the other.
         if (word === "current-process") return [record(process())]
 
+        if (word === "desktop-connection") {
+
+            await access.require("desktopConnection", [])
+
+            return [await authManager.connection("current")]
+        }
+
         if (word === "host-program-list") {
 
             const programs = [...programManager.programs.values()].filter(program => args[0] !== true || program.installed)
@@ -172,13 +179,68 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [visible.map(sdkProgram)]
         }
 
+        if (typeof word === "string" && word.startsWith("host-connection-")) {
+
+            const operation = word.slice("host-connection-".length) as "list" | "find" | "state" | "session" | "sign-in"
+
+            if (operation === "list") {
+
+                const connections = await authManager.connection("list") as { identity: string }[]
+
+                return [await access.connections(connections)]
+            }
+
+            const identity = String(args[0])
+
+            if (operation === "find") {
+
+                const connection = await authManager.connection("find", identity) as { identity: string } | null
+
+                return [connection && await access.canConnection(connection.identity) ? connection : null]
+            }
+
+            if (!await access.canConnection(identity)) throw new Error("Connection not found")
+
+            return [await authManager.connection(operation, identity)]
+        }
+
+        if (typeof word === "string" && word.startsWith("host-session-")) {
+
+            const operation = word.slice("host-session-".length) as "list" | "find" | "state" | "connections" | "sign-out"
+
+            if (operation === "list") {
+
+                const sessions = await authManager.session("list") as { identity: string }[]
+
+                return [await access.sessions(sessions)]
+            }
+
+            const identity = String(args[0])
+
+            if (operation === "find") {
+
+                const session = await authManager.session("find", identity) as { identity: string } | null
+
+                return [session && await access.canSession(session.identity) ? session : null]
+            }
+
+            if (!await access.canSession(identity)) throw new Error("Session not found")
+
+            if (operation === "connections") {
+
+                const connections = await authManager.session(operation, identity) as { identity: string }[]
+
+                return [await access.connections(connections)]
+            }
+
+            return [await authManager.session(operation, identity)]
+        }
+
         if (word === "host-program-find") {
 
             const program = programManager.programs.get(String(args[0]))
 
-            if (program) await access.program(program)
-
-            return [program ? sdkProgram(program) : null]
+            return [program && await access.canProgram(program) ? sdkProgram(program) : null]
         }
 
         if (word === "host-program-create" || word === "host-program-force-create") {
@@ -206,9 +268,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             const found = processManager.processes.get(String(args[0]))
 
-            if (found) await access.process(found)
-
-            return [found ? record(found) : null]
+            return [found && await access.canProcess(found) ? record(found) : null]
         }
 
         if (word === "appearance") return [authManager.linkManager.appearance.value]
@@ -359,9 +419,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (!target.parent) return [null]
 
-            await access.process(target.parent)
-
-            return [sdkProcess(target.parent, programOf(target.parent))]
+            return [await access.canProcess(target.parent) ? sdkProcess(target.parent, programOf(target.parent)) : null]
         }
 
         // A retained Process handle remains able to report its own ending.
@@ -377,7 +435,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         }
 
         // Every live Process belonging to one exact Program handle.
-        if (word === "program-process-list") {
+        if (word === "program-processes") {
 
             const program = await permittedProgram(args[0])
 
@@ -386,7 +444,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         // One process of this program by immutable identity or by its
         // living program-local name. An exact identity always wins.
-        if (word === "program-process-find") {
+        if (word === "program-find-process") {
 
             const program = await permittedProgram(args[0])
             const wanted = String(args[1])
@@ -399,7 +457,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         }
 
         // Create another Process from one exact Program handle.
-        if (word === "program-process-create") {
+        if (word === "program-create-process") {
 
             const program = await permittedProgram(args[0])
             const launch = await access.launch(args[1])
@@ -408,7 +466,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [record(requireProcess(started))]
         }
 
-        if (word === "program-process-find-or-create") {
+        if (word === "program-find-or-create-process") {
 
             const program = await permittedProgram(args[0])
             const launch = await access.launch(args[1]) as Launch & { name: string }
@@ -420,7 +478,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         // Every instance ended, the asker last. One implementation on the
         // core serves this and a server half both.
-        if (word === "program-process-exit-all") return [await processManager.exitAll((await permittedProgram(args[0])).identity, pane)]
+        if (word === "program-exit-processes") return [await processManager.exitAll((await permittedProgram(args[0])).identity, pane)]
 
         if (word === "observe") {
 
@@ -451,7 +509,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (!await access.canProcess(target)) {
 
-                if (reportImpossible) throw new Error("Execution is not permitted")
+                if (reportImpossible) throw new Error("The desktop does not know this process")
 
                 return []
             }
@@ -502,7 +560,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (!await access.canProcess(target)) {
 
-                if (reportImpossible) throw new Error("Execution is not permitted")
+                if (reportImpossible) throw new Error("The desktop does not know this process")
 
                 return []
             }
@@ -595,18 +653,20 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "program-permissions") {
 
+            const program = await permittedProgram(args[0])
+
             await access.requireAll()
 
             const operation = args[1]
 
             if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
-            if (operation === "all") return [await programManager.permissions(address(holdProgram(args[0])), operation)]
+            if (operation === "all") return [await programManager.permissions(address(program), operation)]
 
             const permission = parsePermissionName(args[2])
 
             if (operation === "allows") return [await programManager.permissions(
-                address(holdProgram(args[0])),
+                address(program),
                 operation,
                 permission,
                 args[3] as PermissionRequest<typeof permission>
@@ -615,7 +675,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             if (operation === "set") {
 
                 await programManager.permissions(
-                    address(holdProgram(args[0])),
+                    address(program),
                     operation,
                     permission,
                     args[3] as Exclude<PermissionInput<typeof permission>, null>
@@ -624,7 +684,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                 return []
             }
 
-            await programManager.permissions(address(holdProgram(args[0])), operation, permission)
+            await programManager.permissions(address(program), operation, permission)
 
             return []
         }
@@ -891,7 +951,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                         if (!clientBody(args[3])) throw new Error("Writing takes bytes")
 
-                        if (operation === "append") await authManager.linkManager.application.storageAppend(request, args[3], authManager.authorization, controller.signal)
+                        if (operation === "append") await authManager.linkManager.application.storageAppend(request, args[3], authManager.sessionToken, controller.signal)
 
                         else await authManager.linkManager.application.storageWrite(
 
@@ -899,7 +959,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                             args[3],
 
-                            authManager.authorization,
+                            authManager.sessionToken,
 
                             controller.signal,
 
@@ -917,7 +977,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                             request,
 
-                            authManager.authorization,
+                            authManager.sessionToken,
 
                             controller.signal,
 
@@ -1004,7 +1064,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                 if (writing) {
 
                     if (!clientBody(args[1])) throw new Error("Writing takes bytes")
-                    if (word === "host-storage-append") await authManager.linkManager.application.storageAppend(request, args[1], authManager.authorization, controller.signal)
+                    if (word === "host-storage-append") await authManager.linkManager.application.storageAppend(request, args[1], authManager.sessionToken, controller.signal)
 
                     else await authManager.linkManager.application.storageWrite(
 
@@ -1012,7 +1072,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                         args[1],
 
-                        authManager.authorization,
+                        authManager.sessionToken,
 
                         controller.signal,
 
@@ -1027,7 +1087,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                         request,
 
-                        authManager.authorization,
+                        authManager.sessionToken,
 
                         controller.signal,
 
@@ -1124,7 +1184,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                     { extension: description.extension, type: description.type },
 
-                    authManager.authorization,
+                    authManager.sessionToken,
 
                     controller.signal
                 )
@@ -1163,7 +1223,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                     args[1] as ClientBody | null,
 
-                    authManager.authorization,
+                    authManager.sessionToken,
 
                     controller.signal
                 )

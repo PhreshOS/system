@@ -350,9 +350,11 @@ export default class ServerProcessBoundary extends TheLink {
             }
 
             const hostDomain = route === "host-program" || route === "program-host" ? "program"
-                : route === "host-process" || route === "program-process" || route === "process-host" ? "process"
-                    : route === "host-end" ? "window"
-                        : null
+                : route === "host-process" || route === "process-host" ? "process"
+                : route === "host-connection" || route === "connection-host" ? "connection"
+                : route === "host-session" || route === "session-host" ? "session"
+                : route === "host-end" ? "window"
+                : null
 
             if (hostDomain) {
 

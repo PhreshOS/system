@@ -1,20 +1,20 @@
 import { Forward, Subscribe } from "@the-link/core/decorators"
 import AuthManager from "./auth-manager/auth-manager"
-import { TheLink } from "@the-link/core"
-import { Property } from "@the-link/core"
+import { Property, TheLink } from "@the-link/core"
 import Application from "../application"
-import { type Appearance } from "@phreshos/core"
-import { type AuthenticationState, type RegistrationError } from "../authentication/authentication"
+import type { Appearance, ConnectionSnapshot, SessionEndReason, SessionSnapshot } from "@phreshos/core"
+import { type AuthenticationState, type SignUpError } from "../authentication/authentication"
 import { AsyncLocalStorage } from "node:async_hooks"
 
+/** Owns live Link boundaries and their browser Connection and Session relationships. */
 export default class LinkManager extends TheLink {
 
     public readonly application: Application
 
-    /** Live boundary connections. Ordinary authentication sessions outlive them. */
-    public readonly connections = new Map<string, Connection>()
+    /** Every live transport boundary, including the external owner Gateway. */
+    public readonly boundaries = new Map<string, LinkBoundary>()
 
-    private readonly connectionContext = new AsyncLocalStorage<Connection>()
+    private readonly connectionContext = new AsyncLocalStorage<LinkBoundary>()
 
     public readonly authManager: AuthManager
 
@@ -32,32 +32,62 @@ export default class LinkManager extends TheLink {
         this.appearance = Property.private(this, this.application.appearanceManager.value)
 
         this.authManager = new AuthManager(this)
+
+        this.application.authentication.onSessionExpire(identity => {
+
+            this.announceSessionEnd(identity, "expired").catch(() => undefined)
+        })
     }
 
+    /** Creates an unclassified browser boundary. */
     public addConnection(link: TheLink) {
 
-        const connection = new Connection(this, link)
+        return this.addBoundary(link, false)
+    }
 
-        this.connections.set(connection.identity, connection)
+    /** Creates a trusted transport boundary excluded from the Connection domain. */
+    public addExternalConnection(link: TheLink) {
+
+        return this.addBoundary(link, true)
+    }
+
+    private addBoundary(link: TheLink, external: boolean) {
+
+        const connection = new LinkBoundary(this, link, external)
+
+        this.boundaries.set(connection.identity, connection)
 
         return connection
     }
 
-    /** Create and bind a new authenticated session to a live connection. */
-    public async addSession(connection: Connection, owner = false) {
+    /** Creates an unpublished browser Session and binds it to one live Connection. */
+    private async addSession(connection: LinkBoundary) {
 
-        if (this.connections.get(connection.identity) !== connection) throw new Error("Connection not found")
-        if (connection.session) throw new Error("The connection already has a session")
+        this.requireConnection(connection)
 
-        const session = await this.application.authentication.createSession(owner)
+        if (connection.session) throw new Error("The Connection already has a Session")
 
-        if (!await this.application.authentication.connectSession(session)) throw new Error("The created session is unavailable")
+        if (connection.external) throw new Error("External boundaries do not own browser Sessions")
 
-        connection.session = session
+        const created = await this.application.authentication.createSession()
+
+        try {
+
+            await this.attach(connection, created.identity, false)
+        }
+
+        catch (error) {
+
+            await this.application.authentication.removeSession(created.identity)
+
+            throw error
+        }
 
         return {
 
-            authorization: this.application.encryptor.createToken({ version: 1, session }),
+            identity: created.identity,
+
+            token: created.token,
 
             linkManager: this,
 
@@ -65,22 +95,43 @@ export default class LinkManager extends TheLink {
         }
     }
 
-    public async removeConnection(connection: Connection) {
+    /** Removes a boundary after its Client or transport has disconnected. */
+    public removeConnection(connection: LinkBoundary) {
 
-        if (this.connections.get(connection.identity) !== connection) return
+        return connection.transition(() => this.removeConnectionNow(connection))
+    }
+
+    private async removeConnectionNow(connection: LinkBoundary) {
+
+        if (this.boundaries.get(connection.identity) !== connection) return
+
+        const exposed = connection.exposed && !connection.external
+
+        await this.detach(connection)
 
         connection.close()
 
         this.authManager.processManager.releaseConnection(connection.identity)
 
-        this.connections.delete(connection.identity)
+        this.boundaries.delete(connection.identity)
 
-        if (connection.session && !this.connected(connection.session)) await this.releaseSession(connection.session)
+        if (!exposed) return
+
+        const snapshot = this.connectionSnapshot(connection)
+
+        await Promise.all([
+
+            this.authManager.processManager.announceSubject("connection", "disconnect", connection.identity),
+
+            this.authManager.processManager.announceHost("connection", "disconnect", connection.identity, snapshot),
+
+            this.authManager.$outbound.publish("/connection/disconnect", snapshot)
+        ])
     }
 
-    public receive(connection: Connection, event: string, ...values: unknown[]) {
+    public receive(connection: LinkBoundary, event: string, ...values: unknown[]) {
 
-        if (this.connections.get(connection.identity) !== connection) throw new Error("Connection not found")
+        this.requireConnection(connection)
 
         return this.connectionContext.run(connection, () => this.$inbound.publish(event, ...values))
     }
@@ -89,9 +140,103 @@ export default class LinkManager extends TheLink {
 
         const connection = this.connectionContext.getStore()
 
-        if (!connection || this.connections.get(connection.identity) !== connection) throw new Error("This operation requires a live connection")
+        if (!connection) throw new Error("This operation requires a live Connection")
+
+        this.requireConnection(connection)
 
         return connection
+    }
+
+    /** Every currently exposed browser Connection. */
+    public connections() {
+
+        return [...this.boundaries.values()].filter(connection => connection.exposed && !connection.external)
+    }
+
+    public findConnection(identity: string) {
+
+        const connection = this.boundaries.get(identity)
+
+        return connection?.exposed && !connection.external ? connection : null
+    }
+
+    public sessionOf(connection: LinkBoundary) {
+
+        this.requirePublicConnection(connection)
+
+        return connection.session && this.application.authentication.sessionFind(connection.session)
+    }
+
+    public sessionConnections(identity: string) {
+
+        this.requireSession(identity)
+
+        return this.connections().filter(connection => connection.session === identity)
+    }
+
+    /** Creates, attaches, and delivers a Client-owned token to one Connection. */
+    public signInConnection(connection: LinkBoundary) {
+
+        return connection.transition(() => this.signInConnectionNow(connection))
+    }
+
+    private async signInConnectionNow(connection: LinkBoundary) {
+
+        this.requirePublicConnection(connection)
+
+        const result = await this.addSession(connection)
+
+        try {
+
+            await connection.link.$outbound.publish("/session/signed-in", result.token)
+        }
+
+        catch (error) {
+
+            connection.session = null
+
+            await this.application.authentication.removeSession(result.identity)
+
+            throw error
+        }
+
+        if (!await this.application.authentication.exposeSession(result.identity)) {
+
+            connection.session = null
+
+            await this.application.authentication.removeSession(result.identity)
+
+            throw new Error("The Session could not enter the System registry")
+        }
+
+        await this.announceSessionCreate(result.identity)
+        await this.announceConnectionSession(connection, this.sessionSnapshot(result.identity))
+        await this.announceSessionConnection(result.identity, connection, true)
+
+        return this.sessionSnapshot(result.identity)
+    }
+
+    /** Explicitly ends one browser Session without closing any Connections. */
+    public async signOutSession(identity: string) {
+
+        this.requireSession(identity)
+
+        const connections = this.sessionConnections(identity)
+
+        for (const connection of connections) connection.session = null
+
+        await this.application.authentication.removeSession(identity)
+
+        await Promise.allSettled(connections.map(connection => connection.link.$outbound.publish("/session/signed-out")))
+
+        for (const connection of connections) {
+
+            await this.announceConnectionSession(connection, null)
+
+            await this.announceSessionConnection(identity, connection, false)
+        }
+
+        await this.announceSessionEnd(identity, "signedOut", connections)
     }
 
     @Subscribe("/owner/state")
@@ -100,14 +245,16 @@ export default class LinkManager extends TheLink {
         return this.application.authentication.state()
     }
 
-    @Subscribe("/owner/register")
-    protected async register(username: string, password: string): Promise<RegistrationResponse> {
+    @Subscribe("/owner/sign-up")
+    protected async signUp(username: string, password: string): Promise<SignUpResponse> {
 
-        const result = await this.application.authentication.register(username, password)
+        const result = await this.application.authentication.signUp(username, password)
 
         if ("error" in result) return result
 
-        return { authorization: await this.createAuthorization() }
+        await this.signInConnection(this.connection())
+
+        return { signedUp: true }
     }
 
     @Subscribe("/owner/sign-in")
@@ -115,110 +262,55 @@ export default class LinkManager extends TheLink {
 
         if (!await this.application.authentication.verify(username, password)) return false
 
-        return await this.createAuthorization()
+        await this.signInConnection(this.connection())
+
+        return true
     }
 
-    private async createAuthorization() {
+    /** Resolves a Client-owned raw token to one valid Session identity. */
+    public resolveSessionToken(token: string) {
 
-        const session = await this.application.authentication.createSession()
-
-        return this.application.encryptor.createToken({ version: 1, session })
-    }
-
-    public resolveAuthorization(authorization: string) {
-
-        // Anything that is not a token at all makes the verifier throw
-        // about buffers. What that means is "not authorized", and that
-        // is what a caller should be told.
-        try {
-
-            const result = this.application.encryptor.verifyToken<unknown>(authorization)
-
-            if (!result || !isAuthorization(result.payload)) return false
-
-            return this.application.authentication.sessionValid(result.payload.session) ? result.payload.session : false
-        }
-
-        catch {
-
-            return false
-        }
+        return this.application.authentication.resolveSession(token) ?? false
     }
 
     @Subscribe("/session-authenticate")
-    protected async sessionAuthenticate(authorization: string | null) {
+    protected sessionAuthenticate(token: string | null) {
 
         const connection = this.connection()
 
-        if (!authorization) {
+        return connection.transition(() => this.authenticateConnection(connection, token))
+    }
 
-            await this.releaseAuthorization(connection, true)
+    private async authenticateConnection(connection: LinkBoundary, token: string | null) {
 
-            return false
+        if (connection.external) throw new Error("External boundaries do not enter the browser Connection domain")
+
+        const session = token ? this.resolveSessionToken(token) : false
+
+        let attached = false
+
+        if (connection.session !== (session || null)) {
+
+            await this.detach(connection)
+
+            if (session) {
+
+                await this.attach(connection, session, false)
+                attached = true
+            }
         }
 
-        const session = this.resolveAuthorization(authorization)
+        await this.expose(connection)
 
-        if (!session) {
+        if (session && attached) await this.announceSessionConnection(session, connection, true)
 
-            await this.releaseAuthorization(connection)
-
-            return false
-        }
-
-        if (connection.session !== session) await this.releaseAuthorization(connection)
-
-        if (!await this.application.authentication.connectSession(session)) return false
-
-        connection.session = session
-
-        return [authorization, this.authManager]
+        return session ? [token, this.authManager] : false
     }
 
     @Forward("outbound")
-    protected async broadcastToConnections(event: string, ...values: unknown[]) {
+    protected async broadcastToBoundaries(event: string, ...values: unknown[]) {
 
-        for (const { link } of this.connections.values()) {
-
-            await link.$outbound.publish(event, ...values)
-        }
-    }
-
-    private connected(session: string) {
-
-        return [...this.connections.values()].some(connection => connection.session === session)
-    }
-
-    private async releaseAuthorization(connection: Connection, remove = false) {
-
-        const session = connection.session
-
-        connection.session = null
-
-        if (!session) return
-
-        if (remove) {
-
-            for (const current of this.connections.values()) {
-
-                if (current.session === session) current.session = null
-            }
-
-            await this.application.authentication.removeSession(session)
-
-            return
-        }
-
-        if (!this.connected(session)) await this.releaseSession(session)
-    }
-
-    private releaseSession(session: string) {
-
-        return this.application.authentication.sessionOwner(session)
-
-            ? this.application.authentication.removeSession(session)
-
-            : this.application.authentication.disconnectSession(session)
+        for (const { link } of this.boundaries.values()) await link.$outbound.publish(event, ...values)
     }
 
     /** Persist and publish one authorized Appearance replacement in call order. */
@@ -238,15 +330,154 @@ export default class LinkManager extends TheLink {
         return update
     }
 
-    // Nothing about the link itself crosses. The declaration stays, so
-    // what a session is born with is stated rather than inferred from
-    // whatever the object happens to hold.
+    public connectionSnapshot(connection: LinkBoundary): ConnectionSnapshot {
+
+        return Object.freeze({
+
+            identity: connection.identity,
+
+            connected: this.boundaries.get(connection.identity) === connection && !connection.signal.aborted,
+
+            session: connection.session && this.application.authentication.sessionFind(connection.session)
+        })
+    }
+
+    public sessionSnapshot(identity: string, valid = this.application.authentication.sessionFind(identity) !== null): SessionSnapshot {
+
+        return Object.freeze({ identity, valid })
+    }
+
+    private async expose(connection: LinkBoundary) {
+
+        if (connection.exposed) return
+
+        connection.exposed = true
+
+        const snapshot = this.connectionSnapshot(connection)
+
+        await Promise.all([
+
+            this.authManager.processManager.announceHost("connection", "create", connection.identity, snapshot),
+
+            this.authManager.$outbound.publish("/connection/create", snapshot)
+        ])
+    }
+
+    private async attach(connection: LinkBoundary, session: string, announce = true) {
+
+        if (connection.session === session) return
+
+        if (connection.session) await this.detach(connection)
+
+        if (!await this.application.authentication.connectSession(session)) throw new Error("The Session is unavailable")
+
+        connection.session = session
+
+        if (connection.external) return
+
+        if (announce) {
+
+            await this.announceConnectionSession(connection, this.sessionSnapshot(session))
+            await this.announceSessionConnection(session, connection, true)
+        }
+    }
+
+    private async detach(connection: LinkBoundary) {
+
+        const session = connection.session
+
+        if (!session) return
+
+        connection.session = null
+
+        await this.application.authentication.disconnectSession(session)
+
+        if (connection.external) return
+
+        await this.announceConnectionSession(connection, null)
+        await this.announceSessionConnection(session, connection, false)
+    }
+
+    private async announceConnectionSession(connection: LinkBoundary, session: SessionSnapshot | null) {
+
+        await Promise.all([
+
+            this.authManager.processManager.announceSubject("connection", "sessionChange", connection.identity, session),
+
+            this.authManager.$outbound.publish("/connection/session-change", this.connectionSnapshot(connection), session)
+        ])
+    }
+
+    private async announceSessionCreate(identity: string) {
+
+        const session = this.sessionSnapshot(identity)
+
+        await Promise.all([
+
+            this.authManager.processManager.announceHost("session", "create", identity, session),
+
+            this.authManager.$outbound.publish("/session/create", session)
+        ])
+    }
+
+    private async announceSessionConnection(identity: string, connection: LinkBoundary, attached: boolean) {
+
+        const session = this.sessionSnapshot(identity, attached || this.application.authentication.sessionValid(identity))
+
+        const snapshot = this.connectionSnapshot(connection)
+
+        const event = attached ? "connectionAttach" : "connectionDetach"
+
+        const route = attached ? "/session/connection-attach" : "/session/connection-detach"
+
+        await Promise.all([
+
+            this.authManager.processManager.announceSubject("session", event, identity, snapshot),
+
+            this.authManager.$outbound.publish(route, session, snapshot)
+        ])
+    }
+
+    private async announceSessionEnd(identity: string, reason: SessionEndReason, previousConnections: readonly LinkBoundary[] = []) {
+
+        const session = this.sessionSnapshot(identity, false)
+
+        await Promise.all([
+
+            this.authManager.processManager.announceSubject("session", "end", identity, reason),
+
+            this.authManager.processManager.announceHost("session", "end", identity, session, reason),
+
+            this.authManager.$outbound.publish(
+                "/session/end",
+                session,
+                reason,
+                previousConnections.map(connection => this.connectionSnapshot(connection))
+            )
+        ])
+    }
+
+    private requireConnection(connection: LinkBoundary) {
+
+        if (this.boundaries.get(connection.identity) !== connection || connection.signal.aborted) throw new Error("Connection not found")
+    }
+
+    private requirePublicConnection(connection: LinkBoundary) {
+
+        this.requireConnection(connection)
+
+        if (connection.external || !connection.exposed) throw new Error("Connection not found")
+    }
+
+    private requireSession(identity: string) {
+
+        if (!this.application.authentication.sessionFind(identity)) throw new Error("Session not found")
+    }
+
+    // The transport stays internal. Only public state is represented.
     public toJSON() {
 
-        return {
-
-            appearance: this.appearance
-        }
+        return { appearance: this.appearance }
     }
 }
 
@@ -255,36 +486,50 @@ export interface LinkManagerSnapshot {
     appearance: ReturnType<Property<Appearance>["toJSON"]>
 }
 
-export type RegistrationResponse = { authorization: string } | { error: RegistrationError }
+export type SignUpResponse = { signedUp: true } | { error: SignUpError }
 
-export class Connection {
+/** One internal Link boundary. Only browser boundaries enter the public Connection registry. */
+export class LinkBoundary {
 
     public readonly identity = crypto.randomUUID()
 
     public session: string | null = null
 
+    public exposed = false
+
     private readonly lifetime = new AbortController()
+
+    private transitioning: Promise<void> = Promise.resolve()
 
     public readonly signal = this.lifetime.signal
 
-    public constructor(private readonly manager: LinkManager, public readonly link: TheLink) {}
+    public constructor(
+
+        private readonly manager: LinkManager,
+
+        public readonly link: TheLink,
+
+        public readonly external: boolean
+
+    ) {}
 
     public publish(event: string, ...values: unknown[]) {
 
         return this.manager.receive(this, event, ...values)
     }
 
+    /** Serializes Session and lifecycle mutations belonging to this Connection. */
+    public transition<Value>(work: () => Promise<Value>): Promise<Value> {
+
+        const result = this.transitioning.then(work, work)
+
+        this.transitioning = result.then(() => undefined, () => undefined)
+
+        return result
+    }
+
     public close() {
 
         this.lifetime.abort(new Error("The System representation disconnected"))
     }
-}
-
-function isAuthorization(value: unknown): value is { version: 1, session: string } {
-
-    if (!value || typeof value !== "object") return false
-
-    const authorization = value as { version?: unknown, session?: unknown }
-
-    return authorization.version === 1 && typeof authorization.session === "string"
 }

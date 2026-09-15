@@ -1,22 +1,17 @@
-import { type AuthenticationState, type RegistrationError } from "@server/core/authentication/authentication"
+import { type AuthenticationState, type SignUpError } from "@server/core/authentication/authentication"
 import CredentialsForm from "./credentials-form"
 import { LinkManagerContext } from "../../contexts"
 import usePromise from "@libs/react-promise"
-import useStorage from "@libs/storage-hook"
 
-export default function Register({ state, onClosed }: RegisterProps) {
-
-    const authorization = useStorage("authorization")
+export default function SignUp({ state, onClosed }: SignUpProps) {
 
     const linkManager = LinkManagerContext.useValue()
 
-    const registration = usePromise(async function (username: string, password: string) {
+    const signUp = usePromise(async function (username: string, password: string) {
 
-        const response = await linkManager.register(username, password)
+        const response = await linkManager.signUp(username, password)
 
-        if ("authorization" in response) authorization.update(response.authorization)
-
-        else if (response.error === "registered") onClosed()
+        if ("error" in response && response.error === "signed-up") onClosed()
 
         return "error" in response ? message(response.error, state) : null
     })
@@ -27,26 +22,26 @@ export default function Register({ state, onClosed }: RegisterProps) {
 
         description="Create the credentials for this system's sole owner."
 
-        submitLabel="Register"
+        submitLabel="Sign up"
 
         passwordAutocomplete="new-password"
 
         requirements={state.requirements}
 
-        error={registration.exception ? String(registration.exception.current) : registration.solve?.current}
+        error={signUp.exception ? String(signUp.exception.current) : signUp.solve?.current}
 
-        pending={registration.isPending}
+        pending={signUp.isPending}
 
-        onSubmit={registration.safeExecute}
+        onSubmit={signUp.safeExecute}
 
     />
 }
 
-function message(error: RegistrationError, state: AuthenticationState) {
+function message(error: SignUpError, state: AuthenticationState) {
 
     switch (error) {
 
-        case "registered": return "Registration is already complete."
+        case "signed-up": return "Sign-up is already complete."
 
         case "username-required": return "Enter a username."
 
@@ -60,7 +55,7 @@ function message(error: RegistrationError, state: AuthenticationState) {
     }
 }
 
-interface RegisterProps {
+interface SignUpProps {
 
     state: AuthenticationState
 

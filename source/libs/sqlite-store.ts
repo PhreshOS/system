@@ -62,6 +62,22 @@ export default class SqliteStore extends EventEmitter implements KeyvStoreAdapte
         return this.database.prepare("select 1 from keyv where key = ?").get(key) !== undefined
     }
 
+    public async *iterator<Value>(namespace = this.namespace) {
+
+        const prefix = namespace ? `${namespace}:` : ""
+
+        const rows = prefix
+
+            ? this.database.prepare("select key, value from keyv where substr(key, 1, ?) = ? order by key").all(prefix.length, prefix)
+
+            : this.database.prepare("select key, value from keyv order by key").all()
+
+        for (const row of rows as { key: string, value: string }[]) {
+
+            yield [row.key, row.value as Awaited<Value>] as Array<string | Awaited<Value> | undefined>
+        }
+    }
+
     public async disconnect() {
 
         this.database.close()

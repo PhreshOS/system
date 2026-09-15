@@ -1,192 +1,293 @@
 import Keyv from "keyv"
-import { randomUUID } from "node:crypto"
+import { createHash, randomBytes, randomUUID } from "node:crypto"
 
-const storageKey = "authentication:sessions"
+const storagePrefix = "authentication:sessions:"
 
-/** How long an authentication session survives without a live connection. */
+/** How long a Session remains valid without an attached Connection. */
 export const disconnectedSessionLifetime = 24 * 60 * 60 * 1_000
 
-/**
- * Durable authentication sessions, independent of transient desktop links.
- *
- * A session remains valid while at least one connection holds it. Ordinary
- * sessions receive a reconnecting grace period; owner-local sessions are
- * removed with their final connection because no reusable token leaves that
- * boundary.
- */
+/** Persistent Session state and its transient live-connection count. */
 export default class Sessions {
 
-    private readonly store: Keyv
+    private readonly identities = new Map<string, StoredSession>()
 
-    private readonly sessions: Map<string, StoredSession>
+    private readonly hashes = new Map<string, StoredSession>()
 
-    private writing: Promise<unknown> = Promise.resolve()
+    private readonly expirationListeners = new Set<(identity: string) => void>()
 
-    private constructor(store: Keyv, sessions: Map<string, StoredSession>) {
-
-        this.store = store
-
-        this.sessions = sessions
-    }
+    private constructor(private readonly store: Keyv) {}
 
     public static async open(store: Keyv) {
 
-        const stored = parse(await store.get(storageKey))
+        if (!store.iterator) throw new Error("The System store cannot enumerate authentication Sessions")
 
-        const now = Date.now()
+        const sessions = new Sessions(store)
 
-        const sessions = new Map<string, StoredSession>()
+        for await (const [key, value] of store.iterator(store.namespace)) {
 
-        let changed = false
+            if (typeof key !== "string" || !key.startsWith(storagePrefix)) continue
 
-        for (const record of stored) {
+            const hash = key.slice(storagePrefix.length)
 
-            // No connections survive a host restart. A record that was live
-            // when the host stopped becomes disconnected when this host opens.
-            const disconnectedAt = record.disconnectedAt ?? now
+            const record = parse(value, hash)
 
-            if (disconnectedAt !== record.disconnectedAt) changed = true
+            if (sessions.expired(record, Date.now())) {
 
-            if (now - disconnectedAt > disconnectedSessionLifetime) {
-
-                changed = true
+                await store.delete(key)
 
                 continue
             }
 
-            const owner = record.owner === true
-
-            if (record.owner === undefined) changed = true
-
-            sessions.set(record.identity, { identity: record.identity, owner, disconnectedAt })
+            sessions.identities.set(record.identity, record)
+            sessions.hashes.set(record.hash, record)
         }
 
-        const opened = new Sessions(store, sessions)
-
-        if (changed) await opened.persist()
-
-        return opened
+        return sessions
     }
 
-    /** Creates a session which has not yet acquired a connection. */
-    public async create(owner = false) {
+    /** Creates one Session and returns the raw token exactly once. */
+    public async create(): Promise<CreatedSession> {
 
-        this.prune(Date.now())
+        await this.prune()
 
-        const identity = randomUUID()
+        const token = randomBytes(32).toString("base64url")
 
-        this.sessions.set(identity, { identity, owner, disconnectedAt: Date.now() })
+        const record: StoredSession = {
 
-        await this.persist()
+            identity: randomUUID(),
 
-        return identity
+            hash: hashToken(token),
+
+            exposed: false,
+
+            disconnectedAt: Date.now(),
+
+            connections: 0
+        }
+
+        this.identities.set(record.identity, record)
+        this.hashes.set(record.hash, record)
+
+        await this.persist(record)
+
+        return { identity: record.identity, token }
     }
 
-    /** Whether the session exists and has not exhausted its disconnected day. */
-    public valid(identity: string) {
+    /** Resolves a Client-owned raw token to a valid Session identity. */
+    public resolve(token: string) {
 
-        const session = this.sessions.get(identity)
+        const record = this.hashes.get(hashToken(token))
 
-        if (!session) return false
+        if (!record || !this.valid(record.identity)) return null
 
-        if (session.disconnectedAt === null || Date.now() - session.disconnectedAt <= disconnectedSessionLifetime) return true
-
-        this.sessions.delete(identity)
-
-        this.persist().catch(() => undefined)
-
-        return false
+        return record.identity
     }
 
-    /** Whether this session represents a trusted owner-local connection. */
-    public owner(identity: string) {
+    /** Returns every valid browser Session. */
+    public list() {
 
-        return this.valid(identity) && this.sessions.get(identity)!.owner
+        return [...this.identities.values()]
+
+            .filter(record => record.exposed && this.valid(record.identity))
+
+            .map(record => record.identity)
     }
 
-    /** Resumes a valid session and removes its disconnected deadline. */
-    public async connect(identity: string) {
+    /** Resolves one valid browser Session by its public identity. */
+    public find(identity: string) {
 
-        if (!this.valid(identity)) return false
+        const record = this.identities.get(identity)
 
-        const session = this.sessions.get(identity)!
+        return record && record.exposed && this.valid(identity) ? identity : null
+    }
 
-        if (session.disconnectedAt === null) return true
+    /** Makes one completely established browser Session publicly discoverable. */
+    public async expose(identity: string) {
 
-        session.disconnectedAt = null
+        const record = this.identities.get(identity)
 
-        await this.persist()
+        if (!record || !this.valid(identity)) return false
+
+        record.exposed = true
+
+        await this.persist(record)
 
         return true
     }
 
-    /** Starts the grace period after the session's final connection is lost. */
-    public async disconnect(identity: string) {
+    /** Whether one Session still exists and can authorize a Connection. */
+    public valid(identity: string) {
 
-        const session = this.sessions.get(identity)
+        const record = this.identities.get(identity)
 
-        if (!session) return
+        if (!record) return false
 
-        session.disconnectedAt = Date.now()
+        if (this.validRecord(record, Date.now())) return true
 
-        await this.persist()
+        this.forget(record)
+        this.expiredSession(record.identity)
+        this.store.delete(this.key(record.hash)).catch(() => undefined)
+
+        return false
     }
 
-    /** Revokes a session immediately, independently of its connections. */
+    /** Observes browser Sessions removed by disconnected-lifetime expiration. */
+    public onExpire(listener: (identity: string) => void) {
+
+        this.expirationListeners.add(listener)
+
+        return () => this.expirationListeners.delete(listener)
+    }
+
+    /** Attaches one live connection to a valid Session. */
+    public async attach(identity: string) {
+
+        if (!this.valid(identity)) return false
+
+        const record = this.identities.get(identity)!
+
+        record.connections += 1
+        record.disconnectedAt = null
+
+        await this.persist(record)
+
+        return true
+    }
+
+    /** Detaches one live connection and records the normal disconnection time. */
+    public async detach(identity: string) {
+
+        const record = this.identities.get(identity)
+
+        if (!record) return
+
+        record.connections = Math.max(0, record.connections - 1)
+        record.disconnectedAt = record.connections === 0 ? Date.now() : null
+
+        await this.persist(record)
+    }
+
+    /** Permanently removes one Session. */
     public async remove(identity: string) {
 
-        if (!this.sessions.delete(identity)) return
+        const record = this.identities.get(identity)
 
-        await this.persist()
+        if (!record) return false
+
+        this.forget(record)
+
+        await this.store.delete(this.key(record.hash))
+
+        return true
     }
 
-    private persist() {
+    private validRecord(record: StoredSession, now: number) {
 
-        const snapshot = [...this.sessions.values()].map(session => ({ ...session }))
+        return record.connections > 0
 
-        const writing = this.writing.catch(() => undefined).then(() => this.store.set(storageKey, snapshot))
+            || record.disconnectedAt === null
 
-        this.writing = writing
-
-        return writing
+            || now - record.disconnectedAt <= disconnectedSessionLifetime
     }
 
-    private prune(now: number) {
+    private expired(record: StoredSession, now: number) {
 
-        for (const [identity, session] of this.sessions) {
+        return record.connections === 0
 
-            if (session.disconnectedAt !== null && now - session.disconnectedAt > disconnectedSessionLifetime) this.sessions.delete(identity)
+            && record.disconnectedAt !== null
+
+            && now - record.disconnectedAt > disconnectedSessionLifetime
+    }
+
+    private async prune() {
+
+        const now = Date.now()
+
+        const expired = [...this.identities.values()].filter(record => this.expired(record, now))
+
+        for (const record of expired) {
+
+            this.forget(record)
+            this.expiredSession(record.identity)
         }
+
+        await Promise.all(expired.map(record => this.store.delete(this.key(record.hash))))
     }
+
+    private persist(record: StoredSession) {
+
+        if (!record.exposed) return Promise.resolve(true)
+
+        return this.store.set(this.key(record.hash), {
+
+            identity: record.identity,
+
+            disconnectedAt: record.disconnectedAt
+        })
+    }
+
+    private forget(record: StoredSession) {
+
+        this.identities.delete(record.identity)
+        this.hashes.delete(record.hash)
+    }
+
+    private expiredSession(identity: string) {
+
+        for (const listener of this.expirationListeners) listener(identity)
+    }
+
+    private key(hash: string) { return storagePrefix + hash }
 }
 
-function parse(value: unknown): StoredSessionInput[] {
+function hashToken(token: string) {
 
-    if (value === undefined) return []
-
-    if (!Array.isArray(value) || !value.every(isStoredSession)) throw new Error("The authentication sessions are invalid")
-
-    return value
+    return createHash("sha256").update(token).digest("base64url")
 }
 
-function isStoredSession(value: unknown): value is StoredSessionInput {
+function parse(value: unknown, hash: string): StoredSession {
 
-    if (!value || typeof value !== "object") return false
+    if (!value || typeof value !== "object") throw new Error("An authentication Session is invalid")
 
-    const record = value as Partial<StoredSessionInput>
+    const record = value as { identity?: unknown, disconnectedAt?: unknown }
 
-    return typeof record.identity === "string"
-        && (record.owner === undefined || typeof record.owner === "boolean")
-        && (record.disconnectedAt === null || typeof record.disconnectedAt === "number" && Number.isFinite(record.disconnectedAt))
+    if (typeof record.identity !== "string"
+
+        || record.disconnectedAt !== null && (typeof record.disconnectedAt !== "number" || !Number.isFinite(record.disconnectedAt))) {
+
+        throw new Error("An authentication Session is invalid")
+    }
+
+    return {
+
+        identity: record.identity,
+
+        hash,
+
+        exposed: true,
+
+        disconnectedAt: record.disconnectedAt,
+
+        connections: 0
+    }
 }
 
 interface StoredSession {
 
     identity: string
 
-    owner: boolean
+    hash: string
+
+    exposed: boolean
 
     disconnectedAt: number | null
+
+    connections: number
 }
 
-type StoredSessionInput = Omit<StoredSession, "owner"> & { owner?: boolean }
+export type CreatedSession = Readonly<{
+
+    identity: string
+
+    token: string
+}>

@@ -32,6 +32,41 @@ test("Client Program creation requires all before reaching the creation boundary
     expect(forceCreate).toHaveBeenCalledWith(source, "caller")
 })
 
+test("Program and Process discovery exposes only the accessible scope", async () => {
+
+    let permissions: Permissions = {}
+    const owner = program("owner")
+    const outside = program("outside")
+    const current = process("current", owner)
+    const hidden = process("hidden", outside)
+    const auth = {
+        programManager: { programs: new Map([[owner.identity, owner], [outside.identity, outside]]) },
+        processManager: { processes: new Map([[current.identity, current], [hidden.identity, hidden]]) },
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
+    } as unknown as AuthManager
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, {} as never)
+
+    await expect(answer("host-program-list")).resolves.toEqual([[expect.objectContaining({ identity: owner.identity })]])
+    await expect(answer("host-process-list")).resolves.toEqual([[expect.objectContaining({ identity: current.identity })]])
+    await expect(answer("host-program-find", outside.identity)).resolves.toEqual([null])
+    await expect(answer("host-process-find", hidden.identity)).resolves.toEqual([null])
+    await expect(answer("installed", { identity: outside.identity, reference: outside.reference })).rejects.toThrow("Program represented by this handle does not exist")
+    await expect(answer("window", { identity: hidden.identity, reference: hidden.reference })).rejects.toThrow("Process represented by this handle does not exist")
+
+    permissions = { programs: [outside.identity] }
+
+    await expect(answer("host-program-list")).resolves.toEqual([[
+        expect.objectContaining({ identity: owner.identity }),
+        expect.objectContaining({ identity: outside.identity })
+    ]])
+    await expect(answer("host-process-list")).resolves.toEqual([[
+        expect.objectContaining({ identity: current.identity }),
+        expect.objectContaining({ identity: hidden.identity })
+    ]])
+    await expect(answer("host-program-find", outside.identity)).resolves.toEqual([expect.objectContaining({ identity: outside.identity })])
+    await expect(answer("host-process-find", hidden.identity)).resolves.toEqual([expect.objectContaining({ identity: hidden.identity })])
+})
+
 test.each([
     { owningProgram: "owner", denied: [], granted: [{}] },
     {
@@ -54,7 +89,7 @@ test.each([
     owningProgram: string
     denied: Permissions[]
     granted: Permissions[]
-}>)("Service operations follow the authority hierarchy for $owningProgram", async ({ owningProgram, denied, granted }) => {
+}>)("Service operations expose only Services in the accessible scope for $owningProgram", async ({ owningProgram, denied, granted }) => {
     const destination = "6d138083-7a51-44ec-9abe-ff0194ad1e5b"
     let permissions: Permissions = {}
     const serviceExists = vi.fn(async () => true)
@@ -85,7 +120,7 @@ test.each([
         for (const assignment of denied) {
             permissions = assignment
             for (const [operation, ...args] of operations) {
-                await expect(answer(operation, ...args)).rejects.toThrow("Execution is not permitted")
+                await expect(answer(operation, ...args)).rejects.toThrow("The Service represented by this key does not exist")
             }
         }
         for (const assignment of granted) {
@@ -97,3 +132,32 @@ test.each([
         expect(call).toHaveBeenCalledTimes(granted.length * 2)
     }
 })
+
+function program(identity: string): ProgramSnapshot {
+
+    return {
+        identity,
+        reference: `${identity}-reference`,
+        assetId: `${identity}-assets`,
+        name: identity,
+        version: null,
+        description: null,
+        hasAgent: false,
+        server: null,
+        client: null
+    }
+}
+
+function process(identity: string, owner: ProgramSnapshot) {
+
+    return {
+        identity,
+        reference: `${identity}-reference`,
+        program: owner.identity,
+        name: null,
+        startedAt: new Date(0),
+        options: {},
+        server: null,
+        client: null
+    }
+}

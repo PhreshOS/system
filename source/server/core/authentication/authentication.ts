@@ -75,15 +75,15 @@ export default class Authentication {
 
         return {
 
-            registered: this.owner !== null,
+            signedUp: this.owner !== null,
 
             requirements
         }
     }
 
-    public async register(username: string, password: string): Promise<RegistrationResult> {
+    public async signUp(username: string, password: string): Promise<SignUpResult> {
 
-        if (this.owner) return { error: "registered" }
+        if (this.owner) return { error: "signed-up" }
 
         const normalizedUsername = normalizeUsername(username)
 
@@ -119,18 +119,18 @@ export default class Authentication {
 
             this.owner = owner
 
-            return { registered: true }
+            return { signedUp: true }
         }
 
         catch (exception) {
 
             if (!isExisting(exception)) throw exception
 
-            // Another registration won the exclusive write. Load that owner
+            // Another sign-up won the exclusive write. Load that owner
             // before reporting the closed state so this instance cannot reopen it.
             this.owner = parse(await readFile(this.path, "utf8"))
 
-            return { error: "registered" }
+            return { error: "signed-up" }
         }
     }
 
@@ -151,16 +151,40 @@ export default class Authentication {
             && timingSafeEqual(candidate, expected)
     }
 
-    /** Creates a session with the authority assigned by its trusted boundary. */
-    public createSession(owner = false) {
+    /** Creates a Session and returns its Client-owned raw token exactly once. */
+    public createSession() {
 
-        return this.sessions.create(owner)
+        return this.sessions.create()
     }
 
-    /** Whether a valid session belongs to a trusted owner-local connection. */
-    public sessionOwner(identity: string) {
+    /** Resolves one Client-owned raw token to a valid Session identity. */
+    public resolveSession(token: string) {
 
-        return this.sessions.owner(identity)
+        return this.sessions.resolve(token)
+    }
+
+    /** Returns every valid browser Session identity. */
+    public sessionsList() {
+
+        return this.sessions.list()
+    }
+
+    /** Resolves one valid browser Session identity. */
+    public sessionFind(identity: string) {
+
+        return this.sessions.find(identity)
+    }
+
+    /** Publishes a newly delivered browser Session into the authoritative registry. */
+    public exposeSession(identity: string) {
+
+        return this.sessions.expose(identity)
+    }
+
+    /** Observes browser Sessions removed by disconnected-lifetime expiration. */
+    public onSessionExpire(listener: (identity: string) => void) {
+
+        return this.sessions.onExpire(listener)
     }
 
     /** Whether a session is still within its connection-bound lifetime. */
@@ -169,19 +193,19 @@ export default class Authentication {
         return this.sessions.valid(identity)
     }
 
-    /** Attaches a live connection and renews the session without a timer. */
+    /** Attaches one live Connection to a Session. */
     public connectSession(identity: string) {
 
-        return this.sessions.connect(identity)
+        return this.sessions.attach(identity)
     }
 
-    /** Records when the final live connection to a session disappears. */
+    /** Detaches one live Connection and records its normal disconnection time. */
     public disconnectSession(identity: string) {
 
-        return this.sessions.disconnect(identity)
+        return this.sessions.detach(identity)
     }
 
-    /** Revokes a session explicitly when its owner signs out. */
+    /** Revokes a Session through an explicit sign-out operation. */
     public removeSession(identity: string) {
 
         return this.sessions.remove(identity)
@@ -193,7 +217,7 @@ function normalizeUsername(username: string) {
     return username.trim().normalize("NFKC")
 }
 
-function validate(username: string, password: string): RegistrationError | null {
+function validate(username: string, password: string): SignUpError | null {
 
     const usernameLength = [...username].length
 
@@ -290,7 +314,7 @@ function isFileError(exception: unknown, code: string) {
 
 export interface AuthenticationState {
 
-    registered: boolean
+    signedUp: boolean
 
     requirements: {
 
@@ -310,16 +334,16 @@ export interface AuthenticationState {
     }
 }
 
-export type RegistrationResult = {
+export type SignUpResult = {
 
-    registered: true
+    signedUp: true
 
 } | {
 
-    error: RegistrationError
+    error: SignUpError
 }
 
-export type RegistrationError = "registered" | "username-required" | "username-invalid" | "password-too-short" | "password-too-long" | "password-matches-username"
+export type SignUpError = "signed-up" | "username-required" | "username-invalid" | "password-too-short" | "password-too-long" | "password-matches-username"
 
 interface Owner {
 

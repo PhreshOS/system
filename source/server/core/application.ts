@@ -1,7 +1,6 @@
 import LinkManager from "./link-manager/link-manager"
 import Authentication from "./authentication/authentication"
 import FileManager from "@libs/file-manager"
-import Encryptor from "@libs/encryptor"
 import UploadManager from "./upload-manager"
 import DialogManager from "./dialog-manager"
 import AppearanceManager from "./appearance-manager"
@@ -31,8 +30,6 @@ export default class Application {
 
     /** Internal application persistence, reached publicly through named methods. */
     public readonly store: Keyv
-
-    public readonly encryptor: Encryptor
 
     public readonly authentication: Authentication
 
@@ -64,8 +61,6 @@ export default class Application {
 
         this.home = payload.home
 
-        this.encryptor = payload.encryptor
-
         this.store = payload.store
 
         this.authentication = payload.authentication
@@ -91,15 +86,13 @@ export default class Application {
 
         const store = openStore(storage.path)
 
-        const encryptor = await Encryptor.initialize(storage.join("private.pem"))
-
         const authentication = await Authentication.open(storage.join("credentials.json"), store)
 
         const uploads = new UploadManager(storage.navigateTo("uploads"))
 
         const appearanceManager = await AppearanceManager.open(store, uploads)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, encryptor, authentication, appearanceManager, uploads, createServerRuntime })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, authentication, appearanceManager, uploads, createServerRuntime })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -122,8 +115,6 @@ interface ApplicationPayload {
     home: FileArea
 
     store: Keyv
-
-    encryptor: Encryptor
 
     authentication: Authentication
 

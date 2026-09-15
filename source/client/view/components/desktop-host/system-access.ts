@@ -1,7 +1,7 @@
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import { parseLaunch, type ClientLaunch, type PermissionName, type PermissionValue, type ServiceKey } from "@phreshos/core"
+import { parseLaunch, type ClientLaunch, type ConnectionSnapshot, type PermissionName, type PermissionValue, type ServiceKey } from "@phreshos/core"
 
 const denied = "Execution is not permitted"
 
@@ -51,23 +51,61 @@ export default class SystemAccess {
         return await this.authManager.grantsPermission(this.pane, "services", program === null ? [] : [program])
     }
 
+    /** Whether one Connection belongs to this Client's visible scope. */
+    public async canConnection(identity: string) {
+
+        const scope = await this.connectionScope()
+
+        return scope === "all" || scope?.identity === identity
+    }
+
+    /** Whether one Session belongs to this Client's visible scope. */
+    public async canSession(identity: string) {
+
+        const scope = await this.connectionScope()
+
+        return scope === "all" || scope?.session === identity
+    }
+
+    /** Filters one Connection collection through a single authority snapshot. */
+    public async connections<Connection extends { identity: string }>(connections: readonly Connection[]) {
+
+        const scope = await this.connectionScope()
+
+        if (scope === "all") return [...connections]
+        if (scope === null) return []
+
+        return connections.filter(connection => connection.identity === scope.identity)
+    }
+
+    /** Filters one Session collection through a single authority snapshot. */
+    public async sessions<Session extends { identity: string }>(sessions: readonly Session[]) {
+
+        const scope = await this.connectionScope()
+
+        if (scope === "all") return [...sessions]
+        if (scope === null || scope.session === null) return []
+
+        return sessions.filter(session => session.identity === scope.session)
+    }
+
     public async program(program: Program) {
 
-        if (!await this.canProgram(program)) throw new Error(denied)
+        if (!await this.canProgram(program)) throw new Error("The Program represented by this handle does not exist")
 
         return program
     }
 
     public async process<Subject extends Pick<Process, "program">>(process: Subject) {
 
-        if (!await this.canProcess(process)) throw new Error(denied)
+        if (!await this.canProcess(process)) throw new Error("The Process represented by this handle does not exist")
 
         return process
     }
 
     public async service(service: ServiceKey) {
 
-        if (!await this.canService(service)) throw new Error(denied)
+        if (!await this.canService(service)) throw new Error("The Service represented by this key does not exist")
 
         return service
     }
@@ -117,6 +155,19 @@ export default class SystemAccess {
     public async require<Name extends PermissionName>(name: Name, values: readonly PermissionValue<Name>[]) {
 
         if (!await this.authManager.grantsPermission(this.pane, name, values)) throw new Error(denied)
+    }
+
+    private async currentConnection(): Promise<ConnectionSnapshot> {
+
+        return await this.authManager.connection("current") as ConnectionSnapshot
+    }
+
+    private async connectionScope(): Promise<"all" | ConnectionSnapshot | null> {
+
+        if (await this.authManager.grantsPermission(this.pane, "connections", [])) return "all"
+        if (!await this.authManager.grantsPermission(this.pane, "desktopConnection", [])) return null
+
+        return await this.currentConnection()
     }
 
     private owner() {
