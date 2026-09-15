@@ -56,7 +56,9 @@ function fixture() {
     }
 }
 
-test.each(["under", "over", "wallpaper"] as const)("Client launch routes check %s before delegation", async layer => {
+const restrictedLayers = ["under", "over", "wallpaper", "start-menu"] as const
+
+test.each(restrictedLayers)("Client launch routes check %s before delegation", async layer => {
     const f = fixture()
     const program = { identity: f.program.identity, reference: f.program.reference }
     const process = { identity: f.process.identity, reference: f.process.reference }
@@ -68,7 +70,7 @@ test.each(["under", "over", "wallpaper"] as const)("Client launch routes check %
         ["launch", program, "set", launch],
         ["start-endpoint", process, "client", { layer }]
     ] as const
-    const anotherLayer = layer === "under" ? "over" : layer === "over" ? "wallpaper" : "under"
+    const anotherLayer = restrictedLayers.find(candidate => candidate !== layer)!
     const deniedPermissions: Permissions[] = [{}, { programs: [] }, { layers: [anotherLayer] }, { all: [], layers: false }]
     for (const denied of deniedPermissions) {
         f.permissions(denied)
@@ -134,7 +136,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
     expect(f.createProcess).toHaveBeenCalledOnce()
 })
 
-test.each(["under", "over", "wallpaper"] as const)("Client run streams authorize %s before creating an iterator", async layer => {
+test.each(restrictedLayers)("Client run streams authorize %s before creating an iterator", async layer => {
     const f = fixture()
     const boundary = new ClientProcessBoundary(f.process.identity, { contentWindow: null } as HTMLIFrameElement, f.auth,
         () => ({ size: { width: 100, height: 100 } }), {} as never, { release: vi.fn() } as never)
@@ -160,6 +162,7 @@ test("the layer catalog uses exact assignments before all", () => {
     expect(permissionCatalog.allows("layers", ["under"], { layers: ["under"] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["under", "over"], { layers: [] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["wallpaper"], { layers: [] })).toBe(true)
+    expect(permissionCatalog.allows("layers", ["start-menu"], { layers: [] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["over"], { all: [], layers: false })).toBe(false)
     expect(permissionCatalog.allows("layers", ["over"], { all: [] })).toBe(true)
     expect(() => permissionCatalog.declarations({ layers: false })).toThrow()

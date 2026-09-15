@@ -10,6 +10,7 @@ import {
     type WindowLayer,
     type WindowState
 } from "@phreshos/core"
+import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
 
 export type LocalAnimation = Readonly<{
     revision: number
@@ -92,7 +93,7 @@ export function parseLocalWindowTransaction(value: unknown): AppearanceTransacti
 export function requireLocalSurfaceLayer(layer: WindowLayer) {
 
     if (layer === "window") throw new Error("A standard Window already owns its host Surface")
-    if (layer === "wallpaper") throw new Error("The wallpaper layer does not allow a local Surface")
+    if (isDesktopReplacementLayer(layer)) throw new Error(`The ${layer} layer does not allow a local Surface`)
 }
 
 function easing(value: unknown): Easing {

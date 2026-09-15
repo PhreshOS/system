@@ -52,15 +52,30 @@ test("client surface contract", async () => {
   assert.deepEqual(second.state("ordinary").position, { x: 0, y: 0 })
   assert.deepEqual(ordinary.window.position, { x: 0, y: 0 })
 
-  // A reader reports the rectangle currently painted by the browser. Policy
+  // A representation reports the rectangle currently painted by the browser. Policy
   // such as fill/restore still needs the underlying projection, because a
   // relative full-surface value and its measured pixels are not equivalent.
-  first.represent("ordinary", () => ({ position: { x: 0, y: 0 }, size: { width: 1200, height: 800 } }))
+  first.represent("ordinary", representation({ x: 0, y: 0, width: 1200, height: 800 }))
   assert.deepEqual(first.state("ordinary").size, { width: 1200, height: 800 })
   assert.deepEqual(first.projection("ordinary").size, { width: 300, height: 200 })
   first.represent("ordinary", null)
 
-  first.represent("bare", () => ({ position: { x: 65, y: 75 }, size: { width: 290, height: 190 } }))
+  let settleRepresentation: () => void = () => undefined
+  let representationPublications = 0
+  first.listen(() => { representationPublications++ })
+  first.represent("ordinary", {
+      ...representation({ x: 0, y: 0, width: 1200, height: 800 }),
+      listen(settled) {
+          settleRepresentation = settled
+          return () => { settleRepresentation = () => undefined }
+      }
+  })
+  const registrationPublication = representationPublications
+  settleRepresentation()
+  assert.equal(representationPublications, registrationPublication + 1)
+  first.represent("ordinary", null)
+
+  first.represent("bare", representation({ x: 65, y: 75, width: 290, height: 190 }))
   assert.deepEqual(first.state("bare").position, { x: 65, y: 75 })
   assert.deepEqual(first.state("bare").size, { width: 290, height: 190 })
   first.represent("bare", null)
@@ -320,6 +335,17 @@ test("client surface contract", async () => {
       const value = windows.windows.get(identity)
       assert(value)
       return value
+  }
+
+  function representation(geometry: { x: number, y: number, width: number, height: number }) {
+      return {
+          read: () => geometry,
+          present(next: typeof geometry) { geometry = next },
+          begin: () => geometry,
+          finish() {},
+          cancel() {},
+          listen() { return () => undefined }
+      }
   }
 
   function surface(windows: LocalWindows, identity: string) {

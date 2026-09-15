@@ -31,11 +31,11 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
     </div>
 
-    return <ScrollArea role="group" aria-label="Processes" className="h-full min-h-0">
+    return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
 
-        <div className="grid content-start">
+        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
 
-            <h3 className="sticky top-0 z-10 px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
+        <ScrollArea className="h-full min-h-0">
 
             <ul className="m-0 grid list-none content-start gap-1 p-2">
 
@@ -43,7 +43,7 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
             </ul>
 
-        </div>
+        </ScrollArea>
 
-    </ScrollArea>
+    </div>
 }

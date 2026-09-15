@@ -17,8 +17,8 @@ function fixture(layer: WindowLayer) {
     return { own, target, entries, windows }
 }
 
-test("wallpaper local geometry and visibility belong to Desktop, not authoritative state", async () => {
-    const { own, target, entries, windows } = fixture("wallpaper")
+test.each(["wallpaper", "start-menu"] as const)("%s local geometry and visibility belong to Desktop, not authoritative state", async layer => {
+    const { own, target, entries, windows } = fixture(layer)
     const initial = windows.projection("own")
     expect(initial).toMatchObject({ title: "", position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, minimized: false, maximized: true, depth: 0, surface: null })
     const operations = [
@@ -29,7 +29,7 @@ test("wallpaper local geometry and visibility belong to Desktop, not authoritati
         () => windows.title("own", "Local"), () => windows.raise("own"),
         () => windows.addSurface("own"), () => windows.removeSurface("own")
     ]
-    for (const operation of operations) expect(operation).toThrow(/wallpaper layer does not allow/)
+    for (const operation of operations) expect(operation).toThrow(new RegExp(`${layer} layer does not allow`))
     own.window.position = { x: 500, y: 600 }
     windows.reconcile(entries)
     expect(windows.projection("own")).toEqual(initial)

@@ -63,7 +63,7 @@ export default function ({ label, trigger, children, className, style, ...props 
         // the iframe becomes this document's active element.
         function closeForProgramFrame() {
 
-            if (document.activeElement instanceof HTMLIFrameElement) close()
+            if (document.activeElement instanceof HTMLIFrameElement && !surface.current?.contains(document.activeElement)) close()
         }
 
         window.addEventListener("blur", closeForProgramFrame)

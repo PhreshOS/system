@@ -1,5 +1,5 @@
 import logo from "@/assets/bundled/logo.png"
-import { memo, useState } from "react"
+import { memo, useState, type ReactNode } from "react"
 import Launcher from "./launcher"
 import Programs from "./programs/programs"
 import Processes from "./processes/processes"
@@ -9,7 +9,7 @@ import SearchBar from "./search-bar"
 import { searchTerms } from "./search"
 
 /** The taskbar entry point for current and future desktop actions. */
-export default memo(function StartMenu() {
+export default memo(function StartMenu({ replacement }: Readonly<{ replacement?: ReactNode }>) {
 
     const application = ApplicationContext.useValue()
 
@@ -33,14 +33,17 @@ export default memo(function StartMenu() {
 
     >
 
-        {(close, labelId) => <StartMenuPanel
-            labelId={labelId}
-            name={application.displayName}
-            version={application.version}
-            left={<Programs onChoose={close} terms={terms} />}
-            right={<Processes terms={terms} />}
-            footer={<SearchBar query={query} onChange={setQuery} />}
-        />}
+        {(close, labelId) => replacement ? <>
+            <h2 id={labelId} className="sr-only">{application.displayName}</h2>
+            {replacement}
+        </> : <StartMenuPanel
+                labelId={labelId}
+                name={application.displayName}
+                version={application.version}
+                left={<Programs onChoose={close} terms={terms} />}
+                right={<Processes terms={terms} />}
+                footer={<SearchBar query={query} onChange={setQuery} />}
+            />}
 
     </Launcher>
 })

@@ -8,7 +8,8 @@ const properties: Readonly<Record<WindowLayer, readonly PresentationProperty[]>>
     window: ["title", "position", "size", "minimized", "maximized", "depth"],
     under: ["position", "size", "minimized", "maximized", "depth", "surface"],
     over: ["position", "size", "minimized", "maximized", "depth", "surface"],
-    wallpaper: []
+    wallpaper: [],
+    "start-menu": []
 }
 
 export function requireLocalProperty(layer: WindowLayer, property: PresentationProperty) {

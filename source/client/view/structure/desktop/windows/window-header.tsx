@@ -1,18 +1,16 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useState } from "react"
+import { PointerEvent as ReactPointerEvent, ReactNode } from "react"
 import { motion } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
-import { useAppearance } from "@phreshos/react-ui"
-
-const control = {
-    base: { borderColor: "transparent", backgroundColor: "rgba(255, 255, 255, 0.15)", color: "#475569", scale: 1 },
-    hover: { borderColor: "rgba(255, 255, 255, 0.7)", backgroundColor: "rgba(255, 255, 255, 0.65)", color: "#0f172a", scale: 1 },
-    danger: { borderColor: "rgba(253, 164, 175, 0.7)", backgroundColor: "#f43f5e", color: "#ffffff", scale: 1 }
-}
+import { Button, type ButtonColor, useAppearance, useThemedValue } from "@phreshos/react-ui"
 
 /** The visible chrome above an ordinary window's content. */
 export default function WindowHeader({ title, icon, active, whole, reducedMotion, stopping, onGrab, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
 
-    const transition = motionTransition(useAppearance().transaction, reducedMotion)
+    const appearance = useAppearance()
+
+    const transition = motionTransition(appearance.transaction, reducedMotion)
+
+    const foreground = useThemedValue(appearance.colors).foreground
 
     return <div
 
@@ -51,15 +49,15 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
             transition={transition}
         >{title}</motion.span>
 
-        <div className="grid shrink-0 grid-flow-col auto-cols-max gap-1" onPointerDown={event => event.stopPropagation()}>
+        <div className="grid shrink-0 grid-flow-col auto-cols-max gap-1" onPointerDown={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
 
-            {onMinimize && <Control label="Minimise" reducedMotion={reducedMotion} focusOnPointerDown={false} onClick={onMinimize}>
+            {onMinimize && <Control label="Minimise" foreground={foreground} preventFocusOnPress onPress={onMinimize}>
 
                 <path d="M1.5 7.5h7" />
 
             </Control>}
 
-            {onMaximize && <Control label={whole ? "Restore" : "Fill"} reducedMotion={reducedMotion} onClick={onMaximize}>
+            {onMaximize && <Control label={whole ? "Restore" : "Fill"} foreground={foreground} onPress={onMaximize}>
 
                 {whole
 
@@ -69,7 +67,7 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
 
             </Control>}
 
-            {onClose && <Control label="Close" reducedMotion={reducedMotion} focusOnPointerDown={false} onClick={onClose} disabled={stopping} danger>
+            {onClose && <Control label="Close" foreground={foreground} color="danger:base" preventFocusOnPress onPress={onClose} disabled={stopping}>
 
                 <path d="M1.5 1.5 8.5 8.5M8.5 1.5 1.5 8.5" />
 
@@ -80,84 +78,17 @@ export default function WindowHeader({ title, icon, active, whole, reducedMotion
     </div>
 }
 
-// A pointer control acts on the press: click waits for the release, and that
-// wait reads as lag on something meant to feel mechanical. Keyboard and
-// assistive technology still use the button's native click activation.
-function Control({ label, danger = false, focusOnPointerDown = true, reducedMotion, children, onClick, ...props }: ControlProps) {
+function Control({ label, foreground, children, ...props }: ControlProps) {
 
-    const [interaction, setInteraction] = useState<"base" | "hover" | "pressed">("base")
-
-    const hover = danger ? control.danger : control.hover
-
-    const pressed = {
-        ...hover,
-        backgroundColor: danger ? "#e11d48" : "rgba(255, 255, 255, 0.8)",
-        scale: 0.95
-    }
-
-    const values = interaction === "pressed" ? pressed : interaction === "hover" ? hover : control.base
-
-    return <motion.button
+    return <Button
 
         {...props}
 
         aria-label={label}
 
-        initial={false}
+        size="xsmall"
 
-        animate={values}
-
-            transition={motionTransition(useAppearance().transaction, reducedMotion)}
-
-        onPointerEnter={() => {
-
-            setInteraction("hover")
-        }}
-
-        onPointerLeave={() => {
-
-            setInteraction("base")
-        }}
-
-        onPointerDown={event => {
-
-            event.stopPropagation()
-
-            if (event.button !== 0) return
-
-            setInteraction("pressed")
-
-            if (focusOnPointerDown) event.currentTarget.focus({ preventScroll: true })
-
-            // Minimise and close act without focusing their window. Preventing
-            // the pointer's default focus keeps that action from raising it.
-            else event.preventDefault()
-
-            onClick?.()
-        }}
-
-        onPointerUp={() => setInteraction("hover")}
-
-        onPointerCancel={() => setInteraction("base")}
-
-        onKeyDown={event => {
-
-            if (event.key === "Enter" || event.key === " ") setInteraction("pressed")
-        }}
-
-        onKeyUp={event => {
-
-            if (event.key === "Enter" || event.key === " ") setInteraction("base")
-        }}
-
-        onClick={event => {
-
-            event.stopPropagation()
-
-            if (event.detail === 0) onClick?.()
-        }}
-
-        className="grid size-6 place-items-center rounded-md border border-transparent bg-white/15 outline-none shadow-sm disabled:pointer-events-none disabled:opacity-40 focus-visible:relative focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-sky-500"
+        style={{ color: foreground }}
 
     >
 
@@ -167,7 +98,7 @@ function Control({ label, danger = false, focusOnPointerDown = true, reducedMoti
 
         </svg>
 
-    </motion.button>
+    </Button>
 }
 
 interface WindowHeaderProps {
@@ -193,15 +124,19 @@ interface WindowHeaderProps {
     onClose?: () => void
 }
 
-interface ControlProps extends Omit<ComponentProps<"button">, "onAnimationStart" | "onClick" | "onDrag" | "onDragEnd" | "onDragStart"> {
+interface ControlProps {
 
     label: string
 
-    danger?: boolean
+    foreground: string
 
-    focusOnPointerDown?: boolean
+    color?: ButtonColor
 
-    reducedMotion: boolean
+    preventFocusOnPress?: boolean
 
-    onClick?: () => void
+    disabled?: boolean
+
+    onPress: () => void
+
+    children: ReactNode
 }

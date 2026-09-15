@@ -2,7 +2,7 @@ import Process from "@client/core/link-manager/auth-manager/process-manager/proc
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type LocalAnimation, type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import { type LocalGeometryReader } from "@client/view/components/window-manager/local-windows"
+import { type LocalGeometryRepresentation } from "@client/view/components/window-manager/local-windows"
 import { type Position, type Size, type Theme } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
@@ -37,7 +37,7 @@ export default memo(function ({ identity, record, assetId, client, title, icon, 
 
     const snap = useCallback((position: Position, size: Size) => onSnap(record, position, size), [onSnap, record])
 
-    const represent = useCallback((reader: LocalGeometryReader | null) => onLocalRepresentation(record.identity, reader), [onLocalRepresentation, record])
+    const represent = useCallback((representation: LocalGeometryRepresentation | null) => onLocalRepresentation(record.identity, representation), [onLocalRepresentation, record])
 
     const frameSource = programFrameSource(assetId, door)
 
@@ -220,7 +220,7 @@ interface ProcessWindowProps {
 
     onLocalAnimationComplete: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
-    onLocalRepresentation: (identity: string, reader: LocalGeometryReader | null) => void
+    onLocalRepresentation: (identity: string, representation: LocalGeometryRepresentation | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
 

@@ -4,6 +4,7 @@ import { animate, type AnimationPlaybackControls, type MotionValue } from "motio
 import { motionTransition } from "@client/view/appearance/motion"
 
 const axes = ["x", "y", "width", "height"] as const
+const sizeAxes = ["width", "height"] as const
 type Axis = typeof axes[number]
 type Flight = {
     target: number
@@ -41,6 +42,33 @@ export class WindowGeometryAnimation {
 
     transition(region: WindowRegion, transaction: AppearanceTransaction, complete?: () => void) {
 
+        this.animate(region, transaction, axes, complete)
+    }
+
+    /** Moves directly while preserving an in-flight size transition. */
+    setPosition(position: Pick<WindowRegion, "x" | "y">) {
+
+        for (const axis of ["x", "y"] as const) {
+            const flight = this.flights.get(axis)
+            this.flights.delete(axis)
+            flight?.control?.stop()
+            this.values[axis].set(position[axis])
+        }
+
+        this.finish()
+    }
+
+    /** Starts from the visible size while the pointer immediately owns position. */
+    transitionSize(region: WindowRegion, transaction: AppearanceTransaction, complete?: () => void) {
+
+        this.stop()
+        this.values.x.set(region.x)
+        this.values.y.set(region.y)
+        this.animate(region, transaction, sizeAxes, complete)
+    }
+
+    private animate(region: WindowRegion, transaction: AppearanceTransaction, animatedAxes: readonly Axis[], complete?: () => void) {
+
         if (transaction.duration === 0) {
             this.set(region)
             complete?.()
@@ -56,7 +84,7 @@ export class WindowGeometryAnimation {
         this.layout.width.set(region.width || Math.max(this.values.width.get(), 1))
         this.layout.height.set(region.height || Math.max(this.values.height.get(), 1))
 
-        for (const axis of axes) {
+        for (const axis of animatedAxes) {
 
             const previous = this.flights.get(axis)
             if (previous?.target === region[axis] && previous.timing === timing) continue

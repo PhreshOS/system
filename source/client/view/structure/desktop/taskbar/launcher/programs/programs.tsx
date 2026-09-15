@@ -30,11 +30,11 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
     </div>
 
-    return <ScrollArea role="group" aria-label="Programs" className="h-full min-h-0">
+    return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
 
-        <div className="grid content-start">
+        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
 
-            <h3 className="sticky top-0 z-10 px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
+        <ScrollArea className="h-full min-h-0">
 
             <div className="grid content-start gap-1 p-2">{programs.map(record => <ProgramItem
 
@@ -48,9 +48,9 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
             />)}</div>
 
-        </div>
+        </ScrollArea>
 
-    </ScrollArea>
+    </div>
 }
 
 function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program, onChoose: () => void }) {

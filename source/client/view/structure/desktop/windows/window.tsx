@@ -2,12 +2,12 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useEffect
 import { useReducedMotion } from "@libs/react-motion"
 import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface from "./window-surface"
 import { type LocalAnimation, type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import { type LocalGeometryReader } from "@client/view/components/window-manager/local-windows"
+import { type LocalGeometryRepresentation } from "@client/view/components/window-manager/local-windows"
 import { motion } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
 import { useAppearance } from "@phreshos/react-ui"
@@ -53,7 +53,7 @@ const surfacePose = {
     closing: { scale: 0.86, y: 12, opacity: 0 }
 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = 260, minHeight = 160, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
@@ -80,21 +80,20 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         if (!onLocalRepresentation) return
 
-        const read: LocalGeometryReader = function () {
-
-            const shown = geometryMotion.read()
-
-            return {
-                position: { x: shown.x, y: shown.y },
-                size: { width: shown.width, height: shown.height }
-            }
+        const representation: LocalGeometryRepresentation = {
+            read: geometryMotion.read,
+            present: geometryMotion.present,
+            begin: () => geometryMotion.beginGesture()?.region ?? null,
+            finish: geometryMotion.finishGesture,
+            cancel: geometryMotion.cancelGesture,
+            listen: geometryMotion.listen
         }
 
-        onLocalRepresentation(read)
+        onLocalRepresentation(representation)
 
         return () => onLocalRepresentation(null)
 
-    }, [onLocalRepresentation, position, size])
+    }, [onLocalRepresentation])
 
     const closureCompleted = useRef(false)
 
@@ -294,7 +293,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 const ratio = Math.min(Math.max((pointerX - origin.x) / origin.width, 0), 1)
 
-                if (maximized) {
+                const restoringMaximized = maximized
+
+                if (restoringMaximized) {
                     const stored = resolveWindowGeometry(position, size, bounds)
                     origin = { ...origin, width: stored.width, height: stored.height }
                     onMaximize?.()
@@ -310,7 +311,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                 onMove?.(origin.x, origin.y)
 
-                geometryMotion.updateGesture(current)
+                if (restoringMaximized) geometryMotion.restoreGesture(current)
+
+                else geometryMotion.updateGesture(current)
                 setGesture({ origin, current, zone, shown })
 
                 return
@@ -602,7 +605,7 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     onLocalAnimationComplete?: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
-    onLocalRepresentation?: (reader: LocalGeometryReader | null) => void
+    onLocalRepresentation?: (representation: LocalGeometryRepresentation | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize

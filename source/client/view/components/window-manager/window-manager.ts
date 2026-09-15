@@ -1,11 +1,13 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { ReactTunnel } from "@the-link/react"
-import { Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
-import { type Position, type Size, type Value } from "@phreshos/core"
+import { type Layer, type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import LocalWindows from "./local-windows"
+import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
+import { type SharedResizeWindow } from "./shared-resize"
+import { type WindowRegion } from "./window-geometry"
 
 /**
  * The authorized view's windows: processes that have one. A window is a
@@ -112,7 +114,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const gone = [...previousClients.current.values()].filter(previous => currentClients.get(previous.record.identity)?.client !== previous.client)
 
-        const departed = new Set(gone.filter(({ client }) => client.window.layer === "wallpaper").map(({ identity }) => identity))
+        const departed = new Set(gone.filter(({ client }) => isDesktopReplacementLayer(client.window.layer)).map(({ identity }) => identity))
 
         for (const identity of departed) localWindow.remove(identity)
 
@@ -157,7 +159,7 @@ export default function useWindows(authManager: AuthManager) {
     const summit = useCallback((layer: Layer) => [...peer.processes.values()].reduce((highest, process) => process.client?.window.layer === layer ? Math.max(highest, process.client.window.depth) : highest, 0), [peer])
 
     // Resolve the front window of every layer in one pass.
-    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null }
+    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null, "start-menu": null }
 
     for (const process of records) {
 
@@ -328,12 +330,87 @@ export default function useWindows(authManager: AuthManager) {
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
 
-    const panesByLayer: Record<Layer, typeof panes> = { wallpaper: [], under: [], window: [], over: [] }
+    const panesByLayer: Record<Layer, typeof panes> = { wallpaper: [], under: [], window: [], over: [], "start-menu": [] }
 
     for (const pane of panes) {
 
         panesByLayer[pane.local.layer].push(pane)
     }
+
+    const sharedResizeWindows: SharedResizeWindow[] = panesByLayer.window.flatMap(function (pane) {
+
+        if (pane.closing || pane.stopping || pane.local.minimized || pane.local.maximized) return []
+
+        const geometry = localWindow.representedGeometry(pane.record.identity)
+
+        if (!geometry) return []
+
+        return [{ identity: pane.record.identity, geometry }]
+    })
+
+    const presentSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
+
+        for (const [identity, geometry] of geometries) localWindow.presentGeometry(identity, geometry)
+
+    }, [localWindow])
+
+    const beginSharedResize = useCallback(function (identities: readonly string[]) {
+
+        const geometries = new Map<string, WindowRegion>()
+
+        for (const identity of identities) {
+
+            const geometry = localWindow.beginGeometry(identity)
+
+            if (geometry) {
+
+                geometries.set(identity, geometry)
+
+                continue
+            }
+
+            for (const started of geometries.keys()) localWindow.cancelGeometry(started)
+
+            return null
+        }
+
+        return geometries
+
+    }, [localWindow])
+
+    const finishSharedResize = useCallback(function (identities: readonly string[]) {
+
+        for (const identity of identities) localWindow.finishGeometry(identity)
+
+    }, [localWindow])
+
+    const cancelSharedResize = useCallback(function (identities: readonly string[]) {
+
+        for (const identity of identities) localWindow.cancelGeometry(identity)
+
+    }, [localWindow])
+
+    const commitSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
+
+        for (const [identity, region] of geometries) {
+
+            const process = peer.processes.get(identity)
+
+            const window = process?.client?.window
+
+            if (!window || window.layer !== "window") continue
+
+            const geometry = {
+                position: { x: region.x, y: region.y },
+                size: { width: region.width, height: region.height }
+            }
+
+            void localWindow.geometry(identity, geometry)
+
+            commit(window.setGeometry(geometry))
+        }
+
+    }, [commit, localWindow, peer])
 
     return {
 
@@ -346,6 +423,15 @@ export default function useWindows(authManager: AuthManager) {
         fronts,
 
         localWindow,
+
+        sharedResize: {
+            windows: sharedResizeWindows,
+            begin: beginSharedResize,
+            present: presentSharedResize,
+            commit: commitSharedResize,
+            finish: finishSharedResize,
+            cancel: cancelSharedResize
+        },
 
         close,
 

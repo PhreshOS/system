@@ -34,6 +34,7 @@ import {
     type WindowLayer,
     type WindowState
 } from "@phreshos/core"
+import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/desktop-replacement"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 
@@ -909,25 +910,26 @@ export default class ProcessManager extends TheLink {
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
 
-    private wallpaperChanges: Promise<unknown> = Promise.resolve()
+    private readonly replacementChanges = new Map<DesktopReplacementLayer, Promise<unknown>>()
 
-    private serializeClientLayer<Result>(layer: string | undefined, work: () => Promise<Result>): Promise<Result> {
-        if (layer !== "wallpaper") return work()
-        const next = this.wallpaperChanges.catch(() => undefined).then(work)
-        this.wallpaperChanges = next.catch(() => undefined)
+    private serializeClientLayer<Result>(layer: Layer | undefined, work: () => Promise<Result>): Promise<Result> {
+        if (!isDesktopReplacementLayer(layer)) return work()
+        const current = this.replacementChanges.get(layer) ?? Promise.resolve()
+        const next = current.catch(() => undefined).then(work)
+        this.replacementChanges.set(layer, next.catch(() => undefined))
         return next
     }
 
-    private async replaceWallpaper() {
-        const occupied = [...this.processes.values()].filter(process => process.client?.window.layer === "wallpaper")
+    private async replaceDesktopPresentation(layer: DesktopReplacementLayer) {
+        const occupied = [...this.processes.values()].filter(process => process.client?.window.layer === layer)
         for (const process of occupied) await this.exitProcess(process.identity, "complete")
     }
 
     /** Claims the role after serialized replacement has released its previous owner. */
     private activateClient(process: Process, window: Window, service: boolean) {
-        if (window.layer === "wallpaper" && [...this.processes.values()].some(
-            current => current.client?.window.layer === "wallpaper"
-        )) throw new Error("A Client Endpoint is already running in the wallpaper layer")
+        if (isDesktopReplacementLayer(window.layer) && [...this.processes.values()].some(
+            current => current.client?.window.layer === window.layer
+        )) throw new Error(`A Client Endpoint is already running in the ${window.layer} layer`)
 
         process.startClient(window, service)
     }
@@ -950,7 +952,7 @@ export default class ProcessManager extends TheLink {
             throw new Error("This program already has a process with that name")
         }
 
-        if (client && shape?.layer === "wallpaper") await this.replaceWallpaper()
+        if (client && shape && isDesktopReplacementLayer(shape.layer)) await this.replaceDesktopPresentation(shape.layer)
 
         // Who had focus before this one opened, in the layer it is
         // opening into. A window is born on top of its own layer and
@@ -1240,7 +1242,7 @@ export default class ProcessManager extends TheLink {
 
             const before = this.front(window.layer)
 
-            if (window.layer === "wallpaper") await this.replaceWallpaper()
+            if (isDesktopReplacementLayer(window.layer)) await this.replaceDesktopPresentation(window.layer)
 
             this.activateClient(process, window, launch.service ?? process.program.client.service)
 

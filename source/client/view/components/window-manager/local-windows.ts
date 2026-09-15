@@ -7,6 +7,8 @@ import {
     type WindowState
 } from "@phreshos/core"
 import { type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
+import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
+import { type WindowRegion } from "./window-geometry"
 
 export interface LocalWindowEntry {
     identity: string
@@ -21,7 +23,8 @@ export default class LocalWindows implements LocalWindowHost {
     private readonly live = new Map<string, string>()
     private readonly authoritative = new Map<string, LocalWindowState>()
     private readonly waiting = new Map<string, WaitingAnimation>()
-    private readonly readers = new Map<string, LocalGeometryReader>()
+    private readonly representations = new Map<string, LocalGeometryRepresentation>()
+    private readonly representationListeners = new Map<string, () => void>()
     private readonly following = new Map<string, FollowingWindow>()
     private revision = 0
     private changed: (windows: ReadonlyMap<string, LocalWindowState>) => void = () => undefined
@@ -93,7 +96,7 @@ export default class LocalWindows implements LocalWindowHost {
         if (!this.windows.has(identity)) return
         const next = new Map(this.windows)
         next.delete(identity)
-        this.readers.delete(identity)
+        this.removeRepresentation(identity)
         this.authoritative.delete(identity)
         this.following.delete(identity)
 
@@ -105,8 +108,11 @@ export default class LocalWindows implements LocalWindowHost {
     public state(process: string) {
 
         const { identity, state } = this.existing(process)
-        const geometry = this.readers.get(identity)?.()
-        return windowState(state, frontmost(this.windows, state.layer) === identity, geometry)
+        const geometry = this.representations.get(identity)?.read()
+        return windowState(state, frontmost(this.windows, state.layer) === identity, geometry && {
+            position: { x: geometry.x, y: geometry.y },
+            size: { width: geometry.width, height: geometry.height }
+        })
     }
 
     /** Returns the values currently driving this desktop's representation. */
@@ -115,15 +121,70 @@ export default class LocalWindows implements LocalWindowHost {
         return this.existing(process).state
     }
 
-    public readonly represent = (process: string, reader: LocalGeometryReader | null) => {
+    public readonly represent = (process: string, representation: LocalGeometryRepresentation | null) => {
 
         const identity = this.live.get(process)
 
         if (!identity) return
 
-        if (reader) this.readers.set(identity, reader)
+        this.removeRepresentation(identity)
 
-        else this.readers.delete(identity)
+        if (representation) {
+
+            this.representations.set(identity, representation)
+
+            this.representationListeners.set(identity, representation.listen(() => {
+
+                if (this.representations.get(identity) !== representation) return
+
+                this.publish(new Map(this.windows))
+            }))
+        }
+
+        this.publish(new Map(this.windows))
+    }
+
+    public representedGeometry(process: string) {
+
+        const identity = this.live.get(process)
+
+        return identity ? this.representations.get(identity)?.read() ?? null : null
+    }
+
+    public presentGeometry(process: string, geometry: WindowRegion) {
+
+        const identity = this.live.get(process)
+
+        if (!identity) return false
+
+        const representation = this.representations.get(identity)
+
+        if (!representation) return false
+
+        representation.present(geometry)
+
+        return true
+    }
+
+    public beginGeometry(process: string) {
+
+        const identity = this.live.get(process)
+
+        return identity ? this.representations.get(identity)?.begin() ?? null : null
+    }
+
+    public finishGeometry(process: string) {
+
+        const identity = this.live.get(process)
+
+        if (identity) this.representations.get(identity)?.finish()
+    }
+
+    public cancelGeometry(process: string) {
+
+        const identity = this.live.get(process)
+
+        if (identity) this.representations.get(identity)?.cancel()
     }
 
     public move(process: string, position: WindowState["position"], transaction?: RequestedTransaction) {
@@ -292,6 +353,15 @@ export default class LocalWindows implements LocalWindowHost {
         this.publish(next)
     }
 
+    private removeRepresentation(identity: string) {
+
+        this.representationListeners.get(identity)?.()
+
+        this.representationListeners.delete(identity)
+
+        this.representations.delete(identity)
+    }
+
     private changeGeometry(identity: string, value: WindowGeometry, transaction?: RequestedTransaction) {
 
         const state = this.windows.get(identity)
@@ -381,11 +451,11 @@ function localState(client: ClientState): LocalWindowState {
     return {
         ...authoritativeState(client),
         title: window.layer === "window" ? window.title : "",
-        position: window.layer === "wallpaper" ? { x: 0, y: 0 } : window.position,
-        size: window.layer === "wallpaper" ? { width: "100%", height: "100%" } : window.size,
-        minimized: window.layer === "wallpaper" ? false : window.minimized,
-        maximized: window.layer === "wallpaper" ? true : window.maximized,
-        depth: window.layer === "wallpaper" ? 0 : window.depth,
+        position: isDesktopReplacementLayer(window.layer) ? { x: 0, y: 0 } : window.position,
+        size: isDesktopReplacementLayer(window.layer) ? { width: "100%", height: "100%" } : window.size,
+        minimized: isDesktopReplacementLayer(window.layer) ? false : window.minimized,
+        maximized: isDesktopReplacementLayer(window.layer) ? true : window.maximized,
+        depth: isDesktopReplacementLayer(window.layer) ? 0 : window.depth,
     }
 }
 
@@ -419,10 +489,20 @@ function windowState(local: LocalWindowState, front: boolean, geometry?: Readonl
     }
 }
 
-export type LocalGeometryReader = () => Readonly<{
-    position: WindowState["position"]
-    size: WindowState["size"]
-}>
+export interface LocalGeometryRepresentation {
+
+    read: () => WindowRegion
+
+    present: (geometry: WindowRegion) => void
+
+    begin: () => WindowRegion | null
+
+    finish: () => void
+
+    cancel: () => void
+
+    listen: (settled: () => void) => () => void
+}
 
 function frontmost(windows: ReadonlyMap<string, LocalWindowState>, layer: LocalWindowState["layer"]) {
 

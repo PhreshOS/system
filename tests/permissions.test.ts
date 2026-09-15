@@ -23,7 +23,7 @@ test("permissions contract", async () => {
       layers: {
           default: [],
           title: "Window layers",
-          description: "Select the under, over, and wallpaper layers in Client Endpoint launches."
+          description: "Select the under, over, wallpaper, and start-menu layers in Client Endpoint launches."
       },
       network: {
           default: [],

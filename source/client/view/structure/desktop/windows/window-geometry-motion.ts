@@ -31,12 +31,15 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
     const height = useMotionValue(typeof size.height === "number" ? size.height : 0)
     const layoutWidth = useMotionValue(width.get())
     const layoutHeight = useMotionValue(height.get())
+    const transformOrigin = useMotionValue("0px 0px")
     const scaleX = useTransform(() => layoutWidth.get() === 0 ? 1 : width.get() / layoutWidth.get())
     const scaleY = useTransform(() => layoutHeight.get() === 0 ? 1 : height.get() / layoutHeight.get())
     const animator = useRef<WindowGeometryAnimation | null>(null)
     if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height }, { width: layoutWidth, height: layoutHeight })
     const gesturing = useRef(false)
+    const restoringGesture = useRef(false)
     const initialized = useRef(false)
+    const settlementListeners = useRef(new Set<() => void>())
     const values = useRef({ position, size, animation, immediate, onComplete })
 
     values.current = { position, size, animation, immediate, onComplete }
@@ -51,9 +54,35 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         animator.current!.stop()
     }
 
+    function announceSettlement() {
+
+        for (const listener of settlementListeners.current) listener()
+    }
+
+    function listen(settled: () => void) {
+
+        settlementListeners.current.add(settled)
+
+        return () => settlementListeners.current.delete(settled)
+    }
+
+    function completeGestureRestore() {
+
+        if (!restoringGesture.current) return
+
+        restoringGesture.current = false
+        transformOrigin.set("0px 0px")
+    }
+
     function set(region: WindowRegion) {
 
         animator.current!.set(region)
+    }
+
+    function present(region: WindowRegion) {
+
+        stop()
+        set(region)
     }
 
     function transition(region: WindowRegion, transaction: AppearanceTransaction = appearanceTransaction, complete?: () => void) {
@@ -61,12 +90,18 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         if (immediate) {
 
             set(region)
+            announceSettlement()
             complete?.()
 
             return
         }
 
-        animator.current!.transition(region, transaction, complete)
+        animator.current!.transition(region, transaction, () => {
+
+            completeGestureRestore()
+            announceSettlement()
+            complete?.()
+        })
     }
 
     function resolve() {
@@ -118,7 +153,11 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
             const region = resolve()
 
-            if (region) set(region)
+            if (region) {
+
+                set(region)
+                announceSettlement()
+            }
         })
 
         observer.observe(parent)
@@ -135,6 +174,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         if (!parent) return null
 
+        completeGestureRestore()
         gesturing.current = true
         stop()
 
@@ -143,31 +183,62 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     function updateGesture(region: WindowRegion) {
 
-        set(region)
+        if (restoringGesture.current) animator.current!.setPosition(region)
+
+        else set(region)
+    }
+
+    function restoreGesture(region: WindowRegion) {
+
+        const shown = read()
+        const scaleX = region.width === 0 ? 1 : shown.width / region.width
+        const scaleY = region.height === 0 ? 1 : shown.height / region.height
+        const originX = scaleX === 1 ? 0 : (shown.x - region.x) / (1 - scaleX)
+        const originY = scaleY === 1 ? 0 : (shown.y - region.y) / (1 - scaleY)
+
+        restoringGesture.current = true
+        transformOrigin.set(`${originX}px ${originY}px`)
+        animator.current!.transitionSize(region, appearanceTransaction, () => {
+
+            completeGestureRestore()
+            announceSettlement()
+        })
     }
 
     function finishGesture(region?: WindowRegion) {
 
         gesturing.current = false
 
-        if (region) transition(region)
+        if (region) {
+
+            completeGestureRestore()
+            transition(region)
+        }
     }
 
     function cancelGesture() {
 
         gesturing.current = false
+        completeGestureRestore()
 
         const region = resolve()
 
-        if (region) set(region)
+        if (region) {
+
+            set(region)
+            announceSettlement()
+        }
     }
 
     return {
         frame,
-        style: { x, y, width: layoutWidth, height: layoutHeight, scaleX, scaleY, transformOrigin: "0 0" } satisfies MotionStyle,
+        style: { x, y, width: layoutWidth, height: layoutHeight, scaleX, scaleY, transformOrigin } satisfies MotionStyle,
         read,
+        present,
+        listen,
         beginGesture,
         updateGesture,
+        restoreGesture,
         finishGesture,
         cancelGesture
     }

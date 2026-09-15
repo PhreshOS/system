@@ -66,6 +66,35 @@ test("retargeting preserves visible size and pointer interruption restores unsca
     expect(layout.width.get()).toBe(480)
 })
 
+test("gesture restore animates size while pointer movement remains direct", () => {
+    const { animator, values, layout } = create()
+    const target = { x: 80, y: 40, width: 500, height: 360 }
+    const complete = vi.fn()
+
+    animator.transitionSize(target, timing, complete)
+
+    expect(values.x.get()).toBe(80)
+    expect(values.y.get()).toBe(40)
+    expect(values.width.get()).toBe(initial.width)
+    expect(values.height.get()).toBe(initial.height)
+    expect(layout.width.get()).toBe(500)
+    expect(layout.height.get()).toBe(360)
+    expect(runs).toHaveLength(2)
+
+    animator.setPosition({ x: 120, y: 90 })
+
+    expect(values.x.get()).toBe(120)
+    expect(values.y.get()).toBe(90)
+    expect(runs.every(run => run.stop.mock.calls.length === 0)).toBe(true)
+    expect(complete).not.toHaveBeenCalled()
+
+    for (const run of runs) run.finish()
+
+    expect(values.width.get()).toBe(500)
+    expect(values.height.get()).toBe(360)
+    expect(complete).toHaveBeenCalledOnce()
+})
+
 test("zero-size destinations retain finite backing dimensions until completion", () => {
     const { animator, values, layout } = create()
     animator.transition({ ...initial, width: 0, height: 0 }, timing)

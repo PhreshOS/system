@@ -1,4 +1,4 @@
-import { type Layer } from "@server/core/link-manager/auth-manager/program-manager/config"
+import { type Layer } from "@phreshos/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
@@ -18,6 +18,8 @@ import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
 import { useAppearance, usePreferences, useThemedValue } from "@phreshos/react-ui"
+import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
+import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 
 export default function Workspace() {
 
@@ -46,6 +48,7 @@ export default function Workspace() {
     const [fileWallpaperReady, setFileWallpaperReady] = useState(false)
 
     const hasWallpaperClient = windows.records.some(record => record.client?.window.layer === "wallpaper")
+    const hasStartMenuClient = windows.records.some(record => record.client?.window.layer === "start-menu")
     const wallpaperReady = hasWallpaperClient || fileWallpaperReady
 
     const desktop = useRef<HTMLDivElement>(null)
@@ -156,7 +159,7 @@ export default function Workspace() {
 
             stopping={stopping}
 
-            entering={layer === "wallpaper" ? false : entering}
+            entering={isDesktopReplacementLayer(layer) ? false : entering}
 
             door={application.doors.program}
 
@@ -193,7 +196,7 @@ export default function Workspace() {
 
     const taskbar = <Taskbar
 
-        leading={<StartMenu />}
+        leading={<StartMenu replacement={hasStartMenuClient ? renderWindows("start-menu") : undefined} />}
 
         trailing={<SignOut />}
 
@@ -247,6 +250,8 @@ export default function Workspace() {
             underWindows={renderWindows("under")}
 
             windows={renderWindows("window")}
+
+            sharedResizeBoundaries={<SharedResizeBoundaries {...windows.sharedResize} />}
 
             overWindows={renderWindows("over")}
 

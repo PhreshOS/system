@@ -18,6 +18,8 @@ export interface WindowSurfaceSize {
     height: number
 }
 
+export const minimumWindowSize = Object.freeze({ width: 260, height: 160 })
+
 /**
  * Every window type uses this same calculation inside the CSS containing
  * block supplied by its layer. Every expression is one relative coefficient

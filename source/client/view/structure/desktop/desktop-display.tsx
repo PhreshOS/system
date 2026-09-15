@@ -5,7 +5,7 @@ import { desktopDisplayStyle } from "./geometry"
  * The desktop's visible stacking structure. Each program layer owns a
  * containing block; window geometry remains identical inside every layer.
  */
-export default function DesktopDisplay({ wallpaper, underWindows, windows, overWindows, windowSurfaceRef, taskbar }: DesktopDisplayProps) {
+export default function DesktopDisplay({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, windowSurfaceRef, taskbar }: DesktopDisplayProps) {
 
     return <div className="m-(--desktop-gutter) grid min-h-0 grid-cols-1 grid-rows-[1fr_auto] gap-(--desktop-gutter)" style={desktopDisplayStyle}>
 
@@ -24,6 +24,8 @@ export default function DesktopDisplay({ wallpaper, underWindows, windows, overW
         <div ref={windowSurfaceRef} className="pointer-events-none relative z-2">
 
             {windows}
+
+            {sharedResizeBoundaries}
 
         </div>
 
@@ -45,6 +47,8 @@ interface DesktopDisplayProps {
     underWindows: ReactNode
 
     windows: ReactNode
+
+    sharedResizeBoundaries: ReactNode
 
     overWindows: ReactNode
 
