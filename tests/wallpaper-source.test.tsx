@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { renderToStaticMarkup } from "react-dom/server"
-import { AppearanceProvider } from "@phreshos/react-ui"
+import { UIProvider } from "@phreshos/react-ui"
 import { defaultAppearance } from "@phreshos/core"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
@@ -18,9 +18,9 @@ test("wallpaper source contract", () => {
 
     function render(file: string) {
         return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
-            <AppearanceProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
+            <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
                 <WallpaperBackground file={file} />
-            </AppearanceProvider>
+            </UIProvider>
         </ApplicationContext.Provider>)
     }
 

@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
-import { AppearanceProvider } from "@phreshos/react-ui"
+import { UIProvider } from "@phreshos/react-ui"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import Workspace from "@client/view/structure/desktop/desktop"
 import type { ReactNode } from "react"
@@ -45,7 +45,7 @@ vi.mock("@client/view/structure/desktop/windows/process-window", () => ({
 }))
 
 test("Desktop replaces its default wallpaper with the running Client and restores the fallback after stop", () => {
-    const render = () => renderToStaticMarkup(<AppearanceProvider preferences={{ theme: "light", animations: true }}><Workspace /></AppearanceProvider>)
+    const render = () => renderToStaticMarkup(<UIProvider preferences={{ theme: "light", animations: true }}><Workspace /></UIProvider>)
     fixture.processes.clear()
     fixture.pane.mockClear()
     fixture.fallback.mockClear()
@@ -78,7 +78,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
 })
 
 test("Desktop replaces the built-in Start Menu in its existing host and restores the fallback after stop", () => {
-    const render = () => renderToStaticMarkup(<AppearanceProvider preferences={{ theme: "light", animations: true }}><Workspace /></AppearanceProvider>)
+    const render = () => renderToStaticMarkup(<UIProvider preferences={{ theme: "light", animations: true }}><Workspace /></UIProvider>)
     fixture.processes.clear()
     fixture.pane.mockClear()
     fixture.startMenu.mockClear()

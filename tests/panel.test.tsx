@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { defaultAppearance } from "@phreshos/core"
-import { AppearanceProvider } from "@phreshos/react-ui"
+import { UIProvider } from "@phreshos/react-ui"
 import CredentialsForm from "@client/view/structure/authentication/credentials-form"
 import TaskbarSurface, { taskbarSurfaceClassName } from "@client/view/structure/desktop/taskbar/taskbar-surface"
 import Launcher from "@client/view/structure/desktop/taskbar/launcher/launcher"
@@ -23,7 +23,7 @@ test("panel contract", async () => {
 
   function markup(children: ReactNode) {
       return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
-          <AppearanceProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}>{children}</AppearanceProvider>
+          <UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}>{children}</UIProvider>
       </ApplicationContext.Provider>)
   }
 

@@ -2,7 +2,7 @@ import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { AppearanceProvider, useThemedValue } from "@phreshos/react-ui"
+import { UIProvider, useThemedValue } from "@phreshos/react-ui"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
@@ -123,7 +123,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     return <LinkManagerContext.Provider value={linkManager}>
 
-        <AppearanceProvider appearance={appearance} preferences={preferences}>
+        <UIProvider appearance={appearance} preferences={preferences}>
 
             <ConnectedAppearance>
 
@@ -131,7 +131,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
             </ConnectedAppearance>
 
-        </AppearanceProvider>
+        </UIProvider>
 
     </LinkManagerContext.Provider>
 }

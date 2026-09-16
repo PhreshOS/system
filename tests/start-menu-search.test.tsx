@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { renderToStaticMarkup } from "react-dom/server"
-import { AppearanceProvider } from "@phreshos/react-ui"
+import { UIProvider } from "@phreshos/react-ui"
 import { defaultAppearance } from "@phreshos/core"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import SearchBar from "@client/view/structure/desktop/taskbar/launcher/search-bar"
@@ -38,7 +38,7 @@ test("start menu search contract", async () => {
   assert(!matchesProcess(null, undefined, searchTerms("notes")))
   assert(!matchesProcess("daily draft", program, searchTerms("missing")))
 
-  const footer = renderToStaticMarkup(<AppearanceProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}><SearchBar query="notes" onChange={() => {}} /></AppearanceProvider>)
+  const footer = renderToStaticMarkup(<UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}><SearchBar query="notes" onChange={() => {}} /></UIProvider>)
 
   assert.match(footer, /<div class="react-aria-TextField"/)
   assert.match(footer, /<input\b/)
