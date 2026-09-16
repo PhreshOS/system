@@ -57,7 +57,9 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                 <div className="grid gap-4">
 
                     <Input
-                        label="Username"
+                        aria-label="Username"
+                        placeholder="Username"
+                        size="large"
                         name="username"
                         type="text"
                         autoComplete="username"
@@ -69,7 +71,9 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                     />
 
                     <Input
-                        label="Password"
+                        aria-label="Password"
+                        placeholder="Password"
+                        size="large"
                         name="password"
                         type="password"
                         autoComplete={passwordAutocomplete}
@@ -91,6 +95,10 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                     disabled={pending}
 
                     pending={pending}
+
+                    size="large"
+
+                    color="primary:base"
 
                     style={{ width: "100%" }}
 
