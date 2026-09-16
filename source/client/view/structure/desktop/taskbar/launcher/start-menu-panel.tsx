@@ -31,9 +31,9 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
                 <div className="grid min-h-0 min-w-0 grid-cols-2" style={{ gap: "inherit" }}>
 
-                    <Surface color="default:base" className="min-h-0 min-w-0 overflow-hidden">{left}</Surface>
+                    <Surface className="min-h-0 min-w-0 overflow-hidden">{left}</Surface>
 
-                    <Surface color="default:base" className="min-h-0 min-w-0 overflow-hidden">{right}</Surface>
+                    <Surface className="min-h-0 min-w-0 overflow-hidden">{right}</Surface>
 
                 </div>
 
