@@ -44,7 +44,11 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Panel header={<SystemHeader name={application.displayName} version={application.version} />} contentProps={{ className: "grid gap-5 p-5" }}>
+            <Panel>
+
+                <Panel.Header><SystemHeader name={application.displayName} version={application.version} /></Panel.Header>
+
+                <Panel.Content className="grid gap-5 p-5">
 
                 <div className="grid gap-1">
 
@@ -103,6 +107,8 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                     style={{ width: "100%" }}
 
                 >{pending ? `${submitLabel}…` : submitLabel}</Button>
+
+                </Panel.Content>
 
             </Panel>
 

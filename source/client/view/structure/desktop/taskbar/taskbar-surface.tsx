@@ -6,13 +6,13 @@ export const taskbarSurfaceClassName = "m-0 isolate overflow-visible border-0 bg
 
 export default forwardRef<HTMLDivElement, TaskbarSurfaceProps>(function TaskbarSurface({ label, labelId, contentClassName = "", className, children, ...props }, ref) {
 
-    return <Panel {...props} ref={ref} className={className}
-        header={<h2 id={labelId} className="relative grid h-10 items-center px-3.5 text-window-title font-medium select-none">{label}</h2>}
-        contentProps={{ className: contentClassName }}
-    >{children}</Panel>
+    return <Panel {...props} ref={ref} className={className}>
+        <Panel.Header><h2 id={labelId} className="relative grid h-10 items-center px-3.5 text-window-title font-medium select-none">{label}</h2></Panel.Header>
+        <Panel.Content className={contentClassName}>{children}</Panel.Content>
+    </Panel>
 })
 
-interface TaskbarSurfaceProps extends Omit<PanelProps, "children" | "header" | "contentProps"> {
+interface TaskbarSurfaceProps extends Omit<PanelProps, "children"> {
 
     label: string
 
