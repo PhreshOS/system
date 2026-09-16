@@ -1,10 +1,13 @@
 import useStorage from "@libs/storage-hook"
 import {
+    defaultAppearance,
+    type AppearanceTransaction,
     type DesktopPreferences,
     type DesktopPreferencesUpdate,
     type Theme
 } from "@phreshos/core"
-import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { transitionTheme } from "./theme-transition"
 
 const themeQuery = "(prefers-color-scheme: dark)"
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
@@ -19,9 +22,14 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
     const storedAnimations = useStorage(animationsKey)
     const nativeDark = useMediaPreference(themeQuery)
     const nativeReducedMotion = useMediaPreference(reducedMotionQuery)
-    const theme = selectedTheme(storedTheme.value, nativeDark)
-    const animations = selectedAnimations(storedAnimations.value, nativeReducedMotion)
-    const preferences = useMemo<DesktopPreferences>(() => ({ theme, animations }), [animations, theme])
+    const desiredTheme = selectedTheme(storedTheme.value, nativeDark)
+    const desiredAnimations = selectedAnimations(storedAnimations.value, nativeReducedMotion)
+    const desired = useMemo<DesktopPreferences>(() => ({ theme: desiredTheme, animations: desiredAnimations }), [desiredAnimations, desiredTheme])
+    const [preferences, setPreferences] = useState(desired)
+    const current = useRef(preferences)
+    const pending = useRef<PendingCommit | null>(null)
+    const revision = useRef(0)
+    const transaction = useRef<AppearanceTransaction>(defaultAppearance.transaction)
 
     const update = useCallback(function (change: DesktopPreferencesUpdate) {
         if (change.theme !== undefined) {
@@ -35,16 +43,57 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
         }
     }, [storedAnimations.remove, storedAnimations.update, storedTheme.remove, storedTheme.update])
 
+    const setTransaction = useCallback(function (value: AppearanceTransaction) {
+        transaction.current = value
+    }, [])
+
+    useEffect(() => {
+        if (samePreferences(current.current, desired)) return
+
+        pending.current?.resolve()
+        pending.current = null
+
+        const change = ++revision.current
+        const themeChanged = current.current.theme !== desired.theme
+
+        if (!themeChanged) {
+            setPreferences(desired)
+            return
+        }
+
+        void transitionTheme(document, transaction.current, desired.animations, async () => {
+            if (revision.current !== change) return
+
+            await new Promise<void>(resolve => {
+                pending.current = { preferences: desired, resolve }
+                setPreferences(desired)
+            })
+        })
+    }, [desired])
+
     useLayoutEffect(() => {
         const root = document.documentElement
         const previous = root.style.colorScheme
 
+        current.current = preferences
         root.style.colorScheme = preferences.theme
 
-        return () => { root.style.colorScheme = previous }
-    }, [preferences.theme])
+        const commit = pending.current
 
-    const owner = useMemo(() => ({ preferences, update }), [preferences, update])
+        if (commit && samePreferences(commit.preferences, preferences)) {
+            pending.current = null
+            queueMicrotask(commit.resolve)
+        }
+
+        return () => { root.style.colorScheme = previous }
+    }, [preferences])
+
+    useEffect(() => () => {
+        pending.current?.resolve()
+        pending.current = null
+    }, [])
+
+    const owner = useMemo(() => ({ preferences, update, setTransaction }), [preferences, update, setTransaction])
 
     return <DesktopPreferencesContext.Provider value={owner}>{children}</DesktopPreferencesContext.Provider>
 }
@@ -54,6 +103,15 @@ export function useDesktopPreferences() {
     const owner = useContext(DesktopPreferencesContext)
     if (!owner) throw new Error("useDesktopPreferences() requires DesktopPreferencesProvider")
     return owner
+}
+
+/** Supplies the active Appearance timing to the Desktop-owned theme transition. */
+export function useDesktopThemeTransaction(transaction: AppearanceTransaction) {
+    const owner = useDesktopPreferences()
+
+    useLayoutEffect(() => {
+        owner.setTransaction(transaction)
+    }, [owner, transaction])
 }
 
 function selectedTheme(value: string | null, nativeDark: boolean): Theme {
@@ -81,4 +139,14 @@ function useMediaPreference(query: string) {
 interface DesktopPreferencesOwner {
     readonly preferences: DesktopPreferences
     readonly update: (change: DesktopPreferencesUpdate) => void
+    readonly setTransaction: (transaction: AppearanceTransaction) => void
+}
+
+interface PendingCommit {
+    readonly preferences: DesktopPreferences
+    readonly resolve: () => void
+}
+
+function samePreferences(first: DesktopPreferences, second: DesktopPreferences) {
+    return first.theme === second.theme && first.animations === second.animations
 }

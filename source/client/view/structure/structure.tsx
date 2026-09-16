@@ -7,7 +7,7 @@ import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
-import { useDesktopPreferences } from "../appearance/desktop-preferences"
+import { useDesktopPreferences, useDesktopThemeTransaction } from "../appearance/desktop-preferences"
 import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness"
@@ -114,6 +114,8 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
     }, [update]))
 
     const appearance = useProperty(linkManager.appearance)
+
+    useDesktopThemeTransaction(appearance.transaction)
 
     useEffect(function () {
         void linkManager.updateDesktopPreferences(preferences)

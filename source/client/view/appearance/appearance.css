@@ -3,6 +3,77 @@
 
 @import "@fontsource/roboto";
 
+html[data-phreshos-theme-capture] * {
+
+    transition-delay: 0ms !important;
+
+    transition-duration: 0ms !important;
+
+}
+
+html[data-phreshos-theme-transition]::view-transition-old(root),
+html[data-phreshos-theme-transition]::view-transition-new(root) {
+
+    animation-duration: var(--phreshos-theme-transition-duration);
+
+    animation-fill-mode: both;
+
+    animation-timing-function: var(--phreshos-theme-transition-easing);
+
+}
+
+html[data-phreshos-theme-transition]::view-transition-old(root) {
+
+    animation-name: phreshos-theme-leave;
+
+}
+
+html[data-phreshos-theme-transition]::view-transition-new(root) {
+
+    animation-name: phreshos-theme-enter;
+
+}
+
+@keyframes phreshos-theme-leave {
+
+    from {
+
+        opacity: 1;
+
+        scale: 1;
+
+    }
+
+    to {
+
+        opacity: 0;
+
+        scale: 1.05;
+
+    }
+
+}
+
+@keyframes phreshos-theme-enter {
+
+    from {
+
+        opacity: 0;
+
+        scale: 1.05;
+
+    }
+
+    to {
+
+        opacity: 1;
+
+        scale: 1;
+
+    }
+
+}
+
 @theme {
 
     --font-roboto: "Roboto", sans-serif;
