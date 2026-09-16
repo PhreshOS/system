@@ -106,7 +106,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     function resolve() {
 
-        const parent = frame.current?.offsetParent
+        const parent = frame.current?.parentElement
 
         return parent ? resolveWindowGeometry(values.current.position, values.current.size, parent.getBoundingClientRect()) : null
     }
@@ -135,7 +135,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     useLayoutEffect(function () {
 
-        const parent = frame.current?.offsetParent
+        const parent = frame.current?.parentElement
 
         if (!parent) return
 
@@ -170,7 +170,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
     function beginGesture() {
 
-        const parent = frame.current?.offsetParent
+        const parent = frame.current?.parentElement
 
         if (!parent) return null
 

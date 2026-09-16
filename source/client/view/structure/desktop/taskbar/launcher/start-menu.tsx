@@ -33,16 +33,14 @@ export default memo(function StartMenu({ replacement }: Readonly<{ replacement?:
 
     >
 
-        {(close, labelId) => replacement ? <>
-            <h2 id={labelId} className="sr-only">{application.displayName}</h2>
-            {replacement}
-        </> : <StartMenuPanel
+        {(close, labelId) => <StartMenuPanel
                 labelId={labelId}
                 name={application.displayName}
                 version={application.version}
                 left={<Programs onChoose={close} terms={terms} />}
                 right={<Processes terms={terms} />}
                 footer={<SearchBar query={query} onChange={setQuery} />}
+                replacement={replacement}
             />}
 
     </Launcher>

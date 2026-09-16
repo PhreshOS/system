@@ -82,4 +82,19 @@ test("panel contract", async () => {
   assert.doesNotMatch(popover, /\bgrid\b/)
   // Popovers and native dialogs share a non-clipping host for independently owned outer effects.
   assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
+
+  const replacement = markup(<StartMenuPanel
+      labelId="start-menu"
+      name="Example System"
+      version="1.2.3"
+      left={<button>Programs</button>}
+      right={<p>Processes</p>}
+      footer={<input type="search" />}
+      replacement={<iframe title="Client Start Menu" />}
+  />)
+  assert.equal(replacement.match(/data-material=""/g)?.length, 1)
+  assert.match(replacement, /<iframe title="Client Start Menu"/)
+  assert.doesNotMatch(replacement, /<button>Programs<\/button>/)
+  assert.doesNotMatch(replacement, /<p>Processes<\/p>/)
+  assert.doesNotMatch(replacement, /type="search"/)
 }, 120_000)
