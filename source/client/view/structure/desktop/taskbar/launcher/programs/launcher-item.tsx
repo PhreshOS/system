@@ -9,21 +9,17 @@ export default function ({ icon, label, description, children, className, ...pro
 
         type="button"
 
-        className={`group grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-2 text-start outline-none active:scale-[0.98] ${className ?? ""}`}
+        className={`grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-2 text-start outline-none active:scale-[0.98] ${className ?? ""}`}
 
     >
 
-        <span className="grid size-9 place-items-center overflow-hidden rounded-xl border border-white/55 bg-white/25 text-base font-semibold shadow-launcher-icon">
-
-            <img src={icon} alt="" draggable={false} className="size-full object-contain p-1" />
-
-        </span>
+        <img src={icon} alt="" draggable={false} className="size-9 object-contain p-1" />
 
         <span className="min-w-0">
 
             <span className="block truncate text-sm font-medium">{children}</span>
 
-            {description && <span className="block truncate text-xs opacity-60">{description}</span>}
+            {description && <span className="block max-w-[90%] truncate text-xs opacity-60">{description}</span>}
 
         </span>
 
