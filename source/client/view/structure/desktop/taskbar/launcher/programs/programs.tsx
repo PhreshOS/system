@@ -36,7 +36,7 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
         <ScrollArea className="h-full min-h-0">
 
-            <div className="grid content-start gap-1">{programs.map(record => <ProgramItem
+            <div className="grid content-start gap-1 pb-2">{programs.map(record => <ProgramItem
 
                 key={record.identity}
 
