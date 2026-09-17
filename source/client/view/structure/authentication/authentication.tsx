@@ -11,7 +11,8 @@ import { useEffect, useState, type ReactNode } from "react"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { WallpaperStage } from "../desktop/wallpaper/wallpaper"
 import { useReady } from "@libs/readiness"
-import { useAppearance, useThemedValue } from "@phreshos/react-ui"
+import { useThemedValue } from "@phreshos/react-ui"
+import { useProperty } from "@the-link/react"
 
 export default function () {
 
@@ -19,7 +20,9 @@ export default function () {
 
     const linkManager = LinkManagerContext.useValue()
 
-    const signInWallpaper = useThemedValue(useAppearance().signInWallpaper)
+    const appearance = useProperty(linkManager.appearance)
+
+    const signInWallpaper = useThemedValue(appearance.signInWallpaper)
 
     const [revision, setRevision] = useState(0)
 

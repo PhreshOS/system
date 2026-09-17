@@ -1,6 +1,6 @@
 import { type Layer } from "@phreshos/core"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ApplicationContext, AuthManagerContext } from "../../contexts"
+import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
 import DesktopDisplay from "./desktop-display"
 import useDesktopFocus from "./desktop-focus"
@@ -17,7 +17,8 @@ import useWindows from "../../components/window-manager/window-manager"
 import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
-import { useAppearance, usePreferences, useThemedValue } from "@phreshos/react-ui"
+import { usePreferences, useThemedValue } from "@phreshos/react-ui"
+import { useProperty } from "@the-link/react"
 import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 
@@ -27,7 +28,7 @@ export default function Workspace() {
 
     const authManager = AuthManagerContext.useValue()
 
-    const appearance = useAppearance()
+    const appearance = useProperty(LinkManagerContext.useValue().appearance)
 
     const desktopWallpaper = useThemedValue(appearance.desktopWallpaper)
 

@@ -1,9 +1,12 @@
 import useStorage from "@libs/storage-hook"
 import {
+    desktopPreferencesLimits,
+    defaultDesktopScale,
     defaultAppearance,
     type AppearanceTransaction,
     type DesktopPreferences,
     type DesktopPreferencesUpdate,
+    type DesktopScalePreference,
     type Theme
 } from "@phreshos/core"
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
@@ -13,6 +16,7 @@ const themeQuery = "(prefers-color-scheme: dark)"
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)"
 const themeKey = "desktop-preferences:theme"
 const animationsKey = "desktop-preferences:animations"
+const scaleKey = "desktop-preferences:scale"
 
 const DesktopPreferencesContext = createContext<DesktopPreferencesOwner | null>(null)
 
@@ -20,11 +24,13 @@ const DesktopPreferencesContext = createContext<DesktopPreferencesOwner | null>(
 export default function DesktopPreferencesProvider({ children }: Readonly<{ children: ReactNode }>) {
     const storedTheme = useStorage(themeKey)
     const storedAnimations = useStorage(animationsKey)
+    const storedScale = useStorage(scaleKey)
     const nativeDark = useMediaPreference(themeQuery)
     const nativeReducedMotion = useMediaPreference(reducedMotionQuery)
     const desiredTheme = selectedTheme(storedTheme.value, nativeDark)
     const desiredAnimations = selectedAnimations(storedAnimations.value, nativeReducedMotion)
-    const desired = useMemo<DesktopPreferences>(() => ({ theme: desiredTheme, animations: desiredAnimations }), [desiredAnimations, desiredTheme])
+    const desiredScale = resolveStoredDesktopScale(storedScale.value)
+    const desired = useMemo<DesktopPreferences>(() => ({ theme: desiredTheme, animations: desiredAnimations, scale: desiredScale }), [desiredAnimations, desiredScale, desiredTheme])
     const [preferences, setPreferences] = useState(desired)
     const current = useRef(preferences)
     const pending = useRef<PendingCommit | null>(null)
@@ -41,7 +47,13 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
             if (change.animations === "default") storedAnimations.remove()
             else storedAnimations.update(change.animations ? "enabled" : "disabled")
         }
-    }, [storedAnimations.remove, storedAnimations.update, storedTheme.remove, storedTheme.update])
+
+        if (change.scale !== undefined) {
+            const stored = serializeDesktopScalePreference(change.scale)
+            if (stored === null) storedScale.remove()
+            else storedScale.update(stored)
+        }
+    }, [storedAnimations.remove, storedAnimations.update, storedScale.remove, storedScale.update, storedTheme.remove, storedTheme.update])
 
     const setTransaction = useCallback(function (value: AppearanceTransaction) {
         transaction.current = value
@@ -124,6 +136,18 @@ function selectedAnimations(value: string | null, nativeReducedMotion: boolean) 
     return !nativeReducedMotion
 }
 
+/** Resolves the effective scale from this Desktop's persisted representation. */
+export function resolveStoredDesktopScale(value: string | null) {
+    const scale = Number(value)
+    const { minimum, maximum } = desktopPreferencesLimits.scale
+    return value !== null && Number.isFinite(scale) && scale >= minimum && scale <= maximum ? scale : defaultDesktopScale
+}
+
+/** Converts a scale request into its persisted representation; null removes the override. */
+export function serializeDesktopScalePreference(value: DesktopScalePreference) {
+    return value === "default" ? null : String(value)
+}
+
 function useMediaPreference(query: string) {
     const media = useMemo(() => matchMedia(query), [query])
     return useSyncExternalStore(
@@ -148,5 +172,5 @@ interface PendingCommit {
 }
 
 function samePreferences(first: DesktopPreferences, second: DesktopPreferences) {
-    return first.theme === second.theme && first.animations === second.animations
+    return first.theme === second.theme && first.animations === second.animations && first.scale === second.scale
 }

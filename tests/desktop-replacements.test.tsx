@@ -4,6 +4,7 @@ import { UIProvider } from "@phreshos/react-ui"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import Workspace from "@client/view/structure/desktop/desktop"
 import type { ReactNode } from "react"
+import { defaultAppearance } from "@phreshos/core"
 
 const fixture = vi.hoisted(() => ({
     processes: new Map<string, Process>(),
@@ -18,9 +19,13 @@ vi.mock("@client/view/contexts", () => ({
             ["wallpaper-program", { assetId: "wallpaper-assets" }],
             ["start-menu-program", { assetId: "start-menu-assets" }]
         ]) }
-    }) }
+    }) },
+    LinkManagerContext: { useValue: () => ({ appearance: { value: defaultAppearance } }) }
 }))
-vi.mock("@the-link/react", () => ({ ReactTunnel: { useFactory: () => ({ useSubscribe() {} }) } }))
+vi.mock("@the-link/react", () => ({
+    ReactTunnel: { useFactory: () => ({ useSubscribe() {} }) },
+    useProperty: (property: { value: unknown }) => property.value
+}))
 vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({}) }))
 vi.mock("@client/view/components/program-access", () => ({ default: () => null }))
 vi.mock("@libs/readiness", () => ({ useRequirement: () => () => {} }))

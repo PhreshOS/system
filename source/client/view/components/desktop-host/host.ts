@@ -13,8 +13,8 @@ import { type default as ClientProcess } from "@client/core/link-manager/auth-ma
 import {
     isServiceKey,
     isUploadFile,
+    parseDesktopPreferencesUpdate,
     parsePermissionName,
-    type DesktopPreferencesUpdate,
     type PermissionInput,
     type PermissionRequest,
     type ProgramIconSize
@@ -288,7 +288,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             await access.require("desktopPreferences", [])
 
-            const preferences = desktopPreferencesUpdate(args[0])
+            const preferences = parseDesktopPreferencesUpdate(args[0])
 
             await authManager.linkManager.requestDesktopPreferences(preferences)
 
@@ -1254,26 +1254,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         throw new Error(`The desktop does not know the word "${String(word)}"`)
     }
-}
-
-function desktopPreferencesUpdate(value: unknown): DesktopPreferencesUpdate {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Desktop preferences must be an object")
-
-    const preferences = value as Record<string, unknown>
-    if (!("theme" in preferences) && !("animations" in preferences)) throw new Error("Desktop preferences must update theme, animations, or both")
-
-    if ("theme" in preferences && preferences.theme !== "light" && preferences.theme !== "dark" && preferences.theme !== "default") {
-        throw new Error("The Desktop theme preference must be light, dark, or default")
-    }
-
-    if ("animations" in preferences && typeof preferences.animations !== "boolean" && preferences.animations !== "default") {
-        throw new Error("The Desktop animations preference must be true, false, or default")
-    }
-
-    return Object.freeze({
-        ...(preferences.theme === undefined ? {} : { theme: preferences.theme }),
-        ...(preferences.animations === undefined ? {} : { animations: preferences.animations })
-    }) as DesktopPreferencesUpdate
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {
