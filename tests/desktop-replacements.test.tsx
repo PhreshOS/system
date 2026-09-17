@@ -71,7 +71,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
     expect(running).not.toContain("data-default-wallpaper")
     expect(fixture.fallback).not.toHaveBeenCalled()
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
-        bare: true, animateLifecycle: false, minimized: false, maximized: true, entering: false, localSurface: null,
+        bare: true, minimized: false, maximized: true, entering: false, localSurface: null,
         position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, depth: 0
     })
 
@@ -102,7 +102,7 @@ test("Desktop replaces the built-in Start Menu in its existing host and restores
     expect(running).toContain('title="start-menu Client"')
     expect(running).not.toContain("data-default-start-menu")
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
-        bare: true, animateLifecycle: false, minimized: false, maximized: true, entering: false, localSurface: null,
+        bare: true, minimized: false, maximized: true, entering: false, localSurface: null,
         position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, depth: 0
     })
 

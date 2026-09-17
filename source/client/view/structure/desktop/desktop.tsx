@@ -19,7 +19,6 @@ import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
 import { usePreferences, useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
-import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 
 export default function Workspace() {
@@ -112,8 +111,6 @@ export default function Workspace() {
 
     function renderWindows(layer: Layer) {
 
-        const animateLifecycle = !isDesktopReplacementLayer(layer)
-
         return windows.panesByLayer[layer].map(({ identity, record, client, local, closing, entering, stopping }) => <ProcessWindow
 
             key={identity}
@@ -154,8 +151,6 @@ export default function Workspace() {
 
             bare={layer !== "window"}
 
-            animateLifecycle={animateLifecycle}
-
             minimized={local.minimized}
 
             maximized={local.maximized}
@@ -164,7 +159,7 @@ export default function Workspace() {
 
             stopping={stopping}
 
-            entering={animateLifecycle && entering}
+            entering={layer === "window" && entering}
 
             door={application.doors.program}
 

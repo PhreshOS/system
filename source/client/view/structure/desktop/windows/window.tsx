@@ -50,7 +50,7 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, animateLifecycle = !bare, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
@@ -111,10 +111,6 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const [presenceHidden, setPresenceHidden] = useState(minimized)
 
-    const mounting = useRef(true)
-
-    useEffect(() => { mounting.current = false }, [])
-
     const minimizeTransaction = minimizeAnimation?.transaction
 
     useLayoutEffect(function () {
@@ -137,9 +133,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         onUnavailable?.("close")
 
-        if (!animateLifecycle || reducedMotion) completeClosure()
+        if (bare || reducedMotion) completeClosure()
 
-    }, [closing, animateLifecycle, reducedMotion])
+    }, [closing, bare, reducedMotion])
 
     useEffect(function () {
 
@@ -151,11 +147,11 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     }, [bare, minimizeAnimation?.revision, reducedMotion])
 
-    const initialPresence = !animateLifecycle || reducedMotion || !animateEntrance
+    const initialPresence = bare || reducedMotion || !animateEntrance
         ? surfaceLifecyclePose.visible
         : surfaceLifecyclePose.hidden
 
-    const presencePose = closing && animateLifecycle
+    const presencePose = closing && !bare
         ? surfaceLifecyclePose.hidden
         : minimized
             ? bare ? surfacePresencePose.entering : minimizedSurfacePose
@@ -163,19 +159,15 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const presenceTransition = reducedMotion
         ? { duration: 0 }
-        : closing && animateLifecycle
-            ? surfacePresenceTransition(false, appearanceTransaction)
-            : bare
+        : bare
             ? minimizeTransaction
                 ? surfacePresenceTransition(false, minimizeTransaction)
-                : animateLifecycle && animateEntrance && mounting.current
-                    ? surfacePresenceTransition(false, appearanceTransaction)
-                    : { duration: 0 }
-            : motionTransition(minimizeTransaction ?? appearanceTransaction)
+                : { duration: 0 }
+            : motionTransition(closing ? appearanceTransaction : minimizeTransaction ?? appearanceTransaction)
 
     function completePresence() {
 
-        if (closing && animateLifecycle) completeClosure()
+        if (closing && !bare) completeClosure()
 
         if (minimized) setPresenceHidden(true)
 
@@ -599,9 +591,6 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     // Whether mounting this element represents a newly opened window.
     animateEntrance?: boolean
-
-    /** Whether creation and departure animate this complete Window representation. */
-    animateLifecycle?: boolean
 
     position?: Position
 

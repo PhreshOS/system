@@ -3,7 +3,7 @@ import { Surface } from "@phreshos/react-ui"
 import { useLayoutEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
 import { type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 
 /** Projects one representation-local Surface without animating its material host. */
 export default function WindowSurface({ state, onComplete }: WindowSurfaceProps) {
@@ -36,8 +36,8 @@ export default function WindowSurface({ state, onComplete }: WindowSurfaceProps)
     }
 
     return <motion.div
-        initial={animated && visible && !reducedMotion ? surfacePresencePose.entering : surfacePresencePose.entered}
-        animate={visible ? surfacePresencePose.entered : surfacePresencePose.entering}
+        initial={animated && visible && !reducedMotion ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible}
+        animate={visible ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
         transition={animated
             ? surfacePresenceTransition(reducedMotion, transaction)
             : { duration: 0 }}
