@@ -1,6 +1,6 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
-import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size } from "@phreshos/core"
@@ -14,6 +14,7 @@ import { useAppearance } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import { windowPaintInset } from "../geometry"
 import useWindowGeometryMotion from "./window-geometry-motion"
+import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 
 /**
  * A window: a pure function of the record it is given. Every render
@@ -47,16 +48,13 @@ const edges: { edge: WindowEdge, className: string }[] = [
     { edge: "se", className: "bottom-0 right-0 size-4 cursor-nwse-resize" }
 ]
 
-const surfacePose = {
-    resting: { scale: 1, y: 0, opacity: 1 },
-    minimized: { scale: 0.86, y: 28, opacity: 0 },
-    closing: { scale: 0.86, y: 12, opacity: 0 }
-}
+const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, animateLifecycle = !bare, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
+    const desktopScale = useDesktopScale()
 
     // Hidden windows retain their last presentation while lower-priority state changes.
     const presented = useRef({ position, size })
@@ -113,6 +111,10 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     const [presenceHidden, setPresenceHidden] = useState(minimized)
 
+    const mounting = useRef(true)
+
+    useEffect(() => { mounting.current = false }, [])
+
     const minimizeTransaction = minimizeAnimation?.transaction
 
     useLayoutEffect(function () {
@@ -135,11 +137,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         onUnavailable?.("close")
 
-        // Bare layers have no system presence animation, and reduced motion
-        // has no duration to wait for. The close handshake still completes.
-        if (bare || reducedMotion) completeClosure()
+        if (!animateLifecycle || reducedMotion) completeClosure()
 
-    }, [closing, bare, reducedMotion])
+    }, [closing, animateLifecycle, reducedMotion])
 
     useEffect(function () {
 
@@ -151,27 +151,31 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
     }, [bare, minimizeAnimation?.revision, reducedMotion])
 
-    const initialPresence = bare || reducedMotion || !animateEntrance
-        ? surfacePresencePose.entered
-        : surfacePresencePose.entering
+    const initialPresence = !animateLifecycle || reducedMotion || !animateEntrance
+        ? surfaceLifecyclePose.visible
+        : surfaceLifecyclePose.hidden
 
-    const presencePose = closing && !bare
-        ? surfacePose.closing
+    const presencePose = closing && animateLifecycle
+        ? surfaceLifecyclePose.hidden
         : minimized
-            ? bare ? surfacePresencePose.entering : surfacePose.minimized
-            : surfacePose.resting
+            ? bare ? surfacePresencePose.entering : minimizedSurfacePose
+            : surfaceLifecyclePose.visible
 
     const presenceTransition = reducedMotion
         ? { duration: 0 }
-        : bare
+        : closing && animateLifecycle
+            ? surfacePresenceTransition(false, appearanceTransaction)
+            : bare
             ? minimizeTransaction
                 ? surfacePresenceTransition(false, minimizeTransaction)
-                : { duration: 0 }
-            : motionTransition(closing ? appearanceTransaction : minimizeTransaction ?? appearanceTransaction)
+                : animateLifecycle && animateEntrance && mounting.current
+                    ? surfacePresenceTransition(false, appearanceTransaction)
+                    : { duration: 0 }
+            : motionTransition(minimizeTransaction ?? appearanceTransaction)
 
     function completePresence() {
 
-        if (closing && !bare) completeClosure()
+        if (closing && animateLifecycle) completeClosure()
 
         if (minimized) setPresenceHidden(true)
 
@@ -246,9 +250,9 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
         // its own space.
         function snapTerm(motion: globalThis.PointerEvent): Snap | null {
 
-            const pointerX = motion.clientX - bounds!.left
+            const pointerX = physicalToDesktopPixels(motion.clientX - bounds!.left, desktopScale)
 
-            const pointerY = motion.clientY - bounds!.top
+            const pointerY = physicalToDesktopPixels(motion.clientY - bounds!.top, desktopScale)
 
             const west = pointerX <= 16
 
@@ -270,26 +274,30 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
         function move(motion: globalThis.PointerEvent) {
 
-            const dx = motion.clientX - start.pointerX
+            const physicalX = motion.clientX - start.pointerX
 
-            const dy = motion.clientY - start.pointerY
+            const physicalY = motion.clientY - start.pointerY
+
+            const dx = physicalToDesktopPixels(physicalX, desktopScale)
+
+            const dy = physicalToDesktopPixels(physicalY, desktopScale)
 
             // A click is not a drag: without this, releasing a stationary
             // press inside a snap zone would snap the window.
-            if (Math.hypot(dx, dy) >= 4) moved = true
+            if (Math.hypot(physicalX, physicalY) >= 4) moved = true
 
             if (restoring) {
 
-                if (Math.hypot(dx, dy) < 8) return
+                if (Math.hypot(physicalX, physicalY) < 8) return
 
                 restoring = false
 
                 // The window returns to its floating size placed so the
                 // pointer keeps its proportional position across the
                 // header, and the same gesture carries on dragging.
-                const pointerX = motion.clientX - bounds!.left
+                const pointerX = physicalToDesktopPixels(motion.clientX - bounds!.left, desktopScale)
 
-                const pointerY = motion.clientY - bounds!.top
+                const pointerY = physicalToDesktopPixels(motion.clientY - bounds!.top, desktopScale)
 
                 const ratio = Math.min(Math.max((pointerX - origin.x) / origin.width, 0), 1)
 
@@ -591,6 +599,9 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     // Whether mounting this element represents a newly opened window.
     animateEntrance?: boolean
+
+    /** Whether creation and departure animate this complete Window representation. */
+    animateLifecycle?: boolean
 
     position?: Position
 

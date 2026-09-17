@@ -31,10 +31,10 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     const desktopViewport = useCallback(function (): DesktopViewportSnapshot {
 
-        const bounds = desktop.current?.getBoundingClientRect()
+        const element = desktop.current
 
-        return bounds
-            ? { size: { width: Math.round(bounds.width), height: Math.round(bounds.height) } }
+        return element
+            ? { size: measureElement(element) }
             : latestDesktopViewport.current
 
     }, [desktop])
@@ -73,11 +73,11 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
             setWindowSurfaceSize(current => current.width === width && current.height === height ? current : { width, height })
         }
 
-        const initialDesktop = measure(desktop.current.getBoundingClientRect())
+        const initialDesktop = measureElement(desktop.current)
 
         latestDesktopViewport.current = { size: initialDesktop }
 
-        const initialWindowSurface = windowSurfaceRef.current.getBoundingClientRect()
+        const initialWindowSurface = measureElement(windowSurfaceRef.current)
 
         rememberWindowSurfaceSize(initialWindowSurface)
 
@@ -311,4 +311,8 @@ export interface SurfaceSize {
     width: number
 
     height: number
+}
+
+function measureElement(element: HTMLElement): DesktopSize {
+    return { width: element.clientWidth, height: element.clientHeight }
 }

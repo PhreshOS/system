@@ -1,12 +1,14 @@
 import { type PointerEvent as ReactPointerEvent, useState } from "react"
 import { resizeSharedBoundary, sharedResizeBoundaries, type SharedResizeBoundary, type SharedResizeWindow } from "@client/view/components/window-manager/shared-resize"
 import { type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 
 const thickness = 4
 
 export default function SharedResizeBoundaries({ windows, begin, present, commit, finish, cancel }: SharedResizeBoundariesProps) {
 
     const boundaries = sharedResizeBoundaries(windows)
+    const desktopScale = useDesktopScale()
 
     const [active, setActive] = useState<ActiveBoundary | null>(null)
 
@@ -32,7 +34,7 @@ export default function SharedResizeBoundaries({ windows, begin, present, commit
 
             const coordinate = boundary.orientation === "vertical" ? pointer.clientX : pointer.clientY
 
-            const requestedDelta = coordinate - start
+            const requestedDelta = physicalToDesktopPixels(coordinate - start, desktopScale)
 
             if (requestedDelta === 0) return
 

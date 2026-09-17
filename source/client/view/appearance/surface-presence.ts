@@ -7,6 +7,12 @@ export const surfacePresencePose = Object.freeze({
     entering: { scale: 0.96, y: 8, opacity: 0 }
 }) satisfies Record<string, DOMKeyframesDefinition>
 
+/** Shared appearance and disappearance of one complete interactive surface. */
+export const surfaceLifecyclePose = Object.freeze({
+    visible: { scale: 1, y: 0, opacity: 1 },
+    hidden: { scale: 1.05, y: 0, opacity: 0 }
+}) satisfies Record<string, DOMKeyframesDefinition>
+
 /** One shared presence transition owned by Appearance. */
 export function surfacePresenceTransition(reducedMotion: boolean, transaction: AppearanceTransaction): Transition {
 

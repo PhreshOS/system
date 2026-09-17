@@ -112,6 +112,8 @@ export default function Workspace() {
 
     function renderWindows(layer: Layer) {
 
+        const animateLifecycle = !isDesktopReplacementLayer(layer)
+
         return windows.panesByLayer[layer].map(({ identity, record, client, local, closing, entering, stopping }) => <ProcessWindow
 
             key={identity}
@@ -152,6 +154,8 @@ export default function Workspace() {
 
             bare={layer !== "window"}
 
+            animateLifecycle={animateLifecycle}
+
             minimized={local.minimized}
 
             maximized={local.maximized}
@@ -160,7 +164,7 @@ export default function Workspace() {
 
             stopping={stopping}
 
-            entering={isDesktopReplacementLayer(layer) ? false : entering}
+            entering={animateLifecycle && entering}
 
             door={application.doors.program}
 

@@ -108,7 +108,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         const parent = frame.current?.parentElement
 
-        return parent ? resolveWindowGeometry(values.current.position, values.current.size, parent.getBoundingClientRect()) : null
+        return parent ? resolveWindowGeometry(values.current.position, values.current.size, logicalSize(parent)) : null
     }
 
     useLayoutEffect(function () {
@@ -139,11 +139,11 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         if (!parent) return
 
-        let bounds = parent.getBoundingClientRect()
+        let bounds = logicalSize(parent)
 
         const observer = new ResizeObserver(function () {
 
-            const next = parent.getBoundingClientRect()
+            const next = logicalSize(parent)
 
             if (next.width === bounds.width && next.height === bounds.height) return
 
@@ -178,7 +178,12 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         gesturing.current = true
         stop()
 
-        return { bounds: parent.getBoundingClientRect(), region: read() }
+        const physical = parent.getBoundingClientRect()
+
+        return {
+            bounds: { left: physical.left, top: physical.top, ...logicalSize(parent) },
+            region: read()
+        }
     }
 
     function updateGesture(region: WindowRegion) {
@@ -242,4 +247,8 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         finishGesture,
         cancelGesture
     }
+}
+
+function logicalSize(element: HTMLElement) {
+    return { width: element.clientWidth, height: element.clientHeight }
 }

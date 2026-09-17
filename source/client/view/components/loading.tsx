@@ -1,29 +1,24 @@
-import { type ComponentProps } from "react"
+import { Surface, type SurfaceProps } from "@phreshos/react-ui"
 import Spinner from "./spinner"
 
-const loadingBackground = "bg-white/10"
+type LoadingProps = Omit<SurfaceProps, "material">
 
-/** The shared treatment for content obscured by an unresolved system state. */
-export const obscuredBackground = `${loadingBackground} backdrop-blur-md`
+/** A complete loading surface for unresolved content. */
+export default function ({ className, style, ...props }: LoadingProps) {
 
-interface LoadingProps extends ComponentProps<"div"> {
-
-    /** Whether content behind the loading layer is blurred. */
-    blur?: boolean
-}
-
-/** A loading surface that obscures unresolved content. Blur is explicitly opt-in. */
-export default function ({ blur = false, className, ...props }: LoadingProps) {
-
-    return <div
-
-        className={`absolute inset-0 z-10 grid rounded-[inherit] ${blur ? obscuredBackground : loadingBackground} ${className ?? ""}`}
+    return <Surface
 
         {...props}
 
+        material={{ opacity: 1 }}
+
+        className={`inset-0 z-10 grid ${className ?? ""}`}
+
+        style={{ ...style, position: "absolute", borderRadius: style?.borderRadius ?? "inherit" }}
+
     >
 
-        <Spinner className="m-auto size-6 text-slate-700" />
+        <Spinner className="m-auto size-6" />
 
-    </div>
+    </Surface>
 }

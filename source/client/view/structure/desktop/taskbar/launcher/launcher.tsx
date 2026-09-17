@@ -1,5 +1,5 @@
 import { type ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react"
-import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { cssEasing } from "@client/view/appearance/motion"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
@@ -124,7 +124,7 @@ export default function ({ label, trigger, children, className, style, ...props 
 
             initial={false}
 
-            animate={open ? { scale: 1, opacity: 1 } : { scale: 1.05, opacity: 0 }}
+            animate={open ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
 
             transition={surfacePresenceTransition(reducedMotion, transaction)}
 

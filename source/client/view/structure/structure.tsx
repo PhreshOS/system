@@ -2,21 +2,23 @@ import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { UIProvider, useThemedValue } from "@phreshos/react-ui"
+import { useAppearance } from "@phreshos/react-ui"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
-import { useDesktopPreferences, useDesktopThemeTransaction } from "../appearance/desktop-preferences"
+import { useDesktopPreferences } from "../appearance/desktop-preferences"
+import { useRememberSystemAppearance } from "../appearance/appearance"
 import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReady } from "@libs/readiness"
-import { defaultAppearance, type DesktopPreferencesUpdate } from "@phreshos/core"
+import { type DesktopPreferencesUpdate } from "@phreshos/core"
 import { cssEasing } from "../appearance/motion"
 
 const startupRequirements = ["connection", "session", "wallpaper"] as const
 
 export default function () {
+    const appearance = useAppearance()
 
     return <Readiness requirements={startupRequirements}>
 
@@ -32,9 +34,8 @@ export default function () {
                 className={pending.length ? "opacity-100" : "pointer-events-none opacity-0"}
 
                 style={{
-                    backgroundColor: defaultAppearance.colors.light.background,
-                    transitionDuration: String(defaultAppearance.transaction.duration) + "ms",
-                    transitionTimingFunction: cssEasing(defaultAppearance.transaction.easing),
+                    transitionDuration: String(appearance.transaction.duration) + "ms",
+                    transitionTimingFunction: cssEasing(appearance.transaction.easing),
                     transitionProperty: "opacity"
                 }}
             />}
@@ -115,7 +116,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     const appearance = useProperty(linkManager.appearance)
 
-    useDesktopThemeTransaction(appearance.transaction)
+    useRememberSystemAppearance(appearance)
 
     useEffect(function () {
         void linkManager.updateDesktopPreferences(preferences)
@@ -123,22 +124,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     return <LinkManagerContext.Provider value={linkManager}>
 
-        <UIProvider appearance={appearance} preferences={preferences}>
-
-            <ConnectedAppearance>
-
-                <Authentication />
-
-            </ConnectedAppearance>
-
-        </UIProvider>
+        <Authentication />
 
     </LinkManagerContext.Provider>
-}
-
-function ConnectedAppearance({ children }: { children: React.ReactNode }) {
-
-    const background = useThemedValue(LinkManagerContext.useValue().appearance.value.colors).background
-
-    return <div className="grid min-h-0" style={{ backgroundColor: background }}>{children}</div>
 }
