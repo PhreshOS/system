@@ -8,7 +8,7 @@ test("permissions contract", async () => {
       all: {
           default: [],
           title: "All permissions",
-          description: "Grant every available Client permission."
+          description: "Grant every available Program permission."
       },
       services: {
           default: [],
@@ -66,7 +66,7 @@ test("permissions contract", async () => {
       valueDomain: "none",
       default: [],
       title: "All permissions",
-      description: "Grant every available Client permission."
+      description: "Grant every available Program permission."
   })
   assert.deepEqual(catalog.definition("programs"), {
       valueDomain: "program",

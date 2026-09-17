@@ -1,5 +1,5 @@
 import {
-    clientPermissionCatalog,
+    programPermissionCatalog,
     networkScopeCovers,
     parsePermission,
     parsePermissionName,
@@ -21,7 +21,7 @@ export class PermissionCatalog {
 
         const validated: Partial<Record<PermissionName, StoredDefinition>> = {}
 
-        for (const name of Object.keys(clientPermissionCatalog) as PermissionName[]) {
+        for (const name of Object.keys(programPermissionCatalog) as PermissionName[]) {
             const rule = rules[name]
 
             if (!rule || typeof rule !== "object") throw new Error(`Permission "${name}" needs a definition`)
@@ -45,7 +45,7 @@ export class PermissionCatalog {
             }
 
             validated[name] = Object.freeze({
-                valueDomain: clientPermissionCatalog[name],
+                valueDomain: programPermissionCatalog[name],
                 default: Object.freeze(defaults),
                 title: rule.title,
                 description: rule.description
@@ -53,7 +53,7 @@ export class PermissionCatalog {
 
         }
 
-        for (const name of Object.keys(clientPermissionCatalog) as PermissionName[]) {
+        for (const name of Object.keys(programPermissionCatalog) as PermissionName[]) {
 
             if (!validated[name]) throw new Error(`Permission "${name}" needs a definition`)
         }
@@ -94,17 +94,17 @@ export class PermissionCatalog {
     public declarations(value: unknown): DeclaredPermissions {
 
         if (value === undefined) return Object.freeze({})
-        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A Client's permissions must be a record")
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("A Program's permissions must be a record")
 
         const resolved: Partial<Record<PermissionName, readonly string[]>> = {}
 
         for (const [unknownName, assignment] of Object.entries(value)) {
 
-            if (!Object.hasOwn(clientPermissionCatalog, unknownName)) continue
+            if (!Object.hasOwn(programPermissionCatalog, unknownName)) continue
             const name = parsePermissionName(unknownName)
             const permission = this.resolve(name, assignment)
 
-            if (!Array.isArray(permission)) throw new Error("A Client-declared permission must be true or a list of values")
+            if (!Array.isArray(permission)) throw new Error("A Program-declared permission must be true or a list of values")
 
             resolved[name] = Object.freeze(permission)
         }
@@ -120,7 +120,7 @@ export class PermissionCatalog {
 
         for (const [unknownName, assignment] of Object.entries(value)) {
 
-            if (!Object.hasOwn(clientPermissionCatalog, unknownName)) continue
+            if (!Object.hasOwn(programPermissionCatalog, unknownName)) continue
             const name = parsePermissionName(unknownName)
 
             if (assignment === true) throw new Error("The Program permissions file contains unresolved shorthand")
@@ -303,7 +303,7 @@ export const permissionCatalog = new PermissionCatalog({
     all: {
         default: [],
         title: "All permissions",
-        description: "Grant every available Client permission."
+        description: "Grant every available Program permission."
     },
     services: {
         default: [],

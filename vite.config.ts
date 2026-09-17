@@ -22,7 +22,11 @@ export default defineConfig({
         emptyOutDir: true,
         outDir: resolve(import.meta.dirname, "dist/server"),
         rolldownOptions: {
-            input: "main.ts"
+            input: {
+                main: "main.ts",
+                "worker-bootstrap": "core/server-runtime/worker-bootstrap.ts",
+                "sandbox-bootstrap": "core/server-runtime/sandbox-bootstrap.ts"
+            }
         }
     }
 })

@@ -1,7 +1,7 @@
 import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
-import ServerProcessBoundary from "./server-process-boundary"
+import ServerProcessBoundary, { type HostVisibility } from "./server-process-boundary"
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
@@ -121,13 +121,13 @@ export default class Process {
         return true
     }
 
-    public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel) {
+    public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel, hostVisible: HostVisibility) {
 
         if (this.server) return this.server
 
         let boundary!: ServerProcessBoundary
 
-        boundary = new ServerProcessBoundary(runtime, this.program.client !== null, service, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance)
+        boundary = new ServerProcessBoundary(runtime, this.program.client !== null, service, (code, signal) => ended(boundary, code, signal), unanswered, this.hostTraffic, appearance, hostVisible)
 
         this.server = boundary
 

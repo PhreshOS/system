@@ -12,8 +12,7 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
         "PhreshOS",
         "test",
         home,
-        join(home, "icon.png"),
-        () => { throw new Error("The test does not launch Server Endpoints") }
+        join(home, "icon.png")
     )
     const link = new TheLink()
     const connection = application.linkManager.addConnection(link)

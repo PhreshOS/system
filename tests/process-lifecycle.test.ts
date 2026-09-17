@@ -18,7 +18,9 @@ test("process lifecycle contract", async () => {
 
       Object.assign(authManager, {
           programManager: {
-              permission() { return null }
+              permission() { return null },
+              grantsPermission() { return true },
+              grantsStorage() { return true }
           },
           linkManager: {
               application: {
@@ -45,7 +47,7 @@ test("process lifecycle contract", async () => {
 
   function program(identity: string) {
 
-      return new Program({ identity, server: { location: ".", startCommand: "true" } })
+      return new Program({ identity, server: { location: ".", command: "true" } })
   }
 
   async function register(manager: ProcessManager, identity: string) {

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { TheLink } from "@the-link/core"
 import { expect, test, vi, type TestContext } from "vitest"
-import type { ClientPermissionDeclarations } from "@phreshos/core"
+import type { ProgramPermissionDeclarations } from "@phreshos/core"
 import FileManager from "@libs/file-manager"
 import type AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
@@ -22,8 +22,8 @@ function fixture(context: TestContext) {
         processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject: vi.fn() }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
-    function definition(permissions?: ClientPermissionDeclarations) {
-        return { identity: "example", storage: join(directory, "data"), client: { location: client, permissions } }
+    function definition(permissions?: ProgramPermissionDeclarations) {
+        return { identity: "example", storage: join(directory, "data"), permissions, client: { location: client } }
     }
     return { directory, client, manager, announceHost, definition }
 }
@@ -82,7 +82,7 @@ test("boot reconstruction preserves all stored settings and launches the saved s
     const { manager, definition, client } = fixture(context)
     const directory = manager.fileManager.join("example")
     mkdirSync(directory)
-    writeFileSync(join(directory, "program.json"), JSON.stringify({ ...definition({ all: true }), startup: true, launch: true, storage: "storage", client: { location: client, permissions: { all: true } } }))
+    writeFileSync(join(directory, "program.json"), JSON.stringify({ ...definition({ all: true }), startup: true, launch: true, storage: "storage", client: { location: client } }))
     mkdirSync(join(directory, "storage"))
     writeFileSync(join(directory, "storage", "permissions.json"), JSON.stringify({ network: false }))
     writeFileSync(join(directory, "storage", "launch.json"), JSON.stringify({ options: { document: "saved.txt" } }))
@@ -269,8 +269,8 @@ for (const previous of [false, true]) test(`failed installation rolls back decla
     const replacement = vi.spyOn(entry.program, "replace").mockImplementationOnce(() => { throw new Error("registration failed") })
     try {
         await expect(manager.install(new Program({
-            identity: "example", startup: true, launch: true,
-            client: { location: client, permissions: { network: true } }
+            identity: "example", startup: true, launch: true, permissions: { network: true },
+            client: { location: client }
         }))).rejects.toThrow("registration failed")
     }
     finally { replacement.mockRestore() }

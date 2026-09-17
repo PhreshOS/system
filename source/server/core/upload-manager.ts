@@ -1,4 +1,4 @@
-import { createWriteStream, lstatSync, mkdirSync } from "node:fs"
+import { createReadStream, createWriteStream, lstatSync, mkdirSync } from "node:fs"
 import FileManager from "@libs/file-manager"
 import { rename, rm } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
@@ -115,6 +115,11 @@ export default class UploadManager {
         if (!stat.isFile()) throw new Error("That upload key does not identify a file")
 
         return { size: stat.size, modifiedAt: Math.round(stat.mtimeMs) }
+    }
+
+    public stream(file: string) {
+
+        return Readable.toWeb(createReadStream(this.path(file))) as ReadableStream<Uint8Array>
     }
 
 }

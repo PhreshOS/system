@@ -38,7 +38,7 @@ test("start menu search contract", async () => {
   assert(!matchesProcess(null, undefined, searchTerms("notes")))
   assert(!matchesProcess("daily draft", program, searchTerms("missing")))
 
-  const footer = renderToStaticMarkup(<UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}><SearchBar query="notes" onChange={() => {}} /></UIProvider>)
+  const footer = renderToStaticMarkup(<UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true, scale: 1 }}><SearchBar query="notes" onChange={() => {}} /></UIProvider>)
 
   assert.match(footer, /<div class="react-aria-TextField"/)
   assert.match(footer, /<input\b/)

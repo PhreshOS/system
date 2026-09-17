@@ -1,5 +1,4 @@
 import { Connect, Subscribe } from "@the-link/core/decorators"
-import { uploadLimit } from "@server/core/upload-manager"
 import { type Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import { Layer } from "../program-manager/config"
@@ -18,6 +17,7 @@ import EndpointServices, { serviceTimeout } from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
 import {
     isServiceKey,
+    isUploadFile,
     parsePermissionName,
     parseProgramInstallOptions,
     parseProgramUninstallOptions,
@@ -37,6 +37,8 @@ import {
 import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/desktop-replacement"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
+import SystemAccess from "./system-access"
+import { WebSocket } from "ws"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
@@ -78,6 +80,8 @@ export default class ProcessManager extends TheLink {
 
     /** Live observations owned by an authenticated System representation. */
     private readonly connectionObservations = new Map<string, Map<string, () => void>>()
+
+    private readonly serverSockets = new WeakMap<ServerProcessBoundary, Map<string, WebSocket>>()
 
     // Endpoint transitions for one Process are serialized. State is changed in
     // one place, so two simultaneous stop requests cannot both believe the
@@ -895,12 +899,34 @@ export default class ProcessManager extends TheLink {
 
             (values, reason) => this.rejectQuestion(values, reason),
 
-            this.authManager.linkManager.appearance.tunnel
+            this.authManager.linkManager.appearance.tunnel,
+
+            (domain, subject) => this.serverHostVisible(process, domain, subject)
         )
 
         this.bindServer(process, server)
 
         return server
+    }
+
+    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "window", subject: string | null) {
+
+        const access = new SystemAccess(this, process)
+
+        if (domain === "connection" || domain === "session") return access.canConnections()
+
+        if (!subject) return false
+
+        if (domain === "program") {
+
+            const program = [...this.authManager.programManager.programs.values()].find(entry => entry.program.reference === subject)?.program
+
+            return program ? access.canProgram(program) : false
+        }
+
+        const target = [...this.processes.values()].find(candidate => candidate.reference === subject)
+
+        return target ? access.canProcess(target) : false
     }
 
     private window(shape: Shape) {
@@ -1659,21 +1685,56 @@ export default class ProcessManager extends TheLink {
 
         const [word, ...rest] = args
 
-        if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true)]
+        const access = new SystemAccess(this, process)
+
+        const heldProgram = (value: unknown, fallback: Program = process.program) => access.program(this.system.holdProgram(value, fallback))
+
+        const heldProcess = (value: unknown, fallback: Process = process) => access.process(this.system.holdProcess(value, fallback))
+
+        const heldWindow = (value: unknown) => {
+
+            const window = this.heldWindow(value, process)
+
+            access.process(window.process)
+
+            return window
+        }
+
+        const heldService = (value: unknown) => {
+
+            if (!isServiceKey(value)) throw new Error("A complete Service key is required")
+
+            const program = value.program ?? this.services.target(value)?.process.program.identity ?? null
+
+            if (program !== process.program.identity && !this.grants(process.identity, "services", program === null ? [] : [program])) {
+
+                throw new Error("The Service represented by this key does not exist")
+            }
+
+            return value
+        }
+
+        if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true).filter(program => access.canProgram(program))]
 
         if (typeof word === "string" && (word.startsWith("host-connection-") || word.startsWith("host-session-"))) {
 
             if (word === "host-connection-list") {
+
+                if (!access.canConnections()) return [[]]
 
                 return [this.system.listConnections().map(connection => this.authManager.linkManager.connectionSnapshot(connection))]
             }
 
             if (word === "host-connection-find") {
 
+                if (!access.canConnections()) return [null]
+
                 const connection = this.system.findConnection(String(rest[0]))
 
                 return [connection ? this.authManager.linkManager.connectionSnapshot(connection) : null]
             }
+
+            if (word.startsWith("host-connection-") && !access.canConnections()) throw new Error("Connection not found")
 
             if (word === "host-connection-state") return [this.system.connectionSnapshot(String(rest[0]))]
 
@@ -1683,15 +1744,21 @@ export default class ProcessManager extends TheLink {
 
             if (word === "host-session-list") {
 
+                if (!access.canConnections()) return [[]]
+
                 return [this.system.listSessions().map(identity => this.authManager.linkManager.sessionSnapshot(identity))]
             }
 
             if (word === "host-session-find") {
 
+                if (!access.canConnections()) return [null]
+
                 const session = this.system.findSession(String(rest[0]))
 
                 return [session ? this.authManager.linkManager.sessionSnapshot(session) : null]
             }
+
+            if (!access.canConnections()) throw new Error("Session not found")
 
             if (word === "host-session-state") return [this.system.sessionSnapshot(String(rest[0]))]
 
@@ -1712,14 +1779,37 @@ export default class ProcessManager extends TheLink {
 
             const identity = String(rest[0])
 
-            return [this.system.findProgram(identity)]
+            const found = this.system.findProgram(identity)
+
+            return [found && access.canProgram(found) ? found : null]
         }
 
         if (word === "current-program") return [this.system.requireProgram(process.program.identity)]
 
+        if (word === "context-permission-get") {
+
+            return [this.permission(process.identity, parsePermissionName(rest[0]))]
+        }
+
+        if (word === "context-permission-allows") {
+
+            const permission = parsePermissionName(rest[0])
+
+            return [this.authManager.programManager.allowsPermission(process.program, permission, rest[1] as PermissionRequest<typeof permission>)]
+        }
+
+        if (word === "context-permission-request") {
+
+            const permission = parsePermissionName(rest[1])
+
+            return [await this.requestPermission(process.identity, String(rest[0]), permission, rest[2] as PermissionRequest<typeof permission>)]
+        }
+
         if (word === "program-permissions") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
+
+            access.requireAll()
             const operation = rest[1]
 
             if (operation === "all") return [this.authManager.programManager.permissions(program)]
@@ -1754,7 +1844,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "program-agent") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
             return [await this.system.programAgent(program)]
         }
@@ -1763,21 +1853,25 @@ export default class ProcessManager extends TheLink {
 
         if (word === "icon") {
 
-            return [await this.system.programIcon(this.system.holdProgram(rest[0], process.program), rest[1])]
+            return [await this.system.programIcon(heldProgram(rest[0]), rest[1])]
         }
 
         if (word === "launch") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
-            return [await this.system.programLaunch(program, String(rest[1]), rest[2])]
+            const value = rest[1] === "set" ? access.launch(rest[2]) : rest[2]
+
+            return [await this.system.programLaunch(program, String(rest[1]), value)]
         }
 
         if (word === "startup") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
-            return [await this.system.programStartup(program, String(rest[1]), rest[2])]
+            const value = rest[1] === "enable" ? access.launch(rest[2]) : rest[2]
+
+            return [await this.system.programStartup(program, String(rest[1]), value)]
         }
 
         // Which exact process made this one through `program.createProcess()`.
@@ -1785,7 +1879,7 @@ export default class ProcessManager extends TheLink {
         // Process handle rather than to this relationship.
         if (word === "parent") {
 
-            const target = this.system.holdProcess(rest[0], process)
+            const target = heldProcess(rest[0])
 
             if (!target.parent) return [null]
 
@@ -1797,6 +1891,8 @@ export default class ProcessManager extends TheLink {
         // program. Its installed flag begins false.
         if (word === "host-program-create") {
 
+            access.requireAll()
+
             const source = rest[0]
 
             if (typeof source !== "string" && (typeof source !== "object" || source === null)) throw new Error("A program is created from a config or a path")
@@ -1807,6 +1903,8 @@ export default class ProcessManager extends TheLink {
         }
 
         if (word === "host-program-force-create") {
+
+            access.requireAll()
 
             const source = rest[0]
 
@@ -1821,6 +1919,8 @@ export default class ProcessManager extends TheLink {
 
         if (word === "update-appearance") {
 
+            access.require("appearance", [])
+
             await this.system.updateAppearance(rest[0])
 
             return []
@@ -1828,33 +1928,33 @@ export default class ProcessManager extends TheLink {
 
         if (word === "installed") {
 
-            return [this.system.programInstalled(this.system.holdProgram(rest[0]))]
+            return [this.system.programInstalled(heldProgram(rest[0]))]
         }
 
         if (word === "forget") {
 
-            const program = this.system.holdProgram(rest[0])
+            const program = heldProgram(rest[0])
 
             return [await this.system.forgetProgram(program, process.identity)]
         }
 
         if (word === "program-create-process") {
 
-            const program = this.system.holdProgram(rest[0])
+            const program = heldProgram(rest[0])
 
             // The whole record, not the identity alone: the kit builds a
             // Process from this answer, and a record invented at the
             // other end — identity and program, nothing else — was how every
             // process held by its launcher had no startedAt while every
             // other road's did.
-            return [processReference(this.system.requireProcess(await this.system.createProcess(program, rest[1] as Launch, process)))]
+            return [processReference(this.system.requireProcess(await this.system.createProcess(program, access.launch(rest[1]), process)))]
         }
 
         if (word === "program-find-or-create-process") {
 
-            const program = this.system.holdProgram(rest[0])
+            const program = heldProgram(rest[0])
 
-            return [processReference(this.system.requireProcess(await this.system.findOrCreateProcess(program, rest[1] as Launch & { name: string }, process)))]
+            return [processReference(this.system.requireProcess(await this.system.findOrCreateProcess(program, access.launch(rest[1]) as Launch & { name: string }, process)))]
         }
 
         // Named, only that program's instances; unnamed, every one.
@@ -1862,7 +1962,7 @@ export default class ProcessManager extends TheLink {
 
             const living = this.system.listProcesses()
 
-            if (word === "host-process-list") return [living.map(processReference)]
+            if (word === "host-process-list") return [living.filter(target => access.canProcess(target)).map(processReference)]
 
             // Resolved before it is filtered. Filtering alone answered
             // an empty list for a program the system does not know,
@@ -1870,14 +1970,14 @@ export default class ProcessManager extends TheLink {
             // from *there is no such program* — every other act on one
             // refuses, and a word that answers falsely where its
             // neighbours refuse is worse than either.
-            const program = this.system.holdProgram(rest[0])
+            const program = heldProgram(rest[0])
 
             return [this.system.listProcesses(program).map(processReference)]
         }
 
         if (word === "program-find-process") {
 
-            const program = this.system.holdProgram(rest[0])
+            const program = heldProgram(rest[0])
 
             const wanted = String(rest[1])
 
@@ -1892,7 +1992,7 @@ export default class ProcessManager extends TheLink {
 
                 const target = this.system.findProcess(rest[0])
 
-                return [target ? processReference(target) : null]
+                return [target && access.canProcess(target) ? processReference(target) : null]
             }
 
             return [null]
@@ -1900,7 +2000,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "exists") {
 
-            const target = this.system.holdProcess(rest[1], process)
+            const target = heldProcess(rest[1])
 
             if (rest[0] === "server") return [target.server !== null]
 
@@ -1911,7 +2011,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "is-service") {
 
-            const target = this.system.holdProcess(rest[1], process)
+            const target = heldProcess(rest[1])
             const endpoint = rest[0] ?? "server"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
@@ -1921,18 +2021,18 @@ export default class ProcessManager extends TheLink {
 
         if (word === "start-endpoint") {
 
-            const target = this.system.holdProcess(rest[0], process)
+            const target = heldProcess(rest[0])
 
             if (rest[1] === "server") return [await this.system.startEndpoint(target, "server", rest[2] as ServerLaunch | undefined)]
 
-            if (rest[1] === "client") return [await this.system.startEndpoint(target, "client", rest[2] as ClientLaunch | undefined)]
+            if (rest[1] === "client") return [await this.system.startEndpoint(target, "client", access.clientLaunch(rest[2]))]
 
             throw new Error("A Process endpoint is server or client")
         }
 
         if (word === "stop-endpoint") {
 
-            const target = this.system.holdProcess(rest[0], process)
+            const target = heldProcess(rest[0])
 
             if (rest[1] === "server") return [await this.system.stopEndpoint(target, "server")]
 
@@ -1943,9 +2043,9 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.system.stopEndpoint(process, "server")]
 
-        if (word === "service-exists") return [this.services.exists(rest[0])]
+        if (word === "service-exists") return [this.services.exists(heldService(rest[0]))]
 
-        if (word === "service-wait-ready") return [await this.services.waitReady(rest[0], rest[1])]
+        if (word === "service-wait-ready") return [await this.services.waitReady(heldService(rest[0]), rest[1])]
 
         if (word === "service-follow") {
 
@@ -1957,7 +2057,7 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            server.followService(this.services, subscription, key, scope, event)
+            server.followService(this.services, subscription, heldService(key), scope, event)
 
             return []
         }
@@ -1975,7 +2075,7 @@ export default class ProcessManager extends TheLink {
 
             if (!isServiceKey(key) || typeof event !== "string") return []
 
-            const target = this.services.target(key)
+            const target = this.services.target(heldService(key))
 
             if (target) await this.publish(process.identity, "server", target.process.identity, target.endpoint, [event, payload])
 
@@ -1993,7 +2093,7 @@ export default class ProcessManager extends TheLink {
                 return []
             }
 
-            const target = this.services.target(key, "server")
+            const target = this.services.target(heldService(key), "server")
 
             if (!target?.process.server) {
 
@@ -2031,14 +2131,14 @@ export default class ProcessManager extends TheLink {
         // depth was being used to ask.
         if (word === "window") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             return [this.system.windowSnapshot(target)]
         }
 
         if (word === "move") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.moveWindow(target, rest[1] as Position)
 
@@ -2047,7 +2147,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "resize") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.resizeWindow(target, rest[1] as Size)
 
@@ -2056,7 +2156,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "setGeometry") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.setWindowGeometry(target, rest[1] as WindowGeometry)
 
@@ -2065,7 +2165,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "changeTitle") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.changeWindowTitle(target, String(rest[1] ?? ""))
 
@@ -2074,7 +2174,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "raise") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.raiseWindow(target)
 
@@ -2083,14 +2183,14 @@ export default class ProcessManager extends TheLink {
 
         if (word === "maximize") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
             await this.system.maximizeWindow(target, rest[1] !== false)
             return [target.identity]
         }
 
         if (word === "minimize") {
 
-            const target = this.heldWindow(rest[0], process).process
+            const target = heldWindow(rest[0]).process
 
             await this.system.minimizeWindow(target, rest[1] !== false)
 
@@ -2099,14 +2199,14 @@ export default class ProcessManager extends TheLink {
 
         if (word === "exit") {
 
-            const target = this.system.holdProcess(rest[0], process)
+            const target = heldProcess(rest[0])
 
             await this.system.exitProcess(target)
 
             return [target.identity]
         }
 
-        if (word === "program-exit-processes") return [await this.system.exitProgramProcesses(this.system.holdProgram(rest[0]), process.identity)]
+        if (word === "program-exit-processes") return [await this.system.exitProgramProcesses(heldProgram(rest[0]), process.identity)]
 
         if (word === "observe") {
 
@@ -2120,7 +2220,7 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            const target = this.system.holdProcess(rest[1], process)
+            const target = heldProcess(rest[1])
 
             this.observeServer(process, String(rest[0]), target, String(rest[2]), kind, event, reportImpossible)
 
@@ -2140,7 +2240,7 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            const target = this.system.holdProcess(rest[1], process)
+            const target = heldProcess(rest[1])
 
             this.followServer(process, String(rest[0]), target, String(rest[2]), event, rest[4] === true)
 
@@ -2184,7 +2284,7 @@ export default class ProcessManager extends TheLink {
 
             if (half !== "server" && half !== "client") throw new Error(`A process has no "${String(half)}" end`)
 
-            const target = this.system.holdProcess(rest[0])
+            const target = heldProcess(rest[0])
 
             await this.publish(process.identity, "server", target.identity, half, rest.slice(2))
 
@@ -2209,7 +2309,7 @@ export default class ProcessManager extends TheLink {
 
             if (typeof rest[3] !== "string" || typeof rest[4] !== "string") throw new Error("A question needs a public id and an event name")
 
-            const targetProcess = this.system.holdProcess(rest[0])
+            const targetProcess = heldProcess(rest[0])
 
             const target = targetProcess.server
 
@@ -2227,30 +2327,112 @@ export default class ProcessManager extends TheLink {
             return []
         }
 
-        // A server SDK asks the host only where a Program's area begins;
-        // every filesystem operation belongs to the SDK after that. The
-        // area is shared by every Process, so the Program is named rather
-        // than the Process. With no name, it is the asker's own Program.
+        if (word === "fetch") {
+
+            const description = rest[0] as { url?: unknown, method?: unknown, headers?: unknown, redirect?: unknown }
+
+            if (!description || typeof description.url !== "string") throw new Error("A network request needs a URL")
+
+            access.require("network", [description.url])
+
+            const response = await fetch(description.url, {
+                method: typeof description.method === "string" ? description.method : "GET",
+                headers: Array.isArray(description.headers) ? description.headers as [string, string][] : undefined,
+                redirect: description.redirect === "error" || description.redirect === "manual" ? description.redirect : "follow",
+                body: rest[1] === null || rest[1] === undefined ? null : Buffer.from(byteValue(rest[1]))
+            })
+
+            return [{
+                body: response.body ? new Uint8Array(await response.arrayBuffer()) : null,
+                headers: [...response.headers.entries()],
+                redirected: response.redirected,
+                status: response.status,
+                statusText: response.statusText,
+                type: response.type,
+                url: response.url
+            }]
+        }
+
+        if (word === "websocket-open") {
+
+            const identity = String(rest[0])
+            const url = String(rest[1])
+            const protocols = rest[2]
+
+            access.require("network", [url])
+
+            if (!identity) throw new Error("A WebSocket needs an identity")
+            if (protocols !== undefined && typeof protocols !== "string" && (!Array.isArray(protocols) || protocols.some(value => typeof value !== "string"))) {
+                throw new Error("WebSocket protocols must be text")
+            }
+
+            const sockets = this.serverSockets.get(server) ?? new Map<string, WebSocket>()
+            if (sockets.has(identity)) throw new Error("The WebSocket identity already exists")
+            this.serverSockets.set(server, sockets)
+
+            const socket = new WebSocket(url, protocols as string | string[] | undefined)
+            sockets.set(identity, socket)
+            const release = server.retainResource(() => {
+                sockets.delete(identity)
+                socket.close()
+            })
+
+            socket.on("message", (data, binary) => {
+                const value = binary ? Uint8Array.from(data as Buffer) : String(data)
+                server.deliver("host-websocket", identity, "message", value).catch(() => undefined)
+            })
+            socket.on("error", () => server.deliver("host-websocket", identity, "error").catch(() => undefined))
+            socket.on("close", (code, reason) => {
+                release()
+                server.deliver("host-websocket", identity, "close", { code, reason: reason.toString(), wasClean: true }).catch(() => undefined)
+            })
+
+            await new Promise<void>((resolve, reject) => {
+                socket.once("open", resolve)
+                socket.once("error", reject)
+            })
+
+            return [{ extensions: socket.extensions, protocol: socket.protocol }]
+        }
+
+        if (word === "websocket-send" || word === "websocket-close") {
+
+            const socket = this.serverSockets.get(server)?.get(String(rest[0]))
+            if (!socket) throw new Error("The WebSocket does not exist")
+
+            if (word === "websocket-send") socket.send(typeof rest[1] === "string" ? rest[1] : byteValue(rest[1]))
+            else socket.close(typeof rest[1] === "number" ? rest[1] : undefined, typeof rest[2] === "string" ? rest[2] : undefined)
+
+            return []
+        }
+
+        // Program-owned storage uses the same System operation vocabulary in
+        // every execution environment. The runtime never receives a native
+        // filesystem capability.
         if (word === "data" || word === "cache") {
 
             // The one registry is the authority for every program,
             // installed or not. Naming the current program explicitly
             // must therefore be equivalent to leaving the subject empty.
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
-            if (rest[1] !== "path") throw new Error("A server half asks the host only for an area path")
-
-            return [this.system.programArea(program, word, "path", [])]
+            return [this.system.programArea(program, word, String(rest[1]), rest.slice(2))]
         }
 
-        // Native filesystem work remains local to the Server SDK. The System
-        // supplies the user's home as the relative entry point; the
-        // SDK may resolve beyond it without turning the host into a file proxy.
+        // Native storage remains a System capability even when the selected
+        // runtime could reach the host directly by another route.
         if (word === "host-storage") {
 
-            if (rest[0] !== "path") throw new Error("A server half asks the host only for its Storage path")
+            const operation = String(rest[0])
+            const joins = stringPath(rest[1])
+            const path = this.system.nativeStorage("path", joins) as string
+            const required = operation === "delete-storage" || operation === "delete-file" || operation === "clear"
+                ? "delete"
+                : operation === "create" ? "write" : "read"
 
-            return [this.system.storagePath]
+            access.requireStorage(path, required)
+
+            return [this.system.nativeStorage(operation, joins, rest[2])]
         }
 
         // What a program has said, asked for and never told. The
@@ -2259,7 +2441,7 @@ export default class ProcessManager extends TheLink {
         // anything here deciding what a query means.
         if (word === "logs") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
             return [this.system.programQuery(program, "logs", String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
@@ -2269,20 +2451,41 @@ export default class ProcessManager extends TheLink {
         // is the program's own, which is why they are two files.
         if (word === "database") {
 
-            const program = this.system.holdProgram(rest[0], process.program)
+            const program = heldProgram(rest[0])
 
             return [this.system.programQuery(program, "database", String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
 
-        // A Server Endpoint performs upload byte I/O locally. The SDK receives
-        // the managed root only for stream and write operations; upload keys
-        // remain flat and validated by both sides.
         if (word === "uploads") {
 
             const { uploads } = this.system
 
-            if (rest[0] === "access") return [uploads.fileManager.path, uploadLimit]
+            if (rest[0] === "path") {
+
+                access.requireStorage(uploads.fileManager.path)
+
+                return [uploads.fileManager.path]
+            }
             if (rest[0] === "stat") return [uploads.stat(String(rest[1]))]
+
+            if (rest[0] === "write") {
+
+                access.require("uploads", [])
+
+                const bytes = byteValue(rest[1])
+
+                const description = rest[2] as { extension?: unknown } | null
+
+                if (!description || typeof description.extension !== "string") throw new Error("Uploads write takes a value description")
+
+                const file = await uploads.write(description.extension, byteStream(bytes))
+
+                const stat = uploads.stat(file)
+
+                if (!stat) throw new Error("The completed upload could not be described")
+
+                return [{ file, ...stat }]
+            }
 
             throw new Error(`The uploads capability does not know the operation "${String(rest[0])}"`)
         }
@@ -2295,7 +2498,7 @@ export default class ProcessManager extends TheLink {
 
             const [operation, key, value, ttl] = rest.slice(1) as [string, string, unknown, number | undefined]
 
-            const whose = this.system.holdProgram(rest[0], process.program)
+            const whose = heldProgram(rest[0])
 
             return [await this.system.programStore(whose, operation, key, value, ttl)]
         }
@@ -2309,7 +2512,9 @@ export default class ProcessManager extends TheLink {
 
             if (args[0] === "wait-ready") {
 
-                const target = this.system.holdProcess(args[1], process)
+                const access = new SystemAccess(this, process)
+
+                const target = access.process(this.system.holdProcess(args[1], process))
 
                 const endpoint = args[2]
 
@@ -2414,7 +2619,162 @@ export default class ProcessManager extends TheLink {
 
             const operation = args[0]
 
-            const program = this.system.holdProgram(args[1])
+            const access = new SystemAccess(this, process)
+
+            if (operation === "shell") {
+
+                access.requireAll()
+
+                const controller = new AbortController()
+
+                cancel = () => { active = false; controller.abort(new Error("The shell command was cancelled")) }
+
+                for await (const event of this.system.shell(String(args[1]), { ...(args[2] as object), signal: controller.signal })) {
+
+                    if (!active) return
+
+                    await this.say(server, "host-end", "stream", question, "data", event)
+                }
+
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
+            if (operation === "uploads-stream") {
+
+                const file = String(args[1])
+
+                if (!isUploadFile(file)) throw new Error("That is not an upload file")
+
+                for await (const chunk of this.system.uploads.stream(file)) {
+
+                    if (!active) return
+
+                    await this.say(server, "host-end", "stream", question, "data", Uint8Array.from(chunk))
+                }
+
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
+            if (operation === "storage-content") {
+
+                const scope = args[1]
+
+                const program = scope === "program" ? access.program(this.system.holdProgram(args[2], process.program)) : null
+
+                const area = scope === "program" && (args[3] === "data" || args[3] === "cache") ? args[3] : null
+
+                const action = String(args[scope === "program" ? 4 : 2])
+
+                const joins = stringPath(args[scope === "program" ? 5 : 3])
+
+                const value = args[scope === "program" ? 6 : 4]
+
+                const input = args[scope === "program" ? 7 : 5] as { offset?: number, length?: number, overwrite?: boolean } | undefined
+
+                if (scope !== "program" && scope !== "system") throw new Error("Storage content needs a scope")
+
+                if (scope === "program" && !area) throw new Error("Program storage needs an area")
+
+                if (scope === "system") {
+
+                    const path = this.system.nativeStorage("path", joins) as string
+
+                    access.requireStorage(path, action === "stream" ? "read" : "write")
+                }
+
+                if (action === "stream") {
+
+                    const stream = program
+                        ? this.authManager.programManager.streamArea(program, area!, joins, [input?.offset, input?.length])
+                        : this.system.nativeStorageStream(joins, input)
+
+                    for await (const chunk of stream) {
+
+                        if (!active) return
+
+                        await this.say(server, "host-end", "stream", question, "data", Uint8Array.from(chunk))
+                    }
+                }
+
+                else {
+
+                    const bytes = byteStream(byteValue(value))
+
+                    if (action === "write") {
+
+                        if (program) await this.authManager.programManager.writeArea(program, area!, joins, bytes, undefined, input?.overwrite !== false)
+
+                        else await this.system.nativeStorageWrite(joins, bytes, input?.overwrite !== false)
+                    }
+
+                    else if (action === "append") {
+
+                        if (program) await this.authManager.programManager.appendArea(program, area!, joins, bytes)
+
+                        else await this.system.nativeStorageAppend(joins, bytes)
+                    }
+
+                    else throw new Error(`The host does not know the Storage content operation "${action}"`)
+                }
+
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
+            if (operation === "storage-watch") {
+
+                const scope = args[1]
+
+                const controller = new AbortController()
+
+                cancel = () => { active = false; controller.abort(new Error("The Storage watch was cancelled")) }
+
+                let changes: AsyncIterable<{ event: "rename" | "change", path: string | null }>
+
+                if (scope === "program") {
+
+                    const program = access.program(this.system.holdProgram(args[2], process.program))
+
+                    if (args[3] !== "data" && args[3] !== "cache") throw new Error("Program storage needs an area")
+
+                    const options = args[5] as { recursive?: boolean } | undefined
+
+                    changes = this.authManager.programManager.watchArea(program, args[3], stringPath(args[4]), options?.recursive === true, controller.signal)
+                }
+
+                else if (scope === "system") {
+
+                    const joins = stringPath(args[2])
+
+                    const path = this.system.nativeStorage("path", joins) as string
+
+                    access.requireStorage(path, "read")
+
+                    const options = args[3] as { recursive?: boolean } | undefined
+
+                    changes = this.system.nativeStorageWatch(joins, options?.recursive === true, controller.signal)
+                }
+
+                else throw new Error("Storage watch needs a scope")
+
+                for await (const change of changes) {
+
+                    if (!active) return
+
+                    await this.say(server, "host-end", "stream", question, "data", change)
+                }
+
+                if (active) await this.say(server, "host-end", "stream", question, "answer", succeeded(undefined))
+
+                return
+            }
+
+            const program = access.program(this.system.holdProgram(args[1]))
 
             if (operation === "run") {
 
@@ -2437,7 +2797,7 @@ export default class ProcessManager extends TheLink {
                     if (running) this.system.exitProcess(running).catch(() => undefined)
                 }
 
-                const identity = await this.system.runProcess(program, args[2] as Launch ?? {}, {
+                const identity = await this.system.runProcess(program, access.launch(args[2]), {
                     started: created => {
 
                         running = created
@@ -2885,6 +3245,39 @@ function isHandleAddress(value: unknown): value is HandleAddress {
 
     return typeof value === "object" && value !== null && "identity" in value && "reference" in value
         && typeof value.identity === "string" && typeof value.reference === "string"
+}
+
+function stringPath(value: unknown) {
+
+    if (!Array.isArray(value) || value.some(part => typeof part !== "string")) throw new Error("A Storage path is a list of names")
+
+    return value as string[]
+}
+
+function byteValue(value: unknown) {
+
+    if (value instanceof Uint8Array) return value
+
+    if (value instanceof ArrayBuffer) return new Uint8Array(value)
+
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+
+    if (Array.isArray(value) && value.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)) return Uint8Array.from(value)
+
+    throw new Error("The operation requires bytes")
+}
+
+function byteStream(value: Uint8Array) {
+
+    return new ReadableStream<Uint8Array>({
+
+        start(controller) {
+
+            controller.enqueue(value)
+
+            controller.close()
+        }
+    })
 }
 
 type Completion = () => unknown | PromiseLike<unknown>

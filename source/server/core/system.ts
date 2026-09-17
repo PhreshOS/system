@@ -19,6 +19,7 @@ import type { Half, TrafficKind } from "./link-manager/auth-manager/process-mana
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
 import shell from "./shell"
+import type FileArea from "@libs/file-area"
 
 type Endpoint = "server" | "client"
 type ProgramSource = Parameters<Application["linkManager"]["authManager"]["programManager"]["create"]>[0]
@@ -482,6 +483,31 @@ export default class System {
         return this.programManager.area(program, area, "path", [])
     }
 
+    public nativeStorage(operation: string, joins: string[], input?: unknown) {
+
+        return operateArea(this.application.home, operation, joins, input)
+    }
+
+    public nativeStorageStream(joins: string[], options: { offset?: number, length?: number } = {}) {
+
+        return this.application.home.stream(joins, [options.offset, options.length])
+    }
+
+    public nativeStorageWrite(joins: string[], content: ReadableStream<Uint8Array>, overwrite = true, signal?: AbortSignal) {
+
+        return this.application.home.write(joins, content, signal, overwrite)
+    }
+
+    public nativeStorageAppend(joins: string[], content: ReadableStream<Uint8Array>, signal?: AbortSignal) {
+
+        return this.application.home.append(joins, content, signal)
+    }
+
+    public nativeStorageWatch(joins: string[], recursive: boolean, signal?: AbortSignal) {
+
+        return this.application.home.watch(joins, recursive, signal)
+    }
+
     public programStore(program: Program, operation: string, key: string, value?: unknown, ttl?: number) {
 
         return this.programManager.store(program, operation, key, value, ttl)
@@ -534,6 +560,45 @@ export default class System {
 
     private get programManager() { return this.application.linkManager.authManager.programManager }
     private get processManager() { return this.application.linkManager.authManager.processManager }
+}
+
+function operateArea(place: FileArea, operation: string, joins: string[], input?: unknown) {
+
+    if (operation === "path") return place.resolve(joins)
+    if (operation === "name") return place.name(joins)
+    if (operation === "create") { place.create(joins); return }
+    if (operation === "clear") { place.clear(joins); return }
+
+    if (operation === "stat-storage" || operation === "stat-file") {
+        const found = place.stat(joins)
+        if (!found) return null
+        if (operation === "stat-storage") {
+            if (found.kind !== "directory") throw new Error(`${place.resolve(joins)} is not a Storage directory`)
+            return { modifiedAt: found.modifiedAt }
+        }
+        if (found.kind !== "file") throw new Error(`${place.resolve(joins)} is not a file`)
+        return { size: found.size, modifiedAt: found.modifiedAt }
+    }
+
+    if (operation === "list") {
+        const value = input as { recursive?: unknown, depth?: unknown } | undefined
+        const recursive = value?.recursive === true
+        const depth = value?.depth
+        if (depth !== undefined && (!Number.isSafeInteger(depth) || (depth as number) < 0)) throw new Error("A Storage list depth must be a non-negative safe integer")
+        if (depth !== undefined && !recursive) throw new Error("A Storage list depth requires recursive listing")
+        return place.list(joins, [recursive, depth as number | undefined])
+    }
+
+    if (operation === "delete-storage" || operation === "delete-file") {
+        const found = place.stat(joins)
+        if (found && operation === "delete-storage" && found.kind !== "directory") throw new Error(`${place.resolve(joins)} is not a Storage directory`)
+        if (found && operation === "delete-file" && found.kind !== "file") throw new Error(`${place.resolve(joins)} is not a file`)
+        place.delete(joins)
+        return
+    }
+
+    if (operation === "space") return place.space(joins)
+    throw new Error(`The host does not know the storage operation "${operation}"`)
 }
 
 function isHandleAddress(value: unknown): value is { identity: string, reference: string } {

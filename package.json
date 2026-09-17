@@ -36,6 +36,7 @@
   "dependencies": {
     "@fontsource/roboto": "^5.3.0",
     "@hono/node-server": "^2.1.1",
+    "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
     "@phreshos/core": "^0.1.52",
     "@phreshos/react-ui": "^0.1.27",
     "@the-link/core": "^0.3.0",
@@ -47,6 +48,7 @@
     "hono": "^4.13.2",
     "keyv": "^5.6.0",
     "motion": "^13.2.0",
+    "quickjs-emscripten-core": "^0.32.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sharp": "^0.35.3",

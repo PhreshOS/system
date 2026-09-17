@@ -32,8 +32,8 @@ test("installation applies declared settings and launches the resulting stored s
     })
   function definition(setting?: true | Launch) {
     return new Program({
-      identity: "example", startup: setting,
-      client: { location: client, permissions: { network: ["https://new.example.test"] } }
+      identity: "example", startup: setting, permissions: { network: ["https://new.example.test"] },
+      client: { location: client }
     })
   }
 

@@ -79,7 +79,7 @@ test("permission requests contract", async () => {
       assert(!programManager.grantsPermission(program, "network", ["https://other.example.com"]))
 
       // Permission decisions read the authoritative stored state.
-      const declared = new Program({ identity: "declared", storage: temporary, client: { location: ".", permissions: { programs: ["browser"] } } })
+      const declared = new Program({ identity: "declared", storage: temporary, permissions: { programs: ["browser"] }, client: { location: "." } })
       writePermissions(declared, { services: ["editor"] })
       assert(!programManager.grantsPermission(declared, "services", ["browser"]))
       assert(programManager.grantsPermission(declared, "services", ["editor"]))

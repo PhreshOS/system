@@ -8,12 +8,12 @@ import { test } from "vitest"
 test("endpoint services contract", async () => {
   const privateProgram = new Program({
       identity: "private-program",
-      server: { location: ".", startCommand: "true" }
+      server: { location: ".", command: "true" }
   })
   const documentedProgram = new Program({
       identity: "documented-program",
       agent: "agent.md",
-      server: { location: ".", startCommand: "true" },
+      server: { location: ".", command: "true" },
       client: { location: "." }
   })
 
@@ -22,12 +22,12 @@ test("endpoint services contract", async () => {
   assert.throws(() => new Program({
       identity: "invalid-program",
       agent: "",
-      server: { location: ".", startCommand: "true" }
+      server: { location: ".", command: "true" }
   }), /agent documentation/)
 
   const program = new Program({
       identity: "program",
-      server: { location: ".", startCommand: "true" },
+      server: { location: ".", command: "true" },
       client: { location: "." }
   })
   const waits: string[] = []
@@ -117,7 +117,7 @@ test("endpoint services contract", async () => {
 
   const unconfiguredProgram = new Program({
       identity: "unconfigured",
-      server: { location: ".", startCommand: "true" }
+      server: { location: ".", command: "true" }
   })
   assert.equal(unconfiguredProgram.server?.service, false)
 

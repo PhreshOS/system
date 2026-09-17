@@ -106,7 +106,7 @@ export default class Program {
     /** Canonical permission entries applied to storage at creation and installation. */
     public get declaredPermissions(): DeclaredPermissions {
 
-        return permissionCatalog.declarations(this.config.client?.permissions)
+        return permissionCatalog.declarations(this.config.permissions)
     }
 
     // A client half may name a URL instead of a directory. The Program asset
@@ -128,7 +128,7 @@ export default class Program {
 
     public get serverEntryPath() {
 
-        const entry = this.config.server?.entryFile
+        const entry = this.config.server?.worker ?? this.config.server?.sandbox
 
         return entry && this.serverPath ? resolve(this.serverPath, entry) : null
     }
@@ -409,13 +409,18 @@ type Resolved<Half extends { start?: boolean, service?: boolean }> = Half extend
     ? Omit<Half, "start" | "service"> & { start: boolean, service: boolean }
     : never
 
-function execution(server: { startCommand?: unknown, entryFile?: unknown }) {
+function execution(server: { command?: unknown, worker?: unknown, sandbox?: unknown }) {
 
-    if ((server.startCommand === undefined) === (server.entryFile === undefined)) throw new Error("A server half must declare exactly one startCommand or entryFile")
+    const selected = [server.command, server.worker, server.sandbox].filter(value => value !== undefined)
 
-    if (server.startCommand !== undefined && (typeof server.startCommand !== "string" || server.startCommand.trim().length === 0)) throw new Error("A server half's startCommand must be non-empty text")
+    if (selected.length !== 1) throw new Error("A server half must declare exactly one command, worker, or sandbox")
 
-    if (server.entryFile !== undefined && (typeof server.entryFile !== "string" || server.entryFile.trim().length === 0 || !containedEntry(server.entryFile))) throw new Error("A server half's entryFile must be a non-empty path inside its Server directory")
+    if (server.command !== undefined && (typeof server.command !== "string" || server.command.trim().length === 0)) throw new Error("A server half's command must be non-empty text")
+
+    for (const [name, entry] of [["worker", server.worker], ["sandbox", server.sandbox]] as const) {
+
+        if (entry !== undefined && (typeof entry !== "string" || entry.trim().length === 0 || !containedEntry(entry))) throw new Error(`A server half's ${name} entry must be a non-empty path inside its Server directory`)
+    }
 }
 
 function containedEntry(entry: string) {

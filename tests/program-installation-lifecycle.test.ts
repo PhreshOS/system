@@ -23,7 +23,7 @@ function fixture(context: TestContext) {
     const definition = (installCommand = `node -e "process.stdout.write('preparing')"`) => new Program({
         identity: "example", storage: join(directory, "source", "storage"),
         startup: { name: "startup" },
-        server: { location: server, installCommand, startCommand: "node main.js" }
+        server: { location: server, installCommand, command: "node main.js" }
     })
     return { directory, manager, exitAll, definition }
 }

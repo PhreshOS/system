@@ -148,6 +148,8 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (route === "boundary") {
 
+            if (!this.owner) this.pending.push(message)
+
             this.control(values)
 
             return

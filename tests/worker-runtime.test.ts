@@ -1,37 +1,56 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { delimiter, join } from "node:path"
 import { pathToFileURL } from "node:url"
-import CommandServerRuntime, { commandServerEnvironment } from "@server/view/server-runtime/command"
-import WorkerServerRuntime from "@server/view/server-runtime/worker"
+import messagepack from "@the-link/messagepack"
+import { build } from "vite"
+import CommandServerRuntime, { commandServerEnvironment } from "@server/core/server-runtime/command"
+import SandboxServerRuntime from "@server/core/server-runtime/sandbox"
+import WorkerServerRuntime from "@server/core/server-runtime/worker"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type { ProgramConfig } from "@server/core/link-manager/auth-manager/program-manager/config"
 import { test } from "vitest"
 
-test("worker runtime contract", async () => {
+test("server runtime contract", async () => {
   const directory = await mkdtemp(join(tmpdir(), "phresh-worker-runtime-"))
   const entry = join(directory, "server.mjs")
+  const dependency = join(directory, "dependency.mjs")
+  const bareEntry = join(directory, "bare.mjs")
+  const escapedEntry = join(directory, "escaped.mjs")
+  const outsideDirectory = await mkdtemp(join(tmpdir(), "phresh-sandbox-outside-"))
+  const outsideModule = join(outsideDirectory, "outside.mjs")
+  const linkedModule = join(directory, "linked.mjs")
   const commandEntry = join(directory, "command.mjs")
+  const codecDirectory = join(directory, "codec")
+  const codecEntry = join(codecDirectory, "sandbox-codec.js")
   const codec = pathToFileURL(createRequire(import.meta.url).resolve("@the-link/messagepack")).href
+  const ready = [...messagepack.serialize(["boundary", "ready"])]
+  const urlResult = [...messagepack.serialize(["url-result", "https://example.test/runtime"])]
+  const bytesResult = [...messagepack.serialize(["bytes-result", [1, 2, 3]])]
 
   assert.equal(
       commandServerEnvironment(directory, { Path: "/native/bin" }).Path,
       `${join(directory, "node_modules", ".bin")}${delimiter}/native/bin`
   )
 
+  await writeFile(dependency, `export const runtimePath = "/runtime"\n`)
   await writeFile(entry, `
-  import { parentPort } from "node:worker_threads"
-  import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
-
-  console.log("worker output")
-  parentPort.postMessage(encode(["boundary", "ready"]))
-  parentPort.on("message", message => {
-      const [event, value] = decode(message)
-      if (event === "probe") parentPort.postMessage(encode(["probe-result", value]))
-  })
+  import { runtimePath } from "./dependency.mjs"
+  const transport = globalThis.__PHRESHOS_SERVER_TRANSPORT__
+  const runtimeUrl = new URL(runtimePath, "https://example.test/root")
+  console.log("runtime output")
+  transport.send(new Uint8Array(${JSON.stringify(ready)}))
+  transport.send(new Uint8Array(runtimeUrl.href === "https://example.test/runtime" ? ${JSON.stringify(urlResult)} : []))
+  transport.send(new Uint8Array(Uint8Array.from([1, 2, 3]).join(",") === "1,2,3" ? ${JSON.stringify(bytesResult)} : []))
+  transport.onMessage(message => Promise.resolve(message).then(value => transport.send(Uint8Array.from(value))))
   `)
+  const ambientPackage = "ambient-package"
+  await writeFile(bareEntry, `import ${JSON.stringify(ambientPackage)}\n`)
+  await writeFile(outsideModule, `export const outside = true\n`)
+  await symlink(outsideModule, linkedModule)
+  await writeFile(escapedEntry, `import "./linked.mjs"\n`)
 
   await writeFile(commandEntry, `
   import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
@@ -52,37 +71,47 @@ test("worker runtime contract", async () => {
   }
   `)
 
+  await build({
+      configFile: false,
+      logLevel: "silent",
+      ssr: { noExternal: true },
+      build: {
+          ssr: join(import.meta.dirname, "fixtures", "sandbox-codec.ts"),
+          outDir: codecDirectory,
+          emptyOutDir: false,
+          rollupOptions: { output: { entryFileNames: "sandbox-codec.js" } }
+      }
+  })
+
   try {
-      const program = new Program({ identity: "worker-verification", server: { location: directory, entryFile: "server.mjs" } })
+      const program = new Program({ identity: "worker-verification", server: { location: directory, worker: "server.mjs" } })
 
       await program.validate()
 
       assert.equal(program.serverEntryPath, entry)
 
-      assert.throws(() => new Program({ identity: "worker-conflict", server: { location: directory, startCommand: "node main.js", entryFile: "server.mjs" } } as unknown as ProgramConfig))
-      assert.throws(() => new Program({ identity: "worker-escape", server: { location: directory, entryFile: "../server.mjs" } }))
+      assert.throws(() => new Program({ identity: "worker-conflict", server: { location: directory, command: "node main.js", worker: "server.mjs" } } as unknown as ProgramConfig))
+      assert.throws(() => new Program({ identity: "worker-escape", server: { location: directory, worker: "../server.mjs" } }))
 
-      const runtime = new WorkerServerRuntime(entry)
-      const messages: unknown[][] = []
-      const output: ["out" | "err", string][] = []
+      await verifyContainedRuntime(new WorkerServerRuntime(entry))
+      await verifyContainedRuntime(new SandboxServerRuntime(entry, directory))
+      await verifyCodecRuntime(new SandboxServerRuntime(codecEntry, codecDirectory))
 
-      runtime.onMessage((event, ...values) => messages.push([event, ...values]))
-      runtime.onOutput((stream, text) => output.push([stream, text]))
+      const sandbox = new Program({ identity: "sandbox-verification", server: { location: directory, sandbox: "server.mjs" } })
+      await sandbox.validate()
+      assert.equal(sandbox.serverEntryPath, entry)
 
-      await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready"))
+      const bare = new SandboxServerRuntime(bareEntry, directory)
+      const bareOutput: string[] = []
+      bare.onOutput((_stream, text) => bareOutput.push(text))
+      await bare.finished
+      assert.match(bareOutput.join(""), /cannot import the package.*ambient-package.*bundle package dependencies/)
 
-      runtime.send("probe", 42)
-
-      await until(() => messages.some(message => message[0] === "probe-result"))
-      await until(() => output.some(([stream, text]) => stream === "out" && text.includes("worker output")))
-
-      assert.deepEqual(messages.find(message => message[0] === "probe-result"), ["probe-result", 42])
-
-      runtime.stop()
-
-      const ending = await runtime.finished
-
-      assert.equal(ending.signal, null)
+      const escaped = new SandboxServerRuntime(escapedEntry, directory)
+      const escapedOutput: string[] = []
+      escaped.onOutput((_stream, text) => escapedOutput.push(text))
+      await escaped.finished
+      assert.match(escapedOutput.join(""), /may not leave its Server directory/)
 
       const command = new CommandServerRuntime(`"${process.execPath}" "${commandEntry}"`, directory)
       const commandMessages: unknown[][] = []
@@ -105,6 +134,86 @@ test("worker runtime contract", async () => {
       await command.finished
   } finally {
       await rm(directory, { recursive: true, force: true })
+      await rm(outsideDirectory, { recursive: true, force: true })
+  }
+
+  async function verifyContainedRuntime(runtime: WorkerServerRuntime | SandboxServerRuntime) {
+      const messages: unknown[][] = []
+      const output: ["out" | "err", string][] = []
+
+      runtime.onMessage((event, ...values) => messages.push([event, ...values]))
+      runtime.onOutput((stream, text) => output.push([stream, text]))
+
+      await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready"))
+      await until(() => messages.some(message => message[0] === "url-result"))
+      await until(() => messages.some(message => message[0] === "bytes-result"))
+
+      runtime.send("probe", 42)
+
+      await until(() => messages.some(message => message[0] === "probe"))
+      await until(() => output.some(([stream, text]) => stream === "out" && text.includes("runtime output")))
+
+      assert.deepEqual(messages.find(message => message[0] === "probe"), ["probe", 42])
+      assert.deepEqual(messages.find(message => message[0] === "url-result"), ["url-result", "https://example.test/runtime"])
+      assert.deepEqual(messages.find(message => message[0] === "bytes-result"), ["bytes-result", [1, 2, 3]])
+
+      runtime.stop()
+
+      const ending = await runtime.finished
+
+      assert.equal(ending.signal, null)
+  }
+
+  async function verifyCodecRuntime(runtime: SandboxServerRuntime) {
+
+      const messages: unknown[][] = []
+      const output: string[] = []
+
+      runtime.onMessage((event, ...values) => messages.push([event, ...values]))
+      runtime.onOutput((_stream, text) => output.push(text))
+
+      await until(() => messages.some(message => message[0] === "codec-ready") || output.length > 0)
+
+      assert.deepEqual(output, [])
+
+      const endpoint = {
+          kind: "client",
+          process: {
+              reference: "process-reference",
+              identity: "process",
+              name: null,
+              program: {
+                  reference: "program-reference",
+                  identity: "program",
+                  assetId: "asset",
+                  installed: false,
+                  name: "Program",
+                  version: null,
+                  description: null,
+                  categories: [],
+                  keywords: [],
+                  hasAgent: false,
+                  server: { location: "server", sandbox: "main.js", service: false },
+                  client: { location: "client", service: false }
+              },
+              options: {},
+              startedAt: new Date("2026-01-01T00:00:00.000Z"),
+              server: { service: false },
+              client: { service: false }
+          }
+      }
+      const question = `client:${"a".repeat(36)}:${"b".repeat(36)}`
+
+      runtime.send("codec-probe", endpoint, question)
+
+      await until(() => messages.some(message => message[0] === "codec-result") || output.length > 0)
+
+      assert.deepEqual(output, [])
+      assert.deepEqual(messages.find(message => message[0] === "codec-result"), ["codec-result", ["codec-probe", endpoint, question]])
+
+      runtime.stop()
+
+      await runtime.finished
   }
 
   async function until(condition: () => boolean, timeout = 2_000) {

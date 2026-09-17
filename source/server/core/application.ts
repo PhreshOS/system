@@ -9,8 +9,7 @@ import Keyv from "keyv"
 import FileArea, { FileSystem } from "@libs/file-area"
 import { homedir } from "node:os"
 import System from "./system"
-import type Program from "./link-manager/auth-manager/program-manager/program"
-import type { ServerRuntimeFactory } from "./server-runtime"
+import createServerRuntime from "./server-runtime/factory"
 
 export default class Application {
 
@@ -44,8 +43,8 @@ export default class Application {
     /** One authoritative System domain shared by every trusted adapter. */
     public readonly system: System
 
-    /** Runtime creation supplied by the host boundary. */
-    public readonly createServerRuntime: ServerRuntimeFactory<Program>
+    /** Core-owned factory for every Server execution environment. */
+    public readonly createServerRuntime: typeof createServerRuntime
 
     private constructor(payload: ApplicationPayload) {
 
@@ -69,7 +68,7 @@ export default class Application {
 
         this.appearanceManager = payload.appearanceManager
 
-        this.createServerRuntime = payload.createServerRuntime
+        this.createServerRuntime = createServerRuntime
 
         this.dialogManager = new DialogManager()
 
@@ -78,7 +77,7 @@ export default class Application {
         this.system = new System(this)
     }
 
-    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string, createServerRuntime: ServerRuntimeFactory<Program>) {
+    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string) {
 
         const storage = new FileManager(homePath)
 
@@ -92,7 +91,7 @@ export default class Application {
 
         const appearanceManager = await AppearanceManager.open(store, uploads)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, authentication, appearanceManager, uploads, createServerRuntime })
+        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, authentication, appearanceManager, uploads })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -121,6 +120,4 @@ interface ApplicationPayload {
     appearanceManager: AppearanceManager
 
     uploads: UploadManager
-
-    createServerRuntime: ServerRuntimeFactory<Program>
 }

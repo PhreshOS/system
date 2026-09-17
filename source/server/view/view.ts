@@ -15,7 +15,6 @@ import { Hono } from "hono"
 import { resolve } from "node:path"
 import { writeFile } from "node:fs/promises"
 import { styleText } from "node:util"
-import serverRuntime from "./server-runtime/server-runtime"
 import { listenOnPorts } from "./configuration"
 
 export default async function (config: Config) {
@@ -29,7 +28,7 @@ export default async function (config: Config) {
         font: "simple"
     })
 
-    const application = await Application.initialize(config.name, config.displayName, config.version, config.home, resolve("assets/default-icon.png"), serverRuntime)
+    const application = await Application.initialize(config.name, config.displayName, config.version, config.home, resolve("assets/default-icon.png"))
 
     // One server, five doors, each at its own name. A program's client
     // is still not the API — it is files a browser reads, with no link,

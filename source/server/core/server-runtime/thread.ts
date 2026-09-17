@@ -1,4 +1,4 @@
-import type { ServerRuntime, ServerRuntimeEnding, Stream } from "@server/core/server-runtime"
+import type { ServerRuntime, ServerRuntimeEnding, Stream } from "../server-runtime"
 import messagepack from "@the-link/messagepack"
 import { Worker } from "node:worker_threads"
 import RuntimeInbox from "./inbox"
@@ -7,12 +7,14 @@ type OutputListener = (stream: Stream, text: string) => void
 
 const maximumPendingOutput = 256
 
-/** Represents one JavaScript Server Endpoint as an isolate inside the System process. */
-export default class WorkerServerRuntime implements ServerRuntime {
+/** Shared supervision for Server runtimes hosted in a System-owned thread. */
+export default abstract class ThreadServerRuntime implements ServerRuntime {
 
     public readonly finished: Promise<ServerRuntimeEnding>
 
     private readonly worker: Worker
+
+    private readonly inbox = new RuntimeInbox()
 
     private readonly output = new Set<OutputListener>()
 
@@ -20,35 +22,21 @@ export default class WorkerServerRuntime implements ServerRuntime {
 
     private clearingPendingOutput = false
 
-    private readonly inbox = new RuntimeInbox()
+    protected constructor(bootstrap: URL, workerData: object) {
 
-    public constructor(entry: string) {
+        this.worker = new Worker(bootstrap, { stdout: true, stderr: true, workerData })
 
-        this.worker = new Worker(entry, { stdout: true, stderr: true })
-
-        this.finished = new Promise(resolve => {
-
-            this.worker.once("exit", code => resolve({ code, signal: null }))
-        })
+        this.finished = new Promise(resolve => { this.worker.once("exit", code => resolve({ code, signal: null })) })
 
         this.worker.on("message", message => this.inbox.receive(message))
-
         this.worker.stdout?.on("data", chunk => this.print("out", String(chunk)))
-
         this.worker.stderr?.on("data", chunk => this.print("err", String(chunk)))
-
         this.worker.on("error", error => this.print("err", `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`))
     }
 
-    public send(event: string, ...values: unknown[]) {
+    public send(event: string, ...values: unknown[]) { this.worker.postMessage(messagepack.serialize([event, ...values])) }
 
-        this.worker.postMessage(messagepack.serialize([event, ...values]))
-    }
-
-    public onMessage(listener: (event: string, ...values: unknown[]) => void) {
-
-        this.inbox.listen(listener)
-    }
+    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.inbox.listen(listener) }
 
     public onOutput(listener: OutputListener) {
 
@@ -63,7 +51,6 @@ export default class WorkerServerRuntime implements ServerRuntime {
             queueMicrotask(() => {
 
                 this.pendingOutput.splice(0)
-
                 this.clearingPendingOutput = false
             })
         }

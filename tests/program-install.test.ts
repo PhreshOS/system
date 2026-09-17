@@ -29,12 +29,10 @@ test("program install contract", async () => {
               location: join(source, "server"),
               installCommand: `node -e "process.stdout.write('install-out'); process.stderr.write('install-err')"`,
               uninstallCommand: `node -e "process.stdout.write('uninstall-out'); process.stderr.write('uninstall-err')"`,
-              startCommand: "true"
+              command: "true"
           },
-          client: {
-              location: join(source, "client"),
-              permissions: { network: ["https://api.example.test/**"] }
-          }
+          permissions: { network: ["https://api.example.test/**"] },
+          client: { location: join(source, "client") }
       })
 
       await program.validate()

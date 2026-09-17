@@ -43,6 +43,8 @@ export default class ServerProcessBoundary extends TheLink {
 
     private readonly hostSubscriptions = new Map<string, () => void>()
 
+    private readonly resources = new Set<() => void>()
+
     private readonly appearanceSubscriptions = new Set<string>()
 
     private stopAppearance: (() => void) | null = null
@@ -57,7 +59,7 @@ export default class ServerProcessBoundary extends TheLink {
 
     public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
 
-    public constructor(runtime: ServerRuntime, clientDeclared: boolean, service: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel) {
+    public constructor(runtime: ServerRuntime, clientDeclared: boolean, service: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel, private readonly hostVisible: HostVisibility) {
 
         super()
 
@@ -66,6 +68,8 @@ export default class ServerProcessBoundary extends TheLink {
         this.service = service
 
         this.runtime = runtime
+
+        this.$inbound.subscribe("boundary", (...values) => this.control(values))
 
         runtime.onMessage((event, ...values) => { this.$inbound.publish(event, ...values).catch(() => undefined) })
 
@@ -90,8 +94,6 @@ export default class ServerProcessBoundary extends TheLink {
         this.appearance = appearance
 
         this.unanswered = unanswered
-
-        this.$inbound.subscribe("boundary", (...values) => this.control(values))
     }
 
     /** Deliver one routed envelope only when this endpoint requested it. */
@@ -261,6 +263,8 @@ export default class ServerProcessBoundary extends TheLink {
 
         for (const stop of this.hostSubscriptions.values()) stop()
 
+        for (const release of this.resources) release()
+
         this.requests.clear()
 
         this.observations.clear()
@@ -270,6 +274,8 @@ export default class ServerProcessBoundary extends TheLink {
         this.serviceSubscriptions.clear()
 
         this.hostSubscriptions.clear()
+
+        this.resources.clear()
 
         this.appearanceSubscriptions.clear()
 
@@ -288,6 +294,18 @@ export default class ServerProcessBoundary extends TheLink {
         this.incoming.clear()
 
         for (const values of incoming) this.unanswered(values, reason)
+    }
+
+    public retainResource(release: () => void) {
+
+        this.resources.add(release)
+
+        return () => {
+
+            if (!this.resources.delete(release)) return
+
+            release()
+        }
     }
 
     public stop() {
@@ -361,6 +379,12 @@ export default class ServerProcessBoundary extends TheLink {
                 this.hostSubscriptions.get(subscription)?.()
 
                 this.hostSubscriptions.set(subscription, this.hostTraffic.observe(hostDomain, event, subject, (_delivery, word, ...values) => {
+
+                    const eventSubject = typeof values[0] === "object" && values[0] !== null && "reference" in values[0]
+                        ? String((values[0] as { reference: unknown }).reference)
+                        : subject
+
+                    if (!this.hostVisible(hostDomain, eventSubject)) return
 
                     this.deliver(route, word, ...values).catch(() => undefined)
                 }))
@@ -507,3 +531,5 @@ interface WaitingQuestion {
 export type { Stream } from "@server/core/server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
+
+export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "window", subject: string | null) => boolean
