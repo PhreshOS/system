@@ -7,6 +7,8 @@ import { isUploadFile } from "@phreshos/core"
 import { readFile } from "node:fs/promises"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
+const immutableCache = "public, max-age=31536000, immutable"
+
 const wallpaperPolicy = [
     "default-src 'none'",
     "script-src 'unsafe-inline' data: blob:",
@@ -91,7 +93,11 @@ export default function (application: Application) {
 
             const upload = application.uploads.stat(context.req.param("file"))
 
-            return upload ? context.json(upload) : context.body(null, 404)
+            if (!upload) return context.body(null, 404)
+
+            context.header("Cache-Control", immutableCache)
+
+            return context.json(upload)
         }
 
         catch (error) {
@@ -115,6 +121,7 @@ export default function (application: Application) {
             context.header("Content-Security-Policy", wallpaperPolicy)
             context.header("Content-Type", "text/html; charset=utf-8")
             context.header("X-Content-Type-Options", "nosniff")
+            context.header("Cache-Control", immutableCache)
 
             return context.body(Uint8Array.from(await readFile(application.uploads.path(file))))
         }
@@ -142,6 +149,7 @@ export default function (application: Application) {
 
         await next()
 
+        context.header("Cache-Control", immutableCache)
         context.header("Access-Control-Allow-Origin", "*")
     })
 

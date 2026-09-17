@@ -64,6 +64,8 @@ test("uploads contract", async () => {
 
       assert.equal(described.status, 200)
       assert.equal(downloaded.status, 200)
+      assert.equal(described.headers.get("cache-control"), "public, max-age=31536000, immutable")
+      assert.equal(downloaded.headers.get("cache-control"), "public, max-age=31536000, immutable")
       assert.deepEqual(await described.json(), { size: created.size, modifiedAt: created.modifiedAt })
       assert.deepEqual(JSON.parse(await downloaded.text()), { ready: true })
 
@@ -72,6 +74,7 @@ test("uploads contract", async () => {
       const wallpaper = await view.request(`http://system/uploads/wallpaper/${htmlFile}`)
 
       assert.equal(wallpaper.status, 200)
+      assert.equal(wallpaper.headers.get("cache-control"), "public, max-age=31536000, immutable")
       assert.equal(wallpaper.headers.get("content-type"), "text/html; charset=utf-8")
       assert.match(wallpaper.headers.get("content-security-policy") ?? "", /connect-src 'none'/)
       assert.match(wallpaper.headers.get("content-security-policy") ?? "", /script-src 'unsafe-inline' data: blob:/)
