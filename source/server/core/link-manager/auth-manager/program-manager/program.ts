@@ -207,6 +207,8 @@ export default class Program {
 
                 title: client.title ?? null,
 
+                header: client.header ?? null,
+
                 size: client.size ?? null,
 
                 position: client.position ?? null,

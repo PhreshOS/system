@@ -262,6 +262,14 @@ export default class LocalWindows implements LocalWindowHost {
         this.replace(identity, { ...state, title })
     }
 
+    public header(process: string, header: boolean) {
+
+        const { identity, state } = this.existing(process)
+        requireLocalProperty(state.layer, "header")
+        if (state.header === header) return
+        this.replace(identity, { ...state, header })
+    }
+
     public raise(process: string) {
 
         const { identity, state } = this.existing(process)
@@ -451,6 +459,7 @@ function localState(client: ClientState): LocalWindowState {
     return {
         ...authoritativeState(client),
         title: window.layer === "window" ? window.title : "",
+        header: window.layer === "window" ? window.header : true,
         position: isDesktopReplacementLayer(window.layer) ? { x: 0, y: 0 } : window.position,
         size: isDesktopReplacementLayer(window.layer) ? { width: "100%", height: "100%" } : window.size,
         minimized: isDesktopReplacementLayer(window.layer) ? false : window.minimized,
@@ -463,6 +472,7 @@ function authoritativeState(client: ClientState): LocalWindowState {
     const window = client.window
     return {
         title: window.title,
+        header: window.header,
         position: window.position,
         size: window.size,
         minimized: window.minimized,
@@ -480,6 +490,7 @@ function windowState(local: LocalWindowState, front: boolean, geometry?: Readonl
 
     return {
         title: local.title,
+        header: local.header,
         position: geometry?.position ?? local.position,
         size: geometry?.size ?? local.size,
         minimized: local.minimized,

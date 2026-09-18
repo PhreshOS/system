@@ -27,7 +27,7 @@ test("client sandbox contract", async () => {
 
   process.startClient(new Window(
 
-      { title: "Client", layer: "window" },
+      { title: "Client", header: true, layer: "window" },
 
       { x: 0, y: 0 },
 

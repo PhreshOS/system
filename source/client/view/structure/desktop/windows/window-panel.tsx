@@ -11,7 +11,7 @@ const WindowPanel = forwardRef<HTMLDivElement, SurfaceProps & { header: ReactNod
         ref={ref}
         style={{
             display: "grid",
-            gridTemplateRows: "auto minmax(0, 1fr)",
+            gridTemplateRows: header == null ? "minmax(0, 1fr)" : "auto minmax(0, 1fr)",
             minWidth: 0,
             minHeight: 0,
             overflow: "hidden",

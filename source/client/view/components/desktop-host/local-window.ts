@@ -41,6 +41,7 @@ export interface LocalWindowHost {
     follow(identity: string, target: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     unfollow(identity: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     title(identity: string, title: string): void
+    header(identity: string, header: boolean): void
     raise(identity: string): void
     addSurface(identity: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>
     removeSurface(identity: string, transaction?: AppearanceTransaction | WaitedTransaction): Promise<void>

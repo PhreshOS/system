@@ -348,6 +348,11 @@ export default class System {
         await this.processManager.changeTitle(process.identity, title)
     }
 
+    public async changeWindowHeader(process: Process, header: boolean) {
+
+        await this.processManager.changeHeader(process.identity, header)
+    }
+
     public async raiseWindow(process: Process) {
 
         await this.processManager.raise(process.identity)

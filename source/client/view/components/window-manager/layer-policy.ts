@@ -1,11 +1,11 @@
 import type { WindowLayer } from "@phreshos/core"
 import type { LocalWindowState } from "../desktop-host/local-window"
 
-type PresentationProperty = "title" | "position" | "size" | "minimized" | "maximized" | "depth" | "surface"
+type PresentationProperty = "title" | "header" | "position" | "size" | "minimized" | "maximized" | "depth" | "surface"
 
 /** Properties owned by Desktop for each local Window role. */
 const properties: Readonly<Record<WindowLayer, readonly PresentationProperty[]>> = {
-    window: ["title", "position", "size", "minimized", "maximized", "depth"],
+    window: ["title", "header", "position", "size", "minimized", "maximized", "depth"],
     under: ["position", "size", "minimized", "maximized", "depth", "surface"],
     over: ["position", "size", "minimized", "maximized", "depth", "surface"],
     wallpaper: [],

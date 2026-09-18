@@ -33,12 +33,16 @@ export default class Window implements Omit<WindowState, "front"> {
     // window owns it.
     public title: string
 
+    public header: boolean
+
     // The authoritative Desktop layer.
     public layer: WindowLayer
 
     public constructor(processManager: ProcessManager, process: string, payload: WindowSnapshot) {
 
         this.title = payload.title
+
+        this.header = payload.header
 
         this.layer = payload.layer
 
@@ -62,6 +66,8 @@ export default class Window implements Omit<WindowState, "front"> {
     public follow(payload: WindowSnapshot) {
 
         this.title = payload.title
+
+        this.header = payload.header
 
         this.layer = payload.layer
 
@@ -95,6 +101,11 @@ export default class Window implements Omit<WindowState, "front"> {
     public async changeTitle(title: string) {
 
         await this.processManager.$outbound.publish("/change-title", this.process, title)
+    }
+
+    public async changeHeader(header: boolean) {
+
+        await this.processManager.$outbound.publish("/change-header", this.process, header)
     }
 
     // To the front of its own layer, and nothing else. A hidden window

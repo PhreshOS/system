@@ -22,8 +22,8 @@ export default function ({ className, style, ...props }: LoadingProps) {
 
         <Surface
             {...props}
-            className="absolute inset-0 grid"
-            style={{ borderRadius: "inherit" }}
+            className="grid"
+            style={{ position: "absolute", inset: 0, borderRadius: "inherit" }}
         >
 
             <Spinner className="m-auto size-6" />

@@ -8,6 +8,8 @@ export interface Shown {
 
     title: string
 
+    header: boolean
+
     // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
 
@@ -32,12 +34,16 @@ export default class Window implements Omit<WindowState, "front"> {
     // own afterwards.
     public title: string
 
+    public header: boolean
+
     // The Window's authoritative Desktop layer.
     public readonly layer: WindowLayer
 
     public constructor(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean, maximized = false) {
 
         this.title = shown.title
+
+        this.header = shown.header
 
         this.layer = shown.layer
 
@@ -123,11 +129,24 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
+    public changeHeader(header: boolean) {
+
+        if (typeof header !== "boolean") throw new Error("Window header state must be true or false")
+
+        if (this.header === header) return false
+
+        this.header = header
+
+        return true
+    }
+
     public toJSON() {
 
         return {
 
             title: this.title,
+
+            header: this.header,
 
             layer: this.layer,
 

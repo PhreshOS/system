@@ -1502,6 +1502,8 @@ export default class ProgramManager extends TheLink {
 
         if (asked.title !== undefined && typeof asked.title !== "string") throw new Error("A launch client's title must be text")
 
+        if (asked.header !== undefined && typeof asked.header !== "boolean") throw new Error("A launch client's header state must be true or false")
+
         for (const [what, value] of [["size", asked.size], ["position", asked.position]] as const) {
 
             if (value === undefined) continue
@@ -1521,15 +1523,19 @@ export default class ProgramManager extends TheLink {
 
         const shift = this.authManager.processManager.processes.size % 8 * 32
 
+        const layer = asked.layer ?? client.layer ?? "window"
+
         return {
 
             title: asked.title ?? program.title,
+
+            header: layer === "window" ? asked.header ?? client.header ?? true : true,
 
             position: asked.position ?? client.position ?? { x: 120 + shift, y: 80 + shift },
 
             size: asked.size ?? client.size ?? { width: 520, height: 340 },
 
-            layer: asked.layer ?? client.layer ?? "window",
+            layer,
 
             minimize: asked.minimize ?? client.minimize ?? false,
 

@@ -743,6 +743,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                 title: shown.title,
 
+                header: shown.header,
+
                 position: shown.position,
 
                 size: shown.size,
@@ -828,6 +830,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
+        if (word === "windowLocalHeader") {
+            const target = localProcess(args[0])
+            if (typeof args[1] !== "boolean") throw new Error("Local Window header state must be true or false")
+            localWindow.header(target.identity, args[1])
+            return []
+        }
+
         if (word === "windowLocalMaximize") {
             const target = localProcess(args[0])
             if (typeof args[1] !== "boolean") throw new Error("Local Window maximize takes a boolean state")
@@ -875,6 +884,15 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "changeTitle") {
 
             await clientOf(await permittedProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
+
+            return [pane]
+        }
+
+        if (word === "changeHeader") {
+
+            if (typeof args[1] !== "boolean") throw new Error("Window header state must be true or false")
+
+            await clientOf(await permittedProcess(args[0])).window.changeHeader(args[1])
 
             return [pane]
         }

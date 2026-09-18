@@ -14,7 +14,7 @@ test("client surface contract", async () => {
   type RequestedTransaction = AppearanceTransaction | WaitedTransaction
 
   const authoritativeWindow = new ServerWindow(
-      { title: "Target", layer: "over" },
+      { title: "Target", header: true, layer: "over" },
       { x: 0, y: 0 },
       { width: 100, height: 100 },
       1,
@@ -322,6 +322,7 @@ test("client surface contract", async () => {
       return {
           window: {
               title: "Window",
+              header: true,
               position: { x: 0, y: 0 },
               size: { width: 300, height: 200 },
               minimized: false, maximized: false,

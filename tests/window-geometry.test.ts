@@ -12,7 +12,7 @@ test("window geometry contract", async () => {
   }
 
   const authority = new ServerWindow(
-      { title: "Geometry", layer: "window" },
+      { title: "Geometry", header: true, layer: "window" },
       initial.position,
       initial.size,
       1,
@@ -66,7 +66,12 @@ test("window geometry contract", async () => {
   await ProcessManager.prototype.move.call(manager as unknown as ProcessManager, "process", next.position)
   await ProcessManager.prototype.resize.call(manager as unknown as ProcessManager, "process", next.size)
   await ProcessManager.prototype.changeTitle.call(manager as unknown as ProcessManager, "process", "Geometry")
+  await ProcessManager.prototype.changeHeader.call(manager as unknown as ProcessManager, "process", true)
   assert.equal(events.length, unchangedEvents)
+
+  await ProcessManager.prototype.changeHeader.call(manager as unknown as ProcessManager, "process", false)
+  assert.equal(authority.header, false)
+  assert.deepEqual(events.at(-1), ["process", "changeHeader", false])
 
   const resized = { width: "1/2", height: 260 }
   await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", { position: next.position, size: resized })
@@ -105,4 +110,5 @@ test("window geometry contract", async () => {
   assert.deepEqual(publications.at(-1), ["/maximize", "process", true])
   counterpart.follow(authority.toJSON())
   assert.equal(counterpart.maximized, false)
+  assert.equal(counterpart.header, false)
 }, 120_000)

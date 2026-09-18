@@ -11,7 +11,7 @@ function fixture() {
     const program: ProgramSnapshot = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
         version: null, description: null, hasAgent: false, server: null,
-        client: { start: true, service: false, title: null, size: null, position: null, layer: "over", minimize: null, maximize: null }
+        client: { start: true, service: false, title: null, header: null, size: null, position: null, layer: "over", minimize: null, maximize: null }
     }
     const process = { identity: "caller", reference: "process-reference", program: program.identity, name: null, startedAt: 0, options: {}, server: null, client: null }
     const createProcess = vi.fn(async () => process.identity)

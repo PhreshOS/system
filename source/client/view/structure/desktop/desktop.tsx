@@ -125,6 +125,8 @@ export default function Workspace() {
 
             title={local.title}
 
+            header={local.header}
+
             icon={icon(record)}
 
             position={local.position}

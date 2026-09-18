@@ -27,6 +27,7 @@ test("process lifecycle contract", async () => {
 
                   return {
                       title: launch.title ?? "Client",
+                      header: true,
                       position: { x: 0, y: 0 },
                       size: { width: 640, height: 480 },
                       layer: "window" as const,
@@ -90,6 +91,7 @@ test("process lifecycle contract", async () => {
           true,
           {
               title: "Client",
+              header: true,
               position: { x: 0, y: 0 },
               size: { width: 640, height: 480 },
               layer: "window",
@@ -186,7 +188,7 @@ test("process lifecycle contract", async () => {
           { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", minimize: false, maximize: false, service: false } },
           null,
           true,
-          { title: "Partial", position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
+          { title: "Partial", header: true, position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
           null
       ), /creation publication failed/)
 

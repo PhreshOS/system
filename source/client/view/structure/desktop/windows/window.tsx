@@ -50,7 +50,7 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
@@ -496,7 +496,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
             >
                 <WindowPanel
                 style={{ position: "absolute", inset: 0 }}
-                header={<WindowHeader
+                header={header ? <WindowHeader
 
                     title={title}
 
@@ -518,7 +518,7 @@ export default function ({ title, icon, children, onClose, onClosed, onMinimize,
 
                     stopping={stopping || closing}
 
-                />}
+                /> : null}
             >{children}</WindowPanel>
             </motion.div>}
 
@@ -544,6 +544,9 @@ type Snap = SnapTarget
 interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "onDrag" | "onDragEnd" | "onDragStart" | "title"> {
 
     title?: ReactNode
+
+    /** Whether the Desktop-owned standard Window header is shown. */
+    header?: boolean
 
     // Drawn beside the title. A URL rather than a node: what a window
     // shows of its program is a picture the browser fetches, and the

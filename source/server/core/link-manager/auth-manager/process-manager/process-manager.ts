@@ -172,6 +172,7 @@ export default class ProcessManager extends TheLink {
 
         return Object.freeze({
             title: window.title,
+            header: window.header,
             position: window.position,
             size: window.size,
             minimized: window.minimized,
@@ -931,7 +932,7 @@ export default class ProcessManager extends TheLink {
 
     private window(shape: Shape) {
 
-        const shown = { title: shape.title, layer: shape.layer }
+        const shown = { title: shape.title, header: shape.header, layer: shape.layer }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
@@ -2172,6 +2173,15 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
+        if (word === "changeHeader") {
+
+            const target = heldWindow(rest[0]).process
+
+            await this.system.changeWindowHeader(target, rest[1] as boolean)
+
+            return [target.identity]
+        }
+
         if (word === "raise") {
 
             const target = heldWindow(rest[0]).process
@@ -3058,6 +3068,18 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
+    @Connect("/change-header")
+    public async changeHeader(identity: string, header: boolean) {
+
+        const window = this.mutableWindowOf(identity)
+
+        if (!window.changeHeader(header)) return { identity, window }
+
+        this.said(identity, "changeHeader", window.header)
+
+        return { identity, window }
+    }
+
     // To the front of its own layer, and that is the whole of it.
     //
     // It was called `focus` and it did three things: it showed a hidden
@@ -3325,6 +3347,8 @@ function throwFailures(message: string, failures: unknown[]): void {
 interface ShapeBase {
 
     title: string
+
+    header: boolean
 
     position: Position
 
