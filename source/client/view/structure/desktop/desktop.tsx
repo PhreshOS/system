@@ -213,25 +213,38 @@ export default function Workspace() {
             another window is shown and brought forward. */}
         <OverflowRow aria-label="Open windows" backwardLabel="Earlier windows" forwardLabel="Later windows">
 
-            {windows.listed.map(record => <WindowTaskbarItem
+            {windows.listed.map(record => {
 
-                key={record.identity}
+                const window = windows.localWindow.projection(record.identity)
 
-                record={record}
+                return <WindowTaskbarItem
 
-                title={windows.localWindow.projection(record.identity).title}
+                    key={record.identity}
 
-                icon={icon(record)}
+                    record={record}
 
-                active={fronts.window?.identity === record.identity}
+                    title={window.title}
 
-                onElement={focus.taskbarItem}
+                    icon={icon(record)}
 
-                onMinimize={focus.minimize}
+                    active={fronts.window?.identity === record.identity}
 
-                onShow={windows.show}
+                    minimized={window.minimized}
 
-            />)}
+                    maximized={window.maximized}
+
+                    onElement={focus.taskbarItem}
+
+                    onMinimize={focus.minimize}
+
+                    onShow={windows.show}
+
+                    onFill={windows.fill}
+
+                    onClose={focus.close}
+
+                />
+            })}
 
         </OverflowRow>
 
