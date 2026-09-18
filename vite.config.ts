@@ -1,6 +1,6 @@
+import workerThreadPlugin from "./source/libs/worker-thread-plugin.js"
 import packageConfig from "./package.json" with { type: "json" }
 import decoratorPlugin from "./source/libs/decorator-plugin.js"
-import workerThreadPlugin from "./source/libs/worker-thread-plugin.js"
 import { defineConfig } from "vite"
 import { resolve } from "node:path"
 
