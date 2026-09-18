@@ -66,7 +66,11 @@ export default class Window implements Omit<WindowState, "front"> {
 
         validate(position.y, "y")
 
+        if (this.position.x === position.x && this.position.y === position.y) return false
+
         this.position = position
+
+        return true
     }
 
     public resize(size: Size) {
@@ -75,7 +79,11 @@ export default class Window implements Omit<WindowState, "front"> {
 
         validate(size.height, "height")
 
+        if (this.size.width === size.width && this.size.height === size.height) return false
+
         this.size = size
+
+        return true
     }
 
     /** Validates and commits a complete geometry without an intermediate state. */
@@ -89,9 +97,17 @@ export default class Window implements Omit<WindowState, "front"> {
 
         validate(geometry.size.height, "height")
 
+        const moved = this.position.x !== geometry.position.x || this.position.y !== geometry.position.y
+
+        const resized = this.size.width !== geometry.size.width || this.size.height !== geometry.size.height
+
+        if (!moved && !resized) return { moved, resized }
+
         this.position = geometry.position
 
         this.size = geometry.size
+
+        return { moved, resized }
     }
 
     public changeTitle(title: string) {
@@ -100,7 +116,11 @@ export default class Window implements Omit<WindowState, "front"> {
 
         if (!said) throw new Error("A window's title is something a person can read")
 
+        if (this.title === said) return false
+
         this.title = said
+
+        return true
     }
 
     public toJSON() {

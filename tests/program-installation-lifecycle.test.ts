@@ -15,9 +15,10 @@ function fixture(context: TestContext) {
     const server = join(directory, "source", "server")
     mkdirSync(server, { recursive: true })
     const exitAll = vi.fn()
+    const announceHost = vi.fn()
     const auth = Object.assign(new TheLink(), {
         linkManager: { application: { storage: new FileManager(directory, "system"), defaultProgramIcon: "" } },
-        processManager: { processes: new Map(), exitAll, announceHost: vi.fn(), announceSubject: vi.fn() }
+        processManager: { processes: new Map(), exitAll, announceHost, announceSubject: vi.fn() }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
     const definition = (installCommand = `node -e "process.stdout.write('preparing')"`) => new Program({
@@ -25,7 +26,7 @@ function fixture(context: TestContext) {
         startup: { name: "startup" },
         server: { location: server, installCommand, command: "node main.js" }
     })
-    return { directory, manager, exitAll, definition }
+    return { directory, manager, exitAll, announceHost, definition }
 }
 
 test("installation output precedes Process exit and handle switch; explicit launch precedes startup", async context => {
@@ -107,4 +108,31 @@ test("explicit launch errors propagate without rolling back the installed Progra
     await expect(manager.install(definition(), { launch: true })).rejects.toThrow("launch failed")
     expect(manager.find("example").installed).toBe(true)
     expect(start).toHaveBeenCalledTimes(1)
+})
+
+test("uninstallation converges silently while its Program handle remains valid", async context => {
+    const { manager, exitAll, announceHost, definition } = fixture(context)
+    const entry = await manager.install(definition())
+    const program = entry.program
+    const home = manager.fileManager.join(program.identity)
+
+    await manager.uninstall(program)
+
+    expect(entry.installed).toBe(false)
+    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
+
+    await manager.uninstall(program)
+
+    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
+    expect(exitAll).not.toHaveBeenCalled()
+
+    await manager.uninstall(program, { purge: true })
+
+    expect(manager.programs.has(program.identity)).toBe(false)
+    expect(existsSync(home)).toBe(false)
+    expect(exitAll).toHaveBeenCalledExactlyOnceWith(program.identity, null)
+    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
+    expect(announceHost.mock.calls.filter(([, event]) => event === "forget")).toHaveLength(1)
+
+    await expect(manager.uninstall(program)).rejects.toThrow("does not know this program")
 })

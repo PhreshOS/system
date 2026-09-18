@@ -61,6 +61,20 @@ test("window geometry contract", async () => {
   assert.equal(echo.identity, "process")
   assert.equal(echo.window, authority)
 
+  const unchangedEvents = events.length
+  await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", next)
+  await ProcessManager.prototype.move.call(manager as unknown as ProcessManager, "process", next.position)
+  await ProcessManager.prototype.resize.call(manager as unknown as ProcessManager, "process", next.size)
+  await ProcessManager.prototype.changeTitle.call(manager as unknown as ProcessManager, "process", "Geometry")
+  assert.equal(events.length, unchangedEvents)
+
+  const resized = { width: "1/2", height: 260 }
+  await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", { position: next.position, size: resized })
+  assert.deepEqual(events.slice(-2), [
+      ["process", "geometry", { position: next.position, size: resized }],
+      ["process", "resize", resized]
+  ])
+
   const publications: unknown[][] = []
   const counterpart = new ClientWindow(
       { $outbound: { async publish(...publication: unknown[]) { publications.push(publication); return [] } } } as unknown as ClientProcessManager,
@@ -75,8 +89,11 @@ test("window geometry contract", async () => {
   assert.equal(authority.maximized, true)
   assert.equal(authority.minimized, true)
   assert.deepEqual(authority.position, next.position)
-  assert.deepEqual(authority.size, next.size)
+  assert.deepEqual(authority.size, resized)
   assert.deepEqual(events.at(-1), ["process", "maximize", true])
+  const maximizedEvents = events.length
+  await ProcessManager.prototype.maximize.call(manager as unknown as ProcessManager, "process", true)
+  assert.equal(events.length, maximizedEvents)
   const stored = { position: { x: 44, y: 55 }, size: { width: 440, height: 550 } }
   authority.setGeometry(stored)
   await ProcessManager.prototype.maximize.call(manager as unknown as ProcessManager, "process", false)

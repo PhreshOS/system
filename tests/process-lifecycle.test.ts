@@ -20,7 +20,20 @@ test("process lifecycle contract", async () => {
           programManager: {
               permission() { return null },
               grantsPermission() { return true },
-              grantsStorage() { return true }
+              grantsStorage() { return true },
+              clientShape(_program: Program, launch: { service?: boolean, title?: string } = {}) {
+
+                  if (launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A launch client's service role must be true or false")
+
+                  return {
+                      title: launch.title ?? "Client",
+                      position: { x: 0, y: 0 },
+                      size: { width: 640, height: 480 },
+                      layer: "window" as const,
+                      minimize: false,
+                      maximize: false
+                  }
+              }
           },
           linkManager: {
               application: {
@@ -53,6 +66,61 @@ test("process lifecycle contract", async () => {
   async function register(manager: ProcessManager, identity: string) {
 
       return await manager.register(identity, null, program(identity), {}, launch, null, false, null, null)
+  }
+
+  // Endpoint start and stop establish incarnation state. Repeating the same
+  // request on a valid permanent handle is a silent success; removing the
+  // owning Process still invalidates that handle.
+  {
+      const manager = processManager()
+      const owner = new Program({
+          identity: "endpoint-state",
+          server: { location: ".", command: "true" },
+          client: { location: "." }
+      })
+      const clientStarts: unknown[][] = []
+      manager.$outbound.subscribe("/client-start", (...values) => { clientStarts.push(values) })
+      const process = await manager.register(
+          "endpoint-state",
+          null,
+          owner,
+          {},
+          launch,
+          null,
+          true,
+          {
+              title: "Client",
+              position: { x: 0, y: 0 },
+              size: { width: 640, height: 480 },
+              layer: "window",
+              minimize: false,
+              maximize: false
+          },
+          null
+      )
+      const client = process.client
+
+      await manager.startClient(process.identity, { title: "Ignored creation value" })
+
+      assert.equal(process.client, client)
+      assert.equal(clientStarts.length, 1)
+
+      await manager.stopServer(process.identity)
+      await manager.stopServer(process.identity)
+
+      await assert.rejects(manager.stopClient(process.identity), /final live endpoint/)
+
+      process.server = {} as ServerProcessBoundary
+      process.stopClient()
+
+      await manager.stopClient(process.identity)
+      await manager.startServer(process.identity)
+      await assert.rejects(manager.startServer(process.identity, { service: "invalid" } as never), /service value/)
+
+      manager.processes.delete(process.identity)
+
+      await assert.rejects(manager.startClient(process.identity), /does not know this process/)
+      await assert.rejects(manager.stopServer(process.identity), /does not know this process/)
   }
 
   // Parentage retains the exact Process entity after it exits. Absence and

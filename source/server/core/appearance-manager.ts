@@ -1,4 +1,5 @@
 import Keyv from "keyv"
+import { isDeepStrictEqual } from "node:util"
 import { defaultAppearance, parseAppearance, type Appearance } from "@phreshos/core"
 import UploadManager from "./upload-manager"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
@@ -32,6 +33,8 @@ export default class AppearanceManager {
         this.validateWallpaper(appearance.signInWallpaper.dark)
         this.validateWallpaper(appearance.desktopWallpaper.light)
         this.validateWallpaper(appearance.desktopWallpaper.dark)
+
+        if (isDeepStrictEqual(this.current, appearance)) return this.current
 
         await this.store.set(storageKey, appearance)
         this.current = appearance

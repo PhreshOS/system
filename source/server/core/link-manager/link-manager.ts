@@ -318,9 +318,10 @@ export default class LinkManager extends TheLink {
 
         const update = this.updatingAppearance.then(async () => {
 
+            const previous = this.application.appearanceManager.value
             const appearance = await this.application.appearanceManager.update(value)
 
-            await this.appearance.update(appearance)
+            if (appearance !== previous) await this.appearance.update(appearance)
 
             return appearance
         })

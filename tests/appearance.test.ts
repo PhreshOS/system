@@ -40,6 +40,10 @@ test("appearance contract", async () => {
   assert(Object.isFrozen(manager.value))
   assert.deepEqual(await store.get("appearance"), defaultAppearance)
 
+  const initial = manager.value
+  assert.equal(await manager.update(defaultAppearance), initial)
+  assert.equal(manager.value, initial)
+
   for (const theme of ["light", "dark"] as const) {
     for (const role of ["background", "foreground", "primary", "secondary", "success", "warning", "danger", "info"] as const) {
       const color = "oklch(60% 0.2 260)"

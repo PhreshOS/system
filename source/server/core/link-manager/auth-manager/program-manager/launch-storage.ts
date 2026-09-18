@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { join } from "node:path"
+import { isDeepStrictEqual } from "node:util"
 import { parseLaunch, type Launch } from "@phreshos/core"
 import type Program from "./program"
 
@@ -14,7 +15,15 @@ export default class LaunchStorage {
     }
 
     public set(launch: Launch) {
-        this.write(`${JSON.stringify(parseLaunch(launch), null, 2)}\n`)
+        const parsed = parseLaunch(launch)
+        let current: Launch | null = null
+
+        try { current = this.get() }
+        catch { /* A valid replacement repairs an invalid stored declaration. */ }
+
+        if (isDeepStrictEqual(current, parsed)) return
+
+        this.write(`${JSON.stringify(parsed, null, 2)}\n`)
     }
 
     /** Replace one declaration, retaining exact bytes for operation rollback. */

@@ -1177,9 +1177,9 @@ export default class ProcessManager extends TheLink {
 
             if (!process.program.server) throw new Error("This program declared no server half")
 
-            if (process.server) throw new Error("The server endpoint is already running")
-
             if (typeof launch !== "object" || launch === null || Array.isArray(launch) || launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A Server launch must contain an optional boolean service value")
+
+            if (process.server) return
 
             await process.program.validate()
 
@@ -1225,7 +1225,7 @@ export default class ProcessManager extends TheLink {
 
         await this.transition(process, async () => {
 
-            if (!process.server) throw new Error("The server endpoint is already stopped")
+            if (!process.server) return
 
             if (!process.client) throw new Error("The final live endpoint cannot be stopped; exit the Process instead")
 
@@ -1245,24 +1245,24 @@ export default class ProcessManager extends TheLink {
 
         const process = this.find(identity)
 
-        const layer = launch.layer ?? process.program.client?.layer
+        const shape = this.authManager.programManager.clientShape(process.program, launch)
 
-        return await this.serializeClientLayer(layer, () => this.startClientInLayer(identity, launch))
+        return await this.serializeClientLayer(shape.layer, () => this.startClientInLayer(identity, launch, shape))
     }
 
-    private async startClientInLayer(identity: string, launch: ClientLaunch) {
+    private async startClientInLayer(identity: string, launch: ClientLaunch, shape: StandardShape) {
 
         const process = this.find(identity)
 
         await this.transition(process, async () => {
 
-            if (!process.program.client) throw new Error("This program declared no client half")
+            const declaration = process.program.client
 
-            if (process.client) throw new Error("The client endpoint is already running")
+            if (!declaration) throw new Error("This program declared no client half")
+
+            if (process.client) return
 
             await process.program.validate()
-
-            const shape = this.authManager.programManager.clientShape(process.program, launch)
 
             const window = this.window(shape)
 
@@ -1270,7 +1270,7 @@ export default class ProcessManager extends TheLink {
 
             if (isDesktopReplacementLayer(window.layer)) await this.replaceDesktopPresentation(window.layer)
 
-            this.activateClient(process, window, launch.service ?? process.program.client.service)
+            this.activateClient(process, window, launch.service ?? declaration.service)
 
             try {
 
@@ -1301,7 +1301,7 @@ export default class ProcessManager extends TheLink {
 
         await this.transition(process, async () => {
 
-            if (!process.client) throw new Error("The client endpoint is already stopped")
+            if (!process.client) return
 
             if (!process.server) throw new Error("The final live endpoint cannot be stopped; exit the Process instead")
 
@@ -3009,7 +3009,7 @@ export default class ProcessManager extends TheLink {
 
         const window = this.mutableWindowOf(identity)
 
-        window.move(position)
+        if (!window.move(position)) return { identity, window }
 
         this.said(identity, "move", window.position)
 
@@ -3021,7 +3021,7 @@ export default class ProcessManager extends TheLink {
 
         const window = this.mutableWindowOf(identity)
 
-        window.resize(size)
+        if (!window.resize(size)) return { identity, window }
 
         this.said(identity, "resize", window.size)
 
@@ -3033,13 +3033,15 @@ export default class ProcessManager extends TheLink {
 
         const window = this.mutableWindowOf(identity)
 
-        window.setGeometry(geometry)
+        const changed = window.setGeometry(geometry)
+
+        if (!changed.moved && !changed.resized) return { identity, window }
 
         this.said(identity, "geometry", { position: window.position, size: window.size })
 
-        this.said(identity, "move", window.position)
+        if (changed.moved) this.said(identity, "move", window.position)
 
-        this.said(identity, "resize", window.size)
+        if (changed.resized) this.said(identity, "resize", window.size)
 
         return { identity, window }
     }
@@ -3049,7 +3051,7 @@ export default class ProcessManager extends TheLink {
 
         const window = this.mutableWindowOf(identity)
 
-        window.changeTitle(title)
+        if (!window.changeTitle(title)) return { identity, window }
 
         this.said(identity, "changeTitle", window.title)
 
@@ -3077,6 +3079,8 @@ export default class ProcessManager extends TheLink {
 
         const front = this.front(window.layer)
 
+        if (front === identity) return { identity, window }
+
         window.depth = ++this.highest
 
         this.settleFront(window.layer, front)
@@ -3092,6 +3096,7 @@ export default class ProcessManager extends TheLink {
 
         if (typeof maximized !== "boolean") throw new Error("Window maximize takes a boolean state")
         const window = this.mutableWindowOf(identity)
+        if (window.maximized === maximized) return { identity, window }
         window.maximized = maximized
         this.said(identity, "maximize", maximized)
         return { identity, window }
@@ -3102,6 +3107,8 @@ export default class ProcessManager extends TheLink {
 
         if (typeof minimized !== "boolean") throw new Error("Window minimize takes a boolean state")
         const window = this.mutableWindowOf(identity)
+
+        if (window.minimized === minimized) return { identity, window }
 
         const front = this.front(window.layer)
 

@@ -1181,9 +1181,20 @@ export default class ProgramManager extends TheLink {
 
         return await this.change(program.identity, async () => {
 
-            if (!this.installed(program)) throw new Error("This program is not installed — there is nothing here to remove")
-
             const entry = this.find(program.identity)
+
+            if (!entry.installed) {
+
+                if (!purge) return entry.identity
+
+                await this.authManager.processManager.exitAll(entry.identity, asker)
+
+                await this.release(entry.identity)
+
+                rmSync(this.fileManager.join(entry.identity), { recursive: true, force: true })
+
+                return await this.forgetEntry(entry)
+            }
 
             return await this.uninstallEntry(entry, purge, asker, output)
         })
