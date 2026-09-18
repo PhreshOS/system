@@ -1,5 +1,6 @@
 import packageConfig from "./package.json" with { type: "json" }
 import decoratorPlugin from "./source/libs/decorator-plugin.js"
+import workerThreadPlugin from "./source/libs/worker-thread-plugin.js"
 import { defineConfig } from "vite"
 import { resolve } from "node:path"
 
@@ -10,7 +11,7 @@ export const externalDependencies: (keyof typeof packageConfig.dependencies)[] =
 
 export default defineConfig({
     root: "source/server",
-    plugins: [decoratorPlugin()],
+    plugins: [decoratorPlugin(), workerThreadPlugin()],
     resolve: {
         tsconfigPaths: true
     },
@@ -22,11 +23,7 @@ export default defineConfig({
         emptyOutDir: true,
         outDir: resolve(import.meta.dirname, "dist/server"),
         rolldownOptions: {
-            input: {
-                main: "main.ts",
-                "worker-bootstrap": "core/server-runtime/worker-bootstrap.ts",
-                "sandbox-bootstrap": "core/server-runtime/sandbox-bootstrap.ts"
-            }
+            input: "main.ts"
         }
     }
 })

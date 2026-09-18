@@ -1,15 +1,11 @@
 import ThreadServerRuntime from "./thread"
+import bootstrap from "./sandbox-bootstrap.ts?worker-thread"
 
 /** Runs one capability-contained JavaScript Server Endpoint in QuickJS. */
 export default class SandboxServerRuntime extends ThreadServerRuntime {
 
     public constructor(entry: string, root: string) {
 
-        super(bootstrap("sandbox"), { entry, root })
+        super(bootstrap, { entry, root })
     }
-}
-
-function bootstrap(runtime: "sandbox") {
-
-    return new URL(`./${runtime}-bootstrap.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url)
 }

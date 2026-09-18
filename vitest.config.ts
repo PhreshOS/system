@@ -1,8 +1,9 @@
 import { defineConfig } from "vitest/config"
 import decoratorPlugin from "./source/libs/decorator-plugin.js"
+import workerThreadPlugin from "./source/libs/worker-thread-plugin.js"
 
 export default defineConfig({
-  plugins: [decoratorPlugin()],
+  plugins: [decoratorPlugin(), workerThreadPlugin()],
   resolve: { tsconfigPaths: true },
   test: {
     pool: "forks",

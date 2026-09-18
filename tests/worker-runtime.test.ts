@@ -19,6 +19,9 @@ test("server runtime contract", async () => {
   const dependency = join(directory, "dependency.mjs")
   const bareEntry = join(directory, "bare.mjs")
   const escapedEntry = join(directory, "escaped.mjs")
+  const failedEntry = join(directory, "failed.mjs")
+  const timerEntry = join(directory, "timer.mjs")
+  const asyncTimerEntry = join(directory, "async-timer.mjs")
   const outsideDirectory = await mkdtemp(join(tmpdir(), "phresh-sandbox-outside-"))
   const outsideModule = join(outsideDirectory, "outside.mjs")
   const linkedModule = join(directory, "linked.mjs")
@@ -51,6 +54,9 @@ test("server runtime contract", async () => {
   await writeFile(outsideModule, `export const outside = true\n`)
   await symlink(outsideModule, linkedModule)
   await writeFile(escapedEntry, `import "./linked.mjs"\n`)
+  await writeFile(failedEntry, `throw new Error("failed runtime module")\n`)
+  await writeFile(timerEntry, `setTimeout(() => { throw new Error("failed runtime timer") })\n`)
+  await writeFile(asyncTimerEntry, `setTimeout(async () => { throw new Error("failed async runtime timer") })\n`)
 
   await writeFile(commandEntry, `
   import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
@@ -96,6 +102,10 @@ test("server runtime contract", async () => {
       await verifyContainedRuntime(new WorkerServerRuntime(entry))
       await verifyContainedRuntime(new SandboxServerRuntime(entry, directory))
       await verifyCodecRuntime(new SandboxServerRuntime(codecEntry, codecDirectory))
+      await verifyFailedRuntime(new WorkerServerRuntime(failedEntry), "failed runtime module")
+      await verifyFailedRuntime(new SandboxServerRuntime(failedEntry, directory), "failed runtime module")
+      await verifyFailedRuntime(new SandboxServerRuntime(timerEntry, directory), "failed runtime timer")
+      await verifyFailedRuntime(new SandboxServerRuntime(asyncTimerEntry, directory), "failed async runtime timer")
 
       const sandbox = new Program({ identity: "sandbox-verification", server: { location: directory, sandbox: "server.mjs" } })
       await sandbox.validate()
@@ -214,6 +224,27 @@ test("server runtime contract", async () => {
       runtime.stop()
 
       await runtime.finished
+  }
+
+  async function verifyFailedRuntime(runtime: WorkerServerRuntime | SandboxServerRuntime, message: string) {
+
+      const output: ["out" | "err", string][] = []
+      runtime.onOutput((stream, text) => output.push([stream, text]))
+
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      const expiration = new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error(`${runtime.constructor.name} did not terminate after an uncaught error`)), 2_000)
+      })
+      let ending
+      try { ending = await Promise.race([runtime.finished, expiration]) }
+      finally {
+          if (timeout) clearTimeout(timeout)
+          runtime.stop()
+      }
+
+      assert.equal(ending.code, 1)
+      assert.equal(ending.signal, null)
+      assert.match(output.filter(([stream]) => stream === "err").map(([, text]) => text).join(""), new RegExp(message))
   }
 
   async function until(condition: () => boolean, timeout = 2_000) {

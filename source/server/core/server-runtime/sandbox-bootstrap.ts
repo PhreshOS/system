@@ -13,6 +13,7 @@ const QuickJS = await newQuickJSWASMModuleFromVariant(variant)
 const runtime = QuickJS.newRuntime({ memoryLimitBytes: 128 * 1024 * 1024, maxStackSizeBytes: 2 * 1024 * 1024 })
 const context = runtime.newContext()
 const timers = new Map<number, { timer: ReturnType<typeof setTimeout>, callback: QuickJSHandle }>()
+const pendingResults = new Set<QuickJSHandle>()
 const rejectedModule = "sandbox:rejected:"
 let nextTimer = 1
 let stopped = false
@@ -99,8 +100,8 @@ function installEnvironment(vm: QuickJSContext) {
         const timer = setTimeout(() => {
 
             timers.delete(identity)
-            call(retained)
-            retained.dispose()
+            try { call(retained) }
+            finally { retained.dispose() }
         }, milliseconds)
         timers.set(identity, { timer, callback: retained })
         return vm.newNumber(identity)
@@ -120,8 +121,8 @@ function installEnvironment(vm: QuickJSContext) {
         const retained = callback.dup()
         queueMicrotask(() => {
 
-            call(retained)
-            retained.dispose()
+            try { call(retained) }
+            finally { retained.dispose() }
         })
     })
 
@@ -308,9 +309,11 @@ function installEnvironment(vm: QuickJSContext) {
         const result = vm.callFunction(callback, vm.undefined)
         if (result.error) {
 
-            process.stderr.write(`${printable(vm.dump(result.error))}\n`)
+            const error = vm.dump(result.error)
             result.error.dispose()
-        } else result.value.dispose()
+            throw new Error(printable(error))
+        }
+        consumeResult(result.value)
         pump()
     }
 }
@@ -324,7 +327,7 @@ function evaluate(code: string, filename: string, options?: { type: "module" | "
         result.error.dispose()
         throw new Error(printable(error))
     }
-    result.value.dispose()
+    consumeResult(result.value)
 }
 
 function pump() {
@@ -334,11 +337,41 @@ function pump() {
         const result = runtime.executePendingJobs()
         if (result.error) {
 
-            process.stderr.write(`${printable(result.error.context.dump(result.error))}\n`)
+            const error = result.error.context.dump(result.error)
             result.error.dispose()
-            break
+            throw new Error(printable(error))
         }
     }
+
+    for (const result of [...pendingResults]) consumeResult(result)
+}
+
+function consumeResult(value: QuickJSHandle) {
+
+    // QuickJS reports synchronous exceptions through eval/call results, but a
+    // Promise rejection belongs to the returned Promise. Retain that result
+    // until it settles so an uncaught async callback has the same lifecycle
+    // consequence as an uncaught callback in a Worker or child process.
+    const state = context.getPromiseState(value)
+
+    if (state.type === "pending") {
+
+        pendingResults.add(value)
+        return
+    }
+
+    pendingResults.delete(value)
+    value.dispose()
+
+    if (state.type === "fulfilled") {
+
+        if (!state.notAPromise) state.value.dispose()
+        return
+    }
+
+    const error = context.dump(state.error)
+    state.error.dispose()
+    throw new Error(printable(error))
 }
 
 function confined(path: string) {
@@ -384,6 +417,8 @@ function dispose() {
         retained.callback.dispose()
     }
     timers.clear()
+    for (const result of pendingResults) result.dispose()
+    pendingResults.clear()
     context.dispose()
     runtime.dispose()
 }
