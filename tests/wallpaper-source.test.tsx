@@ -18,7 +18,7 @@ test("wallpaper source contract", () => {
 
     function render(file: string) {
         return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
-            <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true, scale: 1 }}>
+            <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
                 <WallpaperBackground file={file} />
             </UIProvider>
         </ApplicationContext.Provider>)
