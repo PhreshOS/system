@@ -506,8 +506,6 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
                     whole={whole}
 
-                    reducedMotion={reducedMotion}
-
                     onGrab={event => grab(event, null)}
 
                     onMinimize={onMinimize}
