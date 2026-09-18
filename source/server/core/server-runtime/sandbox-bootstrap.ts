@@ -2,13 +2,17 @@ import variant from "@jitl/quickjs-ng-wasmfile-release-sync"
 import { newQuickJSWASMModuleFromVariant, type QuickJSContext, type QuickJSHandle } from "quickjs-emscripten-core"
 import { parentPort, workerData } from "node:worker_threads"
 import { readFileSync, realpathSync } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path"
 import { randomUUID } from "node:crypto"
+import installWebEnvironment from "./sandbox-web-environment.js"
 
 if (!parentPort) throw new Error("A Sandbox Server runtime requires a parent port")
 
 const root = realpathSync(resolve(String(workerData.root)))
 const entry = confined(String(workerData.entry))
+const streamsEnvironment = readFileSync(createRequire(import.meta.url).resolve("web-streams-polyfill/polyfill"), "utf8")
+const webEnvironment = `(${installWebEnvironment.toString()})()`
 const QuickJS = await newQuickJSWASMModuleFromVariant(variant)
 const runtime = QuickJS.newRuntime({ memoryLimitBytes: 128 * 1024 * 1024, maxStackSizeBytes: 2 * 1024 * 1024 })
 const context = runtime.newContext()
@@ -295,6 +299,8 @@ function installEnvironment(vm: QuickJSContext) {
             })
         })()
     `, "phreshos:environment")
+    evaluate(streamsEnvironment, "phreshos:streams")
+    evaluate(webEnvironment, "phreshos:web-environment")
 
     function expose(name: string, implementation: (...args: QuickJSHandle[]) => QuickJSHandle | void) {
 

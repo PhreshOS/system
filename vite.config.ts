@@ -6,7 +6,8 @@ import { resolve } from "node:path"
 
 export const externalDependencies: (keyof typeof packageConfig.dependencies)[] = [
     "cfonts",
-    "sharp"
+    "sharp",
+    "web-streams-polyfill"
 ]
 
 export default defineConfig({

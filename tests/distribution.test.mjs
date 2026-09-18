@@ -65,7 +65,7 @@ test("distribution contract", async () => {
     assert.deepEqual(installedManifest.engines, { node: ">=24.15.0" })
     assert.deepEqual(
       installedManifest.dependencies,
-      Object.fromEntries(["cfonts", "sharp"].map(name => [name, manifest.dependencies[name]]))
+      Object.fromEntries(["cfonts", "sharp", "web-streams-polyfill"].map(name => [name, manifest.dependencies[name]]))
     )
 
     execFileSync(

@@ -32,6 +32,7 @@ test("server runtime contract", async () => {
   const ready = [...messagepack.serialize(["boundary", "ready"])]
   const urlResult = [...messagepack.serialize(["url-result", "https://example.test/runtime"])]
   const bytesResult = [...messagepack.serialize(["bytes-result", [1, 2, 3]])]
+  const webResult = [...messagepack.serialize(["web-result", true])]
 
   assert.equal(
       commandServerEnvironment(directory, { Path: "/native/bin" }).Path,
@@ -47,6 +48,46 @@ test("server runtime contract", async () => {
   transport.send(new Uint8Array(${JSON.stringify(ready)}))
   transport.send(new Uint8Array(runtimeUrl.href === "https://example.test/runtime" ? ${JSON.stringify(urlResult)} : []))
   transport.send(new Uint8Array(Uint8Array.from([1, 2, 3]).join(",") === "1,2,3" ? ${JSON.stringify(bytesResult)} : []))
+  const headers = new Headers([["X-Test", "one"]])
+  headers.append("x-test", "two")
+  const request = new Request("https://example.test/request", { body: "request", headers, method: "POST", redirect: "manual" })
+  const response = new Response(Uint8Array.from([114, 101, 115, 112, 111, 110, 115, 101]), {
+      headers: { "content-type": "text/plain" }, status: 201, statusText: "Created"
+  })
+  Object.defineProperties(response, {
+      redirected: { configurable: true, enumerable: true, value: true },
+      type: { configurable: true, enumerable: true, value: "cors" },
+      url: { configurable: true, enumerable: true, value: "https://example.test/response" }
+  })
+  const file = new File(["file"], "value.txt", { lastModified: 1, type: "text/plain" })
+  let pulled = false
+  const stream = new ReadableStream({
+      async pull(controller) {
+          if (pulled) return controller.close()
+          pulled = true
+          controller.enqueue(Uint8Array.from([115, 116, 114, 101, 97, 109]))
+      }
+  })
+  const chunks = []
+  for await (const chunk of stream) chunks.push(...chunk)
+  const webValuesWork = request.url === "https://example.test/request"
+      && request.method === "POST"
+      && request.redirect === "manual"
+      && request.headers.get("x-test") === "one, two"
+      && await request.text() === "request"
+      && response.status === 201
+      && response.statusText === "Created"
+      && response.ok
+      && response.redirected
+      && response.type === "cors"
+      && response.url === "https://example.test/response"
+      && await (await response.blob()).text() === "response"
+      && file.name === "value.txt"
+      && file.lastModified === 1
+      && file.type === "text/plain"
+      && await file.text() === "file"
+      && new TextDecoder().decode(Uint8Array.from(chunks)) === "stream"
+  transport.send(new Uint8Array(webValuesWork ? ${JSON.stringify(webResult)} : []))
   transport.onMessage(message => Promise.resolve(message).then(value => transport.send(Uint8Array.from(value))))
   `)
   const ambientPackage = "ambient-package"
@@ -154,9 +195,13 @@ test("server runtime contract", async () => {
       runtime.onMessage((event, ...values) => messages.push([event, ...values]))
       runtime.onOutput((stream, text) => output.push([stream, text]))
 
-      await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready"))
+      await until(() => messages.some(message => message[0] === "boundary" && message[1] === "ready")).catch(error => {
+          const runtimeOutput = output.map(([stream, text]) => `${stream}: ${text}`).join("")
+          throw new Error(`${error instanceof Error ? error.message : String(error)}${runtimeOutput ? `\n${runtimeOutput}` : ""}`)
+      })
       await until(() => messages.some(message => message[0] === "url-result"))
       await until(() => messages.some(message => message[0] === "bytes-result"))
+      await until(() => messages.some(message => message[0] === "web-result"))
 
       runtime.send("probe", 42)
 
@@ -166,6 +211,7 @@ test("server runtime contract", async () => {
       assert.deepEqual(messages.find(message => message[0] === "probe"), ["probe", 42])
       assert.deepEqual(messages.find(message => message[0] === "url-result"), ["url-result", "https://example.test/runtime"])
       assert.deepEqual(messages.find(message => message[0] === "bytes-result"), ["bytes-result", [1, 2, 3]])
+      assert.deepEqual(messages.find(message => message[0] === "web-result"), ["web-result", true])
 
       runtime.stop()
 
