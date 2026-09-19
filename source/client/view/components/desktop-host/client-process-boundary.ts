@@ -5,7 +5,7 @@ import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isServiceKey, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
-import { type LocalWindowHost } from "./local-window"
+import { type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 import SystemAccess from "./system-access"
@@ -23,7 +23,9 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly traffic: ClientTraffic
 
-    private readonly localWindow: LocalWindowHost
+    private readonly presentation: WindowPresentationHost
+
+    private readonly presentationSubscriptions = new Map<string, () => void>()
 
     private readonly systemAccess: SystemAccess
 
@@ -60,7 +62,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: () => DesktopViewportSnapshot, traffic: ClientTraffic, localWindow: LocalWindowHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: () => DesktopViewportSnapshot, traffic: ClientTraffic, presentation: WindowPresentationHost) {
 
         super()
 
@@ -74,7 +76,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.traffic = traffic
 
-        this.localWindow = localWindow
+        this.presentation = presentation
 
         this.systemAccess = new SystemAccess(authManager, pane)
 
@@ -92,7 +94,7 @@ export default class ClientProcessBoundary extends TheLink {
         // envelopes only after the new server-host lease exists.
         const pending = this.pending.splice(0)
 
-        if (this.leased) this.localWindow.release(this.pane)
+        if (this.leased) this.presentation.release(this.pane)
 
         this.resetEndpoint()
 
@@ -126,7 +128,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     public async release() {
 
-        this.localWindow.release(this.pane)
+        this.presentation.release(this.pane)
 
         const owner = this.leased
 
@@ -235,7 +237,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.trackSystemSubscription(values)
 
-        host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(values[0], ...values.slice(1)).catch((error: Error) => {
+        host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(values[0], ...values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -456,7 +458,13 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.subscriptions.set(subscription, description)
 
-            if (!localPropertySubscription(description)) this.addTraffic(kind, route, event)
+            if (presentationSubscription(description)) {
+                this.presentationSubscriptions.set(subscription, this.presentation.observe(this.pane, event, (word, value) => {
+                    this.deliver("presentation", word, value).catch(() => undefined)
+                }))
+            }
+
+            if (!desktopOwnedSubscription(description)) this.addTraffic(kind, route, event)
 
             if (this.owner && directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, this.owner, subscription, kind, event).catch(() => undefined)
 
@@ -534,14 +542,14 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.answerRequest(
                 question,
-                host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(args[0], ...args.slice(1)),
+                host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(args[0], ...args.slice(1)),
                 () => { this.authManager.cancelPermission(this.pane, args[1] as string).catch(() => undefined) }
             )
 
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.viewport, () => this.owner, this.localWindow)(args[0], ...args.slice(1)))
+        this.answerRequest(question, host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(args[0], ...args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {
@@ -868,6 +876,10 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.subscriptions.delete(subscription)
 
+        this.presentationSubscriptions.get(subscription)?.()
+
+        this.presentationSubscriptions.delete(subscription)
+
         if (this.desktopPreferencesSubscriptions.delete(subscription) && this.desktopPreferencesSubscriptions.size === 0) {
 
             this.stopDesktopPreferences?.()
@@ -972,6 +984,10 @@ export default class ClientProcessBoundary extends TheLink {
         this.desktopPreferencesSubscriptions.clear()
 
         this.appearanceSubscriptions.clear()
+
+        for (const stop of this.presentationSubscriptions.values()) stop()
+
+        this.presentationSubscriptions.clear()
 
         this.stopDesktopPreferences?.()
 
@@ -1118,9 +1134,14 @@ function appearanceSubscription(subscription: EndpointSubscription) {
     return subscription.kind === "publish" && subscription.route === "host-appearance" && (subscription.event === null || subscription.event === "change")
 }
 
-function localPropertySubscription(subscription: EndpointSubscription) {
+function presentationSubscription(subscription: EndpointSubscription) {
 
-    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription)
+    return subscription.kind === "publish" && subscription.route === "presentation"
+}
+
+function desktopOwnedSubscription(subscription: EndpointSubscription) {
+
+    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription) || presentationSubscription(subscription)
 }
 
 function directSubscription(subscription: EndpointSubscription) {

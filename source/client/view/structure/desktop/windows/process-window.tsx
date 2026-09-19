@@ -1,9 +1,9 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type LocalAnimation, type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import { type LocalGeometryRepresentation } from "@client/view/components/window-manager/local-windows"
-import { type Position, type Size, type Theme } from "@phreshos/core"
+import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
+import { type Position, type Size, type Theme, type WindowFrame, type WindowLayer, type WindowTransaction } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, icon, position, size, localSurface, geometryAnimation, minimizeAnimation, onLocalAnimationComplete, onLocalRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, bare, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, frame, layer, openingTransaction, icon, position, size, frameAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -37,7 +37,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const snap = useCallback((position: Position, size: Size) => onSnap(record, position, size), [onSnap, record])
 
-    const represent = useCallback((representation: LocalGeometryRepresentation | null) => onLocalRepresentation(record.identity, representation), [onLocalRepresentation, record])
+    const represent = useCallback((representation: PresentationGeometryRepresentation | null) => onPresentationRepresentation(record.identity, representation), [onPresentationRepresentation, record])
 
     const frameSource = programFrameSource(assetId, door)
 
@@ -86,7 +86,9 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
-    const progress = !bare && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
+    const framed = layer === "window" || (layer === "under" || layer === "over") && frame !== false
+
+    const progress = framed && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
 
     return <Window
 
@@ -94,27 +96,31 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         header={header}
 
+        frame={frame}
+
+        layer={layer}
+
+        openingTransaction={openingTransaction}
+
         icon={icon}
 
         position={position}
 
         size={size}
 
-        localSurface={localSurface}
+        frameAnimation={frameAnimation}
 
         geometryAnimation={geometryAnimation}
 
         minimizeAnimation={minimizeAnimation}
 
-        onLocalAnimationComplete={onLocalAnimationComplete}
+        onPresentationAnimationComplete={onPresentationAnimationComplete}
 
-        onLocalRepresentation={represent}
+        onPresentationRepresentation={represent}
 
         paintSurfaceSize={paintSurfaceSize}
 
         active={active}
-
-        bare={bare}
 
         minimized={minimized}
 
@@ -124,7 +130,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         stopping={stopping}
 
-        animateEntrance={entering}
+        entering={entering}
 
         data-process-window={record.identity}
 
@@ -190,7 +196,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         {/* First press focuses an inactive window before its program can
             receive input. Bare layers have no system click-catcher. */}
-        {!bare && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" />}
+        {layer === "window" && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" />}
 
     </Window>
 })
@@ -210,21 +216,27 @@ interface ProcessWindowProps {
 
     header: boolean
 
+    frame: WindowFrame
+
+    layer: WindowLayer
+
+    openingTransaction: WindowTransaction
+
     icon: string
 
     position: Position
 
     size: Size
 
-    localSurface: LocalSurfaceState | null
+    frameAnimation: PresentationAnimation | null
 
-    geometryAnimation: LocalAnimation | null
+    geometryAnimation: PresentationAnimation | null
 
-    minimizeAnimation: LocalAnimation | null
+    minimizeAnimation: PresentationAnimation | null
 
-    onLocalAnimationComplete: (kind: "geometry" | "minimize" | "surface", revision: number) => void
+    onPresentationAnimationComplete: (kind: "geometry" | "minimize" | "frame", revision: number) => void
 
-    onLocalRepresentation: (identity: string, representation: LocalGeometryRepresentation | null) => void
+    onPresentationRepresentation: (identity: string, representation: PresentationGeometryRepresentation | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
 
@@ -241,8 +253,6 @@ interface ProcessWindowProps {
     stopping: boolean
 
     entering: boolean
-
-    bare: boolean
 
     door: string
 

@@ -1,21 +1,14 @@
-import Window from "./window"
-
 /**
- * The one authoritative client state of a Process.
+ * The current execution context of a Process's Client Endpoint.
  *
  * Browser tabs may each represent this state with an iframe and a nearby
- * boundary, but none of those representations owns it. The Window is part of
- * this state and therefore begins and ends with the client, not with a tab.
+ * boundary. The Client Endpoint-owned Window survives when this context stops.
  */
 export default class ClientState {
 
-    public readonly window: Window
-
     public readonly service: boolean
 
-    public constructor(window: Window, service: boolean) {
-
-        this.window = window
+    public constructor(service: boolean) {
 
         this.service = service
     }

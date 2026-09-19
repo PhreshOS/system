@@ -14,7 +14,7 @@ test("client launch contract", async () => {
   }
 
   const program = {
-    client: { header: false },
+    client: { header: false, title: "Declared client title" },
     title: "Declared title"
   }
 
@@ -25,10 +25,10 @@ test("client launch contract", async () => {
   )
 
   assert.equal(shape({ title: "Fetched title" }).title, "Fetched title")
-  assert.equal(shape({}).title, "Declared title")
+  assert.equal(shape({}).title, "Declared client title")
   assert.throws(() => shape({ title: 42 } as unknown as ClientLaunch), /title must be text/)
   assert.equal(shape({ header: false }).header, false)
   assert.equal(shape({}).header, false)
-  assert.equal(shape({ layer: "over", header: false }).header, true)
+  assert.equal(shape({ layer: "over", header: false }).header, false)
   assert.throws(() => shape({ header: "hidden" } as unknown as ClientLaunch), /header state/)
 }, 120_000)

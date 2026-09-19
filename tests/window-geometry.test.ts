@@ -12,7 +12,7 @@ test("window geometry contract", async () => {
   }
 
   const authority = new ServerWindow(
-      { title: "Geometry", header: true, layer: "window" },
+      { title: "Geometry", header: true, frame: true, transaction: false, layer: "window" },
       initial.position,
       initial.size,
       1,

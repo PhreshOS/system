@@ -61,6 +61,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
         identity: "wallpaper-process", program: "wallpaper-program",
         client: { window: {
             layer: "wallpaper", title: "Internal", position: { x: 200, y: 300 },
+            header: false, frame: false, transaction: false,
             size: { width: 100, height: 100 }, minimized: true, maximized: false, depth: 20
         } }
     } as unknown as Process
@@ -71,7 +72,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
     expect(running).not.toContain("data-default-wallpaper")
     expect(fixture.fallback).not.toHaveBeenCalled()
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
-        bare: true, minimized: false, maximized: true, entering: false, localSurface: null,
+        layer: "wallpaper", frame: false, minimized: false, maximized: true, entering: false,
         position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, depth: 0
     })
 
@@ -93,6 +94,7 @@ test("Desktop replaces the built-in Start Menu in its existing host and restores
         identity: "start-menu-process", program: "start-menu-program",
         client: { window: {
             layer: "start-menu", title: "Internal", position: { x: 200, y: 300 },
+            header: false, frame: false, transaction: false,
             size: { width: 100, height: 100 }, minimized: true, maximized: false, depth: 20
         } }
     } as unknown as Process
@@ -102,7 +104,7 @@ test("Desktop replaces the built-in Start Menu in its existing host and restores
     expect(running).toContain('title="start-menu Client"')
     expect(running).not.toContain("data-default-start-menu")
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
-        bare: true, minimized: false, maximized: true, entering: false, localSurface: null,
+        layer: "start-menu", frame: false, minimized: false, maximized: true, entering: false,
         position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, depth: 0
     })
 

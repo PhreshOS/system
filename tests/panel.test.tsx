@@ -38,7 +38,7 @@ test("panel contract", async () => {
   assert.match(taskbar, /<h2 id="title"/)
   assert.match(taskbar, /<button>Action<\/button>/)
 
-  const window = markup(<Window icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
+  const window = markup(<Window layer="window" icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
   assert.equal(window.match(/data-material=""/g)?.length, 1)
   assert.match(window, /grid-template-rows:auto minmax\(0, 1fr\)/)
   assert.match(window, /data-window-content="true"/)
@@ -48,7 +48,7 @@ test("panel contract", async () => {
   assert.match(window, /<iframe title="Content"/)
   assert.doesNotMatch(window, /class="p-px"/)
 
-  const bare = markup(<Window bare icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
+  const bare = markup(<Window layer="over" icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
   assert.doesNotMatch(bare, /data-material/)
   assert.doesNotMatch(bare, /grid-template-rows:auto minmax\(0, 1fr\)/)
 

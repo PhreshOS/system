@@ -20,13 +20,14 @@ import {
     type ProgramIconSize
 } from "@phreshos/core"
 import {
-    localGeometry,
-    localPosition,
-    localSize,
-    requireLocalSurfaceLayer,
-    parseLocalWindowTransaction,
-    type LocalWindowHost
-} from "./local-window"
+    presentationFrame,
+    presentationGeometry,
+    presentationPosition,
+    presentationSize,
+    presentationTransaction,
+    type WindowPresentationHost
+} from "./window-presentation"
+import { isWindowPresentationProperty, requireWindowPresentationTransactions } from "@shared/window-layers"
 import SystemAccess from "./system-access"
 
 /** A host answer whose stream must be transferred rather than cloned. */
@@ -36,7 +37,7 @@ export class TransferredAnswer {
 }
 
 /** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
-export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, localWindow: LocalWindowHost) {
+export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, presentation: WindowPresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -135,11 +136,18 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         return found.client
     }
 
-    function localProcess(value: unknown) {
+    function windowOf(found: ClientProcess) {
+
+        if (!found.clientEndpoint) throw new Error("This Program declared no Client Endpoint")
+
+        return found.clientEndpoint.window
+    }
+
+    function presentationProcess(value: unknown) {
 
         const found = holdProcess(value)
 
-        if (found !== process()) throw new Error("Local Window operations belong to the current Client Context")
+        if (found !== process()) throw new Error("Window presentation operations belong to the current Client Context")
 
         clientOf(found)
 
@@ -295,13 +303,25 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
-        if (word === "exists") {
+        if (word === "running") {
 
             const target = await permittedProcess(args[1])
 
-            if (args[0] === "server") return [target.server !== null]
+            if (args[0] === "server") {
 
-            if (args[0] === "client") return [target.client !== null]
+                const program = authManager.programManager.programs.get(target.program)
+
+                if (!program?.server) throw new Error("This Program declared no Server Endpoint")
+
+                return [target.server !== null]
+            }
+
+            if (args[0] === "client") {
+
+                if (!target.clientEndpoint) throw new Error("This Program declared no Client Endpoint")
+
+                return [target.client !== null]
+            }
 
             throw new Error("A Process endpoint is server or client")
         }
@@ -343,6 +363,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             const endpoint = args[0] ?? "client"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
+
+            const program = authManager.programManager.programs.get(target.program)
+
+            if (endpoint === "server" ? !program?.server : !target.clientEndpoint) {
+
+                throw new Error(`This Program declared no ${endpoint === "server" ? "Server" : "Client"} Endpoint`)
+            }
 
             return [await processManager.endpointIsService(pane, address(target), endpoint)]
         }
@@ -737,13 +764,17 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "window") {
 
             const target = await permittedProcess(args[0])
-            const shown = clientOf(target).window
+            const shown = windowOf(target)
 
             return [{
 
                 title: shown.title,
 
                 header: shown.header,
+
+                frame: shown.frame,
+
+                transaction: shown.transaction,
 
                 position: shown.position,
 
@@ -761,129 +792,127 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "move") {
 
-            await clientOf(await permittedProcess(args[0])).window.move(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).move(args[1] as never)
 
             return [pane]
         }
 
         if (word === "resize") {
 
-            await clientOf(await permittedProcess(args[0])).window.resize(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).resize(args[1] as never)
 
             return [pane]
         }
 
         if (word === "setGeometry") {
 
-            await clientOf(await permittedProcess(args[0])).window.setGeometry(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).setGeometry(args[1] as never)
 
             return [pane]
         }
 
-        if (word === "windowLocalMove") {
+        if (word === "windowPresentationRead") {
+            const target = presentationProcess(args[0])
+            if (!isWindowPresentationProperty(args[1])) throw new Error("The Window presentation property does not exist")
+            return [presentation.read(target.identity, args[1])]
+        }
 
-            const target = localProcess(args[0])
-            await localWindow.move(target.identity, localPosition(args[1]), parseLocalWindowTransaction(args[2]))
+        const selectedTransaction = (target: ClientProcess) => {
+            const selected = presentationTransaction(args[2], args[3])
+            if (selected) requireWindowPresentationTransactions(clientOf(target).window.layer)
+            return selected
+        }
+
+        if (word === "windowPresentationMove") {
+
+            const target = presentationProcess(args[0])
+            await presentation.move(target.identity, presentationPosition(args[1]), selectedTransaction(target))
 
             return []
         }
 
-        if (word === "windowLocalResize") {
+        if (word === "windowPresentationResize") {
 
-            const target = localProcess(args[0])
-            await localWindow.resize(target.identity, localSize(args[1]), parseLocalWindowTransaction(args[2]))
-
-            return []
-        }
-
-        if (word === "windowLocalGeometry") {
-
-            const target = localProcess(args[0])
-            await localWindow.geometry(target.identity, localGeometry(args[1]), parseLocalWindowTransaction(args[2]))
+            const target = presentationProcess(args[0])
+            await presentation.resize(target.identity, presentationSize(args[1]), selectedTransaction(target))
 
             return []
         }
 
-        if (word === "windowLocalSurfaceAdd") {
+        if (word === "windowPresentationGeometry") {
 
-            const target = localProcess(args[0])
-            requireLocalSurfaceLayer(target.client!.window.layer)
-            await localWindow.addSurface(target.identity, parseLocalWindowTransaction(args[2]))
-
-            return []
-        }
-
-        if (word === "windowLocalSurfaceRemove") {
-
-            const target = localProcess(args[0])
-            requireLocalSurfaceLayer(target.client!.window.layer)
-            await localWindow.removeSurface(target.identity, parseLocalWindowTransaction(args[2]))
+            const target = presentationProcess(args[0])
+            await presentation.geometry(target.identity, presentationGeometry(args[1]), selectedTransaction(target))
 
             return []
         }
 
-        if (word === "windowLocalTitle") {
-            const target = localProcess(args[0])
+        if (word === "windowPresentationTitle") {
+            const target = presentationProcess(args[0])
             const title = String(args[1] ?? "").trim()
             if (!title) throw new Error("A Window title must not be empty")
-            localWindow.title(target.identity, title)
+            presentation.title(target.identity, title)
             return []
         }
 
-        if (word === "windowLocalHeader") {
-            const target = localProcess(args[0])
-            if (typeof args[1] !== "boolean") throw new Error("Local Window header state must be true or false")
-            localWindow.header(target.identity, args[1])
+        if (word === "windowPresentationHeader") {
+            const target = presentationProcess(args[0])
+            if (typeof args[1] !== "boolean") throw new Error("Window presentation header state must be true or false")
+            presentation.header(target.identity, args[1])
             return []
         }
 
-        if (word === "windowLocalMaximize") {
-            const target = localProcess(args[0])
-            if (typeof args[1] !== "boolean") throw new Error("Local Window maximize takes a boolean state")
-            await localWindow.maximize(target.identity, args[1], parseLocalWindowTransaction(args[2]))
+        if (word === "windowPresentationFrame") {
+            const target = presentationProcess(args[0])
+            await presentation.frame(target.identity, presentationFrame(args[1]), selectedTransaction(target))
             return []
         }
 
-        if (word === "windowLocalMinimize") {
-
-            const target = localProcess(args[0])
-
-            if (typeof args[1] !== "boolean") throw new Error("Local Window minimize takes a boolean state")
-
-            await localWindow.minimize(target.identity, args[1], parseLocalWindowTransaction(args[2]))
-
+        if (word === "windowPresentationMaximize") {
+            const target = presentationProcess(args[0])
+            if (typeof args[1] !== "boolean") throw new Error("Window presentation maximize takes a boolean state")
+            await presentation.maximize(target.identity, args[1], selectedTransaction(target))
             return []
         }
 
-        if (word === "windowLocalFollow") {
+        if (word === "windowPresentationMinimize") {
 
-            const target = localProcess(args[0])
-            const followed = await permittedProcess(args[1])
-            clientOf(followed)
-            await localWindow.follow(target.identity, followed.identity, parseLocalWindowTransaction(args[2]))
+            const target = presentationProcess(args[0])
+
+            if (typeof args[1] !== "boolean") throw new Error("Window presentation minimize takes a boolean state")
+
+            await presentation.minimize(target.identity, args[1], selectedTransaction(target))
 
             return []
         }
 
-        if (word === "windowLocalUnfollow") {
+        if (word === "windowPresentationFollow") {
 
-            const target = localProcess(args[0])
-            await localWindow.unfollow(target.identity, parseLocalWindowTransaction(args[1]))
+            const target = presentationProcess(args[0])
+            await presentation.follow(target.identity, selectedTransaction(target))
 
             return []
         }
 
-        if (word === "windowLocalRaise") {
+        if (word === "windowPresentationUnfollow") {
 
-            const target = localProcess(args[0])
-            localWindow.raise(target.identity)
+            const target = presentationProcess(args[0])
+            await presentation.unfollow(target.identity)
+
+            return []
+        }
+
+        if (word === "windowPresentationRaise") {
+
+            const target = presentationProcess(args[0])
+            presentation.raise(target.identity)
 
             return []
         }
 
         if (word === "changeTitle") {
 
-            await clientOf(await permittedProcess(args[0])).window.changeTitle(String(args[1] ?? ""))
+            await windowOf(await permittedProcess(args[0])).changeTitle(String(args[1] ?? ""))
 
             return [pane]
         }
@@ -892,26 +921,40 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (typeof args[1] !== "boolean") throw new Error("Window header state must be true or false")
 
-            await clientOf(await permittedProcess(args[0])).window.changeHeader(args[1])
+            await windowOf(await permittedProcess(args[0])).changeHeader(args[1])
+
+            return [pane]
+        }
+
+        if (word === "changeFrame") {
+
+            await windowOf(await permittedProcess(args[0])).changeFrame(args[1] as never)
+
+            return [pane]
+        }
+
+        if (word === "changeOpeningTransaction") {
+
+            await windowOf(await permittedProcess(args[0])).changeOpeningTransaction(args[1] as never)
 
             return [pane]
         }
 
         if (word === "raise") {
 
-            await clientOf(await permittedProcess(args[0])).window.raise()
+            await windowOf(await permittedProcess(args[0])).raise()
 
             return [pane]
         }
 
         if (word === "maximize") {
-            await clientOf(await permittedProcess(args[0])).window.maximize(args[1] !== false)
+            await windowOf(await permittedProcess(args[0])).maximize(args[1] !== false)
             return [pane]
         }
 
         if (word === "minimize") {
 
-            await clientOf(await permittedProcess(args[0])).window.minimize(args[1] !== false)
+            await windowOf(await permittedProcess(args[0])).minimize(args[1] !== false)
 
             return [pane]
         }

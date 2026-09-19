@@ -6,7 +6,7 @@ import { type Half } from "./process-traffic"
  *
  * Unlike ProcessTraffic, these routes have no destination metadata: the
  * Endpoint is the source being followed, and only explicit followers join its
- * route. Endpoint incarnation changes do not end a route; Process exit does.
+ * route. Endpoint execution-context changes do not end a route; Process exit does.
  */
 export default class EndpointEvents extends TheLink {
 

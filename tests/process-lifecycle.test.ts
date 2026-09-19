@@ -6,6 +6,7 @@ import ProcessManager from "@server/core/link-manager/auth-manager/process-manag
 import type Process from "@server/core/link-manager/auth-manager/process-manager/process"
 import type ServerProcessBoundary from "@server/core/link-manager/auth-manager/process-manager/server-process-boundary"
 import type { ServerRuntime } from "@server/core/server-runtime"
+import type { ClientLaunch } from "@phreshos/core"
 import { test } from "vitest"
 
 test("process lifecycle contract", async () => {
@@ -21,18 +22,20 @@ test("process lifecycle contract", async () => {
               permission() { return null },
               grantsPermission() { return true },
               grantsStorage() { return true },
-              clientShape(_program: Program, launch: { service?: boolean, title?: string } = {}) {
+              clientShape(_program: Program, launch: ClientLaunch = {}) {
 
                   if (launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A launch client's service role must be true or false")
 
                   return {
                       title: launch.title ?? "Client",
-                      header: true,
-                      position: { x: 0, y: 0 },
-                      size: { width: 640, height: 480 },
-                      layer: "window" as const,
-                      minimize: false,
-                      maximize: false
+                      header: launch.header ?? true,
+                      frame: launch.frame ?? true,
+                      transaction: launch.transaction ?? false,
+                      position: launch.position ?? { x: 0, y: 0 },
+                      size: launch.size ?? { width: 640, height: 480 },
+                      layer: launch.layer ?? "window",
+                      minimize: launch.minimize ?? false,
+                      maximize: launch.maximize ?? false
                   }
               }
           },
@@ -59,6 +62,76 @@ test("process lifecycle contract", async () => {
       return manager
   }
 
+  // Window state belongs permanently to the Client Endpoint, not to one of
+  // its execution contexts. Stopping the Client preserves the Window; omitted
+  // restart values preserve it, while explicit launch values replace only
+  // themselves.
+  {
+      const manager = processManager()
+      const owner = new Program({
+          identity: "retained-window",
+          server: { location: ".", command: "true" },
+          client: { location: "https://example.test/" }
+      })
+      const initial = {
+          title: "Initial",
+          header: true,
+          frame: true,
+          transaction: false,
+          position: { x: 12, y: 24 },
+          size: { width: 640, height: 480 },
+          layer: "window" as const,
+          minimize: false,
+          maximize: false
+      }
+      const process = await manager.register(
+          "retained-window",
+          null,
+          owner,
+          {},
+          launch,
+          null,
+          true,
+          initial,
+          null,
+          { window: initial }
+      )
+
+      process.server = {} as ServerProcessBoundary
+      await manager.stopClient(process.identity)
+
+      assert.equal(process.client, null)
+      assert.ok(process.clientEndpoint)
+
+      await manager.move(process.identity, { x: 80, y: 90 })
+      await manager.changeHeader(process.identity, false)
+      await manager.changeFrame(process.identity, { radius: "full", color: "primary" })
+
+      await manager.startClient(process.identity)
+
+      assert.deepEqual(process.clientEndpoint.window.position, { x: 80, y: 90 })
+      assert.equal(process.clientEndpoint.window.header, false)
+      assert.deepEqual(process.clientEndpoint.window.frame, { radius: "full", color: "primary" })
+
+      await manager.stopClient(process.identity)
+      await manager.startClient(process.identity, { layer: "over", title: "Overlay" })
+
+      assert.equal(process.clientEndpoint.window.layer, "over")
+      assert.equal(process.clientEndpoint.window.title, "Overlay")
+      assert.deepEqual(process.clientEndpoint.window.position, { x: 80, y: 90 })
+      assert.equal(process.clientEndpoint.window.header, false)
+
+      await manager.stopClient(process.identity)
+      await manager.changeHeader(process.identity, true)
+      await manager.move(process.identity, { x: 140, y: 150 })
+      await manager.startClient(process.identity, { layer: "window" })
+
+      assert.equal(process.clientEndpoint.window.layer, "window")
+      assert.equal(process.clientEndpoint.window.header, true)
+      assert.deepEqual(process.clientEndpoint.window.position, { x: 140, y: 150 })
+      assert.deepEqual(process.clientEndpoint.window.frame, { radius: "full", color: "primary" })
+  }
+
   function program(identity: string) {
 
       return new Program({ identity, server: { location: ".", command: "true" } })
@@ -69,7 +142,7 @@ test("process lifecycle contract", async () => {
       return await manager.register(identity, null, program(identity), {}, launch, null, false, null, null)
   }
 
-  // Endpoint start and stop establish incarnation state. Repeating the same
+  // Endpoint start and stop establish execution-context state. Repeating the same
   // request on a valid permanent handle is a silent success; removing the
   // owning Process still invalidates that handle.
   {
@@ -92,6 +165,8 @@ test("process lifecycle contract", async () => {
           {
               title: "Client",
               header: true,
+              frame: true,
+              transaction: false,
               position: { x: 0, y: 0 },
               size: { width: 640, height: 480 },
               layer: "window",
@@ -185,10 +260,10 @@ test("process lifecycle contract", async () => {
           null,
           client,
           {},
-          { ...launch, client: { title: "Partial", position: null, size: null, layer: "window", minimize: false, maximize: false, service: false } },
+          { ...launch, client: { title: "Partial", header: true, frame: true, transaction: false, position: null, size: null, layer: "window", minimize: false, maximize: false, service: false } },
           null,
           true,
-          { title: "Partial", header: true, position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
+          { title: "Partial", header: true, frame: true, transaction: false, position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
           null
       ), /creation publication failed/)
 

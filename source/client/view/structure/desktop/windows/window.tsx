@@ -3,13 +3,13 @@ import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type Position, type Size } from "@phreshos/core"
+import { type Position, type Size, type WindowFrame as WindowFrameDefinition, type WindowLayer, type WindowTransaction } from "@phreshos/core"
 import WindowHeader from "./window-header"
-import WindowSurface from "./window-surface"
-import { type LocalAnimation, type LocalSurfaceState } from "@client/view/components/desktop-host/local-window"
-import { type LocalGeometryRepresentation } from "@client/view/components/window-manager/local-windows"
+import WindowFrame from "./window-frame"
+import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
 import { motion } from "motion/react"
-import { motionTransition } from "@client/view/appearance/motion"
+import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import { windowPaintInset } from "../geometry"
@@ -19,8 +19,8 @@ import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 /**
  * A window: a pure function of the record it is given. Every render
  * declares the whole target geometry from props — a float as left/top
- * pixels, a tile as its relative form. Motion interpolates only the local
- * representation between targets; the record remains the truth and a
+ * pixels, a tile as its relative form. Motion interpolates only the Desktop
+ * presentation between targets; the record remains the truth and a
  * refreshed page renders that truth directly.
  *
  * One set of Motion values owns the visible pixel geometry from rest,
@@ -50,11 +50,12 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, header = true, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onLocalAnimationComplete, onLocalRepresentation, onFocusCapture, active = false, bare = false, closing = false, stopping = false, minimized = false, maximized = false, animateEntrance = true, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, localSurface, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, frame: frameDefinition = false, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, openingTransaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, frameAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
     const desktopScale = useDesktopScale()
+    const standard = layer === "window"
 
     // Hidden windows retain their last presentation while lower-priority state changes.
     const presented = useRef({ position, size })
@@ -66,19 +67,19 @@ export default function ({ title, header = true, icon, children, onClose, onClos
         position: presented.current.position,
         size: presented.current.size,
         animation: geometryAnimation,
-        immediate: reducedMotion || (bare && !geometryAnimation),
-        onComplete: revision => onLocalAnimationComplete?.("geometry", revision)
+        immediate: reducedMotion || !geometryAnimation,
+        onComplete: revision => onPresentationAnimationComplete?.("geometry", revision)
     })
 
-    const frame = geometryMotion.frame
+    const frameElement = geometryMotion.frame
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
 
     useLayoutEffect(function () {
 
-        if (!onLocalRepresentation) return
+        if (!onPresentationRepresentation) return
 
-        const representation: LocalGeometryRepresentation = {
+        const representation: PresentationGeometryRepresentation = {
             read: geometryMotion.read,
             present: geometryMotion.present,
             begin: () => geometryMotion.beginGesture()?.region ?? null,
@@ -87,11 +88,11 @@ export default function ({ title, header = true, icon, children, onClose, onClos
             listen: geometryMotion.listen
         }
 
-        onLocalRepresentation(representation)
+        onPresentationRepresentation(representation)
 
-        return () => onLocalRepresentation(null)
+        return () => onPresentationRepresentation(null)
 
-    }, [onLocalRepresentation])
+    }, [onPresentationRepresentation])
 
     const closureCompleted = useRef(false)
 
@@ -110,8 +111,6 @@ export default function ({ title, header = true, icon, children, onClose, onClos
     const whole = maximized
 
     const [presenceHidden, setPresenceHidden] = useState(minimized)
-
-    const minimizeTransaction = minimizeAnimation?.transaction
 
     useLayoutEffect(function () {
 
@@ -133,9 +132,9 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
         onUnavailable?.("close")
 
-        if (bare || reducedMotion) completeClosure()
+        if (!standard || reducedMotion) completeClosure()
 
-    }, [closing, bare, reducedMotion])
+    }, [closing, standard, reducedMotion])
 
     useEffect(function () {
 
@@ -143,31 +142,41 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
         if (revision === undefined || minimizeTransaction && !reducedMotion) return
 
-        onLocalAnimationComplete?.("minimize", revision)
+        onPresentationAnimationComplete?.("minimize", revision)
 
-    }, [bare, minimizeAnimation?.revision, reducedMotion])
+    }, [minimizeAnimation?.revision, reducedMotion])
 
-    const initialPresence = bare || reducedMotion || !animateEntrance
-        ? surfaceLifecyclePose.visible
-        : surfaceLifecyclePose.hidden
+    const configuredOpeningTransaction = layer === "under" || layer === "over"
+        ? resolveWindowTransaction(openingTransaction, appearanceTransaction)
+        : standard ? appearanceTransaction : null
+    const opening = entering && !reducedMotion ? configuredOpeningTransaction : null
+    const [opened, setOpened] = useState(opening === null)
+    const minimizeTransaction = minimizeAnimation
+        ? resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
+        : null
+    const initialPresence = opening ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible
 
-    const presencePose = closing && !bare
+    const presencePose = closing && standard
         ? surfaceLifecyclePose.hidden
         : minimized
-            ? bare ? surfacePresencePose.entering : minimizedSurfacePose
+            ? standard ? minimizedSurfacePose : surfacePresencePose.entering
             : surfaceLifecyclePose.visible
 
     const presenceTransition = reducedMotion
         ? { duration: 0 }
-        : bare
-            ? minimizeTransaction
+        : closing && standard
+            ? motionTransition(appearanceTransaction)
+            : minimizeTransaction
                 ? surfacePresenceTransition(false, minimizeTransaction)
-                : { duration: 0 }
-            : motionTransition(closing ? appearanceTransaction : minimizeTransaction ?? appearanceTransaction)
+                : !opened && opening
+                    ? surfacePresenceTransition(false, opening)
+                    : { duration: 0 }
 
     function completePresence() {
 
-        if (closing && !bare) completeClosure()
+        if (!opened) setOpened(true)
+
+        if (closing && standard) completeClosure()
 
         if (minimized) setPresenceHidden(true)
 
@@ -175,7 +184,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
         if (revision !== undefined && minimizeTransaction && !reducedMotion) {
 
-            onLocalAnimationComplete?.("minimize", revision)
+            onPresentationAnimationComplete?.("minimize", revision)
         }
     }
 
@@ -204,7 +213,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
         let current: WindowRegion = { ...origin }
 
-        if (geometryAnimation) onLocalAnimationComplete?.("geometry", geometryAnimation.revision)
+        if (geometryAnimation) onPresentationAnimationComplete?.("geometry", geometryAnimation.revision)
 
         // Pulling a shared window out of its placement belongs to the
         // header alone. An edge is not a hand asking to float — it is a
@@ -428,7 +437,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
         {gesture?.shown && <SnapPreview
             shown={gesture.shown}
             visible={gesture.zone !== null}
-            bare={bare}
+            bare={!standard}
             paintSurfaceSize={paintSurfaceSize}
             reducedMotion={reducedMotion}
             zIndex={style?.zIndex}
@@ -436,7 +445,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
 
         <motion.div
 
-            ref={frame}
+            ref={frameElement}
 
             onPointerDown={onActivate}
 
@@ -470,7 +479,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
                 Bare, there is no difference: the frame fills the box, so
                 the window is exactly as large as it asked to be and its
                 boundaries are the ones its own content draws. */}
-            {bare ? <motion.div
+            {!standard ? <motion.div
                 data-window-container
                 initial={initialPresence}
                 animate={presencePose}
@@ -480,9 +489,11 @@ export default function ({ title, header = true, icon, children, onClose, onClos
                 style={{ visibility: minimized && presenceHidden ? "hidden" : "visible" }}
             >
 
-                {/* A bare Client controls its own host surface, separate from
-                    its content and without the header/content Panel shell. */}
-                {localSurface && <WindowSurface state={localSurface} onComplete={revision => onLocalAnimationComplete?.("surface", revision)} />}
+                {(layer === "under" || layer === "over") && <WindowFrame
+                    frame={frameDefinition}
+                    animation={frameAnimation ?? null}
+                    onComplete={revision => onPresentationAnimationComplete?.("frame", revision)}
+                />}
 
                 <div data-window-content className="relative min-h-0">{children}</div>
 
@@ -520,7 +531,7 @@ export default function ({ title, header = true, icon, children, onClose, onClos
             >{children}</WindowPanel>
             </motion.div>}
 
-            {!bare && edges.map(handle => <div
+            {standard && edges.map(handle => <div
 
                 key={handle.edge}
 
@@ -545,6 +556,12 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     /** Whether the Desktop-owned standard Window header is shown. */
     header?: boolean
+
+    /** Frame definition applied by under and over presentations. */
+    frame?: WindowFrameDefinition
+
+    /** Presentation role currently occupied by the Window. */
+    layer: WindowLayer
 
     // Drawn beside the title. A URL rather than a node: what a window
     // shows of its program is a picture the browser fetches, and the
@@ -572,15 +589,6 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     active?: boolean
 
-    // Nothing the system paints. The window's boundaries become the
-    // frame's exactly: no surface, no shadow, no rounding, no header, no
-    // controls, and no gutter — so what a program asked to be is what it
-    // gets, edge to edge, rather than half a gutter smaller.
-    //
-    // The endpoint owns later local projection in a bare layer, so the
-    // ordinary window manager contributes neither resize edges nor snapping.
-    bare?: boolean
-
     closing?: boolean
 
     /** The Process termination request has not settled yet. */
@@ -590,23 +598,25 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     maximized?: boolean
 
-    // Whether mounting this element represents a newly opened window.
-    animateEntrance?: boolean
+    /** Whether mounting this element represents a newly opened Window. */
+    entering?: boolean
+
+    /** Opening transaction used by under and over presentations. */
+    openingTransaction?: WindowTransaction
 
     position?: Position
 
     size?: Size
 
-    /** Surface target owned by this live iframe representation. */
-    localSurface?: LocalSurfaceState | null
+    frameAnimation?: PresentationAnimation | null
 
-    geometryAnimation?: LocalAnimation | null
+    geometryAnimation?: PresentationAnimation | null
 
-    minimizeAnimation?: LocalAnimation | null
+    minimizeAnimation?: PresentationAnimation | null
 
-    onLocalAnimationComplete?: (kind: "geometry" | "minimize" | "surface", revision: number) => void
+    onPresentationAnimationComplete?: (kind: "geometry" | "minimize" | "frame", revision: number) => void
 
-    onLocalRepresentation?: (representation: LocalGeometryRepresentation | null) => void
+    onPresentationRepresentation?: (representation: PresentationGeometryRepresentation | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize

@@ -209,5 +209,5 @@ type HostedProcessRecord = {
     name: string | null
     options: Record<string, string>
     server: { ready: boolean, service: boolean } | null
-    client: { window: unknown, service: boolean } | null
+    client: { service: boolean } | null
 }

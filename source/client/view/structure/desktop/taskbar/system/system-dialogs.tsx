@@ -76,7 +76,7 @@ export default function SystemDialogs() {
 
     >
 
-        <TaskbarSurface label={dialog.kind === "permission" ? "Permission request" : "System error"} labelId={title}>
+        <TaskbarSurface material="full" label={dialog.kind === "permission" ? "Permission request" : "System error"} labelId={title}>
 
             {dialog.kind === "permission"
 

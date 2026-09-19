@@ -34,7 +34,7 @@ import {
     type WindowLayer,
     type WindowState
 } from "@phreshos/core"
-import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/desktop-replacement"
+import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/window-layers"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
 import { permissionCatalog } from "@server/core/permissions"
 import SystemAccess from "./system-access"
@@ -42,7 +42,7 @@ import { WebSocket } from "ws"
 
 /**
  * The core's processes: the wire and the collection. Each process owns
- * itself — its endpoint incarnations and serialisation — and this manager
+ * itself — its Endpoint execution contexts and serialisation — and this manager
  * routes: it holds them by identity, carries operations in from connections,
  * and broadcasts what changed.
  *
@@ -66,7 +66,7 @@ export default class ProcessManager extends TheLink {
     // Endpoint speaks once; only boundaries following that Endpoint join.
     private readonly endpointEvents = new EndpointEvents()
 
-    // Services route to live Endpoint incarnations. They own no registration state
+    // Services route to running Endpoint execution contexts. They own no registration state
     // and never control the Process or Endpoint they address.
     private readonly services: EndpointServices
 
@@ -139,18 +139,18 @@ export default class ProcessManager extends TheLink {
 
         const process = this.system.holdProcess(value, fallback)
 
-        const window = process.client?.window
+        const window = process.clientEndpoint?.window
 
-        if (!window) throw new Error("This process has no live client endpoint")
+        if (!window) throw new Error("This Program declared no Client Endpoint")
 
         return { process, window }
     }
 
     private windowOf(identity: string) {
 
-        const window = this.find(identity).client?.window
+        const window = this.find(identity).clientEndpoint?.window
 
-        if (!window) throw new Error("This process has no live client endpoint")
+        if (!window) throw new Error("This Program declared no Client Endpoint")
 
         return window
     }
@@ -173,6 +173,8 @@ export default class ProcessManager extends TheLink {
         return Object.freeze({
             title: window.title,
             header: window.header,
+            frame: window.frame,
+            transaction: window.transaction,
             position: window.position,
             size: window.size,
             minimized: window.minimized,
@@ -932,7 +934,7 @@ export default class ProcessManager extends TheLink {
 
     private window(shape: Shape) {
 
-        const shown = { title: shape.title, header: shape.header, layer: shape.layer }
+        const shown = { title: shape.title, header: shape.header, frame: shape.frame, transaction: shape.transaction, layer: shape.layer }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
@@ -948,17 +950,19 @@ export default class ProcessManager extends TheLink {
     }
 
     private async replaceDesktopPresentation(layer: DesktopReplacementLayer) {
-        const occupied = [...this.processes.values()].filter(process => process.client?.window.layer === layer)
+        const occupied = [...this.processes.values()].filter(process => process.client && process.clientEndpoint?.window.layer === layer)
         for (const process of occupied) await this.exitProcess(process.identity, "complete")
     }
 
     /** Claims the role after serialized replacement has released its previous owner. */
-    private activateClient(process: Process, window: Window, service: boolean) {
+    private activateClient(process: Process, service: boolean) {
+        const window = process.clientEndpoint?.window
+        if (!window) throw new Error("This Program declared no Client Endpoint")
         if (isDesktopReplacementLayer(window.layer) && [...this.processes.values()].some(
-            current => current.client?.window.layer === window.layer
+            current => current !== process && current.client && current.clientEndpoint?.window.layer === window.layer
         )) throw new Error(`A Client Endpoint is already running in the ${window.layer} layer`)
 
-        process.startClient(window, service)
+        process.startClient(service)
     }
 
     public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntimeFactory<Program> | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
@@ -987,7 +991,7 @@ export default class ProcessManager extends TheLink {
         // do not hear about it.
         const front = shape && this.front(shape.layer)
 
-        const window = shape ? this.window(shape) : null
+        const window = registration?.window ? this.window(registration.window) : shape ? this.window(shape) : null
 
         const process = new Process(
 
@@ -1005,7 +1009,9 @@ export default class ProcessManager extends TheLink {
 
             this.hostTraffic,
 
-            permissionCatalog.granted(this.authManager.programManager.permission(program, "all"))
+            permissionCatalog.granted(this.authManager.programManager.permission(program, "all")),
+
+            window
         )
 
         this.processes.set(identity, process)
@@ -1027,7 +1033,7 @@ export default class ProcessManager extends TheLink {
             // order: Process creation, endpoint start, endpoint stop, Process exit.
             await this.transition(process, async () => {
 
-                if (client && window) this.activateClient(process, window, launch.client?.service ?? false)
+                if (client && window) this.activateClient(process, launch.client?.service ?? false)
 
                 if (runtime) this.activateServer(process, runtime, launch.server?.service ?? false)
 
@@ -1092,7 +1098,7 @@ export default class ProcessManager extends TheLink {
         // Who had focus while this one was still here, in its own layer.
         // A window closing hands it to whatever is left showing
         // underneath *it* — a layer emptying hands nothing across.
-        const layer = process.client?.window.layer ?? null
+        const layer = process.client ? process.clientEndpoint?.window.layer ?? null : null
 
         const front = layer && this.front(layer)
 
@@ -1226,6 +1232,8 @@ export default class ProcessManager extends TheLink {
 
         await this.transition(process, async () => {
 
+            if (!process.program.server) throw new Error("This Program declared no Server Endpoint")
+
             if (!process.server) return
 
             if (!process.client) throw new Error("The final live endpoint cannot be stopped; exit the Process instead")
@@ -1248,7 +1256,9 @@ export default class ProcessManager extends TheLink {
 
         const shape = this.authManager.programManager.clientShape(process.program, launch)
 
-        return await this.serializeClientLayer(shape.layer, () => this.startClientInLayer(identity, launch, shape))
+        const layer = launch.layer ?? process.clientEndpoint?.window.layer ?? shape.layer
+
+        return await this.serializeClientLayer(layer, () => this.startClientInLayer(identity, launch, shape))
     }
 
     private async startClientInLayer(identity: string, launch: ClientLaunch, shape: StandardShape) {
@@ -1265,13 +1275,17 @@ export default class ProcessManager extends TheLink {
 
             await process.program.validate()
 
-            const window = this.window(shape)
+            const window = process.clientEndpoint?.window
+
+            if (!window) throw new Error("This Program declared no Client Endpoint")
+
+            this.applyClientLaunch(process, window, shape, launch)
 
             const before = this.front(window.layer)
 
             if (isDesktopReplacementLayer(window.layer)) await this.replaceDesktopPresentation(window.layer)
 
-            this.activateClient(process, window, launch.service ?? declaration.service)
+            this.activateClient(process, launch.service ?? declaration.service)
 
             try {
 
@@ -1296,11 +1310,50 @@ export default class ProcessManager extends TheLink {
         return identity
     }
 
+    /** Explicit restart values replace their retained authoritative counterparts. */
+    private applyClientLaunch(process: Process, window: Window, shape: StandardShape, launch: ClientLaunch) {
+
+        if (launch.title !== undefined && window.changeTitle(shape.title)) this.said(process.identity, "changeTitle", window.title)
+
+        if (launch.header !== undefined && window.changeHeader(shape.header)) this.said(process.identity, "changeHeader", window.header)
+
+        if (launch.frame !== undefined && window.changeFrame(shape.frame)) this.said(process.identity, "changeFrame", window.frame)
+
+        if (launch.transaction !== undefined) window.changeOpeningTransaction(shape.transaction)
+
+        if (launch.position !== undefined && launch.size !== undefined) {
+            const changed = window.setGeometry({ position: shape.position, size: shape.size })
+            if (changed.moved || changed.resized) {
+                this.said(process.identity, "geometry", { position: window.position, size: window.size })
+                if (changed.moved) this.said(process.identity, "move", window.position)
+                if (changed.resized) this.said(process.identity, "resize", window.size)
+            }
+        }
+        else {
+            if (launch.position !== undefined && window.move(shape.position)) this.said(process.identity, "move", window.position)
+            if (launch.size !== undefined && window.resize(shape.size)) this.said(process.identity, "resize", window.size)
+        }
+
+        if (launch.minimize !== undefined && window.minimized !== shape.minimize) {
+            window.minimized = shape.minimize
+            this.said(process.identity, "minimize", window.minimized)
+        }
+
+        if (launch.maximize !== undefined && window.maximized !== shape.maximize) {
+            window.maximized = shape.maximize
+            this.said(process.identity, "maximize", window.maximized)
+        }
+
+        if (launch.layer !== undefined) window.layer = shape.layer
+    }
+
     public async stopClient(identity: string) {
 
         const process = this.find(identity)
 
         await this.transition(process, async () => {
+
+            if (!process.program.client) throw new Error("This Program declared no Client Endpoint")
 
             if (!process.client) return
 
@@ -1314,7 +1367,7 @@ export default class ProcessManager extends TheLink {
 
     private async deactivateClient(process: Process) {
 
-        const layer = process.client?.window.layer ?? null
+        const layer = process.client ? process.clientEndpoint?.window.layer ?? null : null
 
         const service = process.client?.service === true
 
@@ -1999,13 +2052,23 @@ export default class ProcessManager extends TheLink {
             return [null]
         }
 
-        if (word === "exists") {
+        if (word === "running") {
 
             const target = heldProcess(rest[1])
 
-            if (rest[0] === "server") return [target.server !== null]
+            if (rest[0] === "server") {
 
-            if (rest[0] === "client") return [target.client !== null]
+                if (!target.program.server) throw new Error("This Program declared no Server Endpoint")
+
+                return [target.server !== null]
+            }
+
+            if (rest[0] === "client") {
+
+                if (!target.program.client) throw new Error("This Program declared no Client Endpoint")
+
+                return [target.client !== null]
+            }
 
             throw new Error("A Process endpoint is server or client")
         }
@@ -2016,6 +2079,8 @@ export default class ProcessManager extends TheLink {
             const endpoint = rest[0] ?? "server"
 
             if (endpoint !== "server" && endpoint !== "client") throw new Error("A Process endpoint is server or client")
+
+            if (!target.program[endpoint]) throw new Error(`This Program declared no ${endpoint === "server" ? "Server" : "Client"} Endpoint`)
 
             return [endpoint === "server" ? target.server?.service === true : target.client?.service === true]
         }
@@ -2178,6 +2243,24 @@ export default class ProcessManager extends TheLink {
             const target = heldWindow(rest[0]).process
 
             await this.system.changeWindowHeader(target, rest[1] as boolean)
+
+            return [target.identity]
+        }
+
+        if (word === "changeFrame") {
+
+            const target = heldWindow(rest[0]).process
+
+            await this.system.changeWindowFrame(target, rest[1] as never)
+
+            return [target.identity]
+        }
+
+        if (word === "changeOpeningTransaction") {
+
+            const target = heldWindow(rest[0]).process
+
+            await this.system.changeWindowOpeningTransaction(target, rest[1] as never)
 
             return [target.identity]
         }
@@ -3080,6 +3163,28 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
+    @Connect("/change-frame")
+    public async changeFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
+
+        const window = this.mutableWindowOf(identity)
+
+        if (!window.changeFrame(frame)) return { identity, window }
+
+        this.said(identity, "changeFrame", window.frame)
+
+        return { identity, window }
+    }
+
+    @Connect("/change-opening-transaction")
+    public async changeOpeningTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
+
+        const window = this.mutableWindowOf(identity)
+
+        window.changeOpeningTransaction(transaction)
+
+        return { identity, window }
+    }
+
     // To the front of its own layer, and that is the whole of it.
     //
     // It was called `focus` and it did three things: it showed a hidden
@@ -3174,7 +3279,7 @@ export default class ProcessManager extends TheLink {
 
         for (const [identity, process] of this.processes) {
 
-            const window = process.client?.window
+            const window = process.clientEndpoint?.window
 
             if (!process.client || !window || window.minimized || window.layer !== layer) continue
 
@@ -3215,6 +3320,9 @@ export default class ProcessManager extends TheLink {
 }
 
 interface ProcessRegistration {
+
+    /** Client Endpoint-owned Window created even when its execution context starts stopped. */
+    window?: Shape | null
 
     /** Attach observers before either Endpoint can emit output or exit. */
     prepare?: (process: Process) => void
@@ -3349,6 +3457,10 @@ interface ShapeBase {
     title: string
 
     header: boolean
+
+    frame: import("@phreshos/core").WindowFrame
+
+    transaction: import("@phreshos/core").WindowTransaction
 
     position: Position
 

@@ -4,8 +4,8 @@ import { ReactTunnel } from "@the-link/react"
 import { type Layer, type Position, type Size, type Value } from "@phreshos/core"
 import { useCallback, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import LocalWindows from "./local-windows"
-import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
+import WindowPresentations from "./window-presentations"
+import { isDesktopReplacementLayer } from "@shared/window-layers"
 import { type SharedResizeWindow } from "./shared-resize"
 import { type WindowRegion } from "./window-geometry"
 
@@ -14,14 +14,14 @@ import { type WindowRegion } from "./window-geometry"
  * process whose program has a client half, so the process itself says
  * whether it is shown — nothing else is consulted.
  *
- * The local representation and authoritative counterpart are distinct.
+ * The Desktop presentation and authoritative counterpart are distinct.
  * Following starts enabled for ordinary windows and disabled for the other layers.
  * Each Client can subsequently follow an authoritative Window or detach.
  *
- * Departure is representation. The truth drops a stopped client and its
- * Window at once; the exit still has to play, so the last desktop-owned
- * representation is kept until its animation reports done. Its iframe is
- * not part of that snapshot and leaves as soon as the stop is confirmed.
+ * Departure is representation. Stopping a Client removes only its execution
+ * context; its Client Endpoint-owned authoritative Window remains. The last
+ * desktop-owned representation is kept until its exit animation reports
+ * done, while the iframe leaves as soon as the stop is confirmed.
  */
 export default function useWindows(authManager: AuthManager) {
 
@@ -56,15 +56,15 @@ export default function useWindows(authManager: AuthManager) {
 
     const initialClients = initialIncarnations.current
 
-    const localController = useRef<LocalWindows | null>(null)
+    const presentationController = useRef<WindowPresentations | null>(null)
 
-    if (!localController.current) localController.current = new LocalWindows(initialClients, process => peer.processes.get(process)?.client ?? null)
+    if (!presentationController.current) presentationController.current = new WindowPresentations(initialClients, process => peer.processes.get(process)?.client ?? null)
 
-    const localWindow = localController.current
+    const presentation = presentationController.current
 
-    const [localWindows, setLocalWindows] = useState(localWindow.windows)
+    const [presentations, setPresentations] = useState(presentation.windows)
 
-    localWindow.listen(setLocalWindows)
+    presentation.listen(setPresentations)
 
     const previousClients = useRef(initialClients)
 
@@ -97,7 +97,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const currentClients = new Map(list.flatMap(record => record.client ? [[record.identity, incarnation(record, record.client)] as const] : []))
 
-        localWindow.reconcile(currentClients)
+        presentation.reconcile(currentClients)
 
         let settled = false
 
@@ -116,7 +116,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const departed = new Set(gone.filter(({ client }) => isDesktopReplacementLayer(client.window.layer)).map(({ identity }) => identity))
 
-        for (const identity of departed) localWindow.remove(identity)
+        for (const identity of departed) presentation.remove(identity)
 
         const animated = gone.filter(({ identity }) => !departed.has(identity))
 
@@ -165,19 +165,19 @@ export default function useWindows(authManager: AuthManager) {
 
         const live = incarnation(process, process.client!)
 
-        const window = localWindows.get(live.identity)
+        const window = presentations.get(live.identity)
 
         if (!window || window.minimized) continue
 
         const best = fronts[window.layer]
 
-        const bestWindow = best && localWindows.get(incarnation(best, best.client!).identity)
+        const bestWindow = best && presentations.get(incarnation(best, best.client!).identity)
 
         if (!bestWindow || bestWindow.depth <= window.depth) fronts[window.layer] = process
     }
 
-    // Local representation and authoritative mutation are two explicit acts.
-    // The local act already rendered the result; only the server echo may
+    // Presentation and authoritative mutation are two explicit acts.
+    // The presentation act already rendered the result; only the server echo may
     // project the authoritative act back onto an ordinary Window.
     const commit = useCallback(function (request: Promise<void>) {
 
@@ -207,7 +207,7 @@ export default function useWindows(authManager: AuthManager) {
 
         setOrder(current => current.filter(entry => entry !== identity))
 
-        localWindow.remove(identity)
+        presentation.remove(identity)
 
     }, [])
 
@@ -219,7 +219,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const highest = summit(window.layer)
 
-        localWindow.raise(process.identity)
+        presentation.raise(process.identity)
 
         if (window.depth === highest) return
 
@@ -233,7 +233,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        void localWindow.minimize(process.identity, minimized)
+        void presentation.minimize(process.identity, minimized)
 
         commit(window.minimize(minimized))
 
@@ -245,7 +245,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        if (localWindow.state(process.identity).minimized) minimize(process, false)
+        if (presentation.state(process.identity).minimized) minimize(process, false)
 
         raise(process)
 
@@ -257,7 +257,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        void localWindow.move(process.identity, { x, y })
+        void presentation.move(process.identity, { x, y })
 
         commit(window.move({ x, y }))
 
@@ -271,7 +271,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!position) {
 
-            void localWindow.resize(process.identity, { width, height })
+            void presentation.resize(process.identity, { width, height })
 
             commit(window.resize({ width, height }))
 
@@ -280,7 +280,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const geometry = { position, size: { width, height } }
 
-        void localWindow.geometry(process.identity, geometry)
+        void presentation.geometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -294,7 +294,7 @@ export default function useWindows(authManager: AuthManager) {
 
         const geometry = { position, size }
 
-        void localWindow.geometry(process.identity, geometry)
+        void presentation.geometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -303,16 +303,16 @@ export default function useWindows(authManager: AuthManager) {
     const fill = useCallback(function (process: Process) {
         const window = process.client?.window
         if (!window || window.layer !== "window") return
-        const maximized = !localWindow.projection(process.identity).maximized
-        void localWindow.maximize(process.identity, maximized)
+        const maximized = !presentation.projection(process.identity).maximized
+        void presentation.maximize(process.identity, maximized)
         commit(window.maximize(maximized))
     }, [commit])
 
     // Every window on the desktop, in one list and one order.
     //
     // A closing client incarnation keeps the place it had. A restarted
-    // Client receives a new desktop-local representation identity even when
-    // the surrounding Process and its public Client-owned Window capability
+    // Client receives a new Desktop presentation identity even when
+    // the surrounding Process and its Client Endpoint-owned Window
     // remain the same.
     const rank = new Map(order.map((identity, index) => [identity, index]))
 
@@ -322,10 +322,10 @@ export default function useWindows(authManager: AuthManager) {
 
             const live = incarnation(record, record.client!)
 
-            return { ...live, local: localWindows.get(live.identity)!, closing: false, stopping: stopping.current.has(record.identity), entering: !inheritedClients.current.has(live.client) }
+            return { ...live, presentation: presentations.get(live.identity)!, closing: false, stopping: stopping.current.has(record.identity), entering: !inheritedClients.current.has(live.client) }
         }),
 
-        ...leaving.map(window => ({ ...window, local: localWindows.get(window.identity)!, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
+        ...leaving.map(window => ({ ...window, presentation: presentations.get(window.identity)!, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
     ]
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
@@ -334,25 +334,25 @@ export default function useWindows(authManager: AuthManager) {
 
     for (const pane of panes) {
 
-        panesByLayer[pane.local.layer].push(pane)
+        panesByLayer[pane.presentation.layer].push(pane)
     }
 
     const sharedResizeWindows: SharedResizeWindow[] = panesByLayer.window.flatMap(function (pane) {
 
-        if (pane.closing || pane.stopping || pane.local.minimized || pane.local.maximized) return []
+        if (pane.closing || pane.stopping || pane.presentation.minimized || pane.presentation.maximized) return []
 
-        const geometry = localWindow.representedGeometry(pane.record.identity)
+        const geometry = presentation.representedGeometry(pane.record.identity)
 
         if (!geometry) return []
 
-        return [{ identity: pane.record.identity, geometry, depth: pane.local.depth }]
+        return [{ identity: pane.record.identity, geometry, depth: pane.presentation.depth }]
     })
 
     const presentSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
 
-        for (const [identity, geometry] of geometries) localWindow.presentGeometry(identity, geometry)
+        for (const [identity, geometry] of geometries) presentation.presentGeometry(identity, geometry)
 
-    }, [localWindow])
+    }, [presentation])
 
     const beginSharedResize = useCallback(function (identities: readonly string[]) {
 
@@ -360,7 +360,7 @@ export default function useWindows(authManager: AuthManager) {
 
         for (const identity of identities) {
 
-            const geometry = localWindow.beginGeometry(identity)
+            const geometry = presentation.beginGeometry(identity)
 
             if (geometry) {
 
@@ -369,26 +369,26 @@ export default function useWindows(authManager: AuthManager) {
                 continue
             }
 
-            for (const started of geometries.keys()) localWindow.cancelGeometry(started)
+            for (const started of geometries.keys()) presentation.cancelGeometry(started)
 
             return null
         }
 
         return geometries
 
-    }, [localWindow])
+    }, [presentation])
 
     const finishSharedResize = useCallback(function (identities: readonly string[]) {
 
-        for (const identity of identities) localWindow.finishGeometry(identity)
+        for (const identity of identities) presentation.finishGeometry(identity)
 
-    }, [localWindow])
+    }, [presentation])
 
     const cancelSharedResize = useCallback(function (identities: readonly string[]) {
 
-        for (const identity of identities) localWindow.cancelGeometry(identity)
+        for (const identity of identities) presentation.cancelGeometry(identity)
 
-    }, [localWindow])
+    }, [presentation])
 
     const commitSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
 
@@ -405,12 +405,12 @@ export default function useWindows(authManager: AuthManager) {
                 size: { width: region.width, height: region.height }
             }
 
-            void localWindow.geometry(identity, geometry)
+            void presentation.geometry(identity, geometry)
 
             commit(window.setGeometry(geometry))
         }
 
-    }, [commit, localWindow, peer])
+    }, [commit, presentation, peer])
 
     return {
 
@@ -422,7 +422,7 @@ export default function useWindows(authManager: AuthManager) {
 
         fronts,
 
-        localWindow,
+        presentation,
 
         sharedResize: {
             windows: sharedResizeWindows,

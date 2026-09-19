@@ -13,7 +13,9 @@ import type {
     ServerLaunch,
     ShellOptions,
     Size,
-    WindowGeometry
+    WindowFrame,
+    WindowGeometry,
+    WindowTransaction
 } from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
@@ -353,6 +355,16 @@ export default class System {
         await this.processManager.changeHeader(process.identity, header)
     }
 
+    public async changeWindowFrame(process: Process, frame: WindowFrame) {
+
+        await this.processManager.changeFrame(process.identity, frame)
+    }
+
+    public async changeWindowOpeningTransaction(process: Process, transaction: WindowTransaction) {
+
+        await this.processManager.changeOpeningTransaction(process.identity, transaction)
+    }
+
     public async raiseWindow(process: Process) {
 
         await this.processManager.raise(process.identity)
@@ -376,6 +388,9 @@ export default class System {
                 start: program.client.start,
                 service: program.client.service,
                 title: program.client.title ?? null,
+                header: program.client.header ?? null,
+                frame: program.client.frame ?? null,
+                transaction: program.client.transaction ?? null,
                 size: program.client.size ?? null,
                 position: program.client.position ?? null,
                 layer: program.client.layer ?? null,

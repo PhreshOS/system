@@ -1,11 +1,13 @@
 import { ProcessSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process"
 import ProcessManager from "./process-manager"
 import ClientState from "./client-state"
+import Window from "./window"
 
 /**
  * A running instance, as this side holds it: rebuilt from what the core
- * transmitted. Its client state owns the Window counterpart while that state
- * is live. Every act is a request; the truth answers with an echo.
+ * transmitted. Its Client Endpoint retains its Window counterpart independently
+ * of the current execution context. Every act is a request; the truth answers
+ * with an echo.
  */
 export default class Process {
 
@@ -28,6 +30,9 @@ export default class Process {
     public server: { ready: boolean, service: boolean } | null
 
     public client: ClientState | null
+
+    /** Permanent Client Endpoint state retained between execution contexts. */
+    public readonly clientEndpoint: Readonly<{ window: Window }> | null
 
     // Retained lineage from creation. It remains sufficient to reconstruct
     // the same Process handle after the parent leaves the live registry.
@@ -52,7 +57,11 @@ export default class Process {
 
         this.server = payload.server
 
-        this.client = payload.client ? new ClientState(processManager, payload.identity, payload.client) : null
+        this.clientEndpoint = payload.clientEndpoint
+            ? Object.freeze({ window: new Window(processManager, payload.identity, payload.clientEndpoint.window) })
+            : null
+
+        this.client = payload.client && this.clientEndpoint ? new ClientState(this.clientEndpoint.window, payload.client) : null
 
         this.parent = payload.parent
 
@@ -84,7 +93,9 @@ export default class Process {
 
     public clientStarted(payload: ProcessSnapshot) {
 
-        if (!payload.client) return
+        if (!payload.client || !this.clientEndpoint) return
+
+        if (payload.clientEndpoint) this.clientEndpoint.window.follow(payload.clientEndpoint.window)
 
         // A Process creation snapshot already contains every endpoint that is
         // live at birth. Its following lifecycle announcement describes that
@@ -92,14 +103,12 @@ export default class Process {
         // inventing a second local incarnation for the Window Manager.
         if (this.client) {
 
-            this.client.window.follow(payload.client.window)
-
             this.client.sameOrigin = payload.client.sameOrigin
 
             return
         }
 
-        this.client = new ClientState(this.processManager, this.identity, payload.client)
+        this.client = new ClientState(this.clientEndpoint.window, payload.client)
     }
 
     public clientStopped() {

@@ -3,7 +3,7 @@ import messagepack from "@the-link/messagepack"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type ClientTraffic from "@client/view/components/desktop-host/client-traffic"
-import type { LocalWindowHost } from "@client/view/components/desktop-host/local-window"
+import type { WindowPresentationHost } from "@client/view/components/desktop-host/window-presentation"
 import { test } from "vitest"
 
 test("a Client question expectation survives initial iframe ownership", async () => {
@@ -29,7 +29,7 @@ test("a Client question expectation survives initial iframe ownership", async ()
         authManager,
         () => ({ size: { width: 800, height: 600 } }),
         {} as ClientTraffic,
-        { release() {} } as unknown as LocalWindowHost
+        { release() {} } as unknown as WindowPresentationHost
     )
     const question = "client:process:question"
 

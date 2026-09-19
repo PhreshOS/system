@@ -69,7 +69,7 @@ export default function Workspace() {
     // lets the desktop announce the surface that actually contains it.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.localWindow)
+    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.presentation)
 
     const fileWallpaperLoaded = useCallback(() => {
 
@@ -111,7 +111,7 @@ export default function Workspace() {
 
     function renderWindows(layer: Layer) {
 
-        return windows.panesByLayer[layer].map(({ identity, record, client, local, closing, entering, stopping }) => <ProcessWindow
+        return windows.panesByLayer[layer].map(({ identity, record, client, presentation, closing, entering, stopping }) => <ProcessWindow
 
             key={identity}
 
@@ -123,45 +123,49 @@ export default function Workspace() {
 
             client={client}
 
-            title={local.title}
+            title={presentation.title}
 
-            header={local.header}
+            header={presentation.header}
+
+            frame={presentation.frame}
+
+            layer={presentation.layer}
+
+            openingTransaction={presentation.transaction}
 
             icon={icon(record)}
 
-            position={local.position}
+            position={presentation.position}
 
-            size={local.size}
+            size={presentation.size}
 
-            localSurface={local.surface}
+            frameAnimation={presentation.frameAnimation}
 
-            geometryAnimation={local.geometryAnimation}
+            geometryAnimation={presentation.geometryAnimation}
 
-            minimizeAnimation={local.minimizeAnimation}
+            minimizeAnimation={presentation.minimizeAnimation}
 
-            onLocalAnimationComplete={(kind, revision) => windows.localWindow.complete(record.identity, kind, revision)}
+            onPresentationAnimationComplete={(kind, revision) => windows.presentation.complete(record.identity, kind, revision)}
 
-            onLocalRepresentation={windows.localWindow.represent}
+            onPresentationRepresentation={windows.presentation.represent}
 
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.
             paintSurfaceSize={layer === "window" ? windowSurfaceSize : undefined}
 
-            depth={local.depth}
+            depth={presentation.depth}
 
             active={fronts[layer]?.identity === record.identity}
 
-            bare={layer !== "window"}
+            minimized={presentation.minimized}
 
-            minimized={local.minimized}
-
-            maximized={local.maximized}
+            maximized={presentation.maximized}
 
             closing={closing}
 
             stopping={stopping}
 
-            entering={layer === "window" && entering}
+            entering={entering}
 
             door={application.doors.program}
 
@@ -215,7 +219,7 @@ export default function Workspace() {
 
             {windows.listed.map(record => {
 
-                const window = windows.localWindow.projection(record.identity)
+                const window = windows.presentation.projection(record.identity)
 
                 return <WindowTaskbarItem
 

@@ -1,5 +1,5 @@
 import { type WindowSnapshot, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { type WindowGeometry, type WindowLayer, type WindowState } from "@phreshos/core"
+import { type WindowFrame, type WindowGeometry, type WindowLayer, type WindowState, type WindowTransaction } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
 /**
@@ -35,6 +35,10 @@ export default class Window implements Omit<WindowState, "front"> {
 
     public header: boolean
 
+    public frame: WindowFrame
+
+    public transaction: WindowTransaction
+
     // The authoritative Desktop layer.
     public layer: WindowLayer
 
@@ -43,6 +47,10 @@ export default class Window implements Omit<WindowState, "front"> {
         this.title = payload.title
 
         this.header = payload.header
+
+        this.frame = payload.frame
+
+        this.transaction = payload.transaction
 
         this.layer = payload.layer
 
@@ -68,6 +76,10 @@ export default class Window implements Omit<WindowState, "front"> {
         this.title = payload.title
 
         this.header = payload.header
+
+        this.frame = payload.frame
+
+        this.transaction = payload.transaction
 
         this.layer = payload.layer
 
@@ -106,6 +118,16 @@ export default class Window implements Omit<WindowState, "front"> {
     public async changeHeader(header: boolean) {
 
         await this.processManager.$outbound.publish("/change-header", this.process, header)
+    }
+
+    public async changeFrame(frame: WindowFrame) {
+
+        await this.processManager.$outbound.publish("/change-frame", this.process, frame)
+    }
+
+    public async changeOpeningTransaction(transaction: WindowTransaction) {
+
+        await this.processManager.$outbound.publish("/change-opening-transaction", this.process, transaction)
     }
 
     // To the front of its own layer, and nothing else. A hidden window

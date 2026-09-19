@@ -44,11 +44,11 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Panel>
+            <Panel material="full">
 
                 <Panel.Header><SystemHeader name={application.displayName} version={application.version} /></Panel.Header>
 
-                <Panel.Content className="grid gap-5 p-5">
+                <Panel.Content material="extended" className="grid gap-5 p-5">
 
                 <div className="grid gap-1">
 

@@ -15,7 +15,7 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
     const spacing = 8
 
-    return <Surface style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, height: "100%", maxHeight: "inherit", overflow: "hidden" }}>
+    return <Surface material="full" style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, height: "100%", maxHeight: "inherit", overflow: "hidden" }}>
 
         {replacement ? <>
 
@@ -31,9 +31,9 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
                 <div className="grid min-h-0 min-w-0 grid-cols-2" style={{ gap: "inherit" }}>
 
-                    <Surface className="min-h-0 min-w-0 overflow-hidden">{left}</Surface>
+                    <Surface material="extended" className="min-h-0 min-w-0 overflow-hidden">{left}</Surface>
 
-                    <Surface className="min-h-0 min-w-0 overflow-hidden">{right}</Surface>
+                    <Surface material="extended" className="min-h-0 min-w-0 overflow-hidden">{right}</Surface>
 
                 </div>
 

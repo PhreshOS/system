@@ -125,7 +125,7 @@ export default class SystemAccess {
         return launch
     }
 
-    /** Authorize one fresh Client Endpoint incarnation in an existing Process. */
+    /** Authorize one fresh Client Endpoint execution context in an existing Process. */
     public async clientLaunch(value: unknown = {}) {
 
         const launch = parseLaunch({ client: value }).client

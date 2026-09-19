@@ -1,52 +1,54 @@
-import { followedState, requireLocalProperty } from "./layer-policy"
+import { followedState, requirePresentationApplication } from "./layer-policy"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import {
-    type AppearanceTransaction,
-    type WaitedTransaction,
+    type WindowFrame,
     type WindowGeometry,
     type WindowState
 } from "@phreshos/core"
-import { type LocalWindowHost, type LocalWindowState } from "../desktop-host/local-window"
-import { isDesktopReplacementLayer } from "@shared/desktop-replacement"
+import { type PresentationTransactionRequest, type WindowPresentationHost, type WindowPresentationState } from "../desktop-host/window-presentation"
 import { type WindowRegion } from "./window-geometry"
+import { isFixedWindowPresentationLayer, requireWindowPresentationRead, supportsWindowPresentationApplication } from "@shared/window-layers"
 
-export interface LocalWindowEntry {
+export interface WindowPresentationEntry {
     identity: string
     client: ClientState
 }
 
 /** Owns the representations of one desktop without entering server transport. */
-export default class LocalWindows implements LocalWindowHost {
+export default class WindowPresentations implements WindowPresentationHost {
 
-    public windows: ReadonlyMap<string, LocalWindowState>
+    public windows: ReadonlyMap<string, WindowPresentationState>
 
     private readonly live = new Map<string, string>()
-    private readonly authoritative = new Map<string, LocalWindowState>()
+    private readonly authoritative = new Map<string, WindowPresentationState>()
     private readonly waiting = new Map<string, WaitingAnimation>()
-    private readonly representations = new Map<string, LocalGeometryRepresentation>()
+    private readonly representations = new Map<string, PresentationGeometryRepresentation>()
     private readonly representationListeners = new Map<string, () => void>()
     private readonly following = new Map<string, FollowingWindow>()
+    private readonly observers = new Map<string, Set<(event: string, value: unknown) => void>>()
+    private readonly emitted = new Map<string, WindowState>()
     private revision = 0
-    private changed: (windows: ReadonlyMap<string, LocalWindowState>) => void = () => undefined
+    private changed: (windows: ReadonlyMap<string, WindowPresentationState>) => void = () => undefined
 
-    public constructor(initial: ReadonlyMap<string, LocalWindowEntry>, private readonly client: (process: string) => ClientState | null) {
+    public constructor(initial: ReadonlyMap<string, WindowPresentationEntry>, private readonly client: (process: string) => ClientState | null) {
 
-        this.windows = new Map([...initial.values()].map(({ identity, client }) => [identity, localState(client)]))
+        this.windows = new Map([...initial.values()].map(({ identity, client }) => [identity, initialPresentationState(client)]))
+        for (const [identity, state] of this.windows) this.emitted.set(identity, windowState(state, frontmost(this.windows, state.layer) === identity))
         this.reconcile(initial)
     }
 
-    public listen(changed: (windows: ReadonlyMap<string, LocalWindowState>) => void) {
+    public listen(changed: (windows: ReadonlyMap<string, WindowPresentationState>) => void) {
 
         this.changed = changed
     }
 
     /** Following projects the authoritative properties owned by the receiving layer. */
-    public reconcile(current: ReadonlyMap<string, LocalWindowEntry>) {
+    public reconcile(current: ReadonlyMap<string, WindowPresentationEntry>) {
         for (const [process, identity] of this.live) {
             if (current.get(process)?.identity === identity) continue
-            this.cancel(identity, "geometry", "The local Window representation was removed")
-            this.cancel(identity, "minimize", "The local Window representation was removed")
-            this.cancel(identity, "surface", "The local Window representation was removed")
+            this.cancel(identity, "geometry", "The Window presentation was removed")
+            this.cancel(identity, "minimize", "The Window presentation was removed")
+            this.cancel(identity, "frame", "The Window presentation was removed")
             this.following.delete(identity)
             this.authoritative.delete(identity)
         }
@@ -57,20 +59,20 @@ export default class LocalWindows implements LocalWindowHost {
             this.live.set(process, identity)
             const snapshot = authoritativeState(client)
             if (!this.authoritative.has(identity) && client.window.layer === "window") {
-                this.following.set(identity, { target: identity, snapshot })
+                this.following.set(identity, { snapshot })
             }
-            if (!next.has(identity)) next.set(identity, localState(client))
+            if (!next.has(identity)) next.set(identity, initialPresentationState(client))
             this.authoritative.set(identity, snapshot)
         }
 
         const alive = new Set(this.live.values())
         for (const [identity, relation] of this.following) {
-            if (!alive.has(identity) || !alive.has(relation.target)) {
+            if (!alive.has(identity)) {
                 this.following.delete(identity)
                 continue
             }
             const state = next.get(identity)!
-            const target = this.authoritative.get(relation.target)!
+            const target = this.authoritative.get(identity)!
             const previous = relation.snapshot
             const changes = { ...followedState(state, target, previous) }
             const maximized = changes.maximized ?? state.maximized
@@ -99,8 +101,8 @@ export default class LocalWindows implements LocalWindowHost {
         this.removeRepresentation(identity)
         this.authoritative.delete(identity)
         this.following.delete(identity)
-
-        for (const [follower, relation] of this.following) if (relation.target === identity) this.following.delete(follower)
+        this.observers.delete(identity)
+        this.emitted.delete(identity)
 
         this.publish(next)
     }
@@ -115,13 +117,19 @@ export default class LocalWindows implements LocalWindowHost {
         })
     }
 
+    public read(process: string, property: import("@shared/window-layers").WindowPresentationProperty) {
+        const { state } = this.existing(process)
+        requireWindowPresentationRead(state.layer, property)
+        return this.state(process)[property]
+    }
+
     /** Returns the values currently driving this desktop's representation. */
     public projection(process: string) {
 
         return this.existing(process).state
     }
 
-    public readonly represent = (process: string, representation: LocalGeometryRepresentation | null) => {
+    public readonly represent = (process: string, representation: PresentationGeometryRepresentation | null) => {
 
         const identity = this.live.get(process)
 
@@ -137,7 +145,7 @@ export default class LocalWindows implements LocalWindowHost {
 
                 if (this.representations.get(identity) !== representation) return
 
-                this.publish(new Map(this.windows))
+                this.emitPresentationEvents()
             }))
         }
 
@@ -187,57 +195,56 @@ export default class LocalWindows implements LocalWindowHost {
         if (identity) this.representations.get(identity)?.cancel()
     }
 
-    public move(process: string, position: WindowState["position"], transaction?: RequestedTransaction) {
+    public move(process: string, position: WindowState["position"], transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "position")
+        requirePresentationApplication(state.layer, "position")
         return this.changeGeometry(identity, { position, size: state.size }, transaction)
     }
 
-    public resize(process: string, size: WindowState["size"], transaction?: RequestedTransaction) {
+    public resize(process: string, size: WindowState["size"], transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "size")
+        requirePresentationApplication(state.layer, "size")
         return this.changeGeometry(identity, { position: state.position, size }, transaction)
     }
 
-    public geometry(process: string, value: WindowGeometry, transaction?: RequestedTransaction) {
+    public geometry(process: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "position")
+        requirePresentationApplication(state.layer, "position")
         return this.changeGeometry(identity, value, transaction)
     }
 
-    public minimize(process: string, minimized: boolean, transaction?: RequestedTransaction) {
+    public minimize(process: string, minimized: boolean, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "minimized")
+        requirePresentationApplication(state.layer, "minimized")
         return this.changeMinimized(identity, minimized, transaction)
     }
 
-    public maximize(process: string, maximized: boolean, transaction?: RequestedTransaction) {
+    public maximize(process: string, maximized: boolean, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "maximized")
+        requirePresentationApplication(state.layer, "maximized")
         if (state.maximized === maximized) return Promise.resolve()
         this.cancel(identity, "geometry")
-        const animation = transaction && !state.minimized ? localAnimation(++this.revision, transaction) : null
+        const animation = !state.minimized ? presentationAnimation(++this.revision, transaction) : null
         this.replace(identity, { ...state, maximized, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
 
-    public follow(process: string, targetProcess: string, transaction?: RequestedTransaction) {
+    public follow(process: string, transaction?: PresentationTransactionRequest) {
         const { identity } = this.existing(process)
-        const target = this.existing(targetProcess)
-        const snapshot = this.authoritative.get(target.identity)!
-        this.following.set(identity, { target: target.identity, snapshot })
+        const snapshot = this.authoritative.get(identity)!
+        this.following.set(identity, { snapshot })
         const current = this.windows.get(identity)!
         const projected = { ...current, ...followedState(current, snapshot) }
         const geometryChanged = JSON.stringify([current.position, current.size, current.maximized]) !== JSON.stringify([projected.position, projected.size, projected.maximized])
         const visibilityChanged = current.minimized !== projected.minimized
         this.cancel(identity, "geometry")
         this.cancel(identity, "minimize")
-        const geometryAnimation = geometryChanged && !projected.minimized && transaction ? localAnimation(++this.revision, transaction) : null
-        const minimizeAnimation = visibilityChanged && transaction ? localAnimation(++this.revision, transaction) : null
+        const geometryAnimation = geometryChanged && !projected.minimized ? presentationAnimation(++this.revision, transaction) : null
+        const minimizeAnimation = visibilityChanged ? presentationAnimation(++this.revision, transaction) : null
         this.replace(identity, {
             ...projected,
             geometryAnimation,
@@ -249,7 +256,7 @@ export default class LocalWindows implements LocalWindowHost {
         ]).then(() => undefined)
     }
 
-    public unfollow(process: string, _transaction?: RequestedTransaction) {
+    public unfollow(process: string) {
         const { identity } = this.existing(process)
         this.following.delete(identity)
         return Promise.resolve()
@@ -258,14 +265,14 @@ export default class LocalWindows implements LocalWindowHost {
     public title(process: string, title: string) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "title")
+        requirePresentationApplication(state.layer, "title")
         this.replace(identity, { ...state, title })
     }
 
     public header(process: string, header: boolean) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "header")
+        requirePresentationApplication(state.layer, "header")
         if (state.header === header) return
         this.replace(identity, { ...state, header })
     }
@@ -273,34 +280,38 @@ export default class LocalWindows implements LocalWindowHost {
     public raise(process: string) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "depth")
+        requirePresentationApplication(state.layer, "front")
         if (frontmost(this.windows, state.layer) === identity) return
         const depth = [...this.windows.values()].reduce((highest, other) => other.layer === state.layer ? Math.max(highest, other.depth) : highest, 0)
         this.replace(identity, { ...state, depth: depth + 1 })
     }
 
-    public addSurface(process: string, transaction?: RequestedTransaction) {
+    public observe(process: string, event: string | null, listener: (event: string, value: unknown) => void) {
 
-        const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "surface")
-        if (state.surface?.visible) return Promise.resolve()
+        const { identity } = this.existing(process)
+        const listeners = this.observers.get(identity) ?? new Set()
+        const selected = (emitted: string, value: unknown) => {
+            if (event === null || event === emitted) listener(emitted, value)
+        }
+        listeners.add(selected)
+        this.observers.set(identity, listeners)
 
-        this.cancel(identity, "surface")
-        const transition = transaction ? localAnimation(++this.revision, transaction) : null
-        this.replace(identity, { ...state, surface: { visible: true, transition } })
-        return this.waitFor(identity, "surface", transition, transaction)
+        return () => {
+            listeners.delete(selected)
+            if (!listeners.size) this.observers.delete(identity)
+        }
     }
 
-    public removeSurface(process: string, transaction?: RequestedTransaction) {
+    public frame(process: string, frame: WindowFrame, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requireLocalProperty(state.layer, "surface")
-        if (!state.surface || !state.surface.visible) return Promise.resolve()
+        requirePresentationApplication(state.layer, "frame")
+        if (JSON.stringify(state.frame) === JSON.stringify(frame)) return Promise.resolve()
 
-        this.cancel(identity, "surface")
-        const transition = transaction ? localAnimation(++this.revision, transaction) : null
-        this.replace(identity, { ...state, surface: { visible: false, transition } })
-        return this.waitFor(identity, "surface", transition, transaction)
+        this.cancel(identity, "frame")
+        const animation = presentationAnimation(++this.revision, transaction)
+        this.replace(identity, { ...state, frame, frameAnimation: animation })
+        return this.waitFor(identity, "frame", animation, transaction)
     }
 
     public complete(process: string, kind: AnimationKind, revision: number) {
@@ -312,14 +323,14 @@ export default class LocalWindows implements LocalWindowHost {
             ? state?.geometryAnimation
             : kind === "minimize"
                 ? state?.minimizeAnimation
-                : state?.surface?.transition
+                : state?.frameAnimation
         if (!state || animation?.revision !== revision) return
 
         this.replace(identity, kind === "geometry"
             ? { ...state, geometryAnimation: null }
             : kind === "minimize"
                 ? { ...state, minimizeAnimation: null }
-                : { ...state, surface: state.surface?.visible ? { ...state.surface, transition: null } : null })
+                : { ...state, frameAnimation: null })
 
         const key = animationKey(identity, kind)
         const waiting = this.waiting.get(key)
@@ -333,28 +344,28 @@ export default class LocalWindows implements LocalWindowHost {
 
         const identity = this.live.get(process)
         if (!identity) return
-        this.cancel(identity, "geometry", "The local Window representation was removed")
-        this.cancel(identity, "minimize", "The local Window representation was removed")
-        this.cancel(identity, "surface", "The local Window representation was removed")
+        this.cancel(identity, "geometry", "The Window presentation was removed")
+        this.cancel(identity, "minimize", "The Window presentation was removed")
+        this.cancel(identity, "frame", "The Window presentation was removed")
 
         const client = this.client(process)
         if (!client) return
         this.authoritative.set(identity, authoritativeState(client))
         this.following.delete(identity)
-        if (client.window.layer === "window") this.following.set(identity, { target: identity, snapshot: authoritativeState(client) })
-        this.replace(identity, localState(client))
+        if (client.window.layer === "window") this.following.set(identity, { snapshot: authoritativeState(client) })
+        this.replace(identity, initialPresentationState(client))
     }
 
     private existing(process: string) {
 
         const identity = this.live.get(process)
-        if (!identity) throw new Error("This Client has no local Window representation")
+        if (!identity) throw new Error("This Client has no Window presentation")
         const state = this.windows.get(identity)
-        if (!state) throw new Error("This Client has no local Window representation")
+        if (!state) throw new Error("This Client has no Window presentation")
         return { identity, state }
     }
 
-    private replace(identity: string, state: LocalWindowState) {
+    private replace(identity: string, state: WindowPresentationState) {
 
         const next = new Map(this.windows)
         next.set(identity, state)
@@ -370,10 +381,10 @@ export default class LocalWindows implements LocalWindowHost {
         this.representations.delete(identity)
     }
 
-    private changeGeometry(identity: string, value: WindowGeometry, transaction?: RequestedTransaction) {
+    private changeGeometry(identity: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
 
         const state = this.windows.get(identity)
-        if (!state) throw new Error("This Client has no local Window representation")
+        if (!state) throw new Error("This Client has no Window presentation")
         if (JSON.stringify([state.position, state.size]) === JSON.stringify([value.position, value.size])) return Promise.resolve()
 
         if (state.minimized || state.maximized) {
@@ -381,31 +392,63 @@ export default class LocalWindows implements LocalWindowHost {
             return Promise.resolve()
         }
         this.cancel(identity, "geometry")
-        const animation = transaction ? localAnimation(++this.revision, transaction) : null
+        const animation = presentationAnimation(++this.revision, transaction)
         this.replace(identity, { ...state, position: value.position, size: value.size, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
 
-    private changeMinimized(identity: string, minimized: boolean, transaction?: RequestedTransaction) {
+    private changeMinimized(identity: string, minimized: boolean, transaction?: PresentationTransactionRequest) {
 
         const state = this.windows.get(identity)
-        if (!state) throw new Error("This Client has no local Window representation")
+        if (!state) throw new Error("This Client has no Window presentation")
         if (state.minimized === minimized) return Promise.resolve()
 
         this.cancel(identity, "minimize")
-        if (minimized) this.cancel(identity, "geometry", "The local Window was minimized")
-        const animation = transaction ? localAnimation(++this.revision, transaction) : null
+        if (minimized) this.cancel(identity, "geometry", "The Window presentation was minimized")
+        const animation = presentationAnimation(++this.revision, transaction)
         this.replace(identity, { ...state, minimized, minimizeAnimation: animation, geometryAnimation: minimized ? null : state.geometryAnimation })
         return this.waitFor(identity, "minimize", animation, transaction)
     }
 
-    private publish(next: ReadonlyMap<string, LocalWindowState>) {
+    private publish(next: ReadonlyMap<string, WindowPresentationState>) {
 
         this.windows = next
+        this.emitPresentationEvents()
         this.changed(next)
     }
 
-    private cancel(identity: string, kind: AnimationKind, reason = "The local Window animation was interrupted") {
+    private emitPresentationEvents() {
+
+        for (const [identity, presentation] of this.windows) {
+            const represented = this.representations.get(identity)?.read()
+            const current = windowState(presentation, frontmost(this.windows, presentation.layer) === identity, represented && {
+                position: { x: represented.x, y: represented.y },
+                size: { width: represented.width, height: represented.height }
+            })
+            const previous = this.emitted.get(identity)
+            this.emitted.set(identity, current)
+            if (!previous) continue
+
+            const emit = (property: import("@shared/window-layers").WindowPresentationProperty, event: string, value: unknown) => {
+                if (!supportsWindowPresentationApplication(presentation.layer, property)) return
+                for (const listener of this.observers.get(identity) ?? []) listener(event, value)
+            }
+
+            const moved = JSON.stringify(previous.position) !== JSON.stringify(current.position)
+            const resized = JSON.stringify(previous.size) !== JSON.stringify(current.size)
+            if (moved || resized) emit("position", "geometry", { position: current.position, size: current.size })
+            if (moved) emit("position", "move", current.position)
+            if (resized) emit("size", "resize", current.size)
+            if (previous.minimized !== current.minimized) emit("minimized", "minimize", current.minimized)
+            if (previous.maximized !== current.maximized) emit("maximized", "maximize", current.maximized)
+            if (previous.title !== current.title) emit("title", "changeTitle", current.title)
+            if (previous.header !== current.header) emit("header", "changeHeader", current.header)
+            if (JSON.stringify(previous.frame) !== JSON.stringify(current.frame)) emit("frame", "changeFrame", current.frame)
+            if (previous.front !== current.front) emit("front", "front", current.front)
+        }
+    }
+
+    private cancel(identity: string, kind: AnimationKind, reason = "The Window presentation transaction was interrupted") {
 
         const key = animationKey(identity, kind)
         const waiting = this.waiting.get(key)
@@ -414,9 +457,9 @@ export default class LocalWindows implements LocalWindowHost {
         waiting.reject(new Error(reason))
     }
 
-    private waitFor(identity: string, kind: AnimationKind, animation: LocalWindowState["geometryAnimation"], transaction?: RequestedTransaction) {
+    private waitFor(identity: string, kind: AnimationKind, animation: WindowPresentationState["geometryAnimation"], transaction?: PresentationTransactionRequest) {
 
-        if (!animation || !transaction || !("wait" in transaction)) return Promise.resolve()
+        if (!animation || !transaction?.wait) return Promise.resolve()
         return new Promise<void>((resolve, reject) => {
 
             this.waiting.set(animationKey(identity, kind), { revision: animation.revision, resolve, reject })
@@ -424,8 +467,7 @@ export default class LocalWindows implements LocalWindowHost {
     }
 }
 
-type AnimationKind = "geometry" | "minimize" | "surface"
-type RequestedTransaction = AppearanceTransaction | WaitedTransaction
+type AnimationKind = "geometry" | "minimize" | "frame"
 
 interface WaitingAnimation {
     revision: number
@@ -434,8 +476,7 @@ interface WaitingAnimation {
 }
 
 interface FollowingWindow {
-    target: string
-    snapshot: LocalWindowState
+    snapshot: WindowPresentationState
 }
 
 function animationKey(identity: string, kind: AnimationKind) {
@@ -443,36 +484,37 @@ function animationKey(identity: string, kind: AnimationKind) {
     return `${identity}:${kind}`
 }
 
-function baseTransaction(transaction: RequestedTransaction): AppearanceTransaction {
+function presentationAnimation(revision: number, request?: PresentationTransactionRequest) {
 
-    return Object.freeze({ duration: transaction.duration, easing: transaction.easing })
+    const transaction = request?.transaction ?? true
+    return transaction === false ? null : Object.freeze({ revision, transaction })
 }
 
-function localAnimation(revision: number, transaction: RequestedTransaction) {
-
-    return Object.freeze({ revision, transaction: baseTransaction(transaction) })
-}
-
-function localState(client: ClientState): LocalWindowState {
+function initialPresentationState(client: ClientState): WindowPresentationState {
 
     const window = client.window
+    const fixed = isFixedWindowPresentationLayer(window.layer)
     return {
         ...authoritativeState(client),
-        title: window.layer === "window" ? window.title : "",
-        header: window.layer === "window" ? window.header : true,
-        position: isDesktopReplacementLayer(window.layer) ? { x: 0, y: 0 } : window.position,
-        size: isDesktopReplacementLayer(window.layer) ? { width: "100%", height: "100%" } : window.size,
-        minimized: isDesktopReplacementLayer(window.layer) ? false : window.minimized,
-        maximized: isDesktopReplacementLayer(window.layer) ? true : window.maximized,
-        depth: isDesktopReplacementLayer(window.layer) ? 0 : window.depth,
+        title: window.title,
+        header: window.layer === "window" ? window.header : false,
+        frame: window.layer === "window" ? true : fixed ? false : window.frame,
+        position: fixed ? { x: 0, y: 0 } : window.position,
+        size: fixed ? { width: "100%", height: "100%" } : window.size,
+        minimized: fixed ? false : window.minimized,
+        maximized: fixed ? true : window.maximized,
+        depth: fixed ? 0 : window.depth,
+        frameAnimation: null,
     }
 }
 
-function authoritativeState(client: ClientState): LocalWindowState {
+function authoritativeState(client: ClientState): WindowPresentationState {
     const window = client.window
     return {
         title: window.title,
         header: window.header,
+        frame: window.frame,
+        transaction: window.transaction,
         position: window.position,
         size: window.size,
         minimized: window.minimized,
@@ -480,17 +522,19 @@ function authoritativeState(client: ClientState): LocalWindowState {
         front: false,
         layer: window.layer,
         depth: window.depth,
-        surface: null,
+        frameAnimation: null,
         geometryAnimation: null,
         minimizeAnimation: null
     }
 }
 
-function windowState(local: LocalWindowState, front: boolean, geometry?: Readonly<{ position: WindowState["position"], size: WindowState["size"] }>): WindowState {
+function windowState(local: WindowPresentationState, front: boolean, geometry?: Readonly<{ position: WindowState["position"], size: WindowState["size"] }>): WindowState {
 
     return {
         title: local.title,
         header: local.header,
+        frame: local.frame,
+        transaction: local.transaction,
         position: geometry?.position ?? local.position,
         size: geometry?.size ?? local.size,
         minimized: local.minimized,
@@ -500,7 +544,7 @@ function windowState(local: LocalWindowState, front: boolean, geometry?: Readonl
     }
 }
 
-export interface LocalGeometryRepresentation {
+export interface PresentationGeometryRepresentation {
 
     read: () => WindowRegion
 
@@ -515,9 +559,9 @@ export interface LocalGeometryRepresentation {
     listen: (settled: () => void) => () => void
 }
 
-function frontmost(windows: ReadonlyMap<string, LocalWindowState>, layer: LocalWindowState["layer"]) {
+function frontmost(windows: ReadonlyMap<string, WindowPresentationState>, layer: WindowPresentationState["layer"]) {
 
-    let best: [string, LocalWindowState] | null = null
+    let best: [string, WindowPresentationState] | null = null
     for (const candidate of windows) {
 
         const [, window] = candidate

@@ -5,7 +5,7 @@ import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import { type LocalWindowHost } from "./local-window"
+import { type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 
 /**
@@ -13,7 +13,7 @@ import messagepack from "@the-link/messagepack"
  * It owns frame messages and the measured desktop containing those frames;
  * neither fact participates in rendering.
  */
-export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, localWindow: LocalWindowHost) {
+export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, presentation: WindowPresentationHost) {
 
     const windowSurfaceRef = useRef<HTMLDivElement>(null)
 
@@ -203,7 +203,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, traffic, localWindow))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, traffic, presentation))
 
             return
         }
@@ -218,7 +218,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopViewport, localWindow, sources, traffic])
+    }, [authManager, desktopViewport, presentation, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 

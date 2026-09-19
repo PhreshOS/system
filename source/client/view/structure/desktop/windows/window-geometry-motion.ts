@@ -1,5 +1,6 @@
 import { resolveWindowGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
-import { type LocalAnimation } from "@client/view/components/desktop-host/local-window"
+import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { resolveWindowTransaction } from "@client/view/appearance/motion"
 import { type AppearanceTransaction, type Position, type Size } from "@phreshos/core"
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
@@ -9,13 +10,13 @@ import { useAppearance } from "@phreshos/react-ui"
 interface WindowGeometryMotionOptions {
     position: Position
     size: Size
-    animation?: LocalAnimation | null
+    animation?: PresentationAnimation | null
     immediate: boolean
     onComplete?: (revision: number) => void
 }
 
 /**
- * One continuous local representation of Window geometry.
+ * One continuous presentation of Window geometry.
  *
  * Core values remain the destination. Motion values exclusively own the
  * visible pixels, including during a pointer gesture, so releasing a drag
@@ -39,7 +40,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
     const gesturing = useRef(false)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const settlementListeners = useRef(new Set<() => void>())
     const values = useRef({ position, size, animation, immediate, onComplete })
 
     values.current = { position, size, animation, immediate, onComplete }
@@ -54,16 +54,22 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         animator.current!.stop()
     }
 
-    function announceSettlement() {
-
-        for (const listener of settlementListeners.current) listener()
-    }
-
-    function listen(settled: () => void) {
-
-        settlementListeners.current.add(settled)
-
-        return () => settlementListeners.current.delete(settled)
+    function listen(changed: () => void) {
+        let active = true
+        let queued = false
+        const notify = () => {
+            if (queued) return
+            queued = true
+            queueMicrotask(() => {
+                queued = false
+                if (active) changed()
+            })
+        }
+        const cleanup = [x, y, width, height].map(value => value.on("change", notify))
+        return () => {
+            active = false
+            for (const release of cleanup) release()
+        }
     }
 
     function completeGestureRestore() {
@@ -90,7 +96,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         if (immediate) {
 
             set(region)
-            announceSettlement()
             complete?.()
 
             return
@@ -99,7 +104,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         animator.current!.transition(region, transaction, () => {
 
             completeGestureRestore()
-            announceSettlement()
             complete?.()
         })
     }
@@ -129,7 +133,15 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
             return
         }
 
-        transition(region, animation?.transaction, revision === undefined ? undefined : () => onComplete?.(revision))
+        const selected = animation ? resolveWindowTransaction(animation.transaction, appearanceTransaction) : null
+
+        if (!selected) {
+            set(region)
+            if (revision !== undefined) onComplete?.(revision)
+            return
+        }
+
+        transition(region, selected, revision === undefined ? undefined : () => onComplete?.(revision))
 
     }, [position.x, position.y, size.width, size.height, animation?.revision, immediate])
 
@@ -156,7 +168,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
             if (region) {
 
                 set(region)
-                announceSettlement()
             }
         })
 
@@ -206,7 +217,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         animator.current!.transitionSize(region, appearanceTransaction, () => {
 
             completeGestureRestore()
-            announceSettlement()
         })
     }
 
@@ -231,7 +241,6 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
         if (region) {
 
             set(region)
-            announceSettlement()
         }
     }
 

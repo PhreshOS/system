@@ -1,4 +1,16 @@
-import { isRelativeValue, type Position, type Size, type Value, type WindowGeometry, type WindowLayer, type WindowState } from "@phreshos/core"
+import {
+    isRelativeValue,
+    parseWindowFrame,
+    parseWindowTransaction,
+    type Position,
+    type Size,
+    type Value,
+    type WindowFrame,
+    type WindowGeometry,
+    type WindowLayer,
+    type WindowState,
+    type WindowTransaction
+} from "@phreshos/core"
 
 /** Authoritative geometry, visibility, maximization, title, and layer ordering. */
 // What a Window says about the Program behind it. Resolved when the Process
@@ -9,6 +21,10 @@ export interface Shown {
     title: string
 
     header: boolean
+
+    frame: WindowFrame
+
+    transaction: WindowTransaction
 
     // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
@@ -37,13 +53,21 @@ export default class Window implements Omit<WindowState, "front"> {
     public header: boolean
 
     // The Window's authoritative Desktop layer.
-    public readonly layer: WindowLayer
+    public layer: WindowLayer
+
+    public frame: WindowFrame
+
+    public transaction: WindowTransaction
 
     public constructor(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean, maximized = false) {
 
         this.title = shown.title
 
         this.header = shown.header
+
+        this.frame = parseWindowFrame(shown.frame)
+
+        this.transaction = parseWindowTransaction(shown.transaction)
 
         this.layer = shown.layer
 
@@ -140,6 +164,28 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
+    public changeFrame(frame: WindowFrame) {
+
+        const parsed = parseWindowFrame(frame)
+
+        if (JSON.stringify(this.frame) === JSON.stringify(parsed)) return false
+
+        this.frame = parsed
+
+        return true
+    }
+
+    public changeOpeningTransaction(transaction: WindowTransaction) {
+
+        const parsed = parseWindowTransaction(transaction)
+
+        if (JSON.stringify(this.transaction) === JSON.stringify(parsed)) return false
+
+        this.transaction = parsed
+
+        return true
+    }
+
     public toJSON() {
 
         return {
@@ -147,6 +193,10 @@ export default class Window implements Omit<WindowState, "front"> {
             title: this.title,
 
             header: this.header,
+
+            frame: this.frame,
+
+            transaction: this.transaction,
 
             layer: this.layer,
 

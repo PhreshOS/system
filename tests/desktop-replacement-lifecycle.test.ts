@@ -5,7 +5,7 @@ import type AuthManager from "@server/core/link-manager/auth-manager/auth-manage
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import type { ServerRuntimeFactory } from "@server/core/server-runtime"
-import type { DesktopReplacementLayer } from "@shared/desktop-replacement"
+import type { DesktopReplacementLayer } from "@shared/window-layers"
 
 const replacementLayers = ["wallpaper", "start-menu"] as const satisfies readonly DesktopReplacementLayer[]
 
@@ -15,7 +15,8 @@ function fixture(replacementLayer: DesktopReplacementLayer) {
     const program = new Program({ identity: "replacement-test", client: { location: "https://example.test/" } })
     vi.spyOn(program, "validate").mockResolvedValue()
     const shape = (layer: Layer = replacementLayer) => ({
-        title: "Replacement", header: true, position: { x: 20, y: 30 }, size: { width: 320, height: 240 },
+        title: "Replacement", header: layer === "window", frame: false, transaction: false,
+        position: { x: 20, y: 30 }, size: { width: 320, height: 240 },
         layer, minimize: false, maximize: false
     })
     Object.assign(auth, {
@@ -26,7 +27,7 @@ function fixture(replacementLayer: DesktopReplacementLayer) {
     })
     const register = (identity: string, layer: Layer | null = replacementLayer, runtime: ServerRuntimeFactory<Program> | null = null) => manager.register(
         identity, null, program, {}, { server: null, client: null, options: {} },
-        runtime, layer !== null, layer === null ? null : shape(layer), null
+        runtime, layer !== null, shape(layer ?? replacementLayer), null
     )
     return { manager, register }
 }
@@ -39,14 +40,14 @@ test.each(replacementLayers)("concurrent %s launches replace the incumbent Proce
     expect(manager.processes.has("second")).toBe(true)
     expect(manager.processes.size).toBe(1)
     const incumbent = [...manager.processes.values()][0]!
-    expect(incumbent.client?.window.layer).toBe(replacementLayer)
-    incumbent.client!.window.minimized = true
+    expect(incumbent.clientEndpoint?.window.layer).toBe(replacementLayer)
+    incumbent.clientEndpoint!.window.minimized = true
     await register("third")
     expect(manager.processes.has(incumbent.identity)).toBe(false)
     expect(incumbent.client).toBeNull()
     await register("ordinary", "window")
     await register("overlay", "over")
-    expect((await register("replacement")).client?.window.layer).toBe(replacementLayer)
+    expect((await register("replacement")).clientEndpoint?.window.layer).toBe(replacementLayer)
     expect(manager.processes.has("third")).toBe(false)
     expect(manager.processes.has("ordinary")).toBe(true)
     expect(manager.processes.has("overlay")).toBe(true)
@@ -73,12 +74,12 @@ test.each(replacementLayers)("starting an existing Client and creating a Process
         manager.startClient("existing", { layer: replacementLayer }), register("new")
     ])
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(2)
-    expect([...manager.processes.values()].filter(process => process.client?.window.layer === replacementLayer)).toHaveLength(1)
+    expect([...manager.processes.values()].filter(process => process.client && process.clientEndpoint?.window.layer === replacementLayer)).toHaveLength(1)
     expect(manager.processes.has("existing")).toBe(false)
     const waiting = await register("waiting", null)
     await manager.startClient("waiting", { layer: replacementLayer })
     expect(manager.processes.has("new")).toBe(false)
-    expect(waiting.client?.window.layer).toBe(replacementLayer)
+    expect(waiting.clientEndpoint?.window.layer).toBe(replacementLayer)
 })
 
 test.each(replacementLayers)("failed activation releases the %s claim", async replacementLayer => {
@@ -94,5 +95,5 @@ test.each(replacementLayers)("failed activation releases the %s claim", async re
     expect(manager.processes.get("existing")!.client).toBeNull()
     fail = false
     await manager.startClient("existing", { layer: replacementLayer })
-    expect(manager.processes.get("existing")!.client?.window.layer).toBe(replacementLayer)
+    expect(manager.processes.get("existing")!.clientEndpoint?.window.layer).toBe(replacementLayer)
 })

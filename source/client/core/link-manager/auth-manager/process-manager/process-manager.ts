@@ -51,7 +51,7 @@ export default class ProcessManager extends TheLink {
 
         for (const [identity, process] of this.processes) {
 
-            const window = process.client?.window
+            const window = process.client ? process.clientEndpoint?.window : null
 
             if (!window || window.minimized || window.layer !== layer || window.depth <= depth) continue
 
@@ -204,7 +204,7 @@ export default class ProcessManager extends TheLink {
 
         if (!payload) return
 
-        this.processes.get(payload.identity)?.client?.window.follow(payload.window)
+        this.processes.get(payload.identity)?.clientEndpoint?.window.follow(payload.window)
 
         return this.list()
     }
@@ -342,6 +342,20 @@ export default class ProcessManager extends TheLink {
     @Subscribe("/change-header")
     @Publish("/processes", "inbound")
     protected async changeHeaderHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+
+        return this.followed(payload)
+    }
+
+    @Subscribe("/change-frame")
+    @Publish("/processes", "inbound")
+    protected async changeFrameHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+
+        return this.followed(payload)
+    }
+
+    @Subscribe("/change-opening-transaction")
+    @Publish("/processes", "inbound")
+    protected async changeOpeningTransactionHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }

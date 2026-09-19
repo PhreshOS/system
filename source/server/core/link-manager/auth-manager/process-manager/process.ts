@@ -5,7 +5,7 @@ import ServerProcessBoundary, { type HostVisibility } from "./server-process-bou
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
-import { type Layer } from "@phreshos/core"
+import { type Layer, type WindowFrame, type WindowTransaction } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "@server/core/server-runtime"
 
@@ -17,8 +17,8 @@ import type { ServerRuntime } from "@server/core/server-runtime"
  * Program declaration that later launches inherit.
  *
  * Endpoint presence is mutable live state. Each start creates a fresh
- * boundary incarnation; each stop removes that boundary and everything it
- * owns. The Process remains the stable aggregate around those incarnations
+ * execution context; each stop removes that context's boundary and everything
+ * it owns. The Process remains the stable aggregate around those contexts
  * and must always have at least one live endpoint.
  *
  * The Server runtime boundary lives here beside the transmitted values and is
@@ -56,14 +56,16 @@ export default class Process {
     // must preserve that value without changing the domain shape.
     public readonly startedAt = new Date()
 
-    // The current server incarnation. Null is current live state, not a
+    // The current Server execution context. Null is current live state, not a
     // declaration or a permanent launch-shape decision.
     public server: ServerProcessBoundary | null = null
 
-    // The current client incarnation and the Window it owns. Its nearby iframe
-    // boundary belongs to the desktop session, but both existence and Window
-    // lifetime originate here. Stopping the client destroys this value whole.
+    // The current Client execution context. Its nearby iframe boundary
+    // belongs to the Desktop session and ends when this context stops.
     public client: ClientState | null = null
+
+    /** Permanent Client Endpoint state retained between execution contexts. */
+    public readonly clientEndpoint: Readonly<{ window: Window }> | null
 
     // The process whose call to `program.createProcess()` created this
     // one. Lineage only: keeping this handle neither owns nor prolongs
@@ -93,7 +95,7 @@ export default class Process {
 
     private exitProcess: (() => Promise<unknown>) | null = null
 
-    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, clientSameOrigin: boolean) {
+    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, clientSameOrigin: boolean, window: Window | null = null) {
 
         this.identity = identity
 
@@ -110,6 +112,8 @@ export default class Process {
         this.hostTraffic = hostTraffic
 
         this.clientSameOrigin = clientSameOrigin
+
+        this.clientEndpoint = window ? Object.freeze({ window }) : null
     }
 
     public setClientSameOrigin(sameOrigin: boolean) {
@@ -168,11 +172,13 @@ export default class Process {
         return () => { this.readyWaiters[endpoint].delete(notify) }
     }
 
-    public startClient(window: Window, service: boolean) {
+    public startClient(service: boolean) {
 
         if (this.client) return false
 
-        this.client = new ClientState(window, service)
+        if (!this.clientEndpoint) throw new Error("This Program declared no Client Endpoint")
+
+        this.client = new ClientState(service)
 
         this.becameReady("client")
 
@@ -302,6 +308,12 @@ export default class Process {
 
             startedAt: this.startedAt,
 
+            /** Whether this Process's Program declared a Server Endpoint. */
+            serverEndpoint: this.program.server !== null,
+
+            /** Whether this Process's Program declared a Client Endpoint. */
+            clientEndpoint: this.clientEndpoint !== null,
+
             // These are live endpoint snapshots. Program declarations answer
             // which endpoint kinds can be started.
             server: this.server ? { service: this.server.service } : null,
@@ -325,6 +337,10 @@ export default class Process {
             // pane never receives this record whole.
             parent: this.parent?.record() ?? null,
 
+            clientEndpoint: this.clientEndpoint
+                ? { window: this.clientEndpoint.window.toJSON() }
+                : null,
+
             client: this.client ? { ...this.client, sameOrigin: this.clientSameOrigin } : null
         }
     }
@@ -347,18 +363,7 @@ export type HostedProcess = ReturnType<Process["hosted"]>
 /** Public Process data from which an endpoint SDK reconstructs a handle. */
 export type ProcessRecord = ReturnType<Process["record"]>
 
-export type ProcessSnapshot = Omit<HostedProcess, "client"> & {
-
-    client: HostedProcess["client"] extends infer Client
-
-        ? Client extends { window: Window }
-
-            ? Omit<Client, "window"> & { window: ReturnType<Window["toJSON"]> }
-
-            : Client
-
-        : never
-}
+export type ProcessSnapshot = HostedProcess
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
 
@@ -377,6 +382,12 @@ export interface ProcessLaunch {
     readonly client: Readonly<{
 
         title: string
+
+        header: boolean
+
+        frame: WindowFrame
+
+        transaction: WindowTransaction
 
         position: Position | null
 

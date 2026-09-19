@@ -1,5 +1,4 @@
 import { type ProcessSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process"
-import ProcessManager from "./process-manager"
 import Window from "./window"
 
 /** One desktop counterpart of the server-authoritative client state. */
@@ -11,9 +10,9 @@ export default class ClientState {
 
     public readonly service: NonNullable<ProcessSnapshot["client"]>["service"]
 
-    public constructor(processManager: ProcessManager, process: string, payload: NonNullable<ProcessSnapshot["client"]>) {
+    public constructor(window: Window, payload: NonNullable<ProcessSnapshot["client"]>) {
 
-        this.window = new Window(processManager, process, payload.window)
+        this.window = window
 
         this.sameOrigin = payload.sameOrigin
 

@@ -30,6 +30,7 @@ import {
     type PermissionValue,
     type Permissions
 } from "@phreshos/core"
+import { windowLayerDefaults } from "@shared/window-layers"
 
 const maximumProcessesPerProgram = 20
 
@@ -1385,7 +1386,9 @@ export default class ProgramManager extends TheLink {
         // Resolving the Window here validates the same launch grammar even when
         // the launch is being stored for a later boot. Only the original launch
         // is persisted; system defaults are derived again when it actually runs.
-        const shape = client ? this.clientShape(program, askedClient) : null
+        const windowShape = program.client ? this.clientShape(program, askedClient) : null
+
+        const shape = client ? windowShape : null
 
         const intent: ProcessLaunch = {
 
@@ -1405,7 +1408,7 @@ export default class ProgramManager extends TheLink {
             options
         }
 
-        return { options, server, client, shape, intent }
+        return { options, server, client, shape, windowShape, intent }
     }
 
     private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>) {
@@ -1463,6 +1466,7 @@ export default class ProgramManager extends TheLink {
         // activated, so even a server command that exits immediately has a
         // complete output and exit record.
         await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, {
+            window: resolved.windowShape,
             prepare: record => {
                 record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
                 record.onServerStop((code, signal) => logs.endpointExited(identity, "server", code, signal))
@@ -1525,11 +1529,17 @@ export default class ProgramManager extends TheLink {
 
         const layer = asked.layer ?? client.layer ?? "window"
 
+        const defaults = windowLayerDefaults(layer)
+
         return {
 
-            title: asked.title ?? program.title,
+            title: asked.title ?? client.title ?? program.title,
 
-            header: layer === "window" ? asked.header ?? client.header ?? true : true,
+            header: asked.header ?? client.header ?? defaults.header,
+
+            frame: asked.frame ?? client.frame ?? defaults.frame,
+
+            transaction: asked.transaction ?? client.transaction ?? defaults.transaction,
 
             position: asked.position ?? client.position ?? { x: 120 + shift, y: 80 + shift },
 

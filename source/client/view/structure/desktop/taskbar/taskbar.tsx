@@ -14,6 +14,8 @@ export default function Taskbar({ leading, trailing, dialogs, className, childre
 
         {...props}
 
+        material="full"
+
     >
 
         {leading}
