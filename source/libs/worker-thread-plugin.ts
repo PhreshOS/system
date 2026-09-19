@@ -9,12 +9,16 @@ export default function workerThreadPlugin(): Plugin {
 
     let building = false
 
+    const references = new Set<string>()
+
     return {
 
         name: "worker-thread",
         enforce: "pre",
 
         configResolved(config) { building = config.command === "build" },
+
+        buildStart() { references.clear() },
 
         async resolveId(source, importer) {
 
@@ -37,7 +41,16 @@ export default function workerThreadPlugin(): Plugin {
 
             const reference = this.emitFile({ type: "chunk", id: entry })
 
-            return `export default new URL(import.meta.ROLLUP_FILE_URL_${reference})`
+            references.add(reference)
+
+            return `export default import.meta.ROLLUP_FILE_URL_${reference}`
+        },
+
+        resolveFileUrl({ referenceId, relativePath }) {
+
+            if (!references.has(referenceId)) return null
+
+            return `new URL(${JSON.stringify(relativePath)}, import.meta.url)`
         }
     }
 }
