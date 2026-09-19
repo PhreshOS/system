@@ -5,6 +5,8 @@ export interface SharedResizeWindow {
     identity: string
 
     geometry: WindowRegion
+
+    depth: number
 }
 
 export interface SharedResizeBoundary {
@@ -22,6 +24,17 @@ export interface SharedResizeBoundary {
     before: readonly string[]
 
     after: readonly string[]
+
+    segments: readonly SharedResizeSegment[]
+}
+
+export interface SharedResizeSegment {
+
+    start: number
+
+    end: number
+
+    depth: number
 }
 
 const alignmentTolerance = 1
@@ -133,6 +146,8 @@ interface Contact {
     before: string
 
     after: string
+
+    depth: number
 }
 
 function verticalContact(contacts: Contact[], before: SharedResizeWindow, after: SharedResizeWindow) {
@@ -147,7 +162,7 @@ function verticalContact(contacts: Contact[], before: SharedResizeWindow, after:
 
     if (end <= start) return
 
-    contacts.push({ orientation: "vertical", position: (edge + after.geometry.x) / 2, start, end, before: before.identity, after: after.identity })
+    contacts.push({ orientation: "vertical", position: (edge + after.geometry.x) / 2, start, end, before: before.identity, after: after.identity, depth: Math.max(before.depth, after.depth) })
 }
 
 function horizontalContact(contacts: Contact[], before: SharedResizeWindow, after: SharedResizeWindow) {
@@ -162,7 +177,7 @@ function horizontalContact(contacts: Contact[], before: SharedResizeWindow, afte
 
     if (end <= start) return
 
-    contacts.push({ orientation: "horizontal", position: (edge + after.geometry.y) / 2, start, end, before: before.identity, after: after.identity })
+    contacts.push({ orientation: "horizontal", position: (edge + after.geometry.y) / 2, start, end, before: before.identity, after: after.identity, depth: Math.max(before.depth, after.depth) })
 }
 
 function connected(first: Contact, second: Contact) {
@@ -188,8 +203,42 @@ function boundary(contacts: readonly Contact[]): SharedResizeBoundary {
         start: Math.min(...contacts.map(contact => contact.start)),
         end: Math.max(...contacts.map(contact => contact.end)),
         before,
-        after
+        after,
+        segments: boundarySegments(contacts)
     }
+}
+
+function boundarySegments(contacts: readonly Contact[]): SharedResizeSegment[] {
+
+    const points = [...new Set(contacts.flatMap(contact => [contact.start, contact.end]))].sort((first, second) => first - second)
+
+    const segments: SharedResizeSegment[] = []
+
+    for (let index = 0; index < points.length - 1; index++) {
+
+        const start = points[index]
+
+        const end = points[index + 1]
+
+        const covering = contacts.filter(contact => contact.start < end && contact.end > start)
+
+        if (!covering.length) continue
+
+        const depth = Math.max(...covering.map(contact => contact.depth))
+
+        const previous = segments.at(-1)
+
+        if (previous && previous.end === start && previous.depth === depth) {
+
+            previous.end = end
+
+            continue
+        }
+
+        segments.push({ start, end, depth })
+    }
+
+    return segments
 }
 
 function span(geometry: WindowRegion, orientation: SharedResizeBoundary["orientation"]) {

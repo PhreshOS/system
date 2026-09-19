@@ -104,31 +104,33 @@ export default function SharedResizeBoundaries({ windows, begin, present, commit
         setActive({ boundary, delta: 0 })
     }
 
-    return <div className="pointer-events-none absolute inset-0 z-[2147483647]">
+    return <div className="pointer-events-none absolute inset-0">
 
-        {(active ? [active.boundary] : boundaries).map(boundary => {
+        {(active ? [active.boundary] : boundaries).flatMap(boundary => {
 
             const delta = active?.boundary.identity === boundary.identity ? active.delta : 0
 
             const vertical = boundary.orientation === "vertical"
 
-            return <div
-                key={boundary.identity}
+            return boundary.segments.map(segment => <div
+                key={`${boundary.identity}:${segment.start}:${segment.end}`}
                 data-shared-window-resize={boundary.orientation}
                 onPointerDown={event => grab(event, boundary)}
                 className={`pointer-events-auto absolute touch-none ${vertical ? "cursor-col-resize" : "cursor-row-resize"}`}
                 style={vertical ? {
                     left: boundary.position + delta - thickness / 2,
-                    top: boundary.start,
+                    top: segment.start,
                     width: thickness,
-                    height: boundary.end - boundary.start
+                    height: segment.end - segment.start,
+                    zIndex: segment.depth
                 } : {
-                    left: boundary.start,
+                    left: segment.start,
                     top: boundary.position + delta - thickness / 2,
-                    width: boundary.end - boundary.start,
-                    height: thickness
+                    width: segment.end - segment.start,
+                    height: thickness,
+                    zIndex: segment.depth
                 }}
-            />
+            />)
         })}
 
     </div>

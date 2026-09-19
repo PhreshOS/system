@@ -5,8 +5,8 @@ import { test } from "vitest"
 test("a shared boundary resizes the windows on both sides", () => {
 
     const windows: SharedResizeWindow[] = [
-        { identity: "left", geometry: { x: 0, y: 0, width: 500, height: 600 } },
-        { identity: "right", geometry: { x: 500, y: 0, width: 500, height: 600 } }
+        { identity: "left", geometry: { x: 0, y: 0, width: 500, height: 600 }, depth: 1 },
+        { identity: "right", geometry: { x: 500, y: 0, width: 500, height: 600 }, depth: 2 }
     ]
 
     const boundaries = sharedResizeBoundaries(windows)
@@ -20,7 +20,8 @@ test("a shared boundary resizes the windows on both sides", () => {
         start: 0,
         end: 600,
         before: ["left"],
-        after: ["right"]
+        after: ["right"],
+        segments: [{ start: 0, end: 600, depth: 2 }]
     })
 
     const resized = resizeSharedBoundary(boundaries[0], windows, 80)
@@ -35,10 +36,10 @@ test("a shared boundary resizes the windows on both sides", () => {
 test("one continuous boundary coordinates every window that shares it", () => {
 
     const windows: SharedResizeWindow[] = [
-        { identity: "left-top", geometry: { x: 0, y: 0, width: 500, height: 300 } },
-        { identity: "left-bottom", geometry: { x: 0, y: 300, width: 500, height: 300 } },
-        { identity: "right-top", geometry: { x: 500, y: 0, width: 500, height: 300 } },
-        { identity: "right-bottom", geometry: { x: 500, y: 300, width: 500, height: 300 } }
+        { identity: "left-top", geometry: { x: 0, y: 0, width: 500, height: 300 }, depth: 2 },
+        { identity: "left-bottom", geometry: { x: 0, y: 300, width: 500, height: 300 }, depth: 4 },
+        { identity: "right-top", geometry: { x: 500, y: 0, width: 500, height: 300 }, depth: 3 },
+        { identity: "right-bottom", geometry: { x: 500, y: 300, width: 500, height: 300 }, depth: 7 }
     ]
 
     const boundary = sharedResizeBoundaries(windows).find(candidate => candidate.orientation === "vertical")
@@ -50,14 +51,19 @@ test("one continuous boundary coordinates every window that shares it", () => {
     assert.deepEqual(boundary.after, ["right-bottom", "right-top"])
 
     assert.deepEqual([boundary.start, boundary.end], [0, 600])
+
+    assert.deepEqual(boundary.segments, [
+        { start: 0, end: 300, depth: 3 },
+        { start: 300, end: 600, depth: 7 }
+    ])
 })
 
 test("the smallest participating window constrains the whole boundary", () => {
 
     const windows: SharedResizeWindow[] = [
-        { identity: "left", geometry: { x: 0, y: 0, width: 500, height: 600 } },
-        { identity: "right-small", geometry: { x: 500, y: 0, width: 300, height: 300 } },
-        { identity: "right-large", geometry: { x: 500, y: 300, width: 500, height: 300 } }
+        { identity: "left", geometry: { x: 0, y: 0, width: 500, height: 600 }, depth: 1 },
+        { identity: "right-small", geometry: { x: 500, y: 0, width: 300, height: 300 }, depth: 2 },
+        { identity: "right-large", geometry: { x: 500, y: 300, width: 500, height: 300 }, depth: 3 }
     ]
 
     const boundary = sharedResizeBoundaries(windows).find(candidate => candidate.orientation === "vertical")
@@ -76,8 +82,8 @@ test("the smallest participating window constrains the whole boundary", () => {
 test("a horizontal boundary changes heights and the lower origins", () => {
 
     const windows: SharedResizeWindow[] = [
-        { identity: "top", geometry: { x: 0, y: 0, width: 700, height: 300 } },
-        { identity: "bottom", geometry: { x: 0, y: 300, width: 700, height: 400 } }
+        { identity: "top", geometry: { x: 0, y: 0, width: 700, height: 300 }, depth: 1 },
+        { identity: "bottom", geometry: { x: 0, y: 300, width: 700, height: 400 }, depth: 2 }
     ]
 
     const boundary = sharedResizeBoundaries(windows).find(candidate => candidate.orientation === "horizontal")
@@ -94,7 +100,7 @@ test("a horizontal boundary changes heights and the lower origins", () => {
 test("unaligned and merely overlapping windows have no shared boundary", () => {
 
     assert.deepEqual(sharedResizeBoundaries([
-        { identity: "first", geometry: { x: 0, y: 0, width: 400, height: 400 } },
-        { identity: "second", geometry: { x: 300, y: 100, width: 400, height: 400 } }
+        { identity: "first", geometry: { x: 0, y: 0, width: 400, height: 400 }, depth: 1 },
+        { identity: "second", geometry: { x: 300, y: 100, width: 400, height: 400 }, depth: 2 }
     ]), [])
 })

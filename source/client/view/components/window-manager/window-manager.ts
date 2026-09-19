@@ -345,7 +345,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!geometry) return []
 
-        return [{ identity: pane.record.identity, geometry }]
+        return [{ identity: pane.record.identity, geometry, depth: pane.local.depth }]
     })
 
     const presentSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
