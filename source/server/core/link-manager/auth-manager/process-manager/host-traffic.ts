@@ -50,4 +50,4 @@ type Subscriber = (delivery: object, event: string, ...values: unknown[]) => unk
 
 export type HostDomain = Domain
 
-type Domain = "program" | "process" | "window" | "connection" | "session"
+type Domain = "program" | "process" | "window" | "connection" | "session" | "service"

@@ -16,7 +16,7 @@ import EndpointEvents from "./endpoint-events"
 import EndpointServices, { serviceTimeout } from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
 import {
-    isServiceKey,
+    isServiceAddress,
     isUploadFile,
     parsePermissionName,
     parseProgramInstallOptions,
@@ -28,8 +28,9 @@ import {
     type PermissionName,
     type PermissionRequest,
     type PermissionValue,
+    type ProgramIconSize,
     type ServerLaunch,
-    type ServiceKey,
+    type ServiceAddress,
     type WindowGeometry,
     type WindowLayer,
     type WindowState
@@ -104,7 +105,14 @@ export default class ProcessManager extends TheLink {
 
         this.authManager = authManager
 
-        this.services = new EndpointServices(key => this.resolveService(key))
+        this.services = new EndpointServices(
+            address => this.resolveService(address),
+            () => this.processes.values(),
+            (event, address) => Promise.all([
+                this.hostTraffic.emitHost("service", event, address.process, address),
+                this.$outbound.publish(`/service-${event}`, address)
+            ])
+        )
 
         this.connectTo(this.authManager, "/process")
 
@@ -119,20 +127,15 @@ export default class ProcessManager extends TheLink {
         return process
     }
 
-    private resolveService(key: ServiceKey) {
+    private resolveService(address: ServiceAddress) {
 
-        const exact = this.processes.get(key.process)
-        const program = key.program === undefined ? null : this.authManager.programManager.reach(key.program)
-        const process = key.program === undefined
-            ? exact
-            : program && exact?.program === program
-                ? exact
-                : program
-                    ? [...this.processes.values()].find(candidate => candidate.program === program && candidate.name === key.process)
-                    : null
-        const service = key.endpoint === "server" ? process?.server?.service : process?.client?.service
+        const program = this.authManager.programManager.reach(address.program)
+        const process = program
+            ? [...this.processes.values()].find(candidate => candidate.program === program && candidate.name === address.process)
+            : null
+        const service = address.endpoint === "server" ? process?.server?.service : process?.client?.service
 
-        return process && service === true ? { process, endpoint: key.endpoint } : null
+        return process && service === true ? { process, endpoint: address.endpoint } : null
     }
 
     private heldWindow(value: unknown, fallback: Process) {
@@ -185,7 +188,7 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Observe one authoritative host fact without creating a Program boundary. */
-    public observeHost(domain: "program" | "process" | "window" | "connection" | "session", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+    public observeHost(domain: "program" | "process" | "window" | "connection" | "session" | "service", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.hostTraffic.observe(domain, event, subject, (_delivery, word, ...values) => subscriber(word, ...values))
     }
@@ -239,10 +242,12 @@ export default class ProcessManager extends TheLink {
         ))
     }
 
-    public serviceExistsFromOutside(key: unknown) {
+    public serviceAvailableFromOutside(address: unknown) {
 
-        return this.services.exists(key)
+        return this.services.available(address)
     }
+
+    public listServicesFromOutside(name?: string) { return this.services.list(name) }
 
     public endpointIsServiceFromOutside(identity: string, endpoint: Half) {
 
@@ -251,34 +256,34 @@ export default class ProcessManager extends TheLink {
         return endpoint === "server" ? process.server?.service === true : process.client?.service === true
     }
 
-    public waitServiceReadyFromOutside(key: unknown, timeout?: number) {
+    public waitServiceReadyFromOutside(address: unknown, timeout?: number) {
 
-        return this.services.waitReady(key, timeout)
+        return this.services.waitReady(address, timeout)
     }
 
     /** Publish through a Service from an owner boundary represented by `from: null`. */
-    public async publishServiceFromOutside(key: unknown, event: string, payload: unknown) {
+    public async publishServiceFromOutside(address: unknown, event: string, payload: unknown) {
 
-        const target = this.services.target(key)
+        const target = this.services.target(address)
 
-        if (!target) throw new Error("The service endpoint does not exist")
+        if (!target) throw new Error("The Service is unavailable")
 
         await this.deliver(target.process.identity, target.endpoint, [event, { from: null, payload }])
     }
 
     /** Ask a Server Service from an owner boundary represented by `from: null`. */
-    public askServiceFromOutside(key: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
+    public askServiceFromOutside(address: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
 
-        const target = this.services.target(key, "server")
+        const target = this.services.target(address, "server")
 
-        if (!target) return Promise.reject(new Error("The service endpoint does not exist"))
+        if (!target) return Promise.reject(new Error("The Service is unavailable"))
 
         return this.askFromOutside(target.process.identity, event, payload, timeout, signal)
     }
 
-    public observeServiceFromOutside(key: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
+    public observeServiceFromOutside(address: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
 
-        return this.services.follow(key, scope, event, subscriber)
+        return this.services.follow(address, scope, event, subscriber)
     }
 
     /** Publish to an Endpoint from the invoking System representation. */
@@ -305,20 +310,20 @@ export default class ProcessManager extends TheLink {
 
     /** Publish through a Service from the invoking System representation. */
     @Subscribe("/service/publish")
-    protected async publishServiceForConnection(key: unknown, event: unknown, payload: unknown) {
+    protected async publishServiceForConnection(address: unknown, event: unknown, payload: unknown) {
 
         if (typeof event !== "string") throw new Error("A Service event must be text")
 
-        await this.publishServiceFromOutside(key, event, payload)
+        await this.publishServiceFromOutside(address, event, payload)
     }
 
     /** Ask a Server Service from the invoking System representation. */
     @Subscribe("/service/ask")
-    protected askServiceForConnection(key: unknown, event: unknown, payload: unknown, timeout: unknown) {
+    protected askServiceForConnection(address: unknown, event: unknown, payload: unknown, timeout: unknown) {
 
         if (typeof event !== "string") throw new Error("A Service event must be text")
 
-        return this.askServiceFromOutside(key, event, payload, serviceTimeout(timeout), this.authManager.connectionSignal())
+        return this.askServiceFromOutside(address, event, payload, serviceTimeout(timeout), this.authManager.connectionSignal())
     }
 
     // The boundary owns its server runtime transport. A stopped child remains
@@ -608,7 +613,7 @@ export default class ProcessManager extends TheLink {
 
             if (observation.kind !== "events" && observation.kind !== "lifecycle") throw new Error("A Service observation kind is events or lifecycle")
 
-            stop = this.observeServiceFromOutside(observation.key, observation.kind, event, followed)
+            stop = this.observeServiceFromOutside(observation.address, observation.kind, event, followed)
         }
 
         else throw new Error("A System observation scope is endpoint, traffic, or service")
@@ -821,6 +826,8 @@ export default class ProcessManager extends TheLink {
             process.serverBecameReady(server)
 
             this.$outbound.publish("/server-ready", process.identity).catch(() => undefined)
+
+            this.services.ready(process, "server").catch(() => undefined)
         })
     }
 
@@ -912,13 +919,15 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "window", subject: string | null) {
+    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window", subject: string | null) {
 
         const access = new SystemAccess(this, process)
 
         if (domain === "connection" || domain === "session") return access.canConnections()
 
         if (!subject) return false
+
+        if (domain === "service") return this.grants(process.identity, "services", [subject])
 
         if (domain === "program") {
 
@@ -1313,18 +1322,17 @@ export default class ProcessManager extends TheLink {
     /** Explicit restart values replace their retained authoritative counterparts. */
     private applyClientLaunch(process: Process, window: Window, shape: StandardShape, launch: ClientLaunch) {
 
-        if (launch.title !== undefined && window.changeTitle(shape.title)) this.said(process.identity, "changeTitle", window.title)
+        if (launch.title !== undefined && window.setTitle(shape.title)) this.said(process.identity, "changeTitle", window.title)
 
-        if (launch.header !== undefined && window.changeHeader(shape.header)) this.said(process.identity, "changeHeader", window.header)
+        if (launch.header !== undefined && window.setHeader(shape.header)) this.said(process.identity, "changeHeader", window.header)
 
-        if (launch.frame !== undefined && window.changeFrame(shape.frame)) this.said(process.identity, "changeFrame", window.frame)
+        if (launch.frame !== undefined && window.setFrame(shape.frame)) this.said(process.identity, "changeFrame", window.frame)
 
-        if (launch.transaction !== undefined) window.changeOpeningTransaction(shape.transaction)
+        if (launch.transaction !== undefined && window.setTransaction(shape.transaction)) this.said(process.identity, "changeTransaction", window.transaction)
 
         if (launch.position !== undefined && launch.size !== undefined) {
-            const changed = window.setGeometry({ position: shape.position, size: shape.size })
+            const changed = window.setGeometry({ ...shape.position, ...shape.size })
             if (changed.moved || changed.resized) {
-                this.said(process.identity, "geometry", { position: window.position, size: window.size })
                 if (changed.moved) this.said(process.identity, "move", window.position)
                 if (changed.resized) this.said(process.identity, "resize", window.size)
             }
@@ -1514,28 +1522,59 @@ export default class ProcessManager extends TheLink {
         return endpoint === "server" ? held.server?.service === true : held.client?.service === true
     }
 
-    @Connect("/service/exists")
-    protected async serviceExists(key: unknown) {
+    @Connect("/service/available")
+    protected async serviceAvailable(address: unknown) {
 
-        return this.services.exists(key)
+        return this.services.available(address)
+    }
+
+    @Connect("/service/list")
+    protected async listServices() { return this.services.list() }
+
+    @Connect("/service/search")
+    protected async searchServices(name: unknown) {
+
+        if (typeof name !== "string" || !name.trim()) throw new Error("A Service name is required")
+
+        return this.services.list(name)
     }
 
     @Connect("/service/wait-ready")
-    protected async waitServiceReady(key: unknown, timeout: unknown) {
+    protected async waitServiceReady(address: unknown, timeout: unknown) {
 
-        await this.services.waitReady(key, timeout, this.authManager.connectionSignal())
+        await this.services.waitReady(address, timeout, this.authManager.connectionSignal())
+    }
+
+    @Connect("/service/program-metadata")
+    protected async serviceProgramMetadata(address: unknown, iconSize: unknown = "medium") {
+
+        if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
+
+        const target = this.services.target(address)
+
+        if (!target) throw new Error("The Service is unavailable")
+
+        const program = target.process.program
+        const icon = await this.authManager.programManager.icon(program, iconSize)
+        const current = this.services.target(address)
+
+        if (!current || current.process !== target.process || current.endpoint !== target.endpoint) {
+            throw new Error("The Service is unavailable")
+        }
+
+        return Object.freeze({ name: program.name, version: program.version, icon })
     }
 
     @Subscribe("/service/send")
-    protected async sendClientService(source: string, key: unknown, event: unknown, payload: unknown) {
+    protected async sendClientService(source: string, address: unknown, event: unknown, payload: unknown) {
 
-        if (!isServiceKey(key) || typeof event !== "string") return
+        if (!isServiceAddress(address) || typeof event !== "string") return
 
         const process = this.find(source)
 
         if (!process.client) return
 
-        const target = this.services.target(key)
+        const target = this.services.target(address)
 
         if (target) await this.publish(process.identity, "client", target.process.identity, target.endpoint, [event, payload])
     }
@@ -1597,17 +1636,17 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/service/follow")
-    protected followClientService(pane: string, owner: string, subscription: unknown, key: unknown, scope: unknown, event: unknown) {
+    protected followClientService(pane: string, owner: string, subscription: unknown, address: unknown, scope: unknown, event: unknown) {
 
         const boundary = this.clientForwarders.get(this.clientOwnerKey(this.authManager.connection(), pane))
 
-        if (boundary?.owner !== owner || typeof subscription !== "string" || !isServiceKey(key)) return
+        if (boundary?.owner !== owner || typeof subscription !== "string" || !isServiceAddress(address)) return
 
         if (scope !== "lifecycle" && scope !== "events") return
 
         if (event !== null && typeof event !== "string") return
 
-        boundary.followService(this.services, subscription, key, scope, event)
+        boundary.followService(this.services, subscription, address, scope, event)
     }
 
     @Subscribe("/frame/service/unfollow")
@@ -1631,13 +1670,13 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Announces one fact only through an authoritative Host registry. */
-    public async announceHost(domain: "program" | "process" | "connection" | "session", event: string, subject: string, ...values: unknown[]) {
+    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitHost(domain, event, subject, ...values)
     }
 
     /** Announces one fact only to observers of an exact Program or Process subject. */
-    public async announceSubject(domain: "program" | "process" | "connection" | "session", event: string, subject: string, ...values: unknown[]) {
+    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
@@ -1756,14 +1795,9 @@ export default class ProcessManager extends TheLink {
 
         const heldService = (value: unknown) => {
 
-            if (!isServiceKey(value)) throw new Error("A complete Service key is required")
+            if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
 
-            const program = value.program ?? this.services.target(value)?.process.program.identity ?? null
-
-            if (program !== process.program.identity && !this.grants(process.identity, "services", program === null ? [] : [program])) {
-
-                throw new Error("The Service represented by this key does not exist")
-            }
+            if (!this.grants(process.identity, "services", [value.process])) throw new Error("Execution is not permitted")
 
             return value
         }
@@ -2109,21 +2143,36 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.system.stopEndpoint(process, "server")]
 
-        if (word === "service-exists") return [this.services.exists(heldService(rest[0]))]
+        if (word === "host-service-list") return [this.services.list().filter(address => this.grants(process.identity, "services", [address.process]))]
+
+        if (word === "host-service-search") {
+
+            const name = rest[0]
+
+            if (typeof name !== "string" || !name.trim()) throw new Error("A Service name is required")
+
+            return [this.grants(process.identity, "services", [name]) ? this.services.list(name) : []]
+        }
+
+        if (word === "service-available") return [this.services.available(heldService(rest[0]))]
 
         if (word === "service-wait-ready") return [await this.services.waitReady(heldService(rest[0]), rest[1])]
 
+        if (word === "service-program-metadata") return [await this.serviceProgramMetadata(heldService(rest[0]), rest[1] as ProgramIconSize | undefined)]
+
         if (word === "service-follow") {
 
-            const [subscription, key, scope, event] = rest
+            const [subscription, address, scope, event] = rest
 
-            if (typeof subscription !== "string" || !isServiceKey(key)) return []
+            if (typeof subscription !== "string" || !isServiceAddress(address)) return []
 
             if (scope !== "lifecycle" && scope !== "events") return []
 
             if (event !== null && typeof event !== "string") return []
 
-            server.followService(this.services, subscription, heldService(key), scope, event)
+            if (!this.grants(process.identity, "services", [address.process])) return []
+
+            server.followService(this.services, subscription, address, scope, event)
 
             return []
         }
@@ -2137,11 +2186,11 @@ export default class ProcessManager extends TheLink {
 
         if (word === "service-send") {
 
-            const [key, event, payload] = rest
+            const [address, event, payload] = rest
 
-            if (!isServiceKey(key) || typeof event !== "string") return []
+            if (!isServiceAddress(address) || typeof event !== "string") return []
 
-            const target = this.services.target(heldService(key))
+            const target = this.services.target(heldService(address))
 
             if (target) await this.publish(process.identity, "server", target.process.identity, target.endpoint, [event, payload])
 
@@ -2150,20 +2199,20 @@ export default class ProcessManager extends TheLink {
 
         if (word === "service-ask") {
 
-            const [key, question, publicQuestion, event, payload] = rest
+            const [address, question, publicQuestion, event, payload] = rest
 
-            if (!isServiceKey(key) || key.endpoint !== "server" || typeof question !== "string" || typeof publicQuestion !== "string" || typeof event !== "string") {
+            if (!isServiceAddress(address) || address.endpoint !== "server" || typeof question !== "string" || typeof publicQuestion !== "string" || typeof event !== "string") {
 
                 if (typeof question === "string") this.rejectQuestion(["wait", question, publicQuestion, event, payload], "A Server service question is invalid")
 
                 return []
             }
 
-            const target = this.services.target(heldService(key), "server")
+            const target = this.services.target(heldService(address), "server")
 
             if (!target?.process.server) {
 
-                this.rejectQuestion(["wait", question, publicQuestion, event, payload], "The service endpoint does not exist")
+                this.rejectQuestion(["wait", question, publicQuestion, event, payload], "The Service is unavailable")
 
                 return []
             }
@@ -2229,38 +2278,38 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
-        if (word === "changeTitle") {
+        if (word === "setTitle") {
 
             const target = heldWindow(rest[0]).process
 
-            await this.system.changeWindowTitle(target, String(rest[1] ?? ""))
+            await this.system.setWindowTitle(target, String(rest[1] ?? ""))
 
             return [target.identity]
         }
 
-        if (word === "changeHeader") {
+        if (word === "setHeader") {
 
             const target = heldWindow(rest[0]).process
 
-            await this.system.changeWindowHeader(target, rest[1] as boolean)
+            await this.system.setWindowHeader(target, rest[1] as boolean)
 
             return [target.identity]
         }
 
-        if (word === "changeFrame") {
+        if (word === "setFrame") {
 
             const target = heldWindow(rest[0]).process
 
-            await this.system.changeWindowFrame(target, rest[1] as never)
+            await this.system.setWindowFrame(target, rest[1] as never)
 
             return [target.identity]
         }
 
-        if (word === "changeOpeningTransaction") {
+        if (word === "setTransaction") {
 
             const target = heldWindow(rest[0]).process
 
-            await this.system.changeWindowOpeningTransaction(target, rest[1] as never)
+            await this.system.setWindowTransaction(target, rest[1] as never)
 
             return [target.identity]
         }
@@ -2967,22 +3016,22 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/frame/service/ask")
-    protected askClientService(source: string, key: unknown, values: unknown[]) {
+    protected askClientService(source: string, address: unknown, values: unknown[]) {
 
         const connection = this.authManager.connection()
 
-        if (!isServiceKey(key) || key.endpoint !== "server" || typeof values[0] !== "string" || typeof values[1] !== "string" || typeof values[2] !== "string") {
+        if (!isServiceAddress(address) || address.endpoint !== "server" || typeof values[0] !== "string" || typeof values[1] !== "string" || typeof values[2] !== "string") {
 
             this.rejectClientQuestion(connection, source, ["wait", ...values], "A Server service question is invalid")
 
             return
         }
 
-        const target = this.services.target(key, "server")
+        const target = this.services.target(address, "server")
 
         if (!target || !this.retainClientQuestion(connection, source, values[0], target.process.identity)) {
 
-            this.rejectClientQuestion(connection, source, ["wait", ...values], "The service endpoint does not exist")
+            this.rejectClientQuestion(connection, source, ["wait", ...values], "The Service is unavailable")
 
             return
         }
@@ -3121,7 +3170,7 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/geometry")
+    @Connect("/set-geometry")
     public async setGeometry(identity: string, geometry: WindowGeometry) {
 
         const window = this.mutableWindowOf(identity)
@@ -3130,8 +3179,6 @@ export default class ProcessManager extends TheLink {
 
         if (!changed.moved && !changed.resized) return { identity, window }
 
-        this.said(identity, "geometry", { position: window.position, size: window.size })
-
         if (changed.moved) this.said(identity, "move", window.position)
 
         if (changed.resized) this.said(identity, "resize", window.size)
@@ -3139,48 +3186,50 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/change-title")
-    public async changeTitle(identity: string, title: string) {
+    @Connect("/set-title")
+    public async setTitle(identity: string, title: string) {
 
         const window = this.mutableWindowOf(identity)
 
-        if (!window.changeTitle(title)) return { identity, window }
+        if (!window.setTitle(title)) return { identity, window }
 
         this.said(identity, "changeTitle", window.title)
 
         return { identity, window }
     }
 
-    @Connect("/change-header")
-    public async changeHeader(identity: string, header: boolean) {
+    @Connect("/set-header")
+    public async setHeader(identity: string, header: boolean) {
 
         const window = this.mutableWindowOf(identity)
 
-        if (!window.changeHeader(header)) return { identity, window }
+        if (!window.setHeader(header)) return { identity, window }
 
         this.said(identity, "changeHeader", window.header)
 
         return { identity, window }
     }
 
-    @Connect("/change-frame")
-    public async changeFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
+    @Connect("/set-frame")
+    public async setFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
 
         const window = this.mutableWindowOf(identity)
 
-        if (!window.changeFrame(frame)) return { identity, window }
+        if (!window.setFrame(frame)) return { identity, window }
 
         this.said(identity, "changeFrame", window.frame)
 
         return { identity, window }
     }
 
-    @Connect("/change-opening-transaction")
-    public async changeOpeningTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
+    @Connect("/set-transaction")
+    public async setTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
 
         const window = this.mutableWindowOf(identity)
 
-        window.changeOpeningTransaction(transaction)
+        if (!window.setTransaction(transaction)) return { identity, window }
+
+        this.said(identity, "changeTransaction", window.transaction)
 
         return { identity, window }
     }

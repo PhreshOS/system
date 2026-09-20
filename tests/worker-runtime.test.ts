@@ -244,7 +244,7 @@ test("server runtime contract", async () => {
                   assetId: "asset",
                   installed: false,
                   name: "Program",
-                  version: null,
+                  version: "0.0.0",
                   description: null,
                   categories: [],
                   keywords: [],

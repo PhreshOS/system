@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { parseLaunch, parseProgramDefinition, parseWindowFrame, parseWindowTransaction, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowFrame, parseWindowTransaction, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -76,6 +76,11 @@ export default class Program {
     public get name() {
 
         return this.config.name ?? this.config.identity
+    }
+
+    public get version() {
+
+        return this.config.version ?? defaultProgramVersion
     }
 
     // What its window is called when one opens. The window owns its
@@ -166,7 +171,7 @@ export default class Program {
     /** SDK Program record; internal references are consumed by the SDK boundary. */
     public record() {
 
-        const { version, description } = this.config
+        const { description } = this.config
         const server = this.server
         const client = this.client
 
@@ -182,7 +187,7 @@ export default class Program {
 
             name: this.name,
 
-            version: version ?? null,
+            version: this.version,
 
             description: description ?? null,
 
@@ -412,7 +417,7 @@ function coherent(config: ProgramConfig) {
     // somewhere and there is nowhere to put it.
     if (config.client?.layer !== undefined && !layers.includes(config.client.layer)) throw new Error(`A client half's layer is one of ${layers.join(", ")}`)
 
-    return config
+    return { ...config, version: config.version ?? defaultProgramVersion }
 }
 
 type Resolved<Half extends { start?: boolean, service?: boolean }> = Half extends unknown

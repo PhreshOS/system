@@ -1,7 +1,7 @@
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import { parseLaunch, type ClientLaunch, type ConnectionSnapshot, type PermissionName, type PermissionValue, type ServiceKey } from "@phreshos/core"
+import { parseLaunch, type ClientLaunch, type ConnectionSnapshot, type PermissionName, type PermissionValue, type ServiceAddress } from "@phreshos/core"
 
 const denied = "Execution is not permitted"
 
@@ -18,11 +18,6 @@ export default class SystemAccess {
     public ownsProcess(process: Pick<Process, "program">) {
 
         return this.owner().program === process.program
-    }
-
-    public serviceProgram(service: ServiceKey) {
-
-        return service.program ?? this.authManager.processManager.processes.get(service.process)?.program ?? null
     }
 
     public async all() {
@@ -42,13 +37,9 @@ export default class SystemAccess {
             || await this.authManager.grantsPermission(this.pane, "programs", [process.program])
     }
 
-    public async canService(service: ServiceKey) {
+    public async canService(service: ServiceAddress) {
 
-        const program = this.serviceProgram(service)
-
-        if (program !== null && this.owner().program === program) return true
-
-        return await this.authManager.grantsPermission(this.pane, "services", program === null ? [] : [program])
+        return await this.authManager.grantsPermission(this.pane, "services", [service.process])
     }
 
     /** Whether one Connection belongs to this Client's visible scope. */
@@ -103,9 +94,9 @@ export default class SystemAccess {
         return process
     }
 
-    public async service(service: ServiceKey) {
+    public async service(service: ServiceAddress) {
 
-        if (!await this.canService(service)) throw new Error("The Service represented by this key does not exist")
+        if (!await this.canService(service)) throw new Error("Execution is not permitted")
 
         return service
     }

@@ -2,7 +2,7 @@ import AuthManager from "../auth-manager"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
-import type { ServiceKey } from "@phreshos/core"
+import type { ServiceAddress } from "@phreshos/core"
 
 /**
  * Server-host counterpart of one client Process boundary lease.
@@ -141,11 +141,11 @@ export default class ClientProcessForwarder {
         this.endpointSubscriptions.delete(subscription)
     }
 
-    public followService(services: EndpointServices, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null) {
 
         this.unfollowService(subscription)
 
-        const stop = services.follow(key, scope, event, (word, payload) => {
+        const stop = services.follow(address, scope, event, (word, payload) => {
 
             const values = event === null ? [word, payload] : [payload]
 

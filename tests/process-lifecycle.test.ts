@@ -104,8 +104,8 @@ test("process lifecycle contract", async () => {
       assert.ok(process.clientEndpoint)
 
       await manager.move(process.identity, { x: 80, y: 90 })
-      await manager.changeHeader(process.identity, false)
-      await manager.changeFrame(process.identity, { radius: "full", color: "primary" })
+      await manager.setHeader(process.identity, false)
+      await manager.setFrame(process.identity, { radius: "full", color: "primary" })
 
       await manager.startClient(process.identity)
 
@@ -122,7 +122,7 @@ test("process lifecycle contract", async () => {
       assert.equal(process.clientEndpoint.window.header, false)
 
       await manager.stopClient(process.identity)
-      await manager.changeHeader(process.identity, true)
+      await manager.setHeader(process.identity, true)
       await manager.move(process.identity, { x: 140, y: 150 })
       await manager.startClient(process.identity, { layer: "window" })
 

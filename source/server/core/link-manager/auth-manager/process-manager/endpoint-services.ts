@@ -1,117 +1,131 @@
-import { isServiceKey, type ServiceKey } from "@phreshos/core"
+import { isServiceAddress, type ServiceAddress } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import type Process from "./process"
 import type { Half } from "./process-traffic"
 
-/** Routes live Endpoint services without owning their lifecycle or state. */
+/** Resolves and routes the Service view of named Endpoint execution contexts. */
 export default class EndpointServices extends TheLink {
 
-    public constructor(private readonly resolve: (key: ServiceKey) => ServiceTarget | null) {
+    private readonly active = new Set<string>()
+
+    public constructor(
+        private readonly resolve: (address: ServiceAddress) => ServiceTarget | null,
+        private readonly processes: () => Iterable<Process>,
+        private readonly changed: (event: "available" | "unavailable", address: ServiceAddress) => Promise<unknown> | unknown
+    ) {
 
         super()
     }
 
-    public exists(key: unknown) {
+    /** Returns the ready Service addresses currently represented by the model. */
+    public list(name?: string) {
 
-        return this.target(key) !== null
+        const addresses: ServiceAddress[] = []
+
+        for (const process of this.processes()) {
+
+            if (process.name === null || name !== undefined && process.name !== name) continue
+
+            for (const endpoint of ["server", "client"] as const) {
+
+                const address = this.addressOf(process, endpoint)
+
+                if (address && this.available(address)) addresses.push(address)
+            }
+        }
+
+        return addresses
     }
 
-    public async waitReady(key: unknown, timeout: unknown = 10_000, signal?: AbortSignal) {
+    public available(value: unknown) {
 
-        const resolved = this.key(key)
+        const address = this.address(value)
+        const target = this.resolve(address)
 
+        return target !== null && this.readyState(target.process, target.endpoint)
+    }
+
+    public async waitReady(value: unknown, timeout: unknown = 10_000, signal?: AbortSignal) {
+
+        const address = this.address(value)
         const milliseconds = serviceTimeout(timeout)
+
+        if (this.available(address)) return
 
         await new Promise<void>((resolve, reject) => {
 
             let settled = false
-            let stopReady: () => void = () => undefined
-            let stopStart: () => void = () => undefined
-            let timer: ReturnType<typeof setTimeout> | undefined
+            let stop: () => void = () => undefined
 
             const finish = (complete: () => void) => {
 
                 if (settled) return
 
                 settled = true
-                if (timer) clearTimeout(timer)
-                stopStart()
-                stopReady()
+                clearTimeout(timer)
+                stop()
                 signal?.removeEventListener("abort", abort)
                 complete()
             }
 
-            const abort = () => finish(() => reject(signal?.reason instanceof Error ? signal.reason : new Error("Waiting for the service was cancelled")))
+            const abort = () => finish(() => reject(signal?.reason instanceof Error ? signal.reason : new Error("Waiting for the Service was cancelled")))
+            const timer = setTimeout(() => finish(() => reject(new Error("The Service did not become available before the timeout"))), milliseconds)
 
-            const inspect = () => {
-
-                stopReady()
-                stopReady = () => undefined
-
-                const target = this.resolve(resolved)
-
-                if (!target) return
-
-                stopReady = target.process.waitReady(resolved.endpoint, () => finish(resolve))
-            }
-
-            stopStart = this.$inbound.subscribe(this.event(resolved, "lifecycle", "start"), inspect)
-            timer = setTimeout(() => finish(() => reject(new Error("The service did not become ready before the timeout"))), milliseconds)
-
+            stop = this.follow(address, "lifecycle", "available", () => finish(resolve))
             signal?.addEventListener("abort", abort, { once: true })
 
             if (signal?.aborted) abort()
-            else inspect()
+            else if (this.available(address)) finish(resolve)
         })
     }
 
-    public target(key: unknown, endpoint?: Half) {
+    public target(value: unknown, endpoint?: Half) {
 
-        const resolved = this.key(key)
-        const target = this.resolve(resolved)
+        const address = this.address(value)
+        const target = this.resolve(address)
 
-        if (!target || endpoint && target.endpoint !== endpoint) return null
+        if (!target || endpoint && target.endpoint !== endpoint || !this.readyState(target.process, target.endpoint)) return null
 
-        return this.live(target.process, target.endpoint) ? target : null
+        return target
     }
 
-    /** Mirrors one service Endpoint emission into its identity and name routes. */
+    /** Mirrors one application event through the Service's stable address. */
     public async emit(process: Process, endpoint: Half, event: string, payload: unknown) {
 
-        if (!this.configured(process, endpoint)) return []
+        const address = this.addressOf(process, endpoint)
 
-        return await Promise.all(this.keys(process, endpoint).map(key => (
-            this.$inbound.publish(this.event(key, "events", event), event, payload)
-        )))
+        if (!address || !this.available(address)) return []
+
+        return await this.$inbound.publish(this.event(address, "events", event), event, payload)
     }
 
-    /** Mirrors one service Endpoint start into its identity and name routes. */
-    public async started(process: Process, endpoint: Half) {
+    /** Re-evaluates Service availability after an Endpoint starts. */
+    public started(process: Process, endpoint: Half) {
 
-        if (!this.configured(process, endpoint)) return []
-
-        return await Promise.all(this.keys(process, endpoint).map(key => (
-            this.$inbound.publish(this.event(key, "lifecycle", "start"), "start", undefined)
-        )))
+        return this.refresh(process, endpoint)
     }
 
-    /** Mirrors one service Endpoint stop into its identity and name routes. */
-    public async stopped(process: Process, endpoint: Half, service: boolean) {
+    /** Re-evaluates Server Service availability after it signals readiness. */
+    public ready(process: Process, endpoint: Half) {
 
-        if (!service) return []
-
-        return await Promise.all(this.keys(process, endpoint).map(key => (
-            this.$inbound.publish(this.event(key, "lifecycle", "stop"), "stop", undefined)
-        )))
+        return this.refresh(process, endpoint)
     }
 
-    public follow(key: unknown, scope: Scope, event: string | null, subscriber: Subscriber) {
+    /** Removes availability after a previously configured Service Endpoint stops. */
+    public stopped(process: Process, endpoint: Half, service: boolean) {
 
-        const resolved = this.key(key)
+        const address = service ? this.addressOf(process, endpoint, true) : null
 
-        if (scope !== "lifecycle" && scope !== "events") throw new Error("A service subscription scope is invalid")
+        return address ? this.transition(address, false) : Promise.resolve([])
+    }
 
-        const prefix = this.prefix(resolved, scope)
+    public follow(value: unknown, scope: Scope, event: string | null, subscriber: Subscriber) {
+
+        const address = this.address(value)
+
+        if (scope !== "lifecycle" && scope !== "events") throw new Error("A Service subscription scope is invalid")
+
+        const prefix = this.prefix(address, scope)
 
         if (event !== null) return this.$inbound.subscribe(prefix + encodeURIComponent(event), (_word, payload) => subscriber(event, payload))
 
@@ -121,11 +135,44 @@ export default class EndpointServices extends TheLink {
         }, prefix)
     }
 
-    private key(value: unknown) {
+    private refresh(process: Process, endpoint: Half) {
 
-        if (!isServiceKey(value)) throw new Error("A complete service key is required")
+        const address = this.addressOf(process, endpoint)
 
-        return value
+        if (!address) return Promise.resolve([])
+
+        return this.transition(address, this.available(address))
+    }
+
+    private async transition(address: ServiceAddress, available: boolean) {
+
+        const identity = this.identity(address)
+
+        if (this.active.has(identity) === available) return []
+
+        if (available) this.active.add(identity)
+        else this.active.delete(identity)
+
+        const event = available ? "available" : "unavailable"
+
+        return await Promise.all([
+            this.$inbound.publish(this.event(address, "lifecycle", event), event, undefined),
+            this.changed(event, address)
+        ])
+    }
+
+    private address(value: unknown) {
+
+        if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
+
+        return Object.freeze({ program: value.program, process: value.process, endpoint: value.endpoint })
+    }
+
+    private addressOf(process: Process, endpoint: Half, previouslyConfigured = false): ServiceAddress | null {
+
+        if (process.name === null || !previouslyConfigured && !this.configured(process, endpoint)) return null
+
+        return Object.freeze({ program: process.program.identity, process: process.name, endpoint })
     }
 
     private configured(process: Process, endpoint: Half) {
@@ -133,30 +180,26 @@ export default class EndpointServices extends TheLink {
         return endpoint === "server" ? process.server?.service === true : process.client?.service === true
     }
 
-    private live(process: Process, endpoint: Half) {
+    private readyState(process: Process, endpoint: Half) {
 
-        return endpoint === "server" ? process.server !== null : process.client !== null
+        return endpoint === "server"
+            ? process.server?.service === true && process.server.ready
+            : process.client?.service === true
     }
 
-    private keys(process: Process, endpoint: Half) {
+    private identity(address: ServiceAddress) {
 
-        return [
-            Object.freeze({ process: process.identity, endpoint }),
-            Object.freeze({ program: process.program.identity, process: process.identity, endpoint }),
-            ...process.name ? [Object.freeze({ program: process.program.identity, process: process.name, endpoint })] : []
-        ] satisfies ServiceKey[]
+        return JSON.stringify([address.program, address.process, address.endpoint])
     }
 
-    private prefix(key: ServiceKey, scope: Scope) {
+    private prefix(address: ServiceAddress, scope: Scope) {
 
-        return key.program === undefined
-            ? `process/${encodeURIComponent(key.process)}/${key.endpoint}/${scope}/`
-            : `program/${encodeURIComponent(key.program)}/${encodeURIComponent(key.process)}/${key.endpoint}/${scope}/`
+        return `program/${encodeURIComponent(address.program)}/${encodeURIComponent(address.process)}/${address.endpoint}/${scope}/`
     }
 
-    private event(key: ServiceKey, scope: Scope, event: string) {
+    private event(address: ServiceAddress, scope: Scope, event: string) {
 
-        return this.prefix(key, scope) + encodeURIComponent(event)
+        return this.prefix(address, scope) + encodeURIComponent(event)
     }
 }
 
@@ -164,7 +207,7 @@ export function serviceTimeout(value: unknown = 10_000) {
 
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
 
-        throw new Error("A service readiness timeout must be a non-negative finite number")
+        throw new Error("A Service readiness timeout must be a non-negative finite number")
     }
 
     return value

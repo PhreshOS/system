@@ -2,94 +2,59 @@ import assert from "node:assert/strict"
 import EndpointServices from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@server/core/link-manager/auth-manager/process-manager/process"
-import type { ServiceKey } from "@phreshos/core"
+import type { ServiceAddress } from "@phreshos/core"
 import { test } from "vitest"
 
-test("endpoint services contract", async () => {
-  const privateProgram = new Program({
-      identity: "private-program",
-      server: { location: ".", command: "true" }
-  })
-  const documentedProgram = new Program({
-      identity: "documented-program",
-      agent: "agent.md",
-      server: { location: ".", command: "true" },
-      client: { location: "." }
-  })
-
-  assert.equal(privateProgram.record().hasAgent, false)
-  assert.equal(documentedProgram.record().hasAgent, true)
-  assert.throws(() => new Program({
-      identity: "invalid-program",
-      agent: "",
-      server: { location: ".", command: "true" }
-  }), /agent documentation/)
-
+test("endpoint services use stable name addresses and ready availability", async () => {
   const program = new Program({
       identity: "program",
       server: { location: ".", command: "true" },
       client: { location: "." }
   })
-  const waits: string[] = []
+  assert.equal(program.version, "0.0.0")
 
   function process(identity: string, name: string | null, ready = true, service = true) {
-      const waiters = new Set<() => void>()
       const server = { ready, service }
       return {
           identity,
           name,
           reference: `${identity}-reference`,
           program,
-          launch: {
-              server: { service },
-              client: { service }
-          },
+          launch: { server: { service }, client: { service } },
           server,
           client: { service },
-          waitReady(endpoint: "server" | "client", notify: () => void) {
-
-              waits.push(endpoint)
-              if (endpoint === "client" || server.ready) notify()
-              else waiters.add(notify)
-              return () => { waiters.delete(notify) }
-          },
-          becomeReady() {
-              server.ready = true
-              for (const notify of waiters) notify()
-              waiters.clear()
-          }
+          becomeReady() { server.ready = true }
       } as unknown as Process & { becomeReady(): void }
   }
 
-  let provider = process("0b231437-513b-4907-8041-c497279c07fa", "main")
-
-  const services = new EndpointServices(key => {
-      if (key.program !== undefined && key.program !== program.identity) return null
-      if (key.program === undefined && key.process !== provider.identity) return null
-      if (key.process !== provider.identity && key.process !== provider.name) return null
-      if ((key.endpoint === "server" ? provider.server?.service : provider.client?.service) !== true) return null
-      return { process: provider, endpoint: key.endpoint }
-  })
-
-  const key = { program: "program", process: "main", endpoint: "server" } satisfies ServiceKey
-  const clientKey = { ...key, endpoint: "client" } satisfies ServiceKey
-  const exact = { ...key, process: provider.identity }
-  const global = { process: provider.identity, endpoint: "server" } satisfies ServiceKey
+  let provider = process("first", "main")
+  const transitions: Array<[string, ServiceAddress]> = []
+  const services = new EndpointServices(
+      address => address.program === program.identity
+          && address.process === provider.name
+          && (address.endpoint === "server" ? provider.server?.service : provider.client?.service) === true
+          ? { process: provider, endpoint: address.endpoint }
+          : null,
+      () => [provider],
+      (event, address) => { transitions.push([event, address]) }
+  )
+  const address = { program: "program", process: "main", endpoint: "server" } satisfies ServiceAddress
+  const clientAddress = { ...address, endpoint: "client" } satisfies ServiceAddress
   const lifecycle: string[] = []
   const publications: unknown[] = []
 
-  await assert.rejects(() => services.waitReady(key, -1), /non-negative finite number/)
+  assert.throws(() => services.available({ process: "main", endpoint: "server" }), /complete Service address/)
+  await assert.rejects(() => services.waitReady(address, -1), /non-negative finite number/)
 
-  services.follow(key, "lifecycle", null, event => lifecycle.push(event))
-  services.follow(key, "events", "change", (_event, payload) => publications.push(payload))
+  services.follow(address, "lifecycle", null, event => lifecycle.push(event))
+  services.follow(address, "events", "change", (_event, payload) => publications.push(payload))
 
   await services.started(provider, "server")
-  assert.equal(services.exists(key), true)
-  assert.equal(services.exists(global), true)
-  assert.deepEqual(lifecycle, ["start"])
-  await services.waitReady(key, 0)
-  await services.waitReady(clientKey, 0)
-  assert.deepEqual(waits, ["server", "client"])
+  await services.started(provider, "client")
+  assert.equal(services.available(address), true)
+  assert.deepEqual(services.list("main"), [address, clientAddress])
+  assert.deepEqual(lifecycle, ["available"])
+  await services.waitReady(address, 0)
 
   await services.emit(provider, "server", "ignored", 1)
   await services.emit(provider, "server", "change", 2)
@@ -97,32 +62,30 @@ test("endpoint services contract", async () => {
 
   provider.server = null
   await services.stopped(provider, "server", true)
-  assert.equal(services.exists(key), false)
-  assert.deepEqual(lifecycle, ["start", "stop"])
-  await assert.rejects(() => services.waitReady(key, 0), /timeout/)
+  assert.equal(services.available(address), false)
+  assert.deepEqual(lifecycle, ["available", "unavailable"])
+  await assert.rejects(() => services.waitReady(address, 0), /timeout|available/)
 
-  // A name address follows a replacement, while an identity address does not.
-  provider = process("234448b9-4661-4bda-8028-ae75438bf5be", "main", false)
+  // A stable address follows a replacement with the same Program and Process name.
+  provider = process("replacement", "main", false)
   await services.started(provider, "server")
-  assert.equal(services.exists(key), true)
-  assert.equal(services.exists(exact), false)
-  assert.equal(services.exists(global), false)
+  assert.equal(services.available(address), false)
 
-  const ready = services.waitReady(key, 100)
+  const ready = services.waitReady(address, 100)
   provider.becomeReady()
+  await services.ready(provider, "server")
   await ready
+  assert.equal(services.available(address), true)
 
-  // Server and Client remain distinct coordinates for the same Process.
-  assert.equal(services.exists(clientKey), true)
-
-  const unconfiguredProgram = new Program({
-      identity: "unconfigured",
-      server: { location: ".", command: "true" }
-  })
-  assert.equal(unconfiguredProgram.server?.service, false)
-
-  // One incarnation can override the Program default without changing the Program.
-  provider = process("2c6f42b0-7847-4f80-8373-0cba3f48636b", "main", true, false)
+  // An unnamed Process is never discoverable, even when its Endpoint is configured.
+  provider = process("unnamed", null)
   await services.started(provider, "server")
-  assert.equal(services.exists(key), false)
+  assert.deepEqual(services.list(), [])
+
+  // A running Endpoint that did not opt into Service mode remains unavailable.
+  provider = process("unconfigured", "main", true, false)
+  await services.started(provider, "server")
+  assert.equal(services.available(address), false)
+
+  assert.deepEqual(transitions.map(([event]) => event), ["available", "available", "unavailable", "available"])
 }, 120_000)

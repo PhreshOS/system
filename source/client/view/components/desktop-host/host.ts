@@ -11,7 +11,7 @@ import { sdkProcess, sdkProgram } from "./sdk-records"
 import { type default as ClientProgram } from "@client/core/link-manager/auth-manager/program-manager/program"
 import { type default as ClientProcess } from "@client/core/link-manager/auth-manager/process-manager/process"
 import {
-    isServiceKey,
+    isServiceAddress,
     isUploadFile,
     parseDesktopPreferencesUpdate,
     parsePermissionName,
@@ -106,7 +106,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
     function permittedService(value: unknown) {
 
-        if (!isServiceKey(value)) throw new Error("A complete service key is required")
+        if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
 
         return access.service(value)
     }
@@ -374,11 +374,25 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [await processManager.endpointIsService(pane, address(target), endpoint)]
         }
 
-        if (word === "service-exists") {
+        if (word === "host-service-list" || word === "host-service-search") {
+
+            const name = word === "host-service-search" ? args[0] : undefined
+
+            if (name !== undefined && (typeof name !== "string" || !name.trim())) throw new Error("A Service name is required")
+
+            const services = await processManager.listServices(name)
+            const visible = []
+
+            for (const service of services) if (await access.canService(service)) visible.push(service)
+
+            return [visible]
+        }
+
+        if (word === "service-available") {
 
             const service = await permittedService(args[0])
 
-            return [await processManager.serviceExists(service)]
+            return [await processManager.serviceAvailable(service)]
         }
 
         if (word === "service-wait-ready") {
@@ -388,21 +402,28 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [await processManager.waitServiceReady(service, args[1] as number | undefined)]
         }
 
+        if (word === "service-program-metadata") {
+
+            const service = await permittedService(args[0])
+
+            return [await processManager.serviceProgramMetadata(service, args[1] as ProgramIconSize | undefined)]
+        }
+
         if (word === "service-follow") {
 
-            const [subscription, key, scope, event] = args
+            const [subscription, address, scope, event] = args
 
-            if (typeof subscription !== "string" || !isServiceKey(key)) return []
+            if (typeof subscription !== "string" || !isServiceAddress(address)) return []
 
             if (scope !== "lifecycle" && scope !== "events") return []
 
             if (event !== null && typeof event !== "string") return []
 
-            await access.service(key)
+            if (!await access.canService(address)) return []
 
             const owner = frameOwner()
 
-            if (owner) await processManager.followService(pane, owner, subscription, key, scope, event)
+            if (owner) await processManager.followService(pane, owner, subscription, address, scope, event)
 
             return []
         }
@@ -418,7 +439,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "service-send") {
 
-            if (!isServiceKey(args[0]) || typeof args[1] !== "string") return []
+            if (!isServiceAddress(args[0]) || typeof args[1] !== "string") return []
 
             const service = await access.service(args[0])
 
@@ -429,7 +450,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "service-ask") {
 
-            if (!isServiceKey(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
+            if (!isServiceAddress(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
 
             const service = await access.service(args[0])
 
@@ -842,7 +863,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowPresentationGeometry") {
 
             const target = presentationProcess(args[0])
-            await presentation.geometry(target.identity, presentationGeometry(args[1]), selectedTransaction(target))
+            await presentation.setGeometry(target.identity, presentationGeometry(args[1]), selectedTransaction(target))
 
             return []
         }
@@ -851,20 +872,20 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             const target = presentationProcess(args[0])
             const title = String(args[1] ?? "").trim()
             if (!title) throw new Error("A Window title must not be empty")
-            presentation.title(target.identity, title)
+            presentation.setTitle(target.identity, title)
             return []
         }
 
         if (word === "windowPresentationHeader") {
             const target = presentationProcess(args[0])
             if (typeof args[1] !== "boolean") throw new Error("Window presentation header state must be true or false")
-            presentation.header(target.identity, args[1])
+            presentation.setHeader(target.identity, args[1])
             return []
         }
 
         if (word === "windowPresentationFrame") {
             const target = presentationProcess(args[0])
-            await presentation.frame(target.identity, presentationFrame(args[1]), selectedTransaction(target))
+            await presentation.setFrame(target.identity, presentationFrame(args[1]), selectedTransaction(target))
             return []
         }
 
@@ -910,32 +931,32 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
-        if (word === "changeTitle") {
+        if (word === "setTitle") {
 
-            await windowOf(await permittedProcess(args[0])).changeTitle(String(args[1] ?? ""))
+            await windowOf(await permittedProcess(args[0])).setTitle(String(args[1] ?? ""))
 
             return [pane]
         }
 
-        if (word === "changeHeader") {
+        if (word === "setHeader") {
 
             if (typeof args[1] !== "boolean") throw new Error("Window header state must be true or false")
 
-            await windowOf(await permittedProcess(args[0])).changeHeader(args[1])
+            await windowOf(await permittedProcess(args[0])).setHeader(args[1])
 
             return [pane]
         }
 
-        if (word === "changeFrame") {
+        if (word === "setFrame") {
 
-            await windowOf(await permittedProcess(args[0])).changeFrame(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).setFrame(args[1] as never)
 
             return [pane]
         }
 
-        if (word === "changeOpeningTransaction") {
+        if (word === "setTransaction") {
 
-            await windowOf(await permittedProcess(args[0])).changeOpeningTransaction(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).setTransaction(args[1] as never)
 
             return [pane]
         }

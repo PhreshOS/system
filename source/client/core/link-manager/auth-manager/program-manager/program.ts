@@ -25,7 +25,7 @@ export default class Program {
 
     public readonly name: string
 
-    public readonly version: string | null
+    public readonly version: string
 
     public readonly description: string | null
 

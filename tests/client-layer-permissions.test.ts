@@ -10,7 +10,7 @@ function fixture() {
     let permissions: Permissions = {}
     const program: ProgramSnapshot = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
-        version: null, description: null, hasAgent: false, server: null,
+        version: "0.0.0", description: null, hasAgent: false, server: null,
         client: { start: true, service: false, title: null, header: null, frame: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null }
     }
     const process = { identity: "caller", reference: "process-reference", program: program.identity, name: null, startedAt: 0, options: {}, server: null, client: null }

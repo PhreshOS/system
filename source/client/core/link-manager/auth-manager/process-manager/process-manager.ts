@@ -5,9 +5,9 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Process from "./process"
-import { type ClientLaunch, type ServerLaunch } from "@phreshos/core"
+import { type ClientLaunch, type ProgramIconSize, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { type ServiceKey, type WindowLayer } from "@phreshos/core"
+import { type ServiceAddress, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
 
 /**
@@ -81,21 +81,37 @@ export default class ProcessManager extends TheLink {
         return await this.$outbound.publishFirst("/endpoint/is-service", source, target, endpoint) as boolean
     }
 
-    /** Reads current Endpoint existence for one exact Service address. */
-    public async serviceExists(key: ServiceKey) {
+    /** Reads current availability for one exact Service address. */
+    public async serviceAvailable(address: ServiceAddress) {
 
-        return await this.$outbound.publishFirst("/service/exists", key) as boolean
+        return await this.$outbound.publishFirst("/service/available", address) as boolean
     }
 
-    public async waitServiceReady(key: ServiceKey, timeout: number | undefined) {
+    public async listServices(name?: string) {
 
-        await this.$outbound.publishFirst("/service/wait-ready", key, timeout)
+        const route = name === undefined ? "/service/list" : "/service/search"
+
+        return await this.$outbound.publishFirst(route, ...name === undefined ? [] : [name]) as ServiceAddress[]
+    }
+
+    public async waitServiceReady(address: ServiceAddress, timeout: number | undefined) {
+
+        await this.$outbound.publishFirst("/service/wait-ready", address, timeout)
+    }
+
+    public async serviceProgramMetadata(address: ServiceAddress, iconSize: ProgramIconSize = "medium") {
+
+        return await this.$outbound.publishFirst("/service/program-metadata", address, iconSize) as {
+            name: string
+            version: string
+            icon: number[]
+        }
     }
 
     /** Registers one exact service interest for this frame lease. */
-    public async followService(pane: string, owner: string, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+    public async followService(pane: string, owner: string, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null) {
 
-        await this.$outbound.publish("/frame/service/follow", pane, owner, subscription, key, scope, event)
+        await this.$outbound.publish("/frame/service/follow", pane, owner, subscription, address, scope, event)
     }
 
     public async unfollowService(pane: string, owner: string, subscription: string) {
@@ -103,15 +119,15 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/frame/service/unfollow", pane, owner, subscription)
     }
 
-    /** Sends to the live Endpoint behind one exact service key. */
-    public async sendService(source: string, key: ServiceKey, event: string, payload: unknown) {
+    /** Sends to the live Endpoint behind one exact Service address. */
+    public async sendService(source: string, address: ServiceAddress, event: string, payload: unknown) {
 
-        await this.$outbound.publish("/service/send", source, key, event, payload)
+        await this.$outbound.publish("/service/send", source, address, event, payload)
     }
 
-    public async askService(source: string, key: ServiceKey, values: unknown[]) {
+    public async askService(source: string, address: ServiceAddress, values: unknown[]) {
 
-        await this.$outbound.publish("/frame/service/ask", source, key, values)
+        await this.$outbound.publish("/frame/service/ask", source, address, values)
     }
 
     // Handed on, not awaited. Whoever asked is holding the question by
@@ -318,13 +334,6 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
-    @Subscribe("/geometry")
-    @Publish("/processes", "inbound")
-    protected async geometryHandle(payload: { identity: string, window: WindowSnapshot } | null) {
-
-        return this.followed(payload)
-    }
-
     @Subscribe("/raise")
     @Publish("/processes", "inbound")
     protected async raiseHandle(payload: { identity: string, window: WindowSnapshot } | null) {
@@ -353,9 +362,9 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
-    @Subscribe("/change-opening-transaction")
+    @Subscribe("/change-transaction")
     @Publish("/processes", "inbound")
-    protected async changeOpeningTransactionHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+    protected async changeTransactionHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }

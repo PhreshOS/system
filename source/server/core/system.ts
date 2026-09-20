@@ -220,7 +220,7 @@ export default class System {
         })
     }
 
-    public observe(domain: "program" | "process" | "window" | "connection" | "session", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+    public observe(domain: "program" | "process" | "window" | "connection" | "session" | "service", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.processManager.observeHost(domain, event, subject, subscriber)
     }
@@ -345,24 +345,24 @@ export default class System {
         await this.processManager.minimize(process.identity, minimized)
     }
 
-    public async changeWindowTitle(process: Process, title: string) {
+    public async setWindowTitle(process: Process, title: string) {
 
-        await this.processManager.changeTitle(process.identity, title)
+        await this.processManager.setTitle(process.identity, title)
     }
 
-    public async changeWindowHeader(process: Process, header: boolean) {
+    public async setWindowHeader(process: Process, header: boolean) {
 
-        await this.processManager.changeHeader(process.identity, header)
+        await this.processManager.setHeader(process.identity, header)
     }
 
-    public async changeWindowFrame(process: Process, frame: WindowFrame) {
+    public async setWindowFrame(process: Process, frame: WindowFrame) {
 
-        await this.processManager.changeFrame(process.identity, frame)
+        await this.processManager.setFrame(process.identity, frame)
     }
 
-    public async changeWindowOpeningTransaction(process: Process, transaction: WindowTransaction) {
+    public async setWindowTransaction(process: Process, transaction: WindowTransaction) {
 
-        await this.processManager.changeOpeningTransaction(process.identity, transaction)
+        await this.processManager.setTransaction(process.identity, transaction)
     }
 
     public async raiseWindow(process: Process) {
@@ -379,7 +379,7 @@ export default class System {
             identity: program.identity,
             assetId: program.assetId,
             name: program.name,
-            version: program.config.version ?? null,
+            version: program.version,
             description: program.config.description ?? null,
             installed: entry.installed,
             hasAgent: program.agentPath !== null,
@@ -543,29 +543,31 @@ export default class System {
         return this.processManager.endpointIsServiceFromOutside(process.identity, endpoint)
     }
 
-    public serviceExists(key: unknown) {
+    public serviceAvailable(address: unknown) {
 
-        return this.processManager.serviceExistsFromOutside(key)
+        return this.processManager.serviceAvailableFromOutside(address)
     }
 
-    public waitServiceReady(key: unknown, timeout?: number) {
+    public listServices(name?: string) { return this.processManager.listServicesFromOutside(name) }
 
-        return this.processManager.waitServiceReadyFromOutside(key, timeout)
+    public waitServiceReady(address: unknown, timeout?: number) {
+
+        return this.processManager.waitServiceReadyFromOutside(address, timeout)
     }
 
-    public publishService(key: unknown, event: string, payload: unknown) {
+    public publishService(address: unknown, event: string, payload: unknown) {
 
-        return this.processManager.publishServiceFromOutside(key, event, payload)
+        return this.processManager.publishServiceFromOutside(address, event, payload)
     }
 
-    public askService(key: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
+    public askService(address: unknown, event: string, payload: unknown, timeout = 10_000, signal?: AbortSignal) {
 
-        return this.processManager.askServiceFromOutside(key, event, payload, timeout, signal)
+        return this.processManager.askServiceFromOutside(address, event, payload, timeout, signal)
     }
 
-    public observeService(key: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
+    public observeService(address: unknown, scope: "lifecycle" | "events", event: string | null, subscriber: (event: string, payload: unknown) => unknown) {
 
-        return this.processManager.observeServiceFromOutside(key, scope, event, subscriber)
+        return this.processManager.observeServiceFromOutside(address, scope, event, subscriber)
     }
 
     public get uploads() {

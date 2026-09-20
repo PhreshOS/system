@@ -4,7 +4,7 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceKey, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceKey, type ShellOptions } from "@phreshos/core"
+import { isServiceAddress, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceAddress, type ShellOptions } from "@phreshos/core"
 import { type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -354,7 +354,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (operation === "service-follow") {
 
-            if (isServiceKey(target)) this.systemSubscriptions.set(subscription, { domain: "service", service: target })
+            if (isServiceAddress(target)) this.systemSubscriptions.set(subscription, { domain: "service", service: target })
 
             return
         }
@@ -1122,7 +1122,7 @@ interface EndpointSubscription {
 
 type SystemSubscriptionTarget =
     | Readonly<{ domain: "program", program: string }>
-    | Readonly<{ domain: "service", service: ServiceKey }>
+    | Readonly<{ domain: "service", service: ServiceAddress }>
 
 function desktopPreferencesSubscription(subscription: EndpointSubscription) {
 

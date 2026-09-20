@@ -3,7 +3,7 @@ import ClientProcessBoundary from "@client/view/components/desktop-host/client-p
 import { presentationTransaction } from "@client/view/components/desktop-host/window-presentation"
 import WindowPresentations, { type WindowPresentationEntry } from "@client/view/components/window-manager/window-presentations"
 import { requireWindowPresentationTransactions } from "@shared/window-layers"
-import type { WindowLayer } from "@phreshos/core"
+import type { WindowLayer, WindowTransaction } from "@phreshos/core"
 import { test } from "vitest"
 
 test("Window presentation transactions remain independent from Appearance limits", () => {
@@ -77,11 +77,39 @@ test("transactionAndWait semantics resolve on completion and reject on interrupt
   await presentations.move("overlay", { x: 70, y: 80 })
   await assert.rejects(interrupted, /interrupted/)
 
-  const changingFrame = presentations.frame("overlay", { color: "primary", radius: "full" }, request)
+  const changingFrame = presentations.setFrame("overlay", { color: "primary", radius: "full" }, request)
   const frameRevision = presentations.projection("overlay").frameAnimation?.revision
   presentations.complete("overlay", "frame", frameRevision!)
   await changingFrame
   assert.deepEqual(presentations.state("overlay").frame, { color: "primary", radius: "full" })
+})
+
+test("transaction-capable presentations use the authoritative Window transaction by default", async () => {
+  const overlay = client("over")
+  overlay.window.transaction = { duration: 240, easing: "ease-out" }
+  const entries = new Map([
+      ["overlay", { identity: "overlay:0", client: overlay }]
+  ]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
+  const presentations = new WindowPresentations(entries, () => overlay as never)
+
+  const first = presentations.move("overlay", { x: 20, y: 30 })
+  const firstAnimation = presentations.projection("overlay").geometryAnimation
+  assert.deepEqual(firstAnimation?.transaction, overlay.window.transaction)
+  presentations.complete("overlay", "geometry", firstAnimation!.revision)
+  await first
+
+  overlay.window.transaction = false
+  presentations.reconcile(entries)
+  await presentations.move("overlay", { x: 40, y: 50 })
+  assert.equal(presentations.projection("overlay").geometryAnimation, null)
+
+  overlay.window.transaction = { duration: 180, easing: "linear" }
+  presentations.reconcile(entries)
+  const inherited = presentations.move("overlay", { x: 60, y: 70 }, { transaction: true, wait: true })
+  const inheritedAnimation = presentations.projection("overlay").geometryAnimation
+  assert.deepEqual(inheritedAnimation?.transaction, overlay.window.transaction)
+  presentations.complete("overlay", "geometry", inheritedAnimation!.revision)
+  await inherited
 })
 
 test("presentation geometry events expose each applied representation change", () => {
@@ -136,7 +164,7 @@ function client(layer: WindowLayer) {
           title: "Window",
           header: layer === "window",
           frame: layer === "window",
-          transaction: false,
+          transaction: false as WindowTransaction,
           position: { x: 0, y: 0 },
           size: { width: 300, height: 200 },
           minimized: false,

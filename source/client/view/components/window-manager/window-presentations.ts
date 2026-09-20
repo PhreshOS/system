@@ -62,6 +62,7 @@ export default class WindowPresentations implements WindowPresentationHost {
                 this.following.set(identity, { snapshot })
             }
             if (!next.has(identity)) next.set(identity, initialPresentationState(client))
+            else next.set(identity, { ...next.get(identity)!, transaction: snapshot.transaction })
             this.authoritative.set(identity, snapshot)
         }
 
@@ -74,7 +75,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             const state = next.get(identity)!
             const target = this.authoritative.get(identity)!
             const previous = relation.snapshot
-            const changes = { ...followedState(state, target, previous) }
+            const changes = { transaction: target.transaction, ...followedState(state, target, previous) }
             const maximized = changes.maximized ?? state.maximized
             const minimized = changes.minimized ?? state.minimized
             const geometryChanged = ("position" in changes && JSON.stringify(state.position) !== JSON.stringify(changes.position))
@@ -199,17 +200,17 @@ export default class WindowPresentations implements WindowPresentationHost {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "position")
-        return this.changeGeometry(identity, { position, size: state.size }, transaction)
+        return this.changeGeometry(identity, { ...position, ...state.size }, transaction)
     }
 
     public resize(process: string, size: WindowState["size"], transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "size")
-        return this.changeGeometry(identity, { position: state.position, size }, transaction)
+        return this.changeGeometry(identity, { ...state.position, ...size }, transaction)
     }
 
-    public geometry(process: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
+    public setGeometry(process: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "position")
@@ -228,7 +229,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         requirePresentationApplication(state.layer, "maximized")
         if (state.maximized === maximized) return Promise.resolve()
         this.cancel(identity, "geometry")
-        const animation = !state.minimized ? presentationAnimation(++this.revision, transaction) : null
+        const animation = !state.minimized ? presentationAnimation(++this.revision, state.transaction, transaction) : null
         this.replace(identity, { ...state, maximized, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
@@ -243,8 +244,8 @@ export default class WindowPresentations implements WindowPresentationHost {
         const visibilityChanged = current.minimized !== projected.minimized
         this.cancel(identity, "geometry")
         this.cancel(identity, "minimize")
-        const geometryAnimation = geometryChanged && !projected.minimized ? presentationAnimation(++this.revision, transaction) : null
-        const minimizeAnimation = visibilityChanged ? presentationAnimation(++this.revision, transaction) : null
+        const geometryAnimation = geometryChanged && !projected.minimized ? presentationAnimation(++this.revision, projected.transaction, transaction) : null
+        const minimizeAnimation = visibilityChanged ? presentationAnimation(++this.revision, projected.transaction, transaction) : null
         this.replace(identity, {
             ...projected,
             geometryAnimation,
@@ -262,14 +263,14 @@ export default class WindowPresentations implements WindowPresentationHost {
         return Promise.resolve()
     }
 
-    public title(process: string, title: string) {
+    public setTitle(process: string, title: string) {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "title")
         this.replace(identity, { ...state, title })
     }
 
-    public header(process: string, header: boolean) {
+    public setHeader(process: string, header: boolean) {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "header")
@@ -302,14 +303,14 @@ export default class WindowPresentations implements WindowPresentationHost {
         }
     }
 
-    public frame(process: string, frame: WindowFrame, transaction?: PresentationTransactionRequest) {
+    public setFrame(process: string, frame: WindowFrame, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
         requirePresentationApplication(state.layer, "frame")
         if (JSON.stringify(state.frame) === JSON.stringify(frame)) return Promise.resolve()
 
         this.cancel(identity, "frame")
-        const animation = presentationAnimation(++this.revision, transaction)
+        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
         this.replace(identity, { ...state, frame, frameAnimation: animation })
         return this.waitFor(identity, "frame", animation, transaction)
     }
@@ -385,15 +386,17 @@ export default class WindowPresentations implements WindowPresentationHost {
 
         const state = this.windows.get(identity)
         if (!state) throw new Error("This Client has no Window presentation")
-        if (JSON.stringify([state.position, state.size]) === JSON.stringify([value.position, value.size])) return Promise.resolve()
+        const position = { x: value.x, y: value.y }
+        const size = { width: value.width, height: value.height }
+        if (JSON.stringify([state.position, state.size]) === JSON.stringify([position, size])) return Promise.resolve()
 
         if (state.minimized || state.maximized) {
-            this.replace(identity, { ...state, position: value.position, size: value.size })
+            this.replace(identity, { ...state, position, size })
             return Promise.resolve()
         }
         this.cancel(identity, "geometry")
-        const animation = presentationAnimation(++this.revision, transaction)
-        this.replace(identity, { ...state, position: value.position, size: value.size, geometryAnimation: animation })
+        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
+        this.replace(identity, { ...state, position, size, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
 
@@ -405,7 +408,7 @@ export default class WindowPresentations implements WindowPresentationHost {
 
         this.cancel(identity, "minimize")
         if (minimized) this.cancel(identity, "geometry", "The Window presentation was minimized")
-        const animation = presentationAnimation(++this.revision, transaction)
+        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
         this.replace(identity, { ...state, minimized, minimizeAnimation: animation, geometryAnimation: minimized ? null : state.geometryAnimation })
         return this.waitFor(identity, "minimize", animation, transaction)
     }
@@ -436,7 +439,6 @@ export default class WindowPresentations implements WindowPresentationHost {
 
             const moved = JSON.stringify(previous.position) !== JSON.stringify(current.position)
             const resized = JSON.stringify(previous.size) !== JSON.stringify(current.size)
-            if (moved || resized) emit("position", "geometry", { position: current.position, size: current.size })
             if (moved) emit("position", "move", current.position)
             if (resized) emit("size", "resize", current.size)
             if (previous.minimized !== current.minimized) emit("minimized", "minimize", current.minimized)
@@ -484,9 +486,11 @@ function animationKey(identity: string, kind: AnimationKind) {
     return `${identity}:${kind}`
 }
 
-function presentationAnimation(revision: number, request?: PresentationTransactionRequest) {
+function presentationAnimation(revision: number, fallback: WindowState["transaction"], request?: PresentationTransactionRequest) {
 
-    const transaction = request?.transaction ?? true
+    const transaction = request?.transaction === undefined || request.transaction === true
+        ? fallback
+        : request.transaction
     return transaction === false ? null : Object.freeze({ revision, transaction })
 }
 

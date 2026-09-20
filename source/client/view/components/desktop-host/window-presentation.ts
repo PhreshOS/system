@@ -34,14 +34,14 @@ export interface WindowPresentationHost {
     read(identity: string, property: WindowPresentationProperty): unknown
     move(identity: string, position: Position, transaction?: PresentationTransactionRequest): Promise<void>
     resize(identity: string, size: Size, transaction?: PresentationTransactionRequest): Promise<void>
-    geometry(identity: string, geometry: WindowGeometry, transaction?: PresentationTransactionRequest): Promise<void>
+    setGeometry(identity: string, geometry: WindowGeometry, transaction?: PresentationTransactionRequest): Promise<void>
     maximize(identity: string, maximized: boolean, transaction?: PresentationTransactionRequest): Promise<void>
     minimize(identity: string, minimized: boolean, transaction?: PresentationTransactionRequest): Promise<void>
     follow(identity: string, transaction?: PresentationTransactionRequest): Promise<void>
     unfollow(identity: string): Promise<void>
-    title(identity: string, title: string): void
-    header(identity: string, header: boolean): void
-    frame(identity: string, frame: WindowFrame, transaction?: PresentationTransactionRequest): Promise<void>
+    setTitle(identity: string, title: string): void
+    setHeader(identity: string, header: boolean): void
+    setFrame(identity: string, frame: WindowFrame, transaction?: PresentationTransactionRequest): Promise<void>
     raise(identity: string): void
     observe(identity: string, event: string | null, listener: (event: string, value: unknown) => void): () => void
     complete(identity: string, kind: "geometry" | "minimize" | "frame", revision: number): void
@@ -64,7 +64,11 @@ export function presentationSize(value: unknown): Size {
 
 export function presentationGeometry(value: unknown): WindowGeometry {
     const record = plain(value, "Window presentation geometry")
-    return Object.freeze({ position: presentationPosition(record.position), size: presentationSize(record.size) })
+    valueTerm(record.x, "x")
+    valueTerm(record.y, "y")
+    valueTerm(record.width, "width")
+    valueTerm(record.height, "height")
+    return Object.freeze({ x: record.x, y: record.y, width: record.width, height: record.height }) as WindowGeometry
 }
 
 export function presentationFrame(value: unknown) {

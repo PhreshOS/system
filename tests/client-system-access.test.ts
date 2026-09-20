@@ -42,20 +42,20 @@ test("client system access contract", async () => {
   const access = new SystemAccess(authManager, owner.identity)
   const ownProgram = { identity: "owner" }
   const outsideProgram = { identity: "outside" }
-  const ownService = { program: "owner", process: "main", endpoint: "server" } as const
-  const ownExactService = { process: sibling.identity, endpoint: "client" } as const
-  const outsideService = { program: "outside", process: "main", endpoint: "server" } as const
+  const ownService = { program: "owner", process: "owner-service", endpoint: "server" } as const
+  const siblingService = { program: "owner", process: "sibling-service", endpoint: "client" } as const
+  const outsideService = { program: "outside", process: "outside-service", endpoint: "server" } as const
 
   assert(access.ownsProgram(ownProgram))
   assert(!access.ownsProgram(outsideProgram))
   assert(access.ownsProcess(sibling))
   assert(!access.ownsProcess(outside))
   assert.equal(await access.program(ownProgram as never), ownProgram)
-  assert.equal(await access.service(ownService), ownService)
-  assert.equal(await access.service(ownExactService), ownExactService)
+  await assert.rejects(access.service(ownService), /Execution is not permitted/)
+  await assert.rejects(access.service(siblingService), /Execution is not permitted/)
   await assert.rejects(access.program(outsideProgram as never), /Program represented by this handle does not exist/)
   await assert.rejects(access.process(outside), /Process represented by this handle does not exist/)
-  await assert.rejects(access.service(outsideService), /Service represented by this key does not exist/)
+  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
   await assert.rejects(access.requireNetwork("https://api.example.com/v1/users"), /Execution is not permitted/)
   await assert.rejects(access.requireStorage("/Users/person/Documents/report.txt", "read"), /Execution is not permitted/)
@@ -67,7 +67,7 @@ test("client system access contract", async () => {
   assert.equal(await access.canConnection("desktop-connection"), false)
   assert.equal(await access.canSession("desktop-session"), false)
 
-  permissions = { services: ["outside"] }
+  permissions = { services: ["outside-service"] }
 
   assert.equal(await access.service(outsideService), outsideService)
   await assert.rejects(access.program(outsideProgram as never), /Program represented by this handle does not exist/)
@@ -78,7 +78,7 @@ test("client system access contract", async () => {
 
   assert.equal(await access.service(outsideService), outsideService)
   assert.equal(await access.service(ownService), ownService)
-  assert.equal(await access.service(ownExactService), ownExactService)
+  assert.equal(await access.service(siblingService), siblingService)
   await assert.rejects(access.program(outsideProgram as never), /Program represented by this handle does not exist/)
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 
@@ -86,15 +86,14 @@ test("client system access contract", async () => {
 
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
   assert.equal(await access.process(outside), outside)
-  assert.equal(await access.service(outsideService), outsideService)
-  assert.deepEqual(await access.service({ process: outside.identity, endpoint: "server" }), { process: outside.identity, endpoint: "server" })
+  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 
   permissions = { programs: [] }
 
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
-  assert.equal(await access.service(outsideService), outsideService)
+  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
 
   permissions = { appearance: [], desktopPreferences: [], connections: [] }
 
@@ -154,16 +153,13 @@ test("client system access contract", async () => {
   await access.require("uploads", [])
   await access.requireAll()
 
-  const unresolvedService = { process: "ec99e1e8-d13b-4fc8-89ed-eaa3f394a42f", endpoint: "server" } as const
   permissions = { all: [], services: false }
-  assert.equal(await access.service(ownService), ownService)
-  assert.equal(await access.service(ownExactService), ownExactService)
-  await assert.rejects(access.service(unresolvedService), /Service represented by this key does not exist/)
+  await assert.rejects(access.service(ownService), /Execution is not permitted/)
+  await assert.rejects(access.service(siblingService), /Execution is not permitted/)
   permissions = { services: [] }
-  assert.equal(await access.service(unresolvedService), unresolvedService)
-  permissions = { services: ["owner"] }
+  assert.equal(await access.service(outsideService), outsideService)
+  permissions = { services: ["owner-service"] }
   assert.equal(await access.service(ownService), ownService)
-  assert.equal(await access.service(ownExactService), ownExactService)
-  await assert.rejects(access.service(outsideService), /Service represented by this key does not exist/)
-  await assert.rejects(access.service(unresolvedService), /Service represented by this key does not exist/)
+  await assert.rejects(access.service(siblingService), /Execution is not permitted/)
+  await assert.rejects(access.service(outsideService), /Execution is not permitted/)
 }, 120_000)

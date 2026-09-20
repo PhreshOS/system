@@ -50,7 +50,7 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, header = true, frame: frameDefinition = false, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, openingTransaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, frameAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, frame: frameDefinition = false, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, transaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, frameAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearanceTransaction = useAppearance().transaction
@@ -146,10 +146,10 @@ export default function ({ title, header = true, frame: frameDefinition = false,
 
     }, [minimizeAnimation?.revision, reducedMotion])
 
-    const configuredOpeningTransaction = layer === "under" || layer === "over"
-        ? resolveWindowTransaction(openingTransaction, appearanceTransaction)
+    const entryTransaction = layer === "under" || layer === "over"
+        ? resolveWindowTransaction(transaction, appearanceTransaction)
         : standard ? appearanceTransaction : null
-    const opening = entering && !reducedMotion ? configuredOpeningTransaction : null
+    const opening = entering && !reducedMotion ? entryTransaction : null
     const [opened, setOpened] = useState(opening === null)
     const minimizeTransaction = minimizeAnimation
         ? resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
@@ -601,8 +601,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     /** Whether mounting this element represents a newly opened Window. */
     entering?: boolean
 
-    /** Opening transaction used by under and over presentations. */
-    openingTransaction?: WindowTransaction
+    /** Default transaction used by under and over presentations. */
+    transaction?: WindowTransaction
 
     position?: Position
 

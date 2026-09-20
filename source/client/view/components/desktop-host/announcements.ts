@@ -6,6 +6,7 @@ import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { sdkProcess, sdkProgram } from "./sdk-records"
 import SystemAccess from "./system-access"
+import { isServiceAddress } from "@phreshos/core"
 
 /** Projects authoritative System announcements into every Client frame. */
 export default function useAnnouncements(authManager: AuthManager, panes: Map<string, ClientProcessBoundary>, traffic: ClientTraffic) {
@@ -143,6 +144,16 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     processes.useSubscribe("/server-stop", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStop", "server", payload), [endpoint]))
     processes.useSubscribe("/client-start", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStart", "client", payload), [endpoint]))
     processes.useSubscribe("/client-stop", useCallback((_identity: unknown, payload: HostedProcessRecord | null) => endpoint("endpointStop", "client", payload), [endpoint]))
+
+    const serviceEvent = useCallback((event: "available" | "unavailable", value: unknown) => {
+
+        if (!isServiceAddress(value)) return
+
+        postVisible(access => access.canService(value), "host-service", event, value.process, value)
+    }, [postVisible])
+
+    processes.useSubscribe("/service-available", useCallback((value: unknown) => serviceEvent("available", value), [serviceEvent]))
+    processes.useSubscribe("/service-unavailable", useCallback((value: unknown) => serviceEvent("unavailable", value), [serviceEvent]))
 
     processes.useSubscribe("/said", useCallback((identity: string, event: string, value: unknown) => {
 

@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, frame, layer, openingTransaction, icon, position, size, frameAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, frame, layer, transaction, icon, position, size, frameAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -100,7 +100,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         layer={layer}
 
-        openingTransaction={openingTransaction}
+        transaction={transaction}
 
         icon={icon}
 
@@ -220,7 +220,7 @@ interface ProcessWindowProps {
 
     layer: WindowLayer
 
-    openingTransaction: WindowTransaction
+    transaction: WindowTransaction
 
     icon: string
 

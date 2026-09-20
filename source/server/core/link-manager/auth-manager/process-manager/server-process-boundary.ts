@@ -3,7 +3,7 @@ import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import HostTraffic from "./host-traffic"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
-import type { ServiceKey } from "@phreshos/core"
+import type { ServiceAddress } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime, Stream } from "@server/core/server-runtime"
 
@@ -214,11 +214,11 @@ export default class ServerProcessBoundary extends TheLink {
     }
 
     /** Follow one exact service route for this boundary's lifetime. */
-    public followService(services: EndpointServices, subscription: string, key: ServiceKey, scope: ServiceScope, event: string | null) {
+    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null) {
 
         this.unfollowService(subscription)
 
-        const stop = services.follow(key, scope, event, (word, payload) => {
+        const stop = services.follow(address, scope, event, (word, payload) => {
 
             const values = event === null ? [word, payload] : [payload]
 
@@ -371,6 +371,7 @@ export default class ServerProcessBoundary extends TheLink {
                 : route === "host-process" || route === "process-host" ? "process"
                 : route === "host-connection" || route === "connection-host" ? "connection"
                 : route === "host-session" || route === "session-host" ? "session"
+                : route === "host-service" || route === "service-host" ? "service"
                 : route === "host-end" ? "window"
                 : null
 
@@ -380,7 +381,9 @@ export default class ServerProcessBoundary extends TheLink {
 
                 this.hostSubscriptions.set(subscription, this.hostTraffic.observe(hostDomain, event, subject, (_delivery, word, ...values) => {
 
-                    const eventSubject = typeof values[0] === "object" && values[0] !== null && "reference" in values[0]
+                    const eventSubject = hostDomain === "service" && typeof values[0] === "string"
+                        ? values[0]
+                        : typeof values[0] === "object" && values[0] !== null && "reference" in values[0]
                         ? String((values[0] as { reference: unknown }).reference)
                         : subject
 
@@ -532,4 +535,4 @@ export type { Stream } from "@server/core/server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
 
-export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "window", subject: string | null) => boolean
+export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "service" | "window", subject: string | null) => boolean

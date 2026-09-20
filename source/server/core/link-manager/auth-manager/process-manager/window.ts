@@ -119,28 +119,28 @@ export default class Window implements Omit<WindowState, "front"> {
     /** Validates and commits a complete geometry without an intermediate state. */
     public setGeometry(geometry: WindowGeometry) {
 
-        validate(geometry.position.x, "x")
+        validate(geometry.x, "x")
 
-        validate(geometry.position.y, "y")
+        validate(geometry.y, "y")
 
-        validate(geometry.size.width, "width")
+        validate(geometry.width, "width")
 
-        validate(geometry.size.height, "height")
+        validate(geometry.height, "height")
 
-        const moved = this.position.x !== geometry.position.x || this.position.y !== geometry.position.y
+        const moved = this.position.x !== geometry.x || this.position.y !== geometry.y
 
-        const resized = this.size.width !== geometry.size.width || this.size.height !== geometry.size.height
+        const resized = this.size.width !== geometry.width || this.size.height !== geometry.height
 
         if (!moved && !resized) return { moved, resized }
 
-        this.position = geometry.position
+        this.position = { x: geometry.x, y: geometry.y }
 
-        this.size = geometry.size
+        this.size = { width: geometry.width, height: geometry.height }
 
         return { moved, resized }
     }
 
-    public changeTitle(title: string) {
+    public setTitle(title: string) {
 
         const said = String(title ?? "").trim()
 
@@ -153,7 +153,7 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
-    public changeHeader(header: boolean) {
+    public setHeader(header: boolean) {
 
         if (typeof header !== "boolean") throw new Error("Window header state must be true or false")
 
@@ -164,7 +164,7 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
-    public changeFrame(frame: WindowFrame) {
+    public setFrame(frame: WindowFrame) {
 
         const parsed = parseWindowFrame(frame)
 
@@ -175,7 +175,7 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
-    public changeOpeningTransaction(transaction: WindowTransaction) {
+    public setTransaction(transaction: WindowTransaction) {
 
         const parsed = parseWindowTransaction(transaction)
 

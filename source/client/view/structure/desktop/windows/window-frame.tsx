@@ -84,7 +84,7 @@ function frameColor(frame: Exclude<WindowFrameDefinition, false>): Color | undef
 
 function frameMaterial(frame: Exclude<WindowFrameDefinition, false>): "none" | "full" | MaterialOptions {
 
-    if (frame === true || frame.material === undefined || frame.material === true) return "full"
+    if (frame === true || frame.material === undefined) return "full"
 
     if (frame.material === false) return "none"
 

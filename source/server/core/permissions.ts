@@ -163,30 +163,6 @@ export class PermissionCatalog {
 
         this.definition(name)
 
-        if (name === "services") {
-
-            const services = permissions.services
-            const programs = permissions.programs
-            const values = requested as readonly PermissionValue<"services">[]
-
-            const covered = values.length === 0
-                ? this.grants("services", services ?? null, values)
-                    || this.grants("programs", programs ?? null, values)
-                : values.every(value => (
-                    this.grants("services", services ?? null, [value])
-                    || this.grants("programs", programs ?? null, [value])
-                ))
-
-            if (covered) return true
-
-            // `programs` contributes authority to Services but does not become
-            // the Service permission's assignment. Only an exact `services`
-            // assignment replaces the `all` fallback for this capability.
-            if (services === undefined || services === null) return this.granted(permissions.all ?? null)
-
-            return false
-        }
-
         if (name === "desktopConnection") {
 
             if (this.allows("connections", [], permissions)) return true
@@ -278,7 +254,7 @@ function unique(values: readonly string[]) {
 
 function valued(domain: PermissionValueDomain) {
 
-    if (domain === "program" || domain === "layer" || domain === "network" || domain === "storage") return true
+    if (domain === "program" || domain === "service" || domain === "layer" || domain === "network" || domain === "storage") return true
     if (domain === "none") return false
 
     domain satisfies never
@@ -288,7 +264,7 @@ function valued(domain: PermissionValueDomain) {
 
 function valueCovers(domain: PermissionValueDomain, grant: string, requested: string) {
 
-    if (domain === "program" || domain === "layer") return grant === requested
+    if (domain === "program" || domain === "service" || domain === "layer") return grant === requested
     if (domain === "network") return networkScopeCovers(grant, requested)
     if (domain === "storage") return nativeStorageScopeCovers(grant, requested)
     if (domain === "none") return false
@@ -308,12 +284,12 @@ export const permissionCatalog = new PermissionCatalog({
     services: {
         default: [],
         title: "Services",
-        description: "Access Services without broader authority over their Programs."
+        description: "Access Services by their Process and Service name."
     },
     programs: {
         default: [],
         title: "Programs",
-        description: "Access every Program or selected Programs, including their Services."
+        description: "Access every Program or selected Programs."
     },
     layers: {
         default: [],

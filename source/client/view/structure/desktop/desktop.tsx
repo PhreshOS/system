@@ -131,7 +131,7 @@ export default function Workspace() {
 
             layer={presentation.layer}
 
-            openingTransaction={presentation.transaction}
+            transaction={presentation.transaction}
 
             icon={icon(record)}
 

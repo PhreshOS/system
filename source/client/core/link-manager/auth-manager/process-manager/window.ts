@@ -107,27 +107,27 @@ export default class Window implements Omit<WindowState, "front"> {
 
     public async setGeometry(geometry: WindowGeometry) {
 
-        await this.processManager.$outbound.publish("/geometry", this.process, geometry)
+        await this.processManager.$outbound.publish("/set-geometry", this.process, geometry)
     }
 
-    public async changeTitle(title: string) {
+    public async setTitle(title: string) {
 
-        await this.processManager.$outbound.publish("/change-title", this.process, title)
+        await this.processManager.$outbound.publish("/set-title", this.process, title)
     }
 
-    public async changeHeader(header: boolean) {
+    public async setHeader(header: boolean) {
 
-        await this.processManager.$outbound.publish("/change-header", this.process, header)
+        await this.processManager.$outbound.publish("/set-header", this.process, header)
     }
 
-    public async changeFrame(frame: WindowFrame) {
+    public async setFrame(frame: WindowFrame) {
 
-        await this.processManager.$outbound.publish("/change-frame", this.process, frame)
+        await this.processManager.$outbound.publish("/set-frame", this.process, frame)
     }
 
-    public async changeOpeningTransaction(transaction: WindowTransaction) {
+    public async setTransaction(transaction: WindowTransaction) {
 
-        await this.processManager.$outbound.publish("/change-opening-transaction", this.process, transaction)
+        await this.processManager.$outbound.publish("/set-transaction", this.process, transaction)
     }
 
     // To the front of its own layer, and nothing else. A hidden window

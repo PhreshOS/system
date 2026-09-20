@@ -278,9 +278,9 @@ export default function useWindows(authManager: AuthManager) {
             return
         }
 
-        const geometry = { position, size: { width, height } }
+        const geometry = { ...position, width, height }
 
-        void presentation.geometry(process.identity, geometry)
+        void presentation.setGeometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -292,9 +292,9 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        const geometry = { position, size }
+        const geometry = { ...position, ...size }
 
-        void presentation.geometry(process.identity, geometry)
+        void presentation.setGeometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -400,12 +400,9 @@ export default function useWindows(authManager: AuthManager) {
 
             if (!window || window.layer !== "window") continue
 
-            const geometry = {
-                position: { x: region.x, y: region.y },
-                size: { width: region.width, height: region.height }
-            }
+            const geometry = { ...region }
 
-            void presentation.geometry(identity, geometry)
+            void presentation.setGeometry(identity, geometry)
 
             commit(window.setGeometry(geometry))
         }

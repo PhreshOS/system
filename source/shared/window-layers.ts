@@ -44,32 +44,32 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
         transactions: false
     }),
     under: Object.freeze({
-        readable: Object.freeze(["title", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["title", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: false,
         exclusive: false,
         transactions: true
     }),
     over: Object.freeze({
-        readable: Object.freeze(["title", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["title", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: false,
         exclusive: false,
         transactions: true
     }),
     wallpaper: Object.freeze({
-        readable: Object.freeze(["title", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["title", "layer"] satisfies WindowPresentationProperty[]),
+        readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: true,
         exclusive: true,
         transactions: false
     }),
     "start-menu": Object.freeze({
-        readable: Object.freeze(["title", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["title", "layer"] satisfies WindowPresentationProperty[]),
+        readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: true,
         exclusive: true,
