@@ -3186,7 +3186,7 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/set-title")
+    @Connect("/set-title", "/change-title")
     public async setTitle(identity: string, title: string) {
 
         const window = this.mutableWindowOf(identity)
@@ -3198,7 +3198,7 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/set-header")
+    @Connect("/set-header", "/change-header")
     public async setHeader(identity: string, header: boolean) {
 
         const window = this.mutableWindowOf(identity)
@@ -3210,7 +3210,7 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/set-frame")
+    @Connect("/set-frame", "/change-frame")
     public async setFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
 
         const window = this.mutableWindowOf(identity)
@@ -3222,7 +3222,7 @@ export default class ProcessManager extends TheLink {
         return { identity, window }
     }
 
-    @Connect("/set-transaction")
+    @Connect("/set-transaction", "/change-transaction")
     public async setTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
 
         const window = this.mutableWindowOf(identity)

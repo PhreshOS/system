@@ -158,7 +158,7 @@ test("presentation geometry events expose each applied representation change", (
   assert.deepEqual(moves, [{ x: 10, y: 0 }, { x: 20, y: 0 }])
 })
 
-test("a Client boundary releases its presentation lease exactly once per document", async () => {
+test("a Client boundary begins each document from authoritative presentation state without resetting on release", async () => {
   const lifecycle: string[] = []
   const boundary = new ClientProcessBoundary(
       "requester",
@@ -166,7 +166,7 @@ test("a Client boundary releases its presentation lease exactly once per documen
       { processManager: { async ownFrame() {}, async releaseFrame() {} } } as never,
       () => ({ size: { width: 1, height: 1 } }),
       {} as never,
-      { release(identity: string) { lifecycle.push(identity) } } as never
+      { begin(identity: string) { lifecycle.push(identity) } } as never
   )
 
   await boundary.own("first-owner")

@@ -31,6 +31,8 @@ export type PresentationTransactionRequest = Readonly<{
 
 /** The only interface through which an iframe changes or observes its Desktop presentation. */
 export interface WindowPresentationHost {
+    /** Begins a new iframe presentation from the authoritative Window state. */
+    begin(identity: string): void
     read(identity: string, property: WindowPresentationProperty): unknown
     move(identity: string, position: Position, transaction?: PresentationTransactionRequest): Promise<void>
     resize(identity: string, size: Size, transaction?: PresentationTransactionRequest): Promise<void>
@@ -45,7 +47,6 @@ export interface WindowPresentationHost {
     raise(identity: string): void
     observe(identity: string, event: string | null, listener: (event: string, value: unknown) => void): () => void
     complete(identity: string, kind: "geometry" | "minimize" | "frame", revision: number): void
-    release(identity: string): void
 }
 
 export function presentationPosition(value: unknown): Position {

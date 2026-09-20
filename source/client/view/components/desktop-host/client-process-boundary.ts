@@ -94,7 +94,7 @@ export default class ClientProcessBoundary extends TheLink {
         // envelopes only after the new server-host lease exists.
         const pending = this.pending.splice(0)
 
-        if (this.leased) this.presentation.release(this.pane)
+        this.presentation.begin(this.pane)
 
         this.resetEndpoint()
 
@@ -127,8 +127,6 @@ export default class ClientProcessBoundary extends TheLink {
     }
 
     public async release() {
-
-        this.presentation.release(this.pane)
 
         const owner = this.leased
 

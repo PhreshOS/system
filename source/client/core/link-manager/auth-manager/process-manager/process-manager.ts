@@ -334,6 +334,13 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
+    @Subscribe("/set-geometry")
+    @Publish("/processes", "inbound")
+    protected async setGeometryHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+
+        return this.followed(payload)
+    }
+
     @Subscribe("/raise")
     @Publish("/processes", "inbound")
     protected async raiseHandle(payload: { identity: string, window: WindowSnapshot } | null) {

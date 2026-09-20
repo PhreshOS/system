@@ -1,8 +1,9 @@
 import assert from "node:assert/strict"
 import ClientWindow from "@client/core/link-manager/auth-manager/process-manager/window"
+import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import type ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
+import { TheLink } from "@the-link/core"
 import { test } from "vitest"
 
 test("window geometry contract", async () => {
@@ -93,6 +94,19 @@ test("window geometry contract", async () => {
       "process",
       authority.toJSON()
   )
+
+  const synchronized = {
+      ...authority.toJSON(),
+      position: { x: "1/2", y: "0/1" },
+      size: { width: "1/2", height: "1/1" }
+  } as const
+  const clientLink = new TheLink()
+  const clientManager = new ClientProcessManager(clientLink as never, { processes: [] })
+  clientManager.processes.set("process", { clientEndpoint: { window: counterpart } } as never)
+  await clientLink.$inbound.publish("/process/set-geometry", { identity: "process", window: synchronized })
+  assert.deepEqual(counterpart.position, synchronized.position)
+  assert.deepEqual(counterpart.size, synchronized.size)
+
   await counterpart.setGeometry(next)
   assert.deepEqual(publications, [["/set-geometry", "process", next]])
   await counterpart.setTransaction(false)

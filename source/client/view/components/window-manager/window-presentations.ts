@@ -346,7 +346,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     /** A new iframe representation always begins from authoritative truth. */
-    public release(process: string) {
+    public begin(process: string) {
 
         const identity = this.live.get(process)
         if (!identity) return

@@ -29,7 +29,7 @@ test("a Client question expectation survives initial iframe ownership", async ()
         authManager,
         () => ({ size: { width: 800, height: 600 } }),
         {} as ClientTraffic,
-        { release() {} } as unknown as WindowPresentationHost
+        { begin() {} } as unknown as WindowPresentationHost
     )
     const question = "client:process:question"
 
