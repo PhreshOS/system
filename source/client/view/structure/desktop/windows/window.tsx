@@ -67,7 +67,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
         position: presented.current.position,
         size: presented.current.size,
         animation: geometryAnimation,
-        immediate: reducedMotion || !geometryAnimation,
+        immediate: reducedMotion,
         onComplete: revision => onPresentationAnimationComplete?.("geometry", revision)
     })
 
