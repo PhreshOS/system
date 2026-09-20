@@ -82,11 +82,15 @@ export default class WindowPresentations implements WindowPresentationHost {
                 || ("size" in changes && JSON.stringify(state.size) !== JSON.stringify(changes.size))
             if (maximized !== state.maximized || (!maximized && geometryChanged) || (minimized && !state.minimized)) {
                 this.cancel(identity, "geometry", "The followed Window presentation changed")
-                changes.geometryAnimation = null
+                const target = { ...state, ...changes }
+                changes.geometryAnimation = minimized
+                    ? null
+                    : presentationAnimation(++this.revision, defaultPresentationTransaction(target))
             }
             if ("minimized" in changes && state.minimized !== changes.minimized) {
                 this.cancel(identity, "minimize", "The followed Window visibility changed")
-                changes.minimizeAnimation = null
+                const target = { ...state, ...changes }
+                changes.minimizeAnimation = presentationAnimation(++this.revision, defaultPresentationTransaction(target))
             }
             next.set(identity, { ...state, ...changes })
             relation.snapshot = target
@@ -229,7 +233,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         requirePresentationApplication(state.layer, "maximized")
         if (state.maximized === maximized) return Promise.resolve()
         this.cancel(identity, "geometry")
-        const animation = !state.minimized ? presentationAnimation(++this.revision, state.transaction, transaction) : null
+        const animation = !state.minimized ? presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction) : null
         this.replace(identity, { ...state, maximized, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
@@ -244,8 +248,9 @@ export default class WindowPresentations implements WindowPresentationHost {
         const visibilityChanged = current.minimized !== projected.minimized
         this.cancel(identity, "geometry")
         this.cancel(identity, "minimize")
-        const geometryAnimation = geometryChanged && !projected.minimized ? presentationAnimation(++this.revision, projected.transaction, transaction) : null
-        const minimizeAnimation = visibilityChanged ? presentationAnimation(++this.revision, projected.transaction, transaction) : null
+        const selectedTransaction = defaultPresentationTransaction(projected)
+        const geometryAnimation = geometryChanged && !projected.minimized ? presentationAnimation(++this.revision, selectedTransaction, transaction) : null
+        const minimizeAnimation = visibilityChanged ? presentationAnimation(++this.revision, selectedTransaction, transaction) : null
         this.replace(identity, {
             ...projected,
             geometryAnimation,
@@ -310,7 +315,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (JSON.stringify(state.frame) === JSON.stringify(frame)) return Promise.resolve()
 
         this.cancel(identity, "frame")
-        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
+        const animation = presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction)
         this.replace(identity, { ...state, frame, frameAnimation: animation })
         return this.waitFor(identity, "frame", animation, transaction)
     }
@@ -395,7 +400,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             return Promise.resolve()
         }
         this.cancel(identity, "geometry")
-        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
+        const animation = presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction)
         this.replace(identity, { ...state, position, size, geometryAnimation: animation })
         return this.waitFor(identity, "geometry", animation, transaction)
     }
@@ -408,7 +413,7 @@ export default class WindowPresentations implements WindowPresentationHost {
 
         this.cancel(identity, "minimize")
         if (minimized) this.cancel(identity, "geometry", "The Window presentation was minimized")
-        const animation = presentationAnimation(++this.revision, state.transaction, transaction)
+        const animation = presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction)
         this.replace(identity, { ...state, minimized, minimizeAnimation: animation, geometryAnimation: minimized ? null : state.geometryAnimation })
         return this.waitFor(identity, "minimize", animation, transaction)
     }
@@ -492,6 +497,12 @@ function presentationAnimation(revision: number, fallback: WindowState["transact
         ? fallback
         : request.transaction
     return transaction === false ? null : Object.freeze({ revision, transaction })
+}
+
+/** Standard Window motion belongs to the Desktop; other layers use their Window value. */
+function defaultPresentationTransaction(state: Pick<WindowPresentationState, "layer" | "transaction">) {
+
+    return state.layer === "window" ? true : state.transaction
 }
 
 function initialPresentationState(client: ClientState): WindowPresentationState {

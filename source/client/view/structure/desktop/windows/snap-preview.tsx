@@ -16,6 +16,7 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, re
         position: shown.position,
         size: shown.size,
         animation: null,
+        transaction: true,
         immediate: reducedMotion
     })
 

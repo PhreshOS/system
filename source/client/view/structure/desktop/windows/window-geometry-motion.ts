@@ -1,7 +1,7 @@
 import { resolveWindowGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
-import { type AppearanceTransaction, type Position, type Size } from "@phreshos/core"
+import { type AppearanceTransaction, type Position, type Size, type WindowTransaction } from "@phreshos/core"
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
@@ -11,6 +11,7 @@ interface WindowGeometryMotionOptions {
     position: Position
     size: Size
     animation?: PresentationAnimation | null
+    transaction?: WindowTransaction | null
     immediate: boolean
     onComplete?: (revision: number) => void
 }
@@ -22,7 +23,7 @@ interface WindowGeometryMotionOptions {
  * visible pixels, including during a pointer gesture, so releasing a drag
  * cannot hand the transform to another renderer before snapping begins.
  */
-export default function useWindowGeometryMotion({ position, size, animation, immediate, onComplete }: WindowGeometryMotionOptions) {
+export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, onComplete }: WindowGeometryMotionOptions) {
 
     const appearanceTransaction = useAppearance().transaction
     const frame = useRef<HTMLDivElement>(null)
@@ -40,9 +41,9 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
     const gesturing = useRef(false)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const values = useRef({ position, size, animation, immediate, onComplete })
+    const values = useRef({ position, size, animation, transaction, immediate, onComplete })
 
-    values.current = { position, size, animation, immediate, onComplete }
+    values.current = { position, size, animation, transaction, immediate, onComplete }
 
     function read(): WindowRegion {
 
@@ -133,7 +134,11 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
             return
         }
 
-        const selected = animation ? resolveWindowTransaction(animation.transaction, appearanceTransaction) : null
+        const selected = animation
+            ? resolveWindowTransaction(animation.transaction, appearanceTransaction)
+            : transaction === undefined || transaction === null
+                ? null
+                : resolveWindowTransaction(transaction, appearanceTransaction)
 
         if (!selected) {
             set(region)
@@ -143,7 +148,7 @@ export default function useWindowGeometryMotion({ position, size, animation, imm
 
         transition(region, selected, revision === undefined ? undefined : () => onComplete?.(revision))
 
-    }, [position.x, position.y, size.width, size.height, animation?.revision, immediate])
+    }, [position.x, position.y, size.width, size.height, animation?.revision, transaction, immediate])
 
     useLayoutEffect(function () {
 

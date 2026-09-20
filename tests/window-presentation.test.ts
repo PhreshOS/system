@@ -112,6 +112,24 @@ test("transaction-capable presentations use the authoritative Window transaction
   await inherited
 })
 
+test("standard Window geometry uses the Desktop Appearance transaction by default", async () => {
+  const ordinary = client("window")
+  const entries = new Map([
+      ["ordinary", { identity: "ordinary:0", client: ordinary }]
+  ]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
+  const presentations = new WindowPresentations(entries, () => ordinary as never)
+
+  await presentations.move("ordinary", { x: 20, y: 30 })
+  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
+
+  await presentations.resize("ordinary", { width: 500, height: 400 })
+  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
+
+  ordinary.window.position = { x: 80, y: 90 }
+  presentations.reconcile(entries)
+  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
+})
+
 test("presentation geometry events expose each applied representation change", () => {
   const ordinary = client("window")
   const entries = new Map([
