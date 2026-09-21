@@ -123,9 +123,11 @@ export class PermissionCatalog {
             if (!Object.hasOwn(programPermissionCatalog, unknownName)) continue
             const name = parsePermissionName(unknownName)
 
-            if (assignment === true) throw new Error("The Program permissions file contains unresolved shorthand")
+            if (assignment === true) throw new Error("The Program permissions state contains unresolved shorthand")
 
-            permissions[name] = this.resolve(name, assignment)
+            const permission = this.resolve(name, assignment)
+            if (permission === null) throw new Error("The Program permissions state cannot contain an absent assignment")
+            permissions[name] = permission
         }
 
         return permissions as Permissions

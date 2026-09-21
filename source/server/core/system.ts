@@ -109,11 +109,6 @@ export default class System {
         return this.programManager.setPermission(program, name, permission)
     }
 
-    public deleteProgramPermission<Name extends PermissionName>(program: Program, name: Name) {
-
-        return this.programManager.deletePermission(program, name)
-    }
-
     public listProcesses(program?: Program) {
 
         return [...this.processManager.processes.values()].filter(process => !program || process.program === program)
@@ -463,14 +458,19 @@ export default class System {
         return this.programManager.agent(program)
     }
 
+    public programDefinition(program: Program) {
+
+        return this.programManager.definition(program)
+    }
+
     public programStartup(program: Program, operation: string, value?: unknown) {
 
         return this.programManager.startup(program, operation, value)
     }
 
-    public programLaunch(program: Program, operation: string, value?: unknown) {
+    public programPinned(program: Program, operation: "get" | "pin" | "unpin") {
 
-        return this.programManager.launch(program, operation, value)
+        return this.programManager.pinned(program, operation)
     }
 
     public programInstalled(program: Program) {

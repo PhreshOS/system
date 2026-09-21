@@ -17,7 +17,6 @@ function fixture() {
     const createProcess = vi.fn(async () => process.identity)
     const findOrCreateProcess = vi.fn(async () => process.identity)
     const startup = vi.fn()
-    const savedLaunch = vi.fn()
     const startEndpoint = vi.fn()
     const connections = [
         { identity: "desktop-connection", connected: true, session: "desktop-session" },
@@ -44,14 +43,14 @@ function fixture() {
     })
     const command = vi.fn(async function* () {})
     const auth = {
-        programManager: { programs: new Map([[program.identity, program]]), createProcess, findOrCreateProcess, startup, launch: savedLaunch, command },
+        programManager: { programs: new Map([[program.identity, program]]), createProcess, findOrCreateProcess, startup, command },
         processManager: { processes: new Map([[process.identity, process]]), startEndpoint, ownFrame: vi.fn(), releaseFrame: vi.fn() },
         connection, session,
         grantsPermission: async <Name extends PermissionName>(_pane: string, name: Name, values: readonly PermissionValue<Name>[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
     const answer = host(auth, process.identity, () => ({ size: { width: 100, height: 100 } }), () => "frame", {} as never)
     return {
-        auth, program, process, answer, createProcess, findOrCreateProcess, startup, savedLaunch, startEndpoint, command, connection,
+        auth, program, process, answer, createProcess, findOrCreateProcess, startup, startEndpoint, command, connection,
         permissions(value: Permissions) { permissions = value }
     }
 }
@@ -67,7 +66,6 @@ test.each(restrictedLayers)("Client launch routes check %s before delegation", a
         ["program-create-process", program, launch],
         ["program-find-or-create-process", program, launch],
         ["startup", program, "enable", launch],
-        ["launch", program, "set", launch],
         ["start-endpoint", process, "client", { layer }]
     ] as const
     const anotherLayer = restrictedLayers.find(candidate => candidate !== layer)!
@@ -76,7 +74,7 @@ test.each(restrictedLayers)("Client launch routes check %s before delegation", a
         f.permissions(denied)
         for (const [operation, ...args] of operations) await expect(f.answer(operation, ...args)).rejects.toThrow("Execution is not permitted")
     }
-    const delegates = [f.createProcess, f.findOrCreateProcess, f.startup, f.savedLaunch, f.startEndpoint]
+    const delegates = [f.createProcess, f.findOrCreateProcess, f.startup, f.startEndpoint]
     for (const delegate of delegates) expect(delegate).not.toHaveBeenCalled()
     const grantedPermissions: Permissions[] = [{ layers: [layer] }, { layers: [] }, { all: [] }]
     for (const granted of grantedPermissions) {

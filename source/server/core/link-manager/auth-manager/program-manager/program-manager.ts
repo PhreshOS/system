@@ -18,9 +18,8 @@ import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type ProgramRecord } from "./entry"
 import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
-import LaunchStorage from "./launch-storage"
 import { permissionCatalog } from "@server/core/permissions"
-import { applyDeclaredPermissions, readPermissions, writePermissions } from "./permissions"
+import ProgramStateStorage from "./state"
 import {
     parsePermissionName,
     type Permission,
@@ -35,7 +34,6 @@ import { windowLayerDefaults } from "@shared/window-layers"
 const maximumProcessesPerProgram = 20
 
 type Registration = {
-    origin: "creation" | "reconstruction"
     installed: boolean
     transitionOwnsIdentity?: boolean
     restoreInstalled?: boolean
@@ -122,7 +120,7 @@ export default class ProgramManager extends TheLink {
 
             try {
 
-                await this.register(new Program(declaration), { origin: "reconstruction", installed: true, transitionOwnsIdentity: true })
+                await this.register(new Program(declaration), { installed: true, transitionOwnsIdentity: true })
             }
 
             catch (exception) { console.log(`programs: ${found.name} was not read — ${exception instanceof Error ? exception.message : "unreadable"}`) }
@@ -166,19 +164,19 @@ export default class ProgramManager extends TheLink {
         return entry
     }
 
-    /** Reads one Program's authoritative value for an exact permission. */
+    /** Resolve one permission from state first, then the Program definition. */
     public permission<Name extends PermissionName>(program: Program, name: Name): Permission<Name> {
 
-        return clonePermission(readPermissions(program)[name] ?? null)
+        return clonePermission(this.permissions(program)[name] ?? null)
     }
 
-    /** Returns an independent snapshot of one Program's permission state. */
+    /** Returns an independent effective snapshot without writing definition fallbacks to state. */
     public permissions(program: Program): Permissions {
 
-        return clonePermissions(readPermissions(program))
+        return clonePermissions({ ...program.declaredPermissions, ...new ProgramStateStorage(program).permissions() })
     }
 
-    /** Tests one requested value against this Program's stored permissions. */
+    /** Tests one requested value against this Program's effective permissions. */
     public allowsPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
@@ -189,7 +187,7 @@ export default class ProgramManager extends TheLink {
 
         if (!Array.isArray(requested)) throw new Error("A permission check must be true or a list of values")
 
-        const permissions = readPermissions(program)
+        const permissions = this.permissions(program)
 
         return permissionCatalog.allows(
             name,
@@ -198,7 +196,7 @@ export default class ProgramManager extends TheLink {
         )
     }
 
-    /** Tests one request against this Program's authoritative stored permission. */
+    /** Tests one request against this Program's effective permission. */
     public grantsPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
@@ -208,7 +206,7 @@ export default class ProgramManager extends TheLink {
         return permissionCatalog.allows(
             name,
             requested,
-            readPermissions(program)
+            this.permissions(program)
         )
     }
 
@@ -232,58 +230,97 @@ export default class ProgramManager extends TheLink {
 
         if (value === null) throw new Error("A stored Program permission cannot be null")
 
-        const permissions = readPermissions(program)
-        const before = permissions[name] ?? null
+        const state = new ProgramStateStorage(program)
+        const stored = state.permissions()
+        const before = stored[name]
         const permission = permissionCatalog.resolve(name, value)
-        if (permissionCatalog.changed(before, permission)) {
+        if (permission === null) throw new Error("A stored Program permission cannot be null")
+        if (before === undefined || permissionCatalog.changed(before, permission)) {
 
-            writePermissions(program, { ...permissions, [name]: permission })
+            const previousAll = this.permission(program, "all")
+            state.setPermission(name, permission)
 
-            if (name === "all") await this.authManager.processManager.updateClientAccess(program)
+            if (name === "all" && permissionCatalog.changed(previousAll, this.permission(program, "all"))) {
+                await this.authManager.processManager.updateClientAccess(program)
+            }
         }
     }
 
-    /** Removes one permission assignment from authoritative state. */
-    public async deletePermission<Name extends PermissionName>(program: Program, name: Name): Promise<void> {
+    /** Requests one owner decision for this target Program, independently of its initiator. */
+    public async requestPermission<Name extends PermissionName>(
+        program: Program,
+        request: string,
+        name: Name,
+        input: PermissionRequest<Name>,
+        process: Process | null = null
+    ): Promise<Permission<Name>> {
 
-        const permissions = readPermissions(program)
-        if (Object.hasOwn(permissions, name)) {
+        const requested = permissionCatalog.resolve(name, input)
 
-            delete permissions[name]
-            writePermissions(program, permissions)
+        if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
 
-            if (name === "all") await this.authManager.processManager.updateClientAccess(program)
+        const choice = await this.authManager.dialogManager.requestPermission(program, request, name, requested, process)
+
+        if (choice === true) {
+
+            await this.setPermission(program, name, requested)
+
+            return requested
         }
+
+        return choice
     }
 
     @Connect("/permissions")
-    protected async programPermissions(subject: unknown, operation: unknown, name?: unknown, value?: unknown) {
+    protected async programPermissions(subject: unknown, operation: unknown, first?: unknown, second?: unknown, third?: unknown) {
 
         const program = this.held(subject)
 
         if (operation === "all") return this.permissions(program)
-        if (operation === "get") return this.permission(program, parsePermissionName(name))
+        if (operation === "get") return this.permission(program, parsePermissionName(first))
         if (operation === "allows") {
 
-            const permission = parsePermissionName(name)
+            const permission = parsePermissionName(first)
 
-            return this.allowsPermission(program, permission, value as PermissionRequest<typeof permission>)
+            return this.allowsPermission(program, permission, second as PermissionRequest<typeof permission>)
         }
-        if (operation === "set") {
+        if (operation === "allow") {
 
-            const permission = parsePermissionName(name)
+            const permission = parsePermissionName(first)
 
-            await this.setPermission(program, permission, value as Exclude<PermissionInput<typeof permission>, null>)
+            await this.setPermission(program, permission, second as PermissionRequest<typeof permission>)
 
             return
         }
-        if (operation === "delete") {
+        if (operation === "deny") {
 
-            await this.deletePermission(program, parsePermissionName(name))
+            await this.setPermission(program, parsePermissionName(first), false)
 
             return
         }
+        if (operation === "request") {
 
+            if (typeof first !== "string") throw new Error("A permission request needs a unique identity")
+
+            const permission = parsePermissionName(second)
+            const signal = this.authManager.connectionSignal()
+            const cancel = () => { this.authManager.dialogManager.cancelPermission(first).catch(() => undefined) }
+
+            signal.addEventListener("abort", cancel, { once: true })
+
+            try {
+                return await this.requestPermission(program, first, permission, third as PermissionRequest<typeof permission>)
+            }
+            finally {
+                signal.removeEventListener("abort", cancel)
+            }
+        }
+        if (operation === "cancel-request") {
+
+            if (typeof first === "string") await this.authManager.dialogManager.cancelPermission(first)
+
+            return
+        }
         throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
     }
 
@@ -305,10 +342,10 @@ export default class ProgramManager extends TheLink {
         return await this.startup(this.held(subject), operation, value)
     }
 
-    @Connect("/launch")
-    protected async savedProgramLaunch(subject: unknown, operation: string, value?: unknown) {
+    @Connect("/pinned")
+    protected async pinnedProgram(subject: unknown, operation: "get" | "pin" | "unpin") {
 
-        return await this.launch(this.held(subject), operation, value)
+        return await this.pinned(this.held(subject), operation)
     }
 
     public reach(identity: string) {
@@ -349,7 +386,7 @@ export default class ProgramManager extends TheLink {
     // absolute itself.
     public async create(source: ProgramDefinition | string) {
 
-        const entry = await this.register(this.runtimeProgram(source), { origin: "creation", installed: false })
+        const entry = await this.register(this.runtimeProgram(source), { installed: false })
 
         await this.created(entry)
 
@@ -367,8 +404,7 @@ export default class ProgramManager extends TheLink {
         // that currently owns this public identity.
         await program.validate()
 
-        this.declaredLaunch(program, "startup")
-        this.declaredLaunch(program, "launch")
+        this.installLaunch(program)
 
         return await this.change(program.identity, async () => {
 
@@ -381,7 +417,7 @@ export default class ProgramManager extends TheLink {
                 await this.forgetEntry(existing, false)
             }
 
-            const entry = this.remember(program, { origin: "creation", installed: false, transitionOwnsIdentity: true, restoreInstalled })
+            const entry = this.remember(program, { installed: false, transitionOwnsIdentity: true, restoreInstalled })
 
             try {
 
@@ -436,15 +472,16 @@ export default class ProgramManager extends TheLink {
     private async register(program: Program, registration: Registration) {
 
         await program.validate()
+        this.installLaunch(program)
 
         return this.remember(program, registration)
     }
 
     /** Commit one already validated Program to the authoritative registry. */
-    private remember(program: Program, { origin, installed, transitionOwnsIdentity = false, restoreInstalled = false }: Registration) {
+    private remember(program: Program, { installed, transitionOwnsIdentity = false, restoreInstalled = false }: Registration) {
 
         // The runtime map is the live registry, while an installed
-        // declaration is the durable reservation reconstructed on boot.
+        // definition is the durable reservation reconstructed on boot.
         // Forgetting an installed Program removes the former but cannot
         // make its identity available to ordinary creation while the
         // latter still exists. Attached replacement is the one transition
@@ -452,10 +489,6 @@ export default class ProgramManager extends TheLink {
         if (this.programs.has(program.identity) || (!transitionOwnsIdentity && (this.changing.has(program.identity) || existsSync(this.fileManager.join(program.identity, "program.json"))))) throw new Error("The system already knows this program identity")
 
         const entry = new Entry(program, installed, restoreInstalled)
-
-        // Creation applies declaration decisions before publishing the Program.
-        // Reconstruction reads its authoritative stored state without writes.
-        if (origin === "creation") this.applyDeclaration(program)
 
         this.programs.set(entry.identity, entry)
 
@@ -616,60 +649,30 @@ export default class ProgramManager extends TheLink {
         return this.held(subject).agent()
     }
 
-    private declaredLaunch(program: Program, name: "startup" | "launch") {
-        const value = program.config[name]
+    /** Reads the canonical definition owned by one exact Program handle. */
+    @Connect("/definition")
+    public async definition(subject: unknown) {
+
+        return this.held(subject).definition()
+    }
+
+    /** Resolve the one launch owned by installation without persisting it as Program state. */
+    private installLaunch(program: Program) {
+        const value = program.config.installLaunch
         if (value === undefined) return undefined
         const launch = parseLaunch(value === true ? {} : value)
         this.resolveLaunch(program, launch)
         return launch
     }
 
-    /** Applies creation/installation decisions to this Program's storage as one reversible unit. */
-    private applyDeclaration(program: Program) {
-        const startup = this.declaredLaunch(program, "startup")
-        const launch = this.declaredLaunch(program, "launch")
-        const rollbacks: (() => void)[] = []
-        const rollback = () => {
-            for (let index = rollbacks.length - 1; index >= 0; index--) rollbacks[index]!()
-        }
-        try {
-            const permissions = applyDeclaredPermissions(program)
-            if (permissions) rollbacks.push(permissions)
-            if (startup !== undefined) rollbacks.push(new LaunchStorage(program, "startup").replace(startup))
-            if (launch !== undefined) rollbacks.push(new LaunchStorage(program, "launch").replace(launch))
-            return rollback
-        }
-        catch (error) {
-            rollback()
-            throw error
-        }
-    }
-
-    /** Read or replace the saved icon launch without executing it. */
-    public async launch(program: Program, operation: string, value?: unknown): Promise<Launch | null | void> {
-        const storage = new LaunchStorage(program, "launch")
-        if (operation === "get") {
-            const launch = storage.get()
-            if (launch !== null) this.resolveLaunch(program, launch)
-            return launch
-        }
-        if (operation === "set") {
-            const launch = parseLaunch(value)
-            this.resolveLaunch(program, launch)
-            storage.set(launch)
-            return
-        }
-        throw new Error(`The host does not know the launch operation "${operation}"`)
-    }
-
     /** Read or change the system-managed startup launch for one Program. */
     public async startup(program: Program, operation: string, value?: unknown): Promise<Launch | null | void> {
 
-        const storage = new LaunchStorage(program, "startup")
+        const state = new ProgramStateStorage(program)
 
         if (operation === "get") {
 
-            const launch = storage.get()
+            const launch = state.startup()
 
             if (launch === null) return null
 
@@ -685,19 +688,39 @@ export default class ProgramManager extends TheLink {
             const launch = parseLaunch(value === undefined ? {} : value)
             this.resolveLaunch(program, launch)
 
-            storage.set(launch)
+            // Startup is a resulting state: repeating the same request must
+            // not rewrite system-managed Program state.
+            if (isDeepStrictEqual(state.startup(), launch)) return
+            state.setStartup(launch)
 
             return
         }
 
         if (operation === "disable") {
 
-            storage.remove()
+            if (state.startup() === null) return
+            state.setStartup(null)
 
             return
         }
 
         throw new Error(`The host does not know the startup operation "${operation}"`)
+    }
+
+    /** Read or change the pinned state and publish only effective transitions. */
+    public async pinned(program: Program, operation: "get" | "pin" | "unpin"): Promise<boolean> {
+        const state = new ProgramStateStorage(program)
+        const current = state.pinned()
+        if (operation === "get") return current
+
+        const pinned = operation === "pin"
+        if (current === pinned) return current
+
+        state.setPinned(pinned)
+        const entry = this.find(program.identity)
+        await this.authManager.processManager.announceHost("program", "pinned", entry.identity, entry, pinned)
+        await this.$outbound.publish("/pinned", entry.record(), pinned)
+        return pinned
     }
 
     // A store's five controls, in one place. Reached from a process
@@ -1051,8 +1074,6 @@ export default class ProgramManager extends TheLink {
 
             let createdHere = false
 
-            let restoreSettings: (() => void) | undefined
-
             let purgedStorage = false
 
             try {
@@ -1067,9 +1088,11 @@ export default class ProgramManager extends TheLink {
                 // because they are wherever the system puts them.
                 const stagedProgram = new Program(join(staged, "program.json"))
                 await stagedProgram.validate()
-                this.declaredLaunch(stagedProgram, "startup")
-                this.declaredLaunch(stagedProgram, "launch")
-                const requestedLaunch = decision.launch === true ? {} : decision.launch
+                const declaredInstallLaunch = this.installLaunch(stagedProgram)
+                const selectedLaunch = decision.launch === undefined ? declaredInstallLaunch : decision.launch
+                const requestedLaunch = selectedLaunch === false || selectedLaunch === undefined
+                    ? undefined
+                    : selectedLaunch === true ? {} : selectedLaunch
                 if (requestedLaunch !== undefined) this.resolveLaunch(stagedProgram, requestedLaunch)
 
                 swapping = true
@@ -1102,8 +1125,6 @@ export default class ProgramManager extends TheLink {
 
                 if (entry) {
 
-                    restoreSettings = this.applyDeclaration(installed)
-
                     entry.program.replace(installed)
 
                     entry.installed = true
@@ -1113,7 +1134,7 @@ export default class ProgramManager extends TheLink {
 
                 else {
 
-                    entry = await this.register(installed, { origin: "creation", installed: true, transitionOwnsIdentity: true })
+                    entry = await this.register(installed, { installed: true, transitionOwnsIdentity: true })
 
                     createdHere = true
                 }
@@ -1135,24 +1156,14 @@ export default class ProgramManager extends TheLink {
                     await this.start(entry.program, requestedLaunch, undefined, null, true)
                 }
 
-                try {
-                    const launch = await this.startup(entry.program, "get")
-                    if (launch) await this.start(entry.program, launch, undefined, null, true)
-                }
-                catch (exception) {
-                    await output({ stream: "stderr", text: `Program installed, but startup failed: ${exception instanceof Error ? exception.message : String(exception)}\n` })
-                }
-
                 return entry
             }
 
             catch (exception) {
 
-                // Restore the prior files, declaration settings, and any storage
+                // Restore the prior files, definition settings, and any storage
                 // set aside for purge after a failure before commit.
                 if (swapping && !committed) {
-
-                    restoreSettings?.()
 
                     for (const what of installedParts) rmSync(join(home, what), { recursive: true, force: true })
 
@@ -1268,7 +1279,7 @@ export default class ProgramManager extends TheLink {
 
             if (existsSync(declaration)) {
 
-                const installed = await this.register(new Program(declaration), { origin: "reconstruction", installed: true, transitionOwnsIdentity: true })
+                const installed = await this.register(new Program(declaration), { installed: true, transitionOwnsIdentity: true })
 
                 await this.created(installed)
             }

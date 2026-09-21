@@ -129,12 +129,13 @@ export default class AuthManager extends TheLink {
 
     public async requestPermission<Name extends PermissionName>(
         process: string,
+        program: unknown,
         request: string,
         name: Name,
         permission: PermissionRequest<Name>
     ): Promise<Permission<Name>> {
 
-        return await this.$outbound.publishFirst("/permission/request", request, process, name, permission) as Permission<Name>
+        return await this.$outbound.publishFirst("/permission/request", request, process, program, name, permission) as Permission<Name>
     }
 
     public async cancelPermission(process: string, request: string) {

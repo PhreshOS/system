@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowFrame, parseWindowTransaction, type ProgramCommandChunk, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowFrame, parseWindowTransaction, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -108,7 +108,7 @@ export default class Program {
         } : null
     }
 
-    /** Canonical permission entries applied to storage at creation and installation. */
+    /** Canonical permission fallback requested by this Program definition. */
     public get declaredPermissions(): DeclaredPermissions {
 
         return permissionCatalog.declarations(this.config.permissions)
@@ -166,6 +166,21 @@ export default class Program {
         if (!this.agentPath) return null
 
         return readFileSync(this.agentPath, "utf-8")
+    }
+
+    /** Returns the complete public definition represented by this Program. */
+    public definition(): ProgramDefinition {
+
+        // Stored installation paths are relative to program.json, while a
+        // returned definition must remain valid as direct Program creation input.
+        return parseProgramDefinition({
+            ...this.config,
+            storage: this.storagePath,
+            ...(this.iconPath ? { icon: this.iconPath } : {}),
+            ...(this.agentPath ? { agent: this.agentPath } : {}),
+            ...(this.config.server ? { server: { ...this.config.server, location: this.serverPath! } } : {}),
+            ...(this.config.client ? { client: { ...this.config.client, location: this.clientUrl ?? this.clientPath! } } : {})
+        })
     }
 
     /** SDK Program record; internal references are consumed by the SDK boundary. */
@@ -325,9 +340,7 @@ function storedDefinition(value: unknown): ProgramConfig {
 // not whether they are true.
 function coherent(config: ProgramConfig) {
 
-    for (const value of [config?.startup, config?.launch]) {
-        if (value !== undefined && value !== true) parseLaunch(value)
-    }
+    if (config?.installLaunch !== undefined && config.installLaunch !== true) parseLaunch(config.installLaunch)
 
     // A name is also the name of a directory, so it is checked as a path
     // component before it is anything else — a program calling itself

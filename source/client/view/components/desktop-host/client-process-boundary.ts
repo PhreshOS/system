@@ -536,12 +536,12 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        if (args[0] === "context-permission-request" && typeof args[1] === "string") {
+        if (args[0] === "program-permissions" && args[2] === "request" && typeof args[3] === "string") {
 
             this.answerRequest(
                 question,
                 host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(args[0], ...args.slice(1)),
-                () => { this.authManager.cancelPermission(this.pane, args[1] as string).catch(() => undefined) }
+                () => { this.authManager.cancelPermission(this.pane, args[3] as string).catch(() => undefined) }
             )
 
             return
@@ -678,7 +678,7 @@ export default class ClientProcessBoundary extends TheLink {
                 let value = args[0] === "run" ? await this.systemAccess.launch(args[2]) : args[2]
                 if (args[0] === "install") {
                     const options = parseProgramInstallOptions(args[2] ?? {})
-                    value = options.launch === undefined ? options : {
+                    value = options.launch === undefined || options.launch === false ? options : {
                         ...options,
                         launch: await this.systemAccess.launch(options.launch === true ? {} : options.launch)
                     }

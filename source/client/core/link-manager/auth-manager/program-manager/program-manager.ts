@@ -6,8 +6,8 @@ import AuthManager from "../auth-manager"
 import Program from "./program"
 import {
     type Launch,
-    type PermissionInput,
     type PermissionName,
+    type PermissionRequest,
     type ProgramCommandChunk,
     type ProgramIconSize
 } from "@phreshos/core"
@@ -75,19 +75,19 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/startup", subject, operation, value)
     }
 
-    public async launch(subject: unknown, operation: string, value?: unknown) {
-
-        return await this.$outbound.publishFirst("/launch", subject, operation, value)
-    }
-
     public async permissions<Name extends PermissionName>(
         subject: unknown,
-        operation: "all" | "get" | "allows" | "set" | "delete",
+        operation: "all" | "get" | "allows" | "allow" | "deny",
         name?: Name,
-        value?: Exclude<PermissionInput<Name>, null>
+        value?: PermissionRequest<Name>
     ) {
 
         return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
+    }
+
+    public async pinned(subject: unknown, operation: "get" | "pin" | "unpin") {
+
+        return await this.$outbound.publishFirst("/pinned", subject, operation) as boolean
     }
 
     /** Atomically resolves one named Process at the authoritative host. */
@@ -142,6 +142,12 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/agent", subject) as string | null
     }
 
+    /** Reads the complete canonical Program definition without mixing in runtime state. */
+    public async definition(subject: unknown) {
+
+        return await this.$outbound.publishFirst("/definition", subject)
+    }
+
     @Subscribe("/install")
     @Publish("/programs", "inbound")
     protected async installed(payload: ProgramRecord | null) {
@@ -170,6 +176,15 @@ export default class ProgramManager extends TheLink {
     protected async uninstalled(payload: ProgramRecord | null) {
 
         return this.arrived(payload)
+    }
+
+    @Subscribe("/pinned")
+    protected async pinnedChanged(payload: ProgramRecord | null, pinned: boolean) {
+
+        if (!payload || typeof pinned !== "boolean") return
+        const program = this.programs.get(payload.identity)
+        if (!program || program.reference !== payload.reference) return
+        await this.$inbound.publish("/pinned", program, pinned)
     }
 
     @Subscribe("/command-output")

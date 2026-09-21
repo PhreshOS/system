@@ -15,7 +15,6 @@ import {
     isUploadFile,
     parseDesktopPreferencesUpdate,
     parsePermissionName,
-    type PermissionInput,
     type PermissionRequest,
     type ProgramIconSize
 } from "@phreshos/core"
@@ -406,7 +405,14 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             const service = await permittedService(args[0])
 
-            return [await processManager.serviceProgramMetadata(service, args[1] as ProgramIconSize | undefined)]
+            return [await processManager.serviceProgramMetadata(service)]
+        }
+
+        if (word === "service-program-icon") {
+
+            const service = await permittedService(args[0])
+
+            return [await processManager.serviceProgramIcon(service, args[1] as ProgramIconSize | undefined)]
         }
 
         if (word === "service-follow") {
@@ -681,35 +687,30 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [sdkProgram(program)]
         }
 
-        if (word === "context-permission-get") return [await authManager.permission(pane, parsePermissionName(args[0]))]
-
-        if (word === "context-permission-allows") {
-
-            const permission = parsePermissionName(args[0])
-
-            return [await authManager.grantsPermission(pane, permission, args[1] as PermissionRequest<typeof permission>)]
-        }
-
-        if (word === "context-permission-request") {
-
-            if (typeof args[0] !== "string") throw new Error("A permission request needs an identity")
-
-            const permission = parsePermissionName(args[1])
-
-            return [await authManager.requestPermission(pane, args[0], permission, args[2] as PermissionRequest<typeof permission>)]
-        }
-
         if (word === "program-permissions") {
 
             const program = await permittedProgram(args[0])
 
-            await access.requireAll()
-
             const operation = args[1]
 
-            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "set" && operation !== "delete") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny" && operation !== "request") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
             if (operation === "all") return [await programManager.permissions(address(program), operation)]
+
+            if (operation === "request") {
+
+                if (typeof args[2] !== "string") throw new Error("A permission request needs an identity")
+
+                const permission = parsePermissionName(args[3])
+
+                return [await authManager.requestPermission(
+                    pane,
+                    address(program),
+                    args[2],
+                    permission,
+                    args[4] as PermissionRequest<typeof permission>
+                )]
+            }
 
             const permission = parsePermissionName(args[2])
 
@@ -720,33 +721,28 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                 args[3] as PermissionRequest<typeof permission>
             )]
 
-            if (operation === "set") {
+            if (operation === "allow") {
 
+                await access.requireAll()
                 await programManager.permissions(
                     address(program),
                     operation,
                     permission,
-                    args[3] as Exclude<PermissionInput<typeof permission>, null>
+                    args[3] as PermissionRequest<typeof permission>
                 )
 
                 return []
             }
 
-            await programManager.permissions(address(program), operation, permission)
+            if (operation === "deny") {
 
-            return []
-        }
+                await access.requireAll()
+                await programManager.permissions(address(program), operation, permission)
 
-        if (word === "launch") {
+                return []
+            }
 
-            const program = await permittedProgram(args[0])
-            const operation = String(args[1])
-
-            if (operation === "set" && args[2] === undefined) throw new Error("A Launch is required")
-
-            const launch = operation === "set" ? await access.launch(args[2]) : args[2]
-
-            return [await programManager.launch(address(program), operation, launch)]
+            return [await programManager.permissions(address(program), operation, permission)]
         }
 
         if (word === "startup") {
@@ -759,7 +755,16 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [await programManager.startup(address(program), operation, launch)]
         }
 
+        if (word === "pinned") {
+
+            const operation = args[1]
+            if (operation !== "get" && operation !== "pin" && operation !== "unpin") throw new Error(`The System does not know the pinned operation "${String(operation)}"`)
+            return [await programManager.pinned(address(await permittedProgram(args[0])), operation)]
+        }
+
         if (word === "program-agent") return [await programManager.agent(address(await permittedProgram(args[0])))]
+
+        if (word === "program-definition") return [await programManager.definition(address(await permittedProgram(args[0])))]
 
         // Icon bytes are requested only when a concrete Program handle asks.
         if (word === "icon") return [await programManager.icon(address(await permittedProgram(args[0])), args[1] as ProgramIconSize)]

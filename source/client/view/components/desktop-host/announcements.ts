@@ -1,5 +1,6 @@
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
+import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { ReactTunnel } from "@the-link/react"
 import { useCallback } from "react"
 import ClientProcessBoundary from "./client-process-boundary"
@@ -180,6 +181,12 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     programs.useSubscribe("/install", useCallback((entry: ProgramRecord | null) => programEvent("install", entry), [programEvent]))
     programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, purge: boolean) => programEvent("uninstall", entry, purge), [programEvent]))
     programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
+    programs.useSubscribe("/pinned", useCallback((entry: Program | null, pinned: boolean) => {
+        if (!entry || typeof pinned !== "boolean") return
+        const record = sdkProgram(entry)
+        post(entry.identity, "host-program", "pinned", entry.identity, record, pinned)
+        post(entry.identity, "program-host", "pinned", entry.reference, pinned)
+    }, [post]))
 }
 
 function domainIdentity(value: unknown) {

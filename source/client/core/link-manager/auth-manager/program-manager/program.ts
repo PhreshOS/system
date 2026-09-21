@@ -75,9 +75,7 @@ export default class Program {
 
     public async open() {
 
-        const launch = await this.programManager.launch(this.address, "get")
-
-        await this.createProcess(launch ?? {})
+        await this.createProcess()
     }
 
     public install(options: ProgramInstallOptions = {}, asker = "") {

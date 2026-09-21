@@ -44,6 +44,11 @@ test("appearance contract", async () => {
   assert.equal(await manager.update(defaultAppearance), initial)
   assert.equal(manager.value, initial)
 
+  await manager.update({ colors: { dark: { danger: "#ff0000" } } })
+  assert.equal(manager.value.colors.dark.danger, "#ff0000")
+  assert.deepEqual(manager.value.colors.light, initial.colors.light)
+  assert.deepEqual(manager.value.material, initial.material)
+
   for (const theme of ["light", "dark"] as const) {
     for (const role of ["background", "foreground", "primary", "secondary", "success", "warning", "danger", "info"] as const) {
       const color = "oklch(60% 0.2 260)"

@@ -312,7 +312,7 @@ export default class AuthManager extends TheLink {
         return this.linkManager.application.system.signOutSession(domainIdentity(identity, "Session"))
     }
 
-    /** Replace System Appearance through the authenticated boundary. */
+    /** Apply a partial System Appearance update through the authenticated boundary. */
     public async updateAppearance(value: unknown) {
 
         return await this.linkManager.updateAppearance(value)
@@ -354,13 +354,13 @@ export default class AuthManager extends TheLink {
     }
 
     @Connect("/permission/request")
-    protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown) {
+    protected async requestPermission(request: unknown, process: unknown, program: unknown, name: unknown, permission: unknown) {
 
         if (typeof request !== "string" || typeof process !== "string") throw new Error("A permission request is invalid")
 
         const permissionName = parsePermissionName(name)
 
-        return this.processManager.requestPermission(process, request, permissionName, permission as PermissionRequest<typeof permissionName>)
+        return this.processManager.requestPermission(process, program, request, permissionName, permission as PermissionRequest<typeof permissionName>)
     }
 
     @Subscribe("/permission/cancel")

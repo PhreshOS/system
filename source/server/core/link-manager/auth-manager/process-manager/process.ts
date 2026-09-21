@@ -14,7 +14,7 @@ import type { ServerRuntime } from "@server/core/server-runtime"
  *
  * Its immutable options are the launch state carried by this particular
  * life. They are available to either half without becoming part of the
- * Program declaration that later launches inherit.
+ * Program definition that later launches inherit.
  *
  * Endpoint presence is mutable live state. Each start creates a fresh
  * execution context; each stop removes that context's boundary and everything
@@ -314,7 +314,7 @@ export default class Process {
             /** Whether this Process's Program declared a Client Endpoint. */
             clientEndpoint: this.clientEndpoint !== null,
 
-            // These are live endpoint snapshots. Program declarations answer
+            // These are live endpoint snapshots. Program definitions answer
             // which endpoint kinds can be started.
             server: this.server ? { service: this.server.service } : null,
 

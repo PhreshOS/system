@@ -21,15 +21,15 @@ function fixture(context: TestContext) {
         processManager: { processes: new Map(), exitAll, announceHost, announceSubject: vi.fn() }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
-    const definition = (installCommand = `node -e "process.stdout.write('preparing')"`) => new Program({
+    const definition = (installCommand = `node -e "process.stdout.write('preparing')"`, installLaunch?: true | Launch) => new Program({
         identity: "example", storage: join(directory, "source", "storage"),
-        startup: { name: "startup" },
+        installLaunch,
         server: { location: server, installCommand, command: "node main.js" }
     })
     return { directory, manager, exitAll, announceHost, definition }
 }
 
-test("installation output precedes Process exit and handle switch; explicit launch precedes startup", async context => {
+test("installation output precedes Process exit and handle switch; an explicit launch overrides the definition", async context => {
     const { manager, exitAll, definition } = fixture(context)
     const source = definition()
     const old = await manager.create({ ...source.config, storage: source.storagePath } as import("@phreshos/core").ProgramDefinition)
@@ -52,7 +52,7 @@ test("installation output precedes Process exit and handle switch; explicit laun
         events.push("output")
     })
     expect(result.program).toBe(old)
-    expect(events).toEqual(["output", "exit", "switch", "explicit", "startup"])
+    expect(events).toEqual(["output", "exit", "switch", "explicit"])
     expect(exitAll).toHaveBeenCalledWith("example", "self")
 })
 
@@ -76,7 +76,7 @@ test("System completes the requested launch after the installation output consum
     expect((await stream.next()).value).toEqual({ stream: "stdout", text: "preparing" })
     await stream.return(undefined as never)
     await completion
-    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["explicit", "startup"])
+    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["explicit"])
     expect(manager.find("example").installed).toBe(true)
 })
 
@@ -85,20 +85,33 @@ test("purge resets installed storage before launching and preserves source stora
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start").mockResolvedValue("process")
     let entry = await manager.install(definition())
     const installedNote = join(entry.program.storagePath, "note.txt")
+    mkdirSync(entry.program.storagePath, { recursive: true })
     writeFileSync(installedNote, "installed data")
+    await manager.pinned(entry.program, "pin")
     const sourceStorage = join(directory, "source", "storage")
     mkdirSync(sourceStorage, { recursive: true })
     writeFileSync(join(sourceStorage, "note.txt"), "development data")
     entry = await manager.install(definition())
     expect(readFileSync(installedNote, "utf8")).toBe("installed data")
+    expect(await manager.pinned(entry.program, "get")).toBe(true)
     start.mockImplementation(async program => {
         expect(existsSync(join(program.storagePath, "note.txt"))).toBe(false)
         return "process"
     })
     entry = await manager.install(definition(), { purge: true, launch: true })
     expect(existsSync(installedNote)).toBe(false)
+    expect(await manager.pinned(entry.program, "get")).toBe(false)
     expect(readFileSync(join(sourceStorage, "note.txt"), "utf8")).toBe("development data")
-    expect(JSON.parse(readFileSync(join(entry.program.storagePath, "startup.json"), "utf8"))).toEqual({ name: "startup" })
+})
+
+test("an omitted installation launch uses installLaunch and false disables it", async context => {
+    const { manager, definition } = fixture(context)
+    const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start").mockResolvedValue("process")
+
+    await manager.install(definition(undefined, { name: "welcome" }))
+    await manager.install(definition(undefined, { name: "ignored" }), { launch: false })
+
+    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["welcome"])
 })
 
 test("explicit launch errors propagate without rolling back the installed Program", async context => {
@@ -115,10 +128,13 @@ test("uninstallation converges silently while its Program handle remains valid",
     const entry = await manager.install(definition())
     const program = entry.program
     const home = manager.fileManager.join(program.identity)
+    await manager.pinned(program, "pin")
 
     await manager.uninstall(program)
 
     expect(entry.installed).toBe(false)
+    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
     expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
 
     await manager.uninstall(program)

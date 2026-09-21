@@ -67,6 +67,36 @@ test("Program and Process discovery exposes only the accessible scope", async ()
     await expect(answer("host-process-find", hidden.identity)).resolves.toEqual([expect.objectContaining({ identity: hidden.identity })])
 })
 
+test("Program permission reads and requests require Program access while direct mutation alone requires all", async () => {
+    let permissions: Permissions = { programs: ["outside"] }
+    const owner = program("owner")
+    const outside = program("outside")
+    const current = process("current", owner)
+    const read = vi.fn(async (_address, operation: string) => operation === "all"
+        ? { network: ["https://example.com"] }
+        : ["https://example.com"])
+    const requestPermission = vi.fn(async () => ["https://example.com"])
+    const auth = {
+        programManager: { programs: new Map([[owner.identity, owner], [outside.identity, outside]]), permissions: read },
+        processManager: { processes: new Map([[current.identity, current]]) },
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions),
+        requestPermission
+    } as unknown as AuthManager
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, {} as never)
+    const target = { identity: outside.identity, reference: outside.reference }
+
+    await expect(answer("program-permissions", target, "get", "network")).resolves.toEqual([["https://example.com"]])
+    await expect(answer("program-permissions", target, "all")).resolves.toEqual([{ network: ["https://example.com"] }])
+    await expect(answer("program-permissions", target, "request", "request", "network", ["https://example.com"])).resolves.toEqual([["https://example.com"]])
+    expect(requestPermission).toHaveBeenCalledWith("current", target, "request", "network", ["https://example.com"])
+    await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).rejects.toThrow("Execution is not permitted")
+    await expect(answer("program-permissions", target, "deny", "network")).rejects.toThrow("Execution is not permitted")
+
+    permissions = { all: [] }
+    await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).resolves.toEqual([])
+    await expect(answer("program-permissions", target, "deny", "network")).resolves.toEqual([])
+})
+
 test.each([
     {
         owningProgram: "owner",
@@ -98,7 +128,8 @@ test.each([
     let permissions: Permissions = {}
     const serviceAvailable = vi.fn(async () => true)
     const waitServiceReady = vi.fn()
-    const serviceProgramMetadata = vi.fn(async () => ({ name: "Provider", version: "0.0.0", icon: [] }))
+    const serviceProgramMetadata = vi.fn(async () => ({ name: "Provider", version: "0.0.0" }))
+    const serviceProgramIcon = vi.fn(async () => [])
     const followService = vi.fn()
     const sendService = vi.fn()
     const askService = vi.fn()
@@ -109,7 +140,7 @@ test.each([
                 ["caller", { program: "owner" }],
                 [destination, { program: owningProgram }]
             ]),
-            serviceAvailable, waitServiceReady, serviceProgramMetadata, followService, sendService, askService
+            serviceAvailable, waitServiceReady, serviceProgramMetadata, serviceProgramIcon, followService, sendService, askService
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
@@ -118,7 +149,8 @@ test.each([
     const operations = [
             ["service-available", key],
             ["service-wait-ready", key],
-            ["service-program-metadata", key, "small"],
+            ["service-program-metadata", key],
+            ["service-program-icon", key, "small"],
             ["service-send", key, "change", {}],
             ["service-ask", key, "read", {}]
         ] as const
@@ -134,7 +166,7 @@ test.each([
         for (const [operation, ...args] of operations) await answer(operation, ...args)
         await answer("service-follow", "subscription", key, "events", "change")
     }
-    for (const call of [serviceAvailable, waitServiceReady, serviceProgramMetadata, followService, sendService, askService]) {
+    for (const call of [serviceAvailable, waitServiceReady, serviceProgramMetadata, serviceProgramIcon, followService, sendService, askService]) {
         expect(call).toHaveBeenCalledTimes(granted.length)
     }
 })

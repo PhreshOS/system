@@ -24,7 +24,6 @@ import {
     type ClientLaunch,
     type Launch,
     type Permission,
-    type PermissionInput,
     type PermissionName,
     type PermissionRequest,
     type PermissionValue,
@@ -1546,7 +1545,7 @@ export default class ProcessManager extends TheLink {
     }
 
     @Connect("/service/program-metadata")
-    protected async serviceProgramMetadata(address: unknown, iconSize: unknown = "medium") {
+    protected async serviceProgramMetadata(address: unknown) {
 
         if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
 
@@ -1555,14 +1554,30 @@ export default class ProcessManager extends TheLink {
         if (!target) throw new Error("The Service is unavailable")
 
         const program = target.process.program
-        const icon = await this.authManager.programManager.icon(program, iconSize)
+
+        return Object.freeze({ name: program.name, version: program.version })
+    }
+
+    @Connect("/service/program-icon")
+    protected async serviceProgramIcon(address: unknown, iconSize: unknown = "medium") {
+
+        if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
+
+        const target = this.services.target(address)
+
+        if (!target) throw new Error("The Service is unavailable")
+
+        const icon = await this.authManager.programManager.icon(target.process.program, iconSize)
+
+        // Rendering can outlive one provider incarnation; never return an icon
+        // after the exact Service target that authorized the read has vanished.
         const current = this.services.target(address)
 
         if (!current || current.process !== target.process || current.endpoint !== target.endpoint) {
             throw new Error("The Service is unavailable")
         }
 
-        return Object.freeze({ name: program.name, version: program.version, icon })
+        return icon
     }
 
     @Subscribe("/service/send")
@@ -1706,29 +1721,17 @@ export default class ProcessManager extends TheLink {
     /** Requests owner approval and replaces the authoritative stored permission. */
     public async requestPermission<Name extends PermissionName>(
         identity: string,
+        subject: unknown,
         request: string,
         name: Name,
         input: PermissionRequest<Name>
     ): Promise<Permission<Name>> {
 
         const process = this.find(identity)
+        const access = new SystemAccess(this, process)
+        const program = access.program(this.system.holdProgram(subject, process.program))
 
-        if (!process.client) throw new Error("A permission request requires a live Client endpoint")
-
-        const requested = permissionCatalog.resolve(name, input)
-
-        if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
-
-        const choice = await this.authManager.dialogManager.requestPermission(process, request, name, requested)
-
-        if (choice === true) {
-
-            await this.authManager.programManager.setPermission(process.program, name, requested)
-
-            return requested
-        }
-
-        return choice
+        return this.authManager.programManager.requestPermission(program, request, name, input, process)
     }
 
     /** Keeps each live Client's iframe access policy aligned with its Program. */
@@ -1874,30 +1877,10 @@ export default class ProcessManager extends TheLink {
 
         if (word === "current-program") return [this.system.requireProgram(process.program.identity)]
 
-        if (word === "context-permission-get") {
-
-            return [this.permission(process.identity, parsePermissionName(rest[0]))]
-        }
-
-        if (word === "context-permission-allows") {
-
-            const permission = parsePermissionName(rest[0])
-
-            return [this.authManager.programManager.allowsPermission(process.program, permission, rest[1] as PermissionRequest<typeof permission>)]
-        }
-
-        if (word === "context-permission-request") {
-
-            const permission = parsePermissionName(rest[1])
-
-            return [await this.requestPermission(process.identity, String(rest[0]), permission, rest[2] as PermissionRequest<typeof permission>)]
-        }
-
         if (word === "program-permissions") {
 
             const program = heldProgram(rest[0])
 
-            access.requireAll()
             const operation = rest[1]
 
             if (operation === "all") return [this.authManager.programManager.permissions(program)]
@@ -1908,25 +1891,40 @@ export default class ProcessManager extends TheLink {
 
                 return [this.authManager.programManager.allowsPermission(program, permission, rest[3] as PermissionRequest<typeof permission>)]
             }
-            if (operation === "set") {
+            if (operation === "allow") {
 
+                access.requireAll()
                 const permission = parsePermissionName(rest[2])
 
                 await this.authManager.programManager.setPermission(
                     program,
                     permission,
-                    rest[3] as Exclude<PermissionInput<typeof permission>, null>
+                    rest[3] as PermissionRequest<typeof permission>
                 )
 
                 return []
             }
-            if (operation === "delete") {
+            if (operation === "deny") {
 
-                await this.authManager.programManager.deletePermission(program, parsePermissionName(rest[2]))
+                access.requireAll()
+                await this.authManager.programManager.setPermission(program, parsePermissionName(rest[2]), false)
 
                 return []
             }
+            if (operation === "request") {
 
+                if (typeof rest[2] !== "string") throw new Error("A permission request needs a unique identity")
+
+                const permission = parsePermissionName(rest[3])
+
+                return [await this.authManager.programManager.requestPermission(
+                    program,
+                    rest[2],
+                    permission,
+                    rest[4] as PermissionRequest<typeof permission>,
+                    process
+                )]
+            }
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
         }
 
@@ -1937,20 +1935,16 @@ export default class ProcessManager extends TheLink {
             return [await this.system.programAgent(program)]
         }
 
+        if (word === "program-definition") {
+
+            return [await this.system.programDefinition(heldProgram(rest[0]))]
+        }
+
         if (word === "current-process") return [processReference(process)]
 
         if (word === "icon") {
 
             return [await this.system.programIcon(heldProgram(rest[0]), rest[1])]
-        }
-
-        if (word === "launch") {
-
-            const program = heldProgram(rest[0])
-
-            const value = rest[1] === "set" ? access.launch(rest[2]) : rest[2]
-
-            return [await this.system.programLaunch(program, String(rest[1]), value)]
         }
 
         if (word === "startup") {
@@ -1960,6 +1954,13 @@ export default class ProcessManager extends TheLink {
             const value = rest[1] === "enable" ? access.launch(rest[2]) : rest[2]
 
             return [await this.system.programStartup(program, String(rest[1]), value)]
+        }
+
+        if (word === "pinned") {
+
+            const operation = rest[1]
+            if (operation !== "get" && operation !== "pin" && operation !== "unpin") throw new Error(`The System does not know the pinned operation "${String(operation)}"`)
+            return [await this.system.programPinned(heldProgram(rest[0]), operation)]
         }
 
         // Which exact process made this one through `program.createProcess()`.
@@ -2158,7 +2159,9 @@ export default class ProcessManager extends TheLink {
 
         if (word === "service-wait-ready") return [await this.services.waitReady(heldService(rest[0]), rest[1])]
 
-        if (word === "service-program-metadata") return [await this.serviceProgramMetadata(heldService(rest[0]), rest[1] as ProgramIconSize | undefined)]
+        if (word === "service-program-metadata") return [await this.serviceProgramMetadata(heldService(rest[0]))]
+
+        if (word === "service-program-icon") return [await this.serviceProgramIcon(heldService(rest[0]), rest[1] as ProgramIconSize | undefined)]
 
         if (word === "service-follow") {
 
@@ -2738,6 +2741,13 @@ export default class ProcessManager extends TheLink {
             // wire carries one value, so the list is that value. A
             // program's own endpoint answers a value directly; these are
             // the two shapes and they meet here.
+            if (args[0] === "program-permissions" && args[2] === "request" && typeof args[3] === "string") {
+
+                // A timed SDK request forgets its transport question. Retain
+                // the matching dialog cancellation at that same boundary.
+                server.retain(question, () => { this.cancelPermission(process.identity, args[3] as string).catch(() => undefined) })
+            }
+
             const result = await this.endHost(process, server, args)
 
             this.say(server, "host-end", "answer", question, succeeded(result))

@@ -99,13 +99,17 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publishFirst("/service/wait-ready", address, timeout)
     }
 
-    public async serviceProgramMetadata(address: ServiceAddress, iconSize: ProgramIconSize = "medium") {
+    public async serviceProgramMetadata(address: ServiceAddress) {
 
-        return await this.$outbound.publishFirst("/service/program-metadata", address, iconSize) as {
+        return await this.$outbound.publishFirst("/service/program-metadata", address) as {
             name: string
             version: string
-            icon: number[]
         }
+    }
+
+    public async serviceProgramIcon(address: ServiceAddress, iconSize: ProgramIconSize = "medium") {
+
+        return await this.$outbound.publishFirst("/service/program-icon", address, iconSize) as number[]
     }
 
     /** Registers one exact service interest for this frame lease. */

@@ -1,6 +1,6 @@
 import Keyv from "keyv"
 import { isDeepStrictEqual } from "node:util"
-import { defaultAppearance, parseAppearance, type Appearance } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, parseAppearance, type Appearance } from "@phreshos/core"
 import UploadManager from "./upload-manager"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
@@ -27,7 +27,7 @@ export default class AppearanceManager {
     public get value() { return this.current }
 
     public async update(value: unknown) {
-        const appearance = parseAppearance(value)
+        const appearance = applyAppearanceUpdate(this.current, value)
 
         this.validateWallpaper(appearance.signInWallpaper.light)
         this.validateWallpaper(appearance.signInWallpaper.dark)

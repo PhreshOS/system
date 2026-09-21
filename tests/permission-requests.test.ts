@@ -2,14 +2,14 @@ import assert from "node:assert/strict"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { PermissionName, PermissionRequest } from "@phreshos/core"
+import type { Permission, PermissionName, PermissionRequest } from "@phreshos/core"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import Process from "@server/core/link-manager/auth-manager/process-manager/process"
 import Window from "@server/core/link-manager/auth-manager/process-manager/window"
 import type HostTraffic from "@server/core/link-manager/auth-manager/process-manager/host-traffic"
-import { readPermissions, writePermissions } from "@server/core/link-manager/auth-manager/program-manager/permissions"
+import ProgramStateStorage from "@server/core/link-manager/auth-manager/program-manager/state"
 import { test } from "vitest"
 
 test("permission requests contract", async () => {
@@ -21,6 +21,7 @@ test("permission requests contract", async () => {
       let choice: boolean | null = null
       let whilePending: (() => void) | undefined
       let accessUpdates = 0
+      let dialogProgram: Program | null = null
 
       const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic, false,
           new Window({ title: "Client", header: true, frame: true, transaction: false, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false))
@@ -28,7 +29,8 @@ test("permission requests contract", async () => {
 
       const authManager = {
           dialogManager: {
-              async requestPermission() {
+              async requestPermission(target: Program) {
+                  dialogProgram = target
                   dialogs++
                   whilePending?.()
                   return choice
@@ -47,52 +49,64 @@ test("permission requests contract", async () => {
       Object.assign(authManager, { programManager, processManager })
 
       const request = <Name extends PermissionName>(name: Name, value: PermissionRequest<Name> = true) => (
-          processManager.requestPermission("process", "request", name, value)
+          programManager.requestPermission(program, "request", name, value, process)
+      )
+      const stored = () => new ProgramStateStorage(program).permissions()
+      const assign = <Name extends PermissionName>(name: Name, value: Exclude<Permission<Name>, null>) => (
+          new ProgramStateStorage(program).setPermission(name, value)
       )
       // Stored authority never bypasses approval, even for a narrower request.
-      writePermissions(program, { services: ["browser", "editor"] })
+      assign("services", ["browser", "editor"])
       assert.equal(await request("services", ["browser"]), null)
       assert.equal(dialogs, 1)
-      assert.deepEqual(readPermissions(program), { services: ["browser", "editor"] })
+      assert.deepEqual(stored(), { services: ["browser", "editor"] })
 
       choice = false
       assert.equal(await request("services", ["browser"]), false)
       assert.equal(dialogs, 2)
-      assert.deepEqual(readPermissions(program), { services: ["browser", "editor"] })
+      assert.deepEqual(stored(), { services: ["browser", "editor"] })
 
       // Approval replaces the exact permission instead of widening or merging it.
       choice = true
       assert.deepEqual(await request("services", ["browser"]), ["browser"])
       assert.equal(dialogs, 3)
-      assert.deepEqual(readPermissions(program), { services: ["browser"] })
+      assert.deepEqual(stored(), { services: ["browser"] })
+
+      // A Program handle requests for its target; the initiating Process is
+      // only the request lifetime owner and never retargets the assignment.
+      const target = new Program({ identity: "target", storage: join(temporary, "target"), permissions: {}, server: { location: ".", command: "node server.js" } })
+      assert.deepEqual(await programManager.requestPermission(target, "owner-request", "uploads", true), [])
+      assert.equal(dialogProgram, target)
+      assert.deepEqual(new ProgramStateStorage(target).permissions(), { uploads: [] })
+      assert.equal(stored().uploads, undefined)
 
       // A concurrent edit cannot turn one approved request into a broader grant.
-      whilePending = () => writePermissions(program, { services: ["editor"] })
+      whilePending = () => assign("services", ["editor"])
       assert.deepEqual(await request("services", ["browser"]), ["browser"])
-      assert.deepEqual(readPermissions(program), { services: ["browser"] })
+      assert.deepEqual(stored(), { services: ["browser"] })
       whilePending = undefined
 
       // An exact assignment restricts a broader fallback grant. Otherwise an
       // approved narrowing request would change the file without changing authority.
-      writePermissions(program, { all: [] })
+      assign("all", [])
       assert.deepEqual(await request("network", ["https://api.example.com"]), ["https://api.example.com"])
       assert(programManager.grantsPermission(program, "network", ["https://api.example.com/v1"]))
       assert(!programManager.grantsPermission(program, "network", ["https://other.example.com"]))
 
       // Permission decisions read the authoritative stored state.
       const declared = new Program({ identity: "declared", storage: temporary, permissions: { programs: ["browser"] }, client: { location: "." } })
-      writePermissions(declared, { services: ["editor"] })
+      new ProgramStateStorage(declared).setPermission("services", ["editor"])
       assert(!programManager.grantsPermission(declared, "services", ["browser"]))
       assert(programManager.grantsPermission(declared, "services", ["editor"]))
 
       // The iframe policy is synchronized independently of permission request results.
-      writePermissions(program, {})
+      assign("all", false)
       assert.deepEqual(await request("all"), [])
       assert.equal(process.hosted().client?.sameOrigin, true)
       assert.equal(accessUpdates, 1)
       await programManager.setPermission(program, "all", [])
       assert.equal(accessUpdates, 1)
-      await programManager.deletePermission(program, "all")
+      await programManager.setPermission(program, "all", false)
       assert.equal(process.hosted().client?.sameOrigin, false)
       assert.equal(accessUpdates, 2)
   }

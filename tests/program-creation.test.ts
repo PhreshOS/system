@@ -7,7 +7,7 @@ import type { ProgramPermissionDeclarations } from "@phreshos/core"
 import FileManager from "@libs/file-manager"
 import type AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
-import { readPermissions, writePermissions } from "@server/core/link-manager/auth-manager/program-manager/permissions"
+import ProgramStateStorage from "@server/core/link-manager/auth-manager/program-manager/state"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 
 function fixture(context: TestContext) {
@@ -19,7 +19,7 @@ function fixture(context: TestContext) {
     const announceHost = vi.fn()
     const auth = Object.assign(new TheLink(), {
         linkManager: { application: { storage: new FileManager(directory, "system"), defaultProgramIcon: "" } },
-        processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject: vi.fn() }
+        processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject: vi.fn(), updateClientAccess: vi.fn() }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
     function definition(permissions?: ProgramPermissionDeclarations) {
@@ -28,256 +28,120 @@ function fixture(context: TestContext) {
     return { directory, client, manager, announceHost, definition }
 }
 
-test("creation establishes all declared settings before announcing the Program", async context => {
-    const { manager, definition, announceHost } = fixture(context)
-    announceHost.mockImplementation((_domain, event, _identity, entry) => {
-        if (event === "create") {
-            expect(readPermissions(entry.program)).toEqual({ network: ["https://api.example.test"], uploads: [] })
-            expect(JSON.parse(readFileSync(join(entry.program.storagePath, "startup.json"), "utf8"))).toEqual({})
-            expect(JSON.parse(readFileSync(join(entry.program.storagePath, "launch.json"), "utf8"))).toEqual({ name: "icon" })
-        }
-    })
-    const program = await manager.create({
-        ...definition({ network: ["https://api.example.test/**"], uploads: true }),
-        startup: true, launch: { name: "icon" }
-    })
-    expect(manager.find(program.identity).installed).toBe(false)
-    expect(JSON.parse(readFileSync(join(program.storagePath, "permissions.json"), "utf8"))).toEqual({ network: ["https://api.example.test"], uploads: [] })
-    expect(announceHost).toHaveBeenCalledOnce()
-})
-
-test("creation and force-create apply declared permissions without changing unrelated entries", async context => {
+test("a Program definition supplies permission fallback without initializing state", async context => {
     const { manager, definition } = fixture(context)
-    const first = await manager.create(definition({ all: true }))
-    writePermissions(first, { appearance: [], network: [] })
-    const replacement = await manager.forceCreate(definition({ network: ["https://api.example.test"], services: ["example"] }))
-    expect(readPermissions(replacement)).toEqual({ appearance: [], network: ["https://api.example.test"], services: ["example"] })
-    await manager.forget(replacement)
-    const empty = await manager.create(definition())
-    expect(readPermissions(empty)).toEqual({ appearance: [], network: ["https://api.example.test"], services: ["example"] })
-    expect(existsSync(join(empty.storagePath, "permissions.json"))).toBe(true)
+    const program = await manager.create(definition({ network: ["https://api.example.test/**"], uploads: true }))
+
+    expect(manager.permissions(program)).toEqual({ network: ["https://api.example.test"], uploads: [] })
+    expect(existsSync(join(program.storagePath, "state.json"))).toBe(false)
 })
 
-test("invalid and duplicate creation leave stored authority and registry unchanged", async context => {
-    const { manager, definition, directory } = fixture(context)
-    const program = await manager.create(definition({ network: true }))
-    await expect(manager.create(definition({ all: true }))).rejects.toThrow("identity")
-    expect(readPermissions(program)).toEqual({ network: [] })
-    await expect(manager.forceCreate({ ...definition({ all: true }), client: { location: join(directory, "missing") } })).rejects.toThrow()
-    expect(manager.find(program.identity).program).toBe(program)
-    expect(readPermissions(program)).toEqual({ network: [] })
+test("stored permission assignments override definition fallbacks by name", async context => {
+    const { manager, definition } = fixture(context)
+    let program = await manager.create(definition({ network: ["https://api.example.test"], uploads: true }))
+    await manager.setPermission(program, "network", false)
+    await manager.setPermission(program, "appearance", true)
+
+    expect(manager.permissions(program)).toEqual({ network: false, uploads: [], appearance: [] })
+
+    program = await manager.forceCreate(definition({ network: true, services: ["editor"] }))
+    expect(manager.permissions(program)).toEqual({ network: false, services: ["editor"], appearance: [] })
 })
 
-test("a permission write failure never publishes a new Program", async context => {
-    const { manager, definition, directory, announceHost } = fixture(context)
-    const storage = join(directory, "not-a-directory")
-    writeFileSync(storage, "keep this")
-    await expect(manager.create({ ...definition({ appearance: true }), storage })).rejects.toThrow()
-    expect(manager.programs.size).toBe(0)
-    expect(announceHost).not.toHaveBeenCalled()
-    expect(readFileSync(storage, "utf8")).toBe("keep this")
+test("a Program definition resolves System-owned paths into reusable creation input", context => {
+    const { client } = fixture(context)
+    const program = new Program({ identity: "example", client: { location: client } })
+
+    expect(program.definition()).toEqual({
+        identity: "example",
+        version: "0.0.0",
+        storage: program.storagePath,
+        client: { location: client }
+    })
 })
 
-test("boot reconstruction preserves all stored settings and launches the saved startup", async context => {
+test("startup and pinned state share one file without overwriting each other", async context => {
+    const { manager, definition } = fixture(context)
+    const program = await manager.create(definition())
+    const startup = { name: "background", options: { mode: "quiet" } }
+
+    await manager.startup(program, "enable", startup)
+    await manager.pinned(program, "pin")
+    await manager.setPermission(program, "network", false)
+
+    expect(await manager.startup(program, "get")).toEqual(startup)
+    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
+    expect(JSON.parse(readFileSync(join(program.storagePath, "state.json"), "utf8"))).toEqual({
+        startup,
+        pinned: true,
+        permissions: { network: false }
+    })
+
+    await manager.startup(program, "disable")
+    await manager.pinned(program, "unpin")
+    expect(await manager.startup(program, "get")).toBeNull()
+    expect(await manager.pinned(program, "get")).toBe(false)
+    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
+})
+
+test("Program state mutations do not rewrite an already-satisfied value", async context => {
+    const { manager, definition } = fixture(context)
+    const program = await manager.create(definition())
+    const startupWrite = vi.spyOn(ProgramStateStorage.prototype, "setStartup")
+    const permissionWrite = vi.spyOn(ProgramStateStorage.prototype, "setPermission")
+    context.onTestFinished(() => { startupWrite.mockRestore(); permissionWrite.mockRestore() })
+
+    await manager.startup(program, "enable", { name: "background" })
+    await manager.startup(program, "enable", { name: "background" })
+    await manager.setPermission(program, "network", false)
+    await manager.setPermission(program, "network", false)
+    await manager.startup(program, "disable")
+    await manager.startup(program, "disable")
+
+    expect(startupWrite).toHaveBeenCalledTimes(2)
+    expect(permissionWrite).toHaveBeenCalledTimes(1)
+})
+
+test("pinning emits Program and global events only when the boolean changes", async context => {
+    const { manager, definition, announceHost } = fixture(context)
+    const program = await manager.create(definition())
+    announceHost.mockClear()
+
+    await manager.pinned(program, "pin")
+    await manager.pinned(program, "pin")
+    await manager.pinned(program, "unpin")
+
+    expect(announceHost.mock.calls.map(([, event, , , pinned]) => [event, pinned])).toEqual([
+        ["pinned", true],
+        ["pinned", false]
+    ])
+})
+
+test("boot reconstruction reads startup and permissions from state", async context => {
     const { manager, definition, client } = fixture(context)
     const directory = manager.fileManager.join("example")
-    mkdirSync(directory)
-    writeFileSync(join(directory, "program.json"), JSON.stringify({ ...definition({ all: true }), startup: true, launch: true, storage: "storage", client: { location: client } }))
-    mkdirSync(join(directory, "storage"))
-    writeFileSync(join(directory, "storage", "permissions.json"), JSON.stringify({ network: false }))
-    writeFileSync(join(directory, "storage", "launch.json"), JSON.stringify({ options: { document: "saved.txt" } }))
+    mkdirSync(join(directory, "storage"), { recursive: true })
+    writeFileSync(join(directory, "program.json"), JSON.stringify({ ...definition({ all: true }), storage: "storage", client: { location: client } }))
     const startup = { name: "saved-startup" }
-    writeFileSync(join(directory, "storage", "startup.json"), JSON.stringify(startup))
+    writeFileSync(join(directory, "storage", "state.json"), JSON.stringify({ startup, permissions: { network: false }, pinned: true }))
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: unknown): Promise<string> }, "start").mockResolvedValue("process")
+
     await manager.initialize()
-    expect(readPermissions(manager.find("example").program)).toEqual({ network: false })
-    expect(await manager.launch(manager.find("example").program, "get")).toEqual({ options: { document: "saved.txt" } })
-    expect(await manager.startup(manager.find("example").program, "get")).toEqual(startup)
-    expect(start).toHaveBeenCalledExactlyOnceWith(manager.find("example").program, startup)
+    const program = manager.find("example").program
+    expect(manager.permissions(program)).toEqual({ all: [], network: false })
+    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(start).toHaveBeenCalledExactlyOnceWith(program, startup)
 })
 
-test("creation applies explicit launch decisions and preserves omitted ones", async context => {
-    const { manager, definition } = fixture(context)
-    const intent = { client: { layer: "over" as const }, options: { document: "icon.txt" } }
-    let program = await manager.create({ ...definition(), launch: intent, startup: intent })
-    expect(await manager.launch(program, "get")).toEqual(intent)
-    expect(await manager.startup(program, "get")).toEqual(intent)
-    expect(manager.authManager.processManager.processes.size).toBe(0)
-    program = await manager.forceCreate(definition())
-    expect(await manager.launch(program, "get")).toEqual(intent)
-    expect(await manager.startup(program, "get")).toEqual(intent)
-    for (const value of [true, {}] as const) {
-        await manager.launch(program, "set", intent)
-        await manager.startup(program, "enable", intent)
-        program = await manager.forceCreate({ ...definition(), launch: value, startup: value })
-        expect(await manager.launch(program, "get")).toEqual({})
-        expect(await manager.startup(program, "get")).toEqual({})
-    }
-    expect(manager.authManager.processManager.processes.size).toBe(0)
-})
+test("invalid creation leaves existing state and registry unchanged", async context => {
+    const { manager, definition, directory } = fixture(context)
+    const program = await manager.create(definition({ network: true }))
+    await manager.setPermission(program, "network", false)
 
-test("undefined launch decisions leave existing bytes and absent files untouched", async context => {
-    const { manager, definition } = fixture(context)
-    let program = await manager.create({ ...definition(), startup: undefined, launch: undefined })
-    for (const name of ["startup", "launch"]) {
-        expect(existsSync(join(program.storagePath, `${name}.json`))).toBe(false)
-    }
-    const previous = '{ "name": "saved" }\n'
-    mkdirSync(program.storagePath, { recursive: true })
-    for (const name of ["startup", "launch"]) writeFileSync(join(program.storagePath, `${name}.json`), previous)
-    await manager.forget(program)
-    program = await manager.create({ ...definition(), startup: undefined, launch: undefined })
-    for (const name of ["startup", "launch"]) {
-        expect(readFileSync(join(program.storagePath, `${name}.json`), "utf8")).toBe(previous)
-    }
-    expect(readPermissions(program)).toEqual({})
-})
+    await expect(manager.create(definition({ all: true }))).rejects.toThrow("identity")
+    await expect(manager.forceCreate({ ...definition({ all: true }), client: { location: join(directory, "missing") } })).rejects.toThrow()
 
-test("saved launch operations preserve defaults and reject invalid intent before mutation", async context => {
-    const { manager, definition } = fixture(context)
-    const program = await manager.create(definition())
-    expect(await manager.launch(program, "get")).toBeNull()
-    expect(existsSync(join(program.storagePath, "launch.json"))).toBe(false)
-    await manager.launch(program, "set", { options: { document: "saved.txt" } })
-    for (const value of [undefined, false, { server: true }, { client: false }]) {
-        await expect(manager.launch(program, "set", value)).rejects.toThrow()
-    }
-    await expect(manager.forceCreate({ ...definition(), launch: { server: true } })).rejects.toThrow("no server")
-    await expect(manager.forceCreate({ ...definition(), startup: { server: true } })).rejects.toThrow("no server")
-    expect(manager.find("example").program).toBe(program)
-    expect(await manager.launch(program, "get")).toEqual({ options: { document: "saved.txt" } })
-})
-
-test("installation applies saved launch decisions and preserves omitted ones", async context => {
-    const { manager, client } = fixture(context)
-    let entry = await manager.install(new Program({ identity: "example", client: { location: client }, launch: true }))
-    expect(await manager.launch(entry.program, "get")).toEqual({})
-    await manager.launch(entry.program, "set", { options: { document: "saved.txt" } })
-    entry = await manager.install(new Program({ identity: "example", client: { location: client } }))
-    expect(await manager.launch(entry.program, "get")).toEqual({ options: { document: "saved.txt" } })
-    entry = await manager.install(new Program({ identity: "example", client: { location: client }, launch: { name: "declaration" } }))
-    expect(await manager.launch(entry.program, "get")).toEqual({ name: "declaration" })
-})
-
-test("failed creation restores both exact previous launch files", async context => {
-    const { manager, definition } = fixture(context)
-    const storage = definition().storage
-    mkdirSync(join(storage, "permissions.json"), { recursive: true })
-    const previous = '{ "options": { "document": "previous.txt" } }\n'
-    writeFileSync(join(storage, "launch.json"), previous)
-    writeFileSync(join(storage, "startup.json"), previous)
-    await expect(manager.create({ ...definition({ appearance: true }), startup: true, launch: true })).rejects.toThrow()
-    expect(manager.programs.size).toBe(0)
-    expect(readFileSync(join(storage, "launch.json"), "utf8")).toBe(previous)
-    expect(readFileSync(join(storage, "startup.json"), "utf8")).toBe(previous)
-})
-
-test("a failed icon launch replacement rolls back startup before any announcement", async context => {
-    const { manager, definition, announceHost } = fixture(context)
-    const storage = definition().storage
-    mkdirSync(join(storage, "launch.json"), { recursive: true })
-    const previous = '{ "name": "previous-startup" }\n'
-    writeFileSync(join(storage, "startup.json"), previous)
-    await expect(manager.create({ ...definition(), startup: true, launch: true })).rejects.toThrow()
-    expect(readFileSync(join(storage, "startup.json"), "utf8")).toBe(previous)
-    expect(existsSync(join(storage, "permissions.json"))).toBe(false)
-    expect(manager.programs.size).toBe(0)
-    expect(announceHost).not.toHaveBeenCalled()
-})
-
-test("uninstalled Programs support startup and launch operations without creating Processes", async context => {
-    const { manager, definition } = fixture(context)
-    const program = await manager.create(definition())
-    expect(manager.find(program.identity).installed).toBe(false)
-    await manager.startup(program, "enable")
-    expect(await manager.startup(program, "get")).toEqual({})
-    const intent = { name: "saved", options: { document: "file.txt" } }
-    await manager.startup(program, "enable", intent)
-    await manager.launch(program, "set", intent)
-    expect(await manager.startup(program, "get")).toEqual(intent)
-    expect(await manager.launch(program, "get")).toEqual(intent)
-    await expect(manager.startup(program, "enable", { server: true })).rejects.toThrow("no server")
-    expect(await manager.startup(program, "get")).toEqual(intent)
-    await manager.startup(program, "disable")
-    expect(await manager.startup(program, "get")).toBeNull()
-    expect(manager.authManager.processManager.processes.size).toBe(0)
-})
-
-test("installing an attached Program applies declarations to destination permissions", async context => {
-    const { manager, definition } = fixture(context)
-    const program = await manager.create(definition({ all: true }))
-    const sourceFile = join(program.storagePath, "permissions.json")
-    const installedStorage = manager.fileManager.join("example", "storage")
-    mkdirSync(installedStorage, { recursive: true })
-    writeFileSync(join(installedStorage, "permissions.json"), JSON.stringify({ appearance: [] }))
-
-    const installed = await manager.install(program)
-    expect(installed.program.storagePath).toBe(installedStorage)
-    expect(readPermissions(installed.program)).toEqual({ appearance: [], all: [] })
-    expect(JSON.parse(readFileSync(sourceFile, "utf8"))).toEqual({ all: [] })
-})
-
-test("a fresh installation receives the declared permission in destination storage", async context => {
-    const { manager, definition } = fixture(context)
-    const program = await manager.create(definition({ appearance: true }))
-    const sourceStorage = program.storagePath
-    expect(readPermissions(program)).toEqual({ appearance: [] })
-    expect(manager.allowsPermission(program, "appearance")).toBe(true)
-    await manager.install(program)
-    expect(program.storagePath).not.toBe(sourceStorage)
-    expect(existsSync(join(program.storagePath, "permissions.json"))).toBe(true)
-    expect(readPermissions(program)).toEqual({ appearance: [] })
-    expect(manager.allowsPermission(program, "appearance")).toBe(true)
-})
-
-test("empty permission declarations neither create nor touch permission files", async context => {
-    const { manager, definition } = fixture(context)
-    for (const permissions of [undefined, {}]) {
-        let program = await manager.forceCreate(definition(permissions))
-        const sourceFile = join(program.storagePath, "permissions.json")
-        expect(existsSync(sourceFile)).toBe(false)
-        await manager.install(program)
-        const destinationFile = join(program.storagePath, "permissions.json")
-        expect(existsSync(destinationFile)).toBe(false)
-        // Even unreadable stored contents must not be read or rewritten by an empty decision.
-        mkdirSync(program.storagePath, { recursive: true })
-        writeFileSync(destinationFile, "untouched destination")
-        await manager.install(program)
-        expect(readFileSync(destinationFile, "utf8")).toBe("untouched destination")
-        rmSync(destinationFile)
-        mkdirSync(definition().storage, { recursive: true })
-        writeFileSync(sourceFile, "untouched source")
-        program = await manager.forceCreate(definition(permissions))
-        expect(readFileSync(sourceFile, "utf8")).toBe("untouched source")
-        rmSync(sourceFile)
-    }
-})
-
-for (const previous of [false, true]) test(`failed installation rolls back declaration settings (previous files: ${previous})`, async context => {
-    const { manager, client } = fixture(context)
-    const original = new Program({ identity: "example", client: { location: client } })
-    const entry = await manager.install(original)
-    const storage = entry.program.storagePath
-    mkdirSync(storage, { recursive: true })
-    const files = {
-        permissions: '{ "uploads": [], "network": false }\n',
-        startup: '{ "name": "previous-startup" }\n',
-        launch: '{ "name": "previous-launch" }\n'
-    }
-    if (previous) for (const [name, bytes] of Object.entries(files)) writeFileSync(join(storage, `${name}.json`), bytes)
-    const declaration = readFileSync(join(entry.program.root, "program.json"), "utf8")
-    const replacement = vi.spyOn(entry.program, "replace").mockImplementationOnce(() => { throw new Error("registration failed") })
-    try {
-        await expect(manager.install(new Program({
-            identity: "example", startup: true, launch: true, permissions: { network: true },
-            client: { location: client }
-        }))).rejects.toThrow("registration failed")
-    }
-    finally { replacement.mockRestore() }
-    for (const [name, bytes] of Object.entries(files)) {
-        const path = join(storage, `${name}.json`)
-        if (previous) expect(readFileSync(path, "utf8")).toBe(bytes)
-        else expect(existsSync(path)).toBe(false)
-    }
-    expect(readFileSync(join(entry.program.root, "program.json"), "utf8")).toBe(declaration)
+    expect(manager.find(program.identity).program).toBe(program)
+    expect(manager.permissions(program)).toEqual({ network: false })
 })

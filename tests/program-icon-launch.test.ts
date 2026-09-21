@@ -4,25 +4,18 @@ import type ProgramManager from "@client/core/link-manager/auth-manager/program-
 import RuntimeProgram from "@server/core/link-manager/auth-manager/program-manager/program"
 import Entry from "@server/core/link-manager/auth-manager/program-manager/entry"
 
-test("opening a Program reads saved intent while direct creation uses its explicit request", async () => {
-    const intent = { options: { document: "icon.txt" }, client: { layer: "over" } }
-    const launch = vi.fn().mockResolvedValue(intent)
+test("opening a Program uses Endpoint defaults while direct creation keeps its explicit request", async () => {
     const publish = vi.fn()
-    const manager = { launch, $outbound: { publish } } as unknown as ProgramManager
+    const manager = { $outbound: { publish } } as unknown as ProgramManager
     const record = new Entry(new RuntimeProgram({ identity: "example", client: { location: "." } })).record()
     const program = new Program(manager, record)
     const address = { identity: record.identity, reference: record.reference }
 
     await program.open()
-    expect(launch).toHaveBeenCalledExactlyOnceWith(address, "get")
-    expect(publish).toHaveBeenLastCalledWith("/create-process", address, intent)
-    await program.createProcess()
-    expect(launch).toHaveBeenCalledOnce()
     expect(publish).toHaveBeenLastCalledWith("/create-process", address, {})
-    launch.mockResolvedValueOnce(null)
+    await program.createProcess({ options: { document: "explicit.txt" } })
+    expect(publish).toHaveBeenLastCalledWith("/create-process", address, { options: { document: "explicit.txt" } })
     await program.open()
     expect(publish).toHaveBeenLastCalledWith("/create-process", address, {})
-    launch.mockRejectedValueOnce(new Error("invalid stored launch"))
-    await expect(program.open()).rejects.toThrow("invalid stored launch")
     expect(publish).toHaveBeenCalledTimes(3)
 })

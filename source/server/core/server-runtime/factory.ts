@@ -4,7 +4,7 @@ import CommandServerRuntime from "./command"
 import SandboxServerRuntime from "./sandbox"
 import WorkerServerRuntime from "./worker"
 
-/** Creates the Core-owned execution adapter selected by a Program declaration. */
+/** Creates the Core-owned execution adapter selected by a Program definition. */
 export default function createServerRuntime(program: Program): ServerRuntime {
 
     const server = program.server

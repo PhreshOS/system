@@ -313,7 +313,7 @@ export default class LinkManager extends TheLink {
         for (const { link } of this.boundaries.values()) await link.$outbound.publish(event, ...values)
     }
 
-    /** Persist and publish one authorized Appearance replacement in call order. */
+    /** Merge, persist, and publish one authorized Appearance update in call order. */
     public updateAppearance(value: unknown) {
 
         const update = this.updatingAppearance.then(async () => {
