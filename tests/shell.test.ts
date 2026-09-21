@@ -1,39 +1,52 @@
 import assert from "node:assert/strict"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import shell from "@server/core/shell"
 import { test } from "vitest"
 
 test("shell contract", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "phresh-shell-"))
   const executable = `"${process.execPath}"`
-  const script = JSON.stringify("process.stdout.write(process.env.PHRESHOS_SHELL_TEST); process.stderr.write('error'); process.exitCode = 7")
-  const events = []
+  const outputEntry = join(directory, "output.mjs")
+  const runningEntry = join(directory, "running.mjs")
 
-  for await (const event of shell(`${executable} -e ${script}`, { env: { PHRESHOS_SHELL_TEST: "output" } })) events.push(event)
+  await writeFile(outputEntry, "process.stdout.write(process.env.PHRESHOS_SHELL_TEST); process.stderr.write('error'); process.exitCode = 7\n")
+  await writeFile(runningEntry, "setInterval(() => {}, 1_000)\n")
 
-  assert.equal(events[0]?.event, "started")
-  assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stdout" ? [event.text] : []).join(""), "output", JSON.stringify(events))
-  assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stderr" ? [event.text] : []).join(""), "error", JSON.stringify(events))
-  assert.deepEqual(events.at(-1), {
-      event: "exited",
-      exit: { status: "exited", code: 7, signal: null }
-  })
+  try {
+    const events = []
 
-  const running = shell(`${executable} -e ${JSON.stringify("setInterval(() => {}, 1_000)")}`)
-  const started = await running.next()
-  const startedEvent = started.value
+    // Script files avoid asserting one host shell's quoting rules as a universal command contract.
+    for await (const event of shell(`${executable} "${outputEntry}"`, { env: { PHRESHOS_SHELL_TEST: "output" } })) events.push(event)
 
-  assert.equal(startedEvent?.event, "started")
-  await running.return(undefined)
+    assert.equal(events[0]?.event, "started")
+    assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stdout" ? [event.text] : []).join(""), "output", JSON.stringify(events))
+    assert.equal(events.flatMap(event => event.event === "output" && event.stream === "stderr" ? [event.text] : []).join(""), "error", JSON.stringify(events))
+    assert.deepEqual(events.at(-1), {
+        event: "exited",
+        exit: { status: "exited", code: 7, signal: null }
+    })
 
-  if (startedEvent?.event === "started") assert.throws(() => process.kill(startedEvent.pid, 0), { code: "ESRCH" })
+    const running = shell(`${executable} "${runningEntry}"`)
+    const started = await running.next()
+    const startedEvent = started.value
 
-  const controller = new AbortController()
-  const aborted = shell(`${executable} -e ${JSON.stringify("setInterval(() => {}, 1_000)")}`, { signal: controller.signal })
-  const abortedStart = (await aborted.next()).value
-  const reason = new Error("test cancellation")
+    assert.equal(startedEvent?.event, "started")
+    await running.return(undefined)
 
-  controller.abort(reason)
+    if (startedEvent?.event === "started") assert.throws(() => process.kill(startedEvent.pid, 0), { code: "ESRCH" })
 
-  await assert.rejects(aborted.next(), error => error === reason)
+    const controller = new AbortController()
+    const aborted = shell(`${executable} "${runningEntry}"`, { signal: controller.signal })
+    const abortedStart = (await aborted.next()).value
+    const reason = new Error("test cancellation")
 
-  if (abortedStart?.event === "started") assert.throws(() => process.kill(abortedStart.pid, 0), { code: "ESRCH" })
+    controller.abort(reason)
+
+    await assert.rejects(aborted.next(), error => error === reason)
+
+    if (abortedStart?.event === "started") assert.throws(() => process.kill(abortedStart.pid, 0), { code: "ESRCH" })
+  }
+  finally { await rm(directory, { recursive: true, force: true }) }
 }, 120_000)

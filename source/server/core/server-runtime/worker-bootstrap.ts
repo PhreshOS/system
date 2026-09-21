@@ -1,4 +1,5 @@
 import { parentPort, workerData } from "node:worker_threads"
+import { pathToFileURL } from "node:url"
 
 if (!parentPort) throw new Error("A Server Worker requires a parent port")
 const port = parentPort
@@ -20,4 +21,5 @@ Object.defineProperty(globalThis, "__PHRESHOS_SERVER_TRANSPORT__", {
 port.on("message", message => { for (const listener of listeners) listener(message) })
 port.once("close", () => { for (const listener of closing) listener() })
 
-await import(String(workerData.entry))
+// Endpoint entries are native paths; ESM import needs a file URL on Windows.
+await import(pathToFileURL(String(workerData.entry)).href)
