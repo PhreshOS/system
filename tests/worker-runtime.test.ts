@@ -29,6 +29,7 @@ test("server runtime contract", async () => {
   const codecDirectory = join(directory, "codec")
   const codecEntry = join(codecDirectory, "sandbox-codec.js")
   const codec = pathToFileURL(createRequire(import.meta.url).resolve("@the-link/messagepack")).href
+  const framing = pathToFileURL(createRequire(import.meta.url).resolve("@the-link/ipc/framing")).href
   const ready = [...messagepack.serialize(["boundary", "ready"])]
   const urlResult = [...messagepack.serialize(["url-result", "https://example.test/runtime"])]
   const bytesResult = [...messagepack.serialize(["bytes-result", [1, 2, 3]])]
@@ -101,21 +102,22 @@ test("server runtime contract", async () => {
 
   await writeFile(commandEntry, `
   import { deserialize as decode, serialize as encode } from ${JSON.stringify(codec)}
+  import { FrameReader, writeFrame } from ${JSON.stringify(framing)}
+  import { connect } from "node:net"
 
   console.log("command output")
-  process.send?.(encode(["boundary", "ready"]))
-  process.on("message", message => {
-      const [event, value] = decode(bytes(message))
-      if (event === "probe") process.send?.(encode(["probe-result", value]))
+  const socket = connect(process.env.PHRESHOS_SERVER_ADDRESS)
+  const reader = new FrameReader(16 * 1024 * 1024)
+  socket.once("connect", async () => {
+      await writeFrame(socket, new TextEncoder().encode(process.env.PHRESHOS_SERVER_TOKEN), 16 * 1024 * 1024)
+      await writeFrame(socket, encode(["boundary", "ready"]), 16 * 1024 * 1024)
   })
-
-  function bytes(value) {
-      if (value instanceof Uint8Array) return value
-      const record = value
-      const result = new Uint8Array(Object.keys(record).length)
-      for (let index = 0; index < result.length; index++) result[index] = record[index]
-      return result
-  }
+  socket.on("data", async chunk => {
+      for (const frame of reader.read(chunk)) {
+          const [event, value] = decode(frame)
+          if (event === "probe") await writeFrame(socket, encode(["probe-result", value]), 16 * 1024 * 1024)
+      }
+  })
   `)
 
   await build({
@@ -171,7 +173,10 @@ test("server runtime contract", async () => {
       command.onMessage((event, ...values) => commandMessages.push([event, ...values]))
       command.onOutput((stream, text) => commandOutput.push([stream, text]))
 
-      await until(() => commandMessages.some(message => message[0] === "boundary" && message[1] === "ready"))
+      await until(() => commandMessages.some(message => message[0] === "boundary" && message[1] === "ready")).catch(error => {
+          const runtimeOutput = commandOutput.map(([stream, text]) => `${stream}: ${text}`).join("")
+          throw new Error(`${error instanceof Error ? error.message : String(error)}${runtimeOutput ? `\n${runtimeOutput}` : ""}`)
+      })
 
       command.send("probe", 42)
 

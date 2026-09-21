@@ -12,7 +12,7 @@
         "@phreshos/react-ui": "^0.1.32",
         "@the-link/core": "^0.3.1",
         "@the-link/http": "^0.1.1",
-        "@the-link/ipc": "^0.2.1",
+        "@the-link/ipc": "^0.2.2",
         "@the-link/messagepack": "^0.1.0",
         "@the-link/react": "^0.2.0",
         "cfonts": "^3.3.1",
@@ -277,7 +277,7 @@
 
     "@the-link/http": ["@the-link/http@0.1.1", "", { "dependencies": { "@the-link/core": "^0.3.0", "hono": "^4.13.2", "uuid": "^14.0.1" } }, "sha512-onqoHm09iHAjPuUHVJiJOttQdEotWofbcxWcsxqe2+DzV4A8/9teF4k/tf3OeVAXqkmo+nBvtQY82lG0n4XxlQ=="],
 
-    "@the-link/ipc": ["@the-link/ipc@0.2.1", "", { "dependencies": { "@the-link/core": "^0.3.0" } }, "sha512-5sPn0y4kDSYulG8pTmzxdAPscqS1S+K8pLOlLHDUnCzEzlytY6a3rvK2PYD1neBaKkUsWml64lrRkzp8d2nkdA=="],
+    "@the-link/ipc": ["@the-link/ipc@0.2.2", "", { "dependencies": { "@the-link/core": "^0.3.0" } }, "sha512-1bRTxXa29DIv96YrBKf6pO4+CGp82VxA76rIolwSfkj4RImycHvz3WzYBJDesVh+mf2uN+tgsTucf0ZGWPmZEQ=="],
 
     "@the-link/messagepack": ["@the-link/messagepack@0.1.0", "", { "dependencies": { "@msgpack/msgpack": "^3.1.3" } }, "sha512-Ktnd6sBPZKLCYl6wnxZjxnCzCBWv33k5iUXAs3hVueejj7vQ5wK5KQVPqaQmfeBFuyOo68KqtVaMxl7A1c/atg=="],
 
