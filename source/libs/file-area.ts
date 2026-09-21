@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, linkSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statfsSync, statSync } from "node:fs"
+import { createReadStream, createWriteStream, linkSync, lstatSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, statfsSync, statSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { rm, watch as watchPath } from "node:fs/promises"
@@ -249,7 +249,12 @@ export default class FileArea {
 
     public async *watch(joins: string[] = [], recursive = false, signal?: AbortSignal) {
 
-        for await (const change of watchPath(this.resolve(joins), { recursive, signal })) {
+        const resolved = this.resolve(joins)
+        // libuv's Windows watcher requires the watched directory and emitted
+        // paths to use the same canonical spelling; 8.3 aliases can abort it.
+        const watched = process.platform === "win32" ? realpathSync.native(resolved) : resolved
+
+        for await (const change of watchPath(watched, { recursive, signal })) {
 
             yield { event: change.eventType, path: change.filename === null ? null : String(change.filename) } as const
         }
