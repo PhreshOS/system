@@ -1,10 +1,11 @@
-import { ChildProcess } from "node:child_process"
+import { spawn, type ChildProcess } from "node:child_process"
 
 const terminationGrace = 1_000
+const windows = process.platform === "win32"
 
 // POSIX detachment creates the process group we supervise; Windows detachment
 // creates a separate console and breaks the inherited pipes and IPC channel.
-export const detachedProcessTree = process.platform !== "win32"
+export const detachedProcessTree = !windows
 
 /** The complete operating-system process tree beneath one child command. */
 export default class ProcessTree {
@@ -55,6 +56,25 @@ export function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals) {
 
     if (!child.pid) return
 
+    if (windows) {
+
+        if (child.exitCode !== null || child.signalCode !== null) return
+
+        // Windows has no process-group signals; taskkill is the host operation
+        // that terminates the command root and every descendant holding its IO.
+        const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+            stdio: "ignore",
+            windowsHide: true
+        })
+
+        killer.once("error", () => {
+            if (child.exitCode === null && child.signalCode === null) child.kill(signal)
+        })
+        killer.unref()
+
+        return
+    }
+
     try { process.kill(-child.pid, signal) }
 
     catch (error) {
@@ -99,7 +119,7 @@ function processTreeExists(pid: number) {
 
     try {
 
-        process.kill(-pid, 0)
+        process.kill(windows ? pid : -pid, 0)
 
         return true
     }
