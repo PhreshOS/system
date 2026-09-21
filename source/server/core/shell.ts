@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process"
 import { homedir } from "node:os"
 import type { ShellEvent, ShellOptions } from "@phreshos/core"
-import ProcessTree from "@libs/process-tree"
+import ProcessTree, { detachedProcessTree } from "@libs/process-tree"
 
 type Queued = Readonly<{
     event: ShellEvent
@@ -46,7 +46,7 @@ export default function shell(command: string, options: ShellOptions = {}): Asyn
         }
         const child = spawn(input.command, {
             shell: true,
-            detached: true,
+            detached: detachedProcessTree,
             cwd: input.cwd,
             env: { ...process.env, ...input.env },
             stdio: ["ignore", "pipe", "pipe"]

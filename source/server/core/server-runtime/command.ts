@@ -1,4 +1,4 @@
-import ProcessTree from "@libs/process-tree"
+import ProcessTree, { detachedProcessTree } from "@libs/process-tree"
 import type { ServerRuntime, ServerRuntimeEnding, Stream } from "../server-runtime"
 import messagepack from "@the-link/messagepack"
 import { spawn, type ChildProcess } from "node:child_process"
@@ -19,7 +19,7 @@ export default class CommandServerRuntime implements ServerRuntime {
 
         this.child = spawn(command, {
             shell: true,
-            detached: true,
+            detached: detachedProcessTree,
             cwd: directory,
             stdio: ["ignore", "pipe", "pipe", "ipc"],
             serialization: "advanced",

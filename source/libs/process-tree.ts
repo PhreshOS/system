@@ -2,6 +2,10 @@ import { ChildProcess } from "node:child_process"
 
 const terminationGrace = 1_000
 
+// POSIX detachment creates the process group we supervise; Windows detachment
+// creates a separate console and breaks the inherited pipes and IPC channel.
+export const detachedProcessTree = process.platform !== "win32"
+
 /** The complete operating-system process tree beneath one child command. */
 export default class ProcessTree {
 
