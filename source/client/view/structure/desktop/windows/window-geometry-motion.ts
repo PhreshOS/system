@@ -1,4 +1,4 @@
-import { resolveWindowGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
 import { type AppearanceTransaction, type Position, type Size, type WindowTransaction } from "@phreshos/core"
@@ -13,6 +13,7 @@ interface WindowGeometryMotionOptions {
     animation?: PresentationAnimation | null
     transaction?: WindowTransaction | null
     immediate: boolean
+    minimumSize?: WindowSurfaceSize
     onComplete?: (revision: number) => void
 }
 
@@ -23,7 +24,7 @@ interface WindowGeometryMotionOptions {
  * visible pixels, including during a pointer gesture, so releasing a drag
  * cannot hand the transform to another renderer before snapping begins.
  */
-export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, onComplete }: WindowGeometryMotionOptions) {
+export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, minimumSize, onComplete }: WindowGeometryMotionOptions) {
 
     const appearanceTransaction = useAppearance().transaction
     const frame = useRef<HTMLDivElement>(null)
@@ -41,9 +42,9 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const gesturing = useRef(false)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const values = useRef({ position, size, animation, transaction, immediate, onComplete })
+    const values = useRef({ position, size, animation, transaction, immediate, minimumSize, onComplete })
 
-    values.current = { position, size, animation, transaction, immediate, onComplete }
+    values.current = { position, size, animation, transaction, immediate, minimumSize, onComplete }
 
     function read(): WindowRegion {
 
@@ -113,7 +114,11 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
         const parent = frame.current?.parentElement
 
-        return parent ? resolveWindowGeometry(values.current.position, values.current.size, logicalSize(parent)) : null
+        if (!parent) return null
+
+        const surface = logicalSize(parent)
+        const region = resolveWindowGeometry(values.current.position, values.current.size, surface)
+        return values.current.minimumSize ? constrainWindowGeometry(region, surface, values.current.minimumSize) : region
     }
 
     useLayoutEffect(function () {
@@ -148,7 +153,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
         transition(region, selected, revision === undefined ? undefined : () => onComplete?.(revision))
 
-    }, [position.x, position.y, size.width, size.height, animation?.revision, transaction, immediate])
+    }, [position.x, position.y, size.width, size.height, animation?.revision, transaction, immediate, minimumSize?.width, minimumSize?.height])
 
     useLayoutEffect(function () {
 

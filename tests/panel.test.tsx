@@ -55,16 +55,29 @@ test("panel contract", async () => {
   const authentication = markup(<CredentialsForm title="Sign in" description="Welcome" submitLabel="Continue" passwordAutocomplete="current-password" pending={false} onSubmit={() => {}} />)
   panel(authentication, 5)
   assert.equal(authentication.match(/<form\b/g)?.length, 1)
+  assert.match(authentication, /<form[^>]*noValidate=""/)
   assert.match(authentication, /name="username"/)
   assert.match(authentication, /name="password"/)
   assert.match(authentication, /placeholder="Username"/)
   assert.match(authentication, /placeholder="Password"/)
-  assert.equal(authentication.match(/height:42px/g)?.length, 3)
   assert.doesNotMatch(authentication, /<label\b/)
+  assert.equal(authentication.match(/height:42px/g)?.length, 3)
   assert.match(authentication, /type="submit"/)
   assert.match(authentication, /<h2[^>]*>Example System<\/h2>/)
   assert.match(authentication, /System version 1.2.3/)
   assert.doesNotMatch(authentication, /backdrop-blur/)
+
+  const authenticationError = markup(<CredentialsForm title="Sign up" description="Welcome" submitLabel="Continue" passwordAutocomplete="new-password" pending={false}
+      requirements={{ username: { minimumLength: 1, maximumLength: 64 }, password: { minimumLength: 8, maximumLength: 1024 } }}
+      error={{ target: "password", message: "Use a stronger password." }} onSubmit={() => {}} />)
+  assert.match(authenticationError, /<input(?=[^>]*name="password")(?=[^>]*aria-invalid="true")/)
+  assert.match(authenticationError, /Use a stronger password\./)
+  assert.match(authenticationError, /<button(?=[^>]*disabled="")(?=[^>]*type="submit")/)
+
+  const authenticationFailure = markup(<CredentialsForm title="Sign in" description="Welcome" submitLabel="Continue" passwordAutocomplete="current-password" pending={false}
+      error={{ target: "form", message: "The request failed." }} onSubmit={() => {}} />)
+  assert.match(authenticationFailure, /role="alert"/)
+  assert.match(authenticationFailure, /The request failed\./)
 
   const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />}</Launcher>)
   assert.equal(launcher.match(/data-material=""/g)?.length, 4)

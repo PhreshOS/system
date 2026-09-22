@@ -22,8 +22,12 @@ type WindowLayerPresentation = Readonly<{
     /** Facts this presentation role can report. */
     readable: readonly WindowPresentationProperty[]
 
-    /** Facts this presentation role can apply, follow, mutate, and emit. */
+    /** Facts the Desktop can apply from authoritative state and emit. */
     applicable: readonly WindowPresentationProperty[]
+    /** Whether a Program may directly mutate this Desktop presentation. */
+    mutable: boolean
+    /** Whether projection from the authoritative Window is optional, required, or forbidden. */
+    following: "optional" | "required" | "forbidden"
     defaults: Readonly<{
         frame: boolean
         header: boolean
@@ -38,6 +42,8 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
     window: Object.freeze({
         readable: Object.freeze(["title", "header", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["title", "header", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        mutable: false,
+        following: "required",
         defaults: Object.freeze({ frame: true, header: true, transaction: false }),
         fixed: false,
         exclusive: false,
@@ -46,6 +52,8 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
     under: Object.freeze({
         readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        mutable: true,
+        following: "optional",
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: false,
         exclusive: false,
@@ -54,6 +62,8 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
     over: Object.freeze({
         readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        mutable: true,
+        following: "optional",
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: false,
         exclusive: false,
@@ -62,6 +72,8 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
     wallpaper: Object.freeze({
         readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
+        mutable: false,
+        following: "forbidden",
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: true,
         exclusive: true,
@@ -70,6 +82,8 @@ export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentat
     "start-menu": Object.freeze({
         readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
+        mutable: false,
+        following: "forbidden",
         defaults: Object.freeze({ frame: false, header: false, transaction: false }),
         fixed: true,
         exclusive: true,
@@ -103,6 +117,18 @@ export function requireWindowPresentationApplication(layer: WindowLayer, propert
     if (!supportsWindowPresentationApplication(layer, property)) {
         throw new Error(`The ${layer} layer cannot apply ${property} presentation changes`)
     }
+}
+
+/** Rejects public local control while preserving application for following and Desktop ownership. */
+export function requireWindowPresentationMutation(layer: WindowLayer, property: WindowPresentationProperty) {
+    if (!windowLayerModel[layer].mutable) {
+        throw new Error(`The ${layer} layer does not allow direct presentation changes`)
+    }
+    requireWindowPresentationApplication(layer, property)
+}
+
+export function windowPresentationFollowing(layer: WindowLayer) {
+    return windowLayerModel[layer].following
 }
 
 export function supportsWindowPresentationTransactions(layer: WindowLayer) {

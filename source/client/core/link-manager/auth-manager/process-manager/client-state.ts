@@ -6,7 +6,7 @@ export default class ClientState {
 
     public readonly window: Window
 
-    public sameOrigin: boolean
+    public readonly sandbox: boolean
 
     public readonly service: NonNullable<ProcessSnapshot["client"]>["service"]
 
@@ -14,7 +14,7 @@ export default class ClientState {
 
         this.window = window
 
-        this.sameOrigin = payload.sameOrigin
+        this.sandbox = payload.sandbox
 
         this.service = payload.service
     }

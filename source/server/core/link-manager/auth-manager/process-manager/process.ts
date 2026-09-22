@@ -74,8 +74,6 @@ export default class Process {
 
     private readonly hostTraffic: HostTraffic
 
-    private clientSameOrigin: boolean
-
     private readonly serverStarts: ((server: ServerProcessBoundary) => void)[] = []
 
     private readonly serverStops: ((code: number | null, signal: NodeJS.Signals | null) => void)[] = []
@@ -95,7 +93,7 @@ export default class Process {
 
     private exitProcess: (() => Promise<unknown>) | null = null
 
-    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, clientSameOrigin: boolean, window: Window | null = null) {
+    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, window: Window | null = null) {
 
         this.identity = identity
 
@@ -111,18 +109,7 @@ export default class Process {
 
         this.hostTraffic = hostTraffic
 
-        this.clientSameOrigin = clientSameOrigin
-
         this.clientEndpoint = window ? Object.freeze({ window }) : null
-    }
-
-    public setClientSameOrigin(sameOrigin: boolean) {
-
-        if (this.clientSameOrigin === sameOrigin) return false
-
-        this.clientSameOrigin = sameOrigin
-
-        return true
     }
 
     public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel, hostVisible: HostVisibility) {
@@ -341,7 +328,7 @@ export default class Process {
                 ? { window: this.clientEndpoint.window.toJSON() }
                 : null,
 
-            client: this.client ? { ...this.client, sameOrigin: this.clientSameOrigin } : null
+            client: this.client ? { ...this.client, sandbox: this.program.client?.sandbox ?? true } : null
         }
     }
 

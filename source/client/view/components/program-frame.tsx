@@ -34,7 +34,9 @@ export default function ProgramFrame({ record, assetId, client, title, door, acc
 
         title={title}
 
-        sandbox={`allow-scripts allow-forms${client.sameOrigin ? " allow-same-origin" : ""}`}
+        // Browser containment is fixed by the Client definition; permission
+        // changes must never weaken or reload this execution boundary.
+        sandbox={client.sandbox ? "allow-scripts allow-forms" : undefined}
 
         className={className}
 

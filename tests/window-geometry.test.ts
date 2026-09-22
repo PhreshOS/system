@@ -3,8 +3,22 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
+import { constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry } from "@client/view/components/window-manager/window-geometry"
 import { TheLink } from "@the-link/core"
 import { test } from "vitest"
+
+test("a standard presentation enforces its minimum after resolving authoritative geometry", () => {
+  const surface = { width: 1200, height: 800 }
+  const authoritative = resolveWindowGeometry({ x: 0, y: 0 }, { width: "1/2", height: 1 }, surface)
+
+  assert.deepEqual(authoritative, { x: 0, y: 0, width: 600, height: 1 })
+  assert.deepEqual(constrainWindowGeometry(authoritative, surface, minimumWindowSize), {
+      x: 0, y: 0, width: 600, height: 160
+  })
+  assert.deepEqual(constrainWindowGeometry({ x: 0, y: 0, width: 1, height: 1 }, { width: 120, height: 80 }, minimumWindowSize), {
+      x: 0, y: 0, width: 120, height: 80
+  })
+})
 
 test("window geometry contract", async () => {
   const initial = {

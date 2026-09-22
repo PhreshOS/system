@@ -1,6 +1,15 @@
+import { useAppearance, useThemedValue } from "@phreshos/react-ui"
 import { ComponentProps } from "react"
 
-export default function ({ className, ...props }: ComponentProps<"div">) {
+export default function ({ style, ...props }: ComponentProps<"div">) {
 
-    return <div role="alert" className={`rounded border px-3 py-2 ${className ?? ""}`} {...props} />
+    const color = useThemedValue(useAppearance().colors).danger
+
+    // Form-wide failures cannot belong to one FieldError, but should retain
+    // the same compact visual language rather than introducing another surface.
+    return <div
+        {...props}
+        role="alert"
+        style={{ fontSize: "0.92em", color, ...style }}
+    />
 }

@@ -101,12 +101,7 @@ export default class Process {
         // live at birth. Its following lifecycle announcement describes that
         // same Client; it must update the existing projection rather than
         // inventing a second local incarnation for the Window Manager.
-        if (this.client) {
-
-            this.client.sameOrigin = payload.client.sameOrigin
-
-            return
-        }
+        if (this.client) return
 
         this.client = new ClientState(this.clientEndpoint.window, payload.client)
     }
@@ -116,10 +111,6 @@ export default class Process {
         this.client = null
     }
 
-    public clientAccessChanged(payload: ProcessSnapshot) {
-
-        if (this.client && payload.client) this.client.sameOrigin = payload.client.sameOrigin
-    }
 }
 
 /** Retained identity needed only to reconstruct a departed parent handle. */

@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useEffect
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size, type WindowFrame as WindowFrameDefinition, type WindowLayer, type WindowTransaction } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowFrame from "./window-frame"
@@ -56,6 +56,14 @@ export default function ({ title, header = true, frame: frameDefinition = false,
     const appearanceTransaction = useAppearance().transaction
     const desktopScale = useDesktopScale()
     const standard = layer === "window"
+    const presentationMinimum = standard ? { width: minWidth, height: minHeight } : undefined
+
+    function resolvePresentedGeometry(selectedPosition: Position, selectedSize: Size, surface: WindowSurfaceSize) {
+
+        const region = resolveWindowGeometry(selectedPosition, selectedSize, surface)
+
+        return presentationMinimum ? constrainWindowGeometry(region, surface, presentationMinimum) : region
+    }
 
     // Hidden windows retain their last presentation while lower-priority state changes.
     const presented = useRef({ position, size })
@@ -68,6 +76,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
         size: presented.current.size,
         animation: geometryAnimation,
         immediate: reducedMotion,
+        minimumSize: presentationMinimum,
         onComplete: revision => onPresentationAnimationComplete?.("geometry", revision)
     })
 
@@ -305,7 +314,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
                 const restoringMaximized = maximized
 
                 if (restoringMaximized) {
-                    const stored = resolveWindowGeometry(position, size, bounds)
+                    const stored = resolvePresentedGeometry(position, size, bounds)
                     origin = { ...origin, width: stored.width, height: stored.height }
                     onMaximize?.()
                 }
@@ -393,7 +402,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
             // frame never shows a stale in-between.
             if (term) {
 
-                geometryMotion.finishGesture(resolveWindowGeometry(term.position, term.size, bounds))
+                geometryMotion.finishGesture(resolvePresentedGeometry(term.position, term.size, bounds))
                 onSnap?.(term.position, term.size)
             }
 
@@ -438,6 +447,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
             shown={gesture.shown}
             visible={gesture.zone !== null}
             bare={!standard}
+            minimumSize={presentationMinimum}
             paintSurfaceSize={paintSurfaceSize}
             reducedMotion={reducedMotion}
             zIndex={style?.zIndex}

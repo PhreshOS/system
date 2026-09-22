@@ -32,10 +32,10 @@ test("each Desktop owns an independent Window presentation", async () => {
   const first = new WindowPresentations(entries, identity => byProcess.get(identity) as never ?? null)
   const second = new WindowPresentations(entries, identity => byProcess.get(identity) as never ?? null)
 
-  await first.move("ordinary", { x: 40, y: 50 })
+  assert.throws(() => first.move("ordinary", { x: 40, y: 50 }), /does not allow direct/)
   await first.move("overlay", { x: 60, y: 70 })
 
-  assert.deepEqual(first.state("ordinary").position, { x: 40, y: 50 })
+  assert.deepEqual(first.state("ordinary").position, { x: 0, y: 0 })
   assert.deepEqual(first.state("overlay").position, { x: 60, y: 70 })
   assert.deepEqual(second.state("ordinary").position, { x: 0, y: 0 })
   assert.deepEqual(ordinary.window.position, { x: 0, y: 0 })
@@ -112,18 +112,12 @@ test("transaction-capable presentations use the authoritative Window transaction
   await inherited
 })
 
-test("standard Window geometry uses the Desktop Appearance transaction by default", async () => {
+test("authoritative standard Window geometry uses the Desktop Appearance transaction", async () => {
   const ordinary = client("window")
   const entries = new Map([
       ["ordinary", { identity: "ordinary:0", client: ordinary }]
   ]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
   const presentations = new WindowPresentations(entries, () => ordinary as never)
-
-  await presentations.move("ordinary", { x: 20, y: 30 })
-  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
-
-  await presentations.resize("ordinary", { width: 500, height: 400 })
-  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
 
   ordinary.window.position = { x: 80, y: 90 }
   presentations.reconcile(entries)

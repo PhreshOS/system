@@ -177,8 +177,8 @@ export default function useWindows(authManager: AuthManager) {
     }
 
     // Presentation and authoritative mutation are two explicit acts.
-    // The presentation act already rendered the result; only the server echo may
-    // project the authoritative act back onto an ordinary Window.
+    // Standard Window control always crosses the authoritative handle. Pointer
+    // motion may already show the gesture, but the server echo owns its result.
     const commit = useCallback(function (request: Promise<void>) {
 
         request.catch(() => undefined)
@@ -219,8 +219,6 @@ export default function useWindows(authManager: AuthManager) {
 
         const highest = summit(window.layer)
 
-        presentation.raise(process.identity)
-
         if (window.depth === highest) return
 
         commit(window.raise())
@@ -232,8 +230,6 @@ export default function useWindows(authManager: AuthManager) {
         const window = process.client?.window
 
         if (!window || window.layer !== "window") return
-
-        void presentation.minimize(process.identity, minimized)
 
         commit(window.minimize(minimized))
 
@@ -257,8 +253,6 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        void presentation.move(process.identity, { x, y })
-
         commit(window.move({ x, y }))
 
     }, [commit])
@@ -270,17 +264,12 @@ export default function useWindows(authManager: AuthManager) {
         if (!window || window.layer !== "window") return
 
         if (!position) {
-
-            void presentation.resize(process.identity, { width, height })
-
             commit(window.resize({ width, height }))
 
             return
         }
 
         const geometry = { ...position, width, height }
-
-        void presentation.setGeometry(process.identity, geometry)
 
         commit(window.setGeometry(geometry))
 
@@ -294,8 +283,6 @@ export default function useWindows(authManager: AuthManager) {
 
         const geometry = { ...position, ...size }
 
-        void presentation.setGeometry(process.identity, geometry)
-
         commit(window.setGeometry(geometry))
 
     }, [commit])
@@ -304,7 +291,6 @@ export default function useWindows(authManager: AuthManager) {
         const window = process.client?.window
         if (!window || window.layer !== "window") return
         const maximized = !presentation.projection(process.identity).maximized
-        void presentation.maximize(process.identity, maximized)
         commit(window.maximize(maximized))
     }, [commit])
 
@@ -401,13 +387,10 @@ export default function useWindows(authManager: AuthManager) {
             if (!window || window.layer !== "window") continue
 
             const geometry = { ...region }
-
-            void presentation.setGeometry(identity, geometry)
-
             commit(window.setGeometry(geometry))
         }
 
-    }, [commit, presentation, peer])
+    }, [commit, peer])
 
     return {
 

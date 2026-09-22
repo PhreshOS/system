@@ -8,7 +8,7 @@ import { motionTransition } from "@client/view/appearance/motion"
 import useWindowGeometryMotion from "./window-geometry-motion"
 
 /** Preview of the placement currently offered by a drag. */
-export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, reducedMotion, zIndex }: SnapPreviewProps) {
+export default function SnapPreview({ shown, visible, bare, minimumSize, paintSurfaceSize, reducedMotion, zIndex }: SnapPreviewProps) {
 
     const transaction = useAppearance().transaction
 
@@ -17,7 +17,8 @@ export default function SnapPreview({ shown, visible, bare, paintSurfaceSize, re
         size: shown.size,
         animation: null,
         transaction: true,
-        immediate: reducedMotion
+        immediate: reducedMotion,
+        minimumSize
     })
 
     return <motion.div
@@ -52,6 +53,7 @@ interface SnapPreviewProps {
     shown: SnapTarget
     visible: boolean
     bare: boolean
+    minimumSize?: WindowSurfaceSize
     paintSurfaceSize: WindowSurfaceSize
     reducedMotion: boolean
     zIndex: CSSProperties["zIndex"]

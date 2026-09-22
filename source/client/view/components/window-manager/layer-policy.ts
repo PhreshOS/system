@@ -1,7 +1,7 @@
 import type { WindowPresentationState } from "../desktop-host/window-presentation"
-import { requireWindowPresentationApplication, supportsWindowPresentationApplication, type WindowPresentationProperty } from "@shared/window-layers"
+import { requireWindowPresentationMutation, supportsWindowPresentationApplication, type WindowPresentationProperty } from "@shared/window-layers"
 
-export const requirePresentationApplication = requireWindowPresentationApplication
+export const requirePresentationMutation = requireWindowPresentationMutation
 
 /** A target contributes only properties allowed by the receiving role. */
 export function followedState(current: WindowPresentationState, target: WindowPresentationState, previous?: WindowPresentationState) {

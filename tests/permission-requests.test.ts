@@ -20,10 +20,9 @@ test("permission requests contract", async () => {
       let dialogs = 0
       let choice: boolean | null = null
       let whilePending: (() => void) | undefined
-      let accessUpdates = 0
       let dialogProgram: Program | null = null
 
-      const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic, false,
+      const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic,
           new Window({ title: "Client", header: true, frame: true, transaction: false, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false))
       process.startClient(false)
 
@@ -40,11 +39,7 @@ test("permission requests contract", async () => {
       const programManager = Object.assign(Object.create(ProgramManager.prototype), { authManager }) as ProgramManager
       const processManager = Object.assign(Object.create(ProcessManager.prototype), {
           authManager,
-          processes: new Map([["process", process]]),
-          $outbound: { async publish(event: string) {
-              assert.equal(event, "/client-access")
-              accessUpdates++
-          } }
+          processes: new Map([["process", process]])
       }) as ProcessManager
       Object.assign(authManager, { programManager, processManager })
 
@@ -99,16 +94,11 @@ test("permission requests contract", async () => {
       assert(!programManager.grantsPermission(declared, "services", ["browser"]))
       assert(programManager.grantsPermission(declared, "services", ["editor"]))
 
-      // The iframe policy is synchronized independently of permission request results.
       assign("all", false)
       assert.deepEqual(await request("all"), [])
-      assert.equal(process.hosted().client?.sameOrigin, true)
-      assert.equal(accessUpdates, 1)
       await programManager.setPermission(program, "all", [])
-      assert.equal(accessUpdates, 1)
       await programManager.setPermission(program, "all", false)
-      assert.equal(process.hosted().client?.sameOrigin, false)
-      assert.equal(accessUpdates, 2)
+      assert.equal(programManager.permission(program, "all"), false)
   }
   finally {
       rmSync(temporary, { recursive: true, force: true })

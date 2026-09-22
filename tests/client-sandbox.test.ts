@@ -1,18 +1,18 @@
 import assert from "node:assert/strict"
 import Process from "@server/core/link-manager/auth-manager/process-manager/process"
 import Window from "@server/core/link-manager/auth-manager/process-manager/window"
-import type Program from "@server/core/link-manager/auth-manager/program-manager/program"
+import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import type HostTraffic from "@server/core/link-manager/auth-manager/process-manager/host-traffic"
 import { test } from "vitest"
 
 test("client sandbox contract", async () => {
-  const process = new Process(
+  const sandboxed = new Process(
 
       "process",
 
       null,
 
-      { identity: "program" } as Program,
+      new Program({ identity: "sandboxed", storage: ".", client: { location: "." } }),
 
       {},
 
@@ -21,8 +21,6 @@ test("client sandbox contract", async () => {
       null,
 
       {} as HostTraffic,
-
-      false,
 
       new Window(
 
@@ -38,12 +36,27 @@ test("client sandbox contract", async () => {
       )
   )
 
-  process.startClient(false)
+  sandboxed.startClient(false)
 
-  assert.equal(process.hosted().client?.sameOrigin, false)
+  assert.equal(sandboxed.hosted().client?.sandbox, true)
 
-  assert.equal(process.setClientSameOrigin(true), true)
-  assert.equal(process.setClientSameOrigin(true), false)
+  const trusted = new Process(
+      "trusted-process",
+      null,
+      new Program({ identity: "trusted", storage: ".", client: { location: ".", sandbox: false } }),
+      {},
+      { server: null, client: null, options: {} },
+      null,
+      {} as HostTraffic,
+      new Window(
+          { title: "Client", header: true, frame: true, transaction: false, layer: "window" },
+          { x: 0, y: 0 },
+          { width: 640, height: 480 },
+          1,
+          false
+      )
+  )
+  trusted.startClient(false)
 
-  assert.equal(process.hosted().client?.sameOrigin, true)
+  assert.equal(trusted.hosted().client?.sandbox, false)
 }, 120_000)

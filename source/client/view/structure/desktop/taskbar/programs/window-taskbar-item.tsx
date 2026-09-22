@@ -42,7 +42,7 @@ export default memo(function ({ record, title, icon, active, minimized, maximize
 
         <ContextMenu.Content UNSTABLE_portalContainer={scaleContainer ?? undefined}>
 
-            <Menu aria-label={`${title} window actions`}>
+            <Menu aria-label={`${title} window actions`} size="small">
 
                 <Menu.Item onAction={changeVisibility}>{minimized ? "Show" : "Minimize"}</Menu.Item>
 

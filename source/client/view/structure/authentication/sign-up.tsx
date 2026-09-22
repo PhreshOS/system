@@ -1,5 +1,5 @@
 import { type AuthenticationState, type SignUpError } from "@server/core/authentication/authentication"
-import CredentialsForm from "./credentials-form"
+import CredentialsForm, { type CredentialsError } from "./credentials-form"
 import { LinkManagerContext } from "../../contexts"
 import usePromise from "@libs/react-promise"
 
@@ -13,7 +13,7 @@ export default function SignUp({ state, onClosed }: SignUpProps) {
 
         if ("error" in response && response.error === "signed-up") onClosed()
 
-        return "error" in response ? message(response.error, state) : null
+        return "error" in response ? resolveError(response.error, state) : null
     })
 
     return <CredentialsForm
@@ -28,30 +28,38 @@ export default function SignUp({ state, onClosed }: SignUpProps) {
 
         requirements={state.requirements}
 
-        error={signUp.exception ? String(signUp.exception.current) : signUp.solve?.current}
+        error={signUp.exception ? {
+
+            target: "form",
+
+            message: signUp.exception.current instanceof Error ? signUp.exception.current.message : String(signUp.exception.current)
+
+        } : signUp.solve?.current}
 
         pending={signUp.isPending}
+
+        onEdit={signUp.reset}
 
         onSubmit={signUp.safeExecute}
 
     />
 }
 
-function message(error: SignUpError, state: AuthenticationState) {
+function resolveError(error: SignUpError, state: AuthenticationState): CredentialsError {
 
     switch (error) {
 
-        case "signed-up": return "Sign-up is already complete."
+        case "signed-up": return { target: "form", message: "Sign-up is already complete." }
 
-        case "username-required": return "Enter a username."
+        case "username-required": return { target: "username", message: "Enter a username." }
 
-        case "username-invalid": return `Use a username of at most ${state.requirements.username.maximumLength} characters without control characters.`
+        case "username-invalid": return { target: "username", message: `Use a username of at most ${state.requirements.username.maximumLength} characters without control characters.` }
 
-        case "password-too-short": return `Use at least ${state.requirements.password.minimumLength} characters.`
+        case "password-too-short": return { target: "password", message: `Use at least ${state.requirements.password.minimumLength} characters.` }
 
-        case "password-too-long": return `Use at most ${state.requirements.password.maximumLength} characters.`
+        case "password-too-long": return { target: "password", message: `Use at most ${state.requirements.password.maximumLength} characters.` }
 
-        case "password-matches-username": return "The password must not be the username."
+        case "password-matches-username": return { target: "password", message: "The password must not be the username." }
     }
 }
 

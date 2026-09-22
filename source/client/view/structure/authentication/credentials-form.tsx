@@ -4,16 +4,18 @@ import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { Button, Input, Panel, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
-import { type SyntheticEvent } from "react"
+import { useState, type SyntheticEvent } from "react"
 import { ApplicationContext } from "../../contexts"
 import SystemHeader from "../../components/system-header"
 
 /** The common username-and-password surface for sign-up and sign-in. */
-export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onSubmit }: CredentialsFormProps) {
+export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
     const transaction = useAppearance().transaction
     const application = ApplicationContext.useValue()
+    const [password, setPassword] = useState("")
+    const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength
 
     function submit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
 
@@ -40,6 +42,10 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             aria-busy={pending}
 
+            // Authentication owns normalized credential validation. Native
+            // interception would prevent its field-specific result reaching this form.
+            noValidate
+
             onSubmit={submit}
 
         >
@@ -60,6 +66,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                 <div className="grid gap-4">
 
+                    {/* A submitted failure belongs to the exact credential values that produced it. */}
                     <Input
                         aria-label="Username"
                         placeholder="Username"
@@ -71,6 +78,9 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                         maxLength={requirements?.username.maximumLength}
                         required
                         disabled={pending}
+                        invalid={error?.target === "username" || error?.target === "credentials"}
+                        errorMessage={error?.target === "username" ? error.message : undefined}
+                        onChange={() => onEdit?.()}
                         autoFocus
                     />
 
@@ -85,18 +95,27 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                         maxLength={requirements?.password.maximumLength}
                         required
                         disabled={pending}
+                        invalid={error?.target === "password" || error?.target === "credentials"}
+                        errorMessage={error?.target === "password" ? error.message : undefined}
+                        onChange={value => {
+
+                            // This controls registration readiness only; Authentication
+                            // remains the authority for accepting the submitted value.
+                            setPassword(value)
+                            onEdit?.()
+                        }}
                         description={requirements ? `Use at least ${requirements.password.minimumLength} characters.` : undefined}
                     />
 
                 </div>
 
-                {error && <Alert className="text-sm">{error}</Alert>}
+                {(error?.target === "credentials" || error?.target === "form") && <Alert className="text-sm">{error.message}</Alert>}
 
                 <Button
 
                     type="submit"
 
-                    disabled={pending}
+                    disabled={!passwordReady}
 
                     pending={pending}
 
@@ -129,9 +148,18 @@ interface CredentialsFormProps {
 
     requirements?: AuthenticationState["requirements"]
 
-    error?: string | null
+    error?: CredentialsError | null
 
     pending: boolean
 
+    onEdit?: () => void
+
     onSubmit: (username: string, password: string) => void
+}
+
+export interface CredentialsError {
+
+    target: "username" | "password" | "credentials" | "form"
+
+    message: string
 }

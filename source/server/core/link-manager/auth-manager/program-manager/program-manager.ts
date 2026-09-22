@@ -236,13 +236,7 @@ export default class ProgramManager extends TheLink {
         const permission = permissionCatalog.resolve(name, value)
         if (permission === null) throw new Error("A stored Program permission cannot be null")
         if (before === undefined || permissionCatalog.changed(before, permission)) {
-
-            const previousAll = this.permission(program, "all")
             state.setPermission(name, permission)
-
-            if (name === "all" && permissionCatalog.changed(previousAll, this.permission(program, "all"))) {
-                await this.authManager.processManager.updateClientAccess(program)
-            }
         }
     }
 

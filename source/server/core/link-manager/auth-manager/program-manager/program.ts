@@ -99,10 +99,11 @@ export default class Program {
         } : null
     }
 
-    public get client(): Resolved<ClientConfig> | null {
+    public get client(): ResolvedClient | null {
 
         return this.config.client ? {
             ...this.config.client,
+            sandbox: this.config.client.sandbox ?? true,
             start: this.config.client.start ?? true,
             service: this.config.client.service ?? false,
         } : null
@@ -220,6 +221,8 @@ export default class Program {
             },
 
             client: client && {
+
+                sandbox: client.sandbox,
 
                 start: client.start,
 
@@ -407,6 +410,8 @@ function coherent(config: ProgramConfig) {
 
     if (config.client?.title !== undefined && typeof config.client.title !== "string") throw new Error("A client half's title must be text")
 
+    if (config.client?.sandbox !== undefined && typeof config.client.sandbox !== "boolean") throw new Error("A client half's sandbox mode must be true or false")
+
     if (config.client?.frame !== undefined) parseWindowFrame(config.client.frame)
 
     if (config.client?.transaction !== undefined) parseWindowTransaction(config.client.transaction)
@@ -436,6 +441,8 @@ function coherent(config: ProgramConfig) {
 type Resolved<Half extends { start?: boolean, service?: boolean }> = Half extends unknown
     ? Omit<Half, "start" | "service"> & { start: boolean, service: boolean }
     : never
+
+type ResolvedClient = Omit<Resolved<ClientConfig>, "sandbox"> & { sandbox: boolean }
 
 function execution(server: { command?: unknown, worker?: unknown, sandbox?: unknown }) {
 

@@ -57,6 +57,19 @@ export function resolveWindowGeometry(position: Position, size: Size, surface: W
 }
 
 /**
+ * Applies a presentation-owned minimum without rewriting authoritative values.
+ * A smaller workspace is the only case where the Desktop cannot provide it.
+ */
+export function constrainWindowGeometry(region: WindowRegion, surface: WindowSurfaceSize, minimum: WindowSurfaceSize): WindowRegion {
+
+    return {
+        ...region,
+        width: Math.max(region.width, Math.min(minimum.width, surface.width)),
+        height: Math.max(region.height, Math.min(minimum.height, surface.height))
+    }
+}
+
+/**
  * The window's box is its geometry; an ordinary painted frame is inset only
  * on edges that do not touch that box's containing surface. Snap previews use
  * this same function, so preview and final paint cannot disagree.

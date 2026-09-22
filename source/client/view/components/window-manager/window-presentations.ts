@@ -1,4 +1,4 @@
-import { followedState, requirePresentationApplication } from "./layer-policy"
+import { followedState, requirePresentationMutation } from "./layer-policy"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import {
     type WindowFrame,
@@ -7,7 +7,7 @@ import {
 } from "@phreshos/core"
 import { type PresentationTransactionRequest, type WindowPresentationHost, type WindowPresentationState } from "../desktop-host/window-presentation"
 import { type WindowRegion } from "./window-geometry"
-import { isFixedWindowPresentationLayer, requireWindowPresentationRead, supportsWindowPresentationApplication } from "@shared/window-layers"
+import { isFixedWindowPresentationLayer, requireWindowPresentationRead, supportsWindowPresentationApplication, windowPresentationFollowing } from "@shared/window-layers"
 
 export interface WindowPresentationEntry {
     identity: string
@@ -75,7 +75,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             const state = next.get(identity)!
             const target = this.authoritative.get(identity)!
             const previous = relation.snapshot
-            const changes = { transaction: target.transaction, ...followedState(state, target, previous) }
+            const changes = { transaction: target.transaction, depth: target.depth, ...followedState(state, target, previous) }
             const maximized = changes.maximized ?? state.maximized
             const minimized = changes.minimized ?? state.minimized
             const geometryChanged = ("position" in changes && JSON.stringify(state.position) !== JSON.stringify(changes.position))
@@ -203,34 +203,34 @@ export default class WindowPresentations implements WindowPresentationHost {
     public move(process: string, position: WindowState["position"], transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "position")
+        requirePresentationMutation(state.layer, "position")
         return this.changeGeometry(identity, { ...position, ...state.size }, transaction)
     }
 
     public resize(process: string, size: WindowState["size"], transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "size")
+        requirePresentationMutation(state.layer, "size")
         return this.changeGeometry(identity, { ...state.position, ...size }, transaction)
     }
 
     public setGeometry(process: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "position")
+        requirePresentationMutation(state.layer, "position")
         return this.changeGeometry(identity, value, transaction)
     }
 
     public minimize(process: string, minimized: boolean, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "minimized")
+        requirePresentationMutation(state.layer, "minimized")
         return this.changeMinimized(identity, minimized, transaction)
     }
 
     public maximize(process: string, maximized: boolean, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "maximized")
+        requirePresentationMutation(state.layer, "maximized")
         if (state.maximized === maximized) return Promise.resolve()
         this.cancel(identity, "geometry")
         const animation = !state.minimized ? presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction) : null
@@ -239,7 +239,10 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     public follow(process: string, transaction?: PresentationTransactionRequest) {
-        const { identity } = this.existing(process)
+        const { identity, state } = this.existing(process)
+        const relationship = windowPresentationFollowing(state.layer)
+        if (relationship === "required") return Promise.resolve()
+        if (relationship === "forbidden") throw new Error(`The ${state.layer} layer cannot follow an authoritative Window`)
         const snapshot = this.authoritative.get(identity)!
         this.following.set(identity, { snapshot })
         const current = this.windows.get(identity)!
@@ -263,7 +266,10 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     public unfollow(process: string) {
-        const { identity } = this.existing(process)
+        const { identity, state } = this.existing(process)
+        const relationship = windowPresentationFollowing(state.layer)
+        if (relationship === "required") throw new Error(`The ${state.layer} layer cannot unfollow its authoritative Window`)
+        if (relationship === "forbidden") return Promise.resolve()
         this.following.delete(identity)
         return Promise.resolve()
     }
@@ -271,14 +277,14 @@ export default class WindowPresentations implements WindowPresentationHost {
     public setTitle(process: string, title: string) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "title")
+        requirePresentationMutation(state.layer, "title")
         this.replace(identity, { ...state, title })
     }
 
     public setHeader(process: string, header: boolean) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "header")
+        requirePresentationMutation(state.layer, "header")
         if (state.header === header) return
         this.replace(identity, { ...state, header })
     }
@@ -286,7 +292,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     public raise(process: string) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "front")
+        requirePresentationMutation(state.layer, "front")
         if (frontmost(this.windows, state.layer) === identity) return
         const depth = [...this.windows.values()].reduce((highest, other) => other.layer === state.layer ? Math.max(highest, other.depth) : highest, 0)
         this.replace(identity, { ...state, depth: depth + 1 })
@@ -311,7 +317,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     public setFrame(process: string, frame: WindowFrame, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationApplication(state.layer, "frame")
+        requirePresentationMutation(state.layer, "frame")
         if (JSON.stringify(state.frame) === JSON.stringify(frame)) return Promise.resolve()
 
         this.cancel(identity, "frame")

@@ -42,7 +42,7 @@ test.each(["wallpaper", "start-menu"] as const)("%s exposes only concepts unders
         () => presentations.setFrame("own", true),
         () => presentations.raise("own")
     ]
-    for (const operation of unsupported) expect(operation).toThrow(new RegExp(`${layer} layer cannot apply`))
+    for (const operation of unsupported) expect(operation).toThrow(new RegExp(`${layer} layer does not allow direct`))
 
     own.window.position = { x: 500, y: 600 }
     own.window.title = "Changed"
@@ -50,7 +50,7 @@ test.each(["wallpaper", "start-menu"] as const)("%s exposes only concepts unders
     expect(presentations.projection("own").position).toEqual({ x: 0, y: 0 })
     expect(presentations.projection("own").title).toBe("Original")
 
-    await presentations.follow("own")
+    expect(() => presentations.follow("own")).toThrow(new RegExp(`${layer} layer cannot follow`))
     expect(presentations.projection("own").title).toBe("Original")
     expect(presentations.projection("own").position).toEqual({ x: 0, y: 0 })
 })
@@ -79,11 +79,24 @@ test.each(["under", "over"] as const)("%s presents geometry and frame without a 
     expect(presentations.projection("own").position).toEqual({ x: 100, y: 200 })
 })
 
-test("a standard presentation reports its permanent frame without allowing frame changes", async () => {
+test("a standard presentation is observed locally and controlled through its authoritative Window", async () => {
     const { presentations } = fixture("window")
 
     expect(presentations.read("own", "frame")).toBe(true)
-    expect(() => presentations.setFrame("own", false)).toThrow(/window layer cannot apply frame/)
+    const mutations = [
+        () => presentations.move("own", { x: 1, y: 2 }),
+        () => presentations.resize("own", { width: 300, height: 200 }),
+        () => presentations.setGeometry("own", { x: 1, y: 2, width: 300, height: 200 }),
+        () => presentations.minimize("own", true),
+        () => presentations.maximize("own", true),
+        () => presentations.setTitle("own", "Changed"),
+        () => presentations.setHeader("own", false),
+        () => presentations.setFrame("own", false),
+        () => presentations.raise("own")
+    ]
+    for (const mutation of mutations) expect(mutation).toThrow(/window layer does not allow direct/)
+    await expect(presentations.follow("own")).resolves.toBeUndefined()
+    expect(() => presentations.unfollow("own")).toThrow(/window layer cannot unfollow/)
 })
 
 test("unsupported presentation events remain silent", () => {
@@ -93,7 +106,7 @@ test("unsupported presentation events remain silent", () => {
 
     own.window.position = { x: 500, y: 600 }
     own.window.title = "Changed"
-    presentations.follow("own")
+    expect(() => presentations.follow("own")).toThrow(/wallpaper layer cannot follow/)
     presentations.reconcile(entries)
 
     expect(received).toEqual([])

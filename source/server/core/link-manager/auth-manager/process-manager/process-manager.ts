@@ -36,7 +36,6 @@ import {
 } from "@phreshos/core"
 import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/window-layers"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
-import { permissionCatalog } from "@server/core/permissions"
 import SystemAccess from "./system-access"
 import { WebSocket } from "ws"
 
@@ -1017,8 +1016,6 @@ export default class ProcessManager extends TheLink {
 
             this.hostTraffic,
 
-            permissionCatalog.granted(this.authManager.programManager.permission(program, "all")),
-
             window
         )
 
@@ -1732,21 +1729,6 @@ export default class ProcessManager extends TheLink {
         const program = access.program(this.system.holdProgram(subject, process.program))
 
         return this.authManager.programManager.requestPermission(program, request, name, input, process)
-    }
-
-    /** Keeps each live Client's iframe access policy aligned with its Program. */
-    public async updateClientAccess(program: Program) {
-
-        const sameOrigin = permissionCatalog.granted(this.authManager.programManager.permission(program, "all"))
-
-        for (const process of this.processes.values()) {
-
-            if (process.program !== program || !process.client) continue
-
-            if (!process.setClientSameOrigin(sameOrigin)) continue
-
-            await this.$outbound.publish("/client-access", process.identity, process.hosted())
-        }
     }
 
     public cancelPermission(identity: string, request: string) {
