@@ -42,6 +42,11 @@ export default class ClientProcessBoundary extends TheLink {
     /** The exact System authority exercised by each routed subscription. */
     private readonly systemSubscriptions = new Map<string, SystemSubscriptionTarget>()
 
+    // A synchronous SDK subscription is useful only if later work from that
+    // same document cannot overtake its remote registration. Keep registration
+    // as a narrow ordering barrier without serializing independent requests.
+    private hostRegistrations: Promise<void> = Promise.resolve()
+
     private readonly desktopPreferencesSubscriptions = new Set<string>()
 
     private stopDesktopPreferences: (() => void) | null = null
@@ -116,9 +121,13 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.leased = owner
 
+        this.hostRegistrations = Promise.resolve()
+
         for (const [subscription, description] of this.subscriptions) {
 
-            if (directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, owner, subscription, description.kind, description.event).catch(() => undefined)
+            if (directSubscription(description)) this.orderHostRegistration(
+                () => this.authManager.processManager.subscribeFrame(this.pane, owner, subscription, description.kind, description.event)
+            ).catch(() => undefined)
         }
 
         pending.push(...this.pending.splice(0))
@@ -184,7 +193,9 @@ export default class ClientProcessBoundary extends TheLink {
                 this.authManager.processManager.cancel(this.pane, asking).catch(() => undefined)
             })
 
-            this.authManager.processManager.processes.get(this.pane)?.endEnd(...values).catch((error: Error) => {
+            this.afterHostRegistrations(
+                () => this.authManager.processManager.processes.get(this.pane)?.endEnd(...values) ?? Promise.resolve()
+            ).catch((error: Error) => {
 
                 if (asking) {
 
@@ -235,7 +246,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.trackSystemSubscription(values)
 
-        host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(values[0], ...values.slice(1)).catch((error: Error) => {
+        this.runHost(values[0], values.slice(1)).catch((error: Error) => {
 
             if (values[0] === "observe" && typeof values[1] === "string" && values[6] === true) {
 
@@ -273,6 +284,29 @@ export default class ClientProcessBoundary extends TheLink {
             }
 
         })
+    }
+
+    private runHost(word: unknown, args: unknown[]) {
+
+        const operation = () => host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(word, ...args)
+
+        return hostRegistrationOperation(word)
+            ? this.orderHostRegistration(operation)
+            : this.afterHostRegistrations(operation)
+    }
+
+    private orderHostRegistration<Result>(operation: () => Promise<Result>) {
+
+        const ordered = this.hostRegistrations.then(operation)
+
+        this.hostRegistrations = ordered.then(() => undefined, () => undefined)
+
+        return ordered
+    }
+
+    private afterHostRegistrations<Result>(operation: () => Promise<Result>) {
+
+        return this.hostRegistrations.then(operation)
     }
 
     /** Deliver one routed envelope only when this endpoint requested it. */
@@ -464,7 +498,11 @@ export default class ClientProcessBoundary extends TheLink {
 
             if (!desktopOwnedSubscription(description)) this.addTraffic(kind, route, event)
 
-            if (this.owner && directSubscription(description)) this.authManager.processManager.subscribeFrame(this.pane, this.owner, subscription, kind, event).catch(() => undefined)
+            const owner = this.owner
+
+            if (owner && directSubscription(description)) this.orderHostRegistration(
+                () => this.authManager.processManager.subscribeFrame(this.pane, owner, subscription, kind, event)
+            ).catch(() => undefined)
 
             if (desktopPreferencesSubscription(description)) {
 
@@ -531,7 +569,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (args[0] === "wait-ready") {
 
-            this.waitReady(question, args[1], args[2], args[3] === true)
+            void this.afterHostRegistrations(() => this.waitReady(question, args[1], args[2], args[3] === true))
 
             return
         }
@@ -540,14 +578,14 @@ export default class ClientProcessBoundary extends TheLink {
 
             this.answerRequest(
                 question,
-                host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(args[0], ...args.slice(1)),
+                this.runHost(args[0], args.slice(1)),
                 () => { this.authManager.cancelPermission(this.pane, args[3] as string).catch(() => undefined) }
             )
 
             return
         }
 
-        this.answerRequest(question, host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(args[0], ...args.slice(1)))
+        this.answerRequest(question, this.runHost(args[0], args.slice(1)))
     }
 
     private answerRequest(question: string, operation: Promise<unknown[] | TransferredAnswer>, cancel: () => void = () => undefined) {
@@ -600,6 +638,7 @@ export default class ClientProcessBoundary extends TheLink {
         })
 
         const run = async () => {
+            await this.hostRegistrations
             await this.deliver("host-end", "stream", question, "open")
 
             if (args[0] === "shell") {
@@ -870,7 +909,11 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (!existing) return
 
-        if (this.owner && directSubscription(existing)) this.authManager.processManager.unsubscribeFrame(this.pane, this.owner, subscription).catch(() => undefined)
+        const owner = this.owner
+
+        if (owner && directSubscription(existing)) this.orderHostRegistration(
+            () => this.authManager.processManager.unsubscribeFrame(this.pane, owner, subscription)
+        ).catch(() => undefined)
 
         this.subscriptions.delete(subscription)
 
@@ -972,9 +1015,13 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.requests.clear()
 
-        if (this.owner) for (const [subscription, description] of this.subscriptions) {
+        const owner = this.owner
 
-            if (directSubscription(description)) this.authManager.processManager.unsubscribeFrame(this.pane, this.owner, subscription).catch(() => undefined)
+        if (owner) for (const [subscription, description] of this.subscriptions) {
+
+            if (directSubscription(description)) this.orderHostRegistration(
+                () => this.authManager.processManager.unsubscribeFrame(this.pane, owner, subscription)
+            ).catch(() => undefined)
         }
 
         this.subscriptions.clear()
@@ -1145,6 +1192,16 @@ function desktopOwnedSubscription(subscription: EndpointSubscription) {
 function directSubscription(subscription: EndpointSubscription) {
 
     return subscription.route === "end-end" && subscription.kind === "publish"
+}
+
+function hostRegistrationOperation(value: unknown) {
+
+    return value === "observe"
+        || value === "unobserve"
+        || value === "follow"
+        || value === "unfollow"
+        || value === "service-follow"
+        || value === "service-unfollow"
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {
