@@ -417,8 +417,11 @@ export default class ClientProcessBoundary extends TheLink {
 
         const target = this.systemSubscriptions.get(subscription)
 
+        // The System checks Service authority both when registering and when
+        // emitting. Repeating that round-trip here would put delivery behind
+        // the traffic it is supposed to authorize.
         return target?.domain === "service"
-            ? await this.systemAccess.canService(target.service)
+            ? true
             : target?.domain === "program"
                 ? await this.systemAccess.canProgram({ identity: target.program })
                 : false

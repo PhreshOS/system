@@ -1,5 +1,5 @@
 import { TheLink } from "@the-link/core"
-import { Connect, Subscribe } from "@the-link/core/decorators"
+import { Subscribe } from "@the-link/core/decorators"
 import type { ShellOptions } from "@phreshos/core"
 import type AuthManager from "./auth-manager"
 
@@ -15,7 +15,7 @@ export default class ShellManager extends TheLink {
         this.connectTo(authManager, "/frame/shell")
     }
 
-    @Connect("/run")
+    @Subscribe("/run")
     protected async run(connection: string, stream: string, command: string, options: Omit<ShellOptions, "signal">, asker: string) {
 
         if (typeof connection !== "string" || typeof asker !== "string" || !asker) throw new Error("A Client shell command needs a requesting Process")
@@ -38,7 +38,7 @@ export default class ShellManager extends TheLink {
 
             for await (const event of this.authManager.linkManager.application.system.shell(command, { ...options, signal: controller.signal })) {
 
-                await this.authManager.publishToConnection(connection, "/frame/shell/event", stream, event)
+                await this.authManager.publishToBoundary(connection, "/frame/shell/event", stream, event)
             }
         }
         finally {

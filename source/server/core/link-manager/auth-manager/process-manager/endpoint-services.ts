@@ -93,7 +93,6 @@ export default class EndpointServices extends TheLink {
     public async emit(process: Process, endpoint: Half, event: string, payload: unknown) {
 
         const address = this.addressOf(process, endpoint)
-
         if (!address || !this.available(address)) return []
 
         return await this.$inbound.publish(this.event(address, "events", event), event, payload)
@@ -119,19 +118,24 @@ export default class EndpointServices extends TheLink {
         return address ? this.transition(address, false) : Promise.resolve([])
     }
 
-    public follow(value: unknown, scope: Scope, event: string | null, subscriber: Subscriber) {
+    public follow(value: unknown, scope: Scope, event: string | null, subscriber: Subscriber, permitted: () => boolean = () => true) {
 
         const address = this.address(value)
 
         if (scope !== "lifecycle" && scope !== "events") throw new Error("A Service subscription scope is invalid")
 
         const prefix = this.prefix(address, scope)
+        // The subscribing boundary supplies current authority; checking it at
+        // this local fan-out point keeps revocation live without a transport
+        // round-trip for every event.
+        if (event !== null) return this.$inbound.subscribe(prefix + encodeURIComponent(event), (_word, payload) => {
 
-        if (event !== null) return this.$inbound.subscribe(prefix + encodeURIComponent(event), (_word, payload) => subscriber(event, payload))
+            if (permitted()) return subscriber(event, payload)
+        })
 
         return this.$inbound.forwardTo((_route, word, payload) => {
 
-            if (typeof word === "string") return subscriber(word, payload)
+            if (typeof word === "string" && permitted()) return subscriber(word, payload)
         }, prefix)
     }
 

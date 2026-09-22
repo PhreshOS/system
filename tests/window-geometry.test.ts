@@ -64,6 +64,11 @@ test("window geometry contract", async () => {
       },
       said(...event: unknown[]) {
           events.push(event)
+      },
+      async publishWindowChange(event: string, identity: string, window: ServerWindow) {
+          const payload = { identity, window }
+          await this.$outbound.publish(event, payload)
+          return payload
       }
   }
 
@@ -82,12 +87,14 @@ test("window geometry contract", async () => {
   assert.equal(echo.window, authority)
 
   const unchangedEvents = events.length
+  const unchangedEchoes = echoes.length
   await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", next)
   await ProcessManager.prototype.move.call(manager as unknown as ProcessManager, "process", nextPosition)
   await ProcessManager.prototype.resize.call(manager as unknown as ProcessManager, "process", nextSize)
   await ProcessManager.prototype.setTitle.call(manager as unknown as ProcessManager, "process", "Geometry")
   await ProcessManager.prototype.setHeader.call(manager as unknown as ProcessManager, "process", true)
   assert.equal(events.length, unchangedEvents)
+  assert.equal(echoes.length, unchangedEchoes)
 
   await ProcessManager.prototype.setHeader.call(manager as unknown as ProcessManager, "process", false)
   assert.equal(authority.header, false)

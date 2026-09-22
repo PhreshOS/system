@@ -42,12 +42,15 @@ test("endpoint services use stable name addresses and ready availability", async
   const clientAddress = { ...address, endpoint: "client" } satisfies ServiceAddress
   const lifecycle: string[] = []
   const publications: unknown[] = []
+  const authorizedPublications: unknown[] = []
+  let permitted = true
 
   assert.throws(() => services.available({ process: "main", endpoint: "server" }), /complete Service address/)
   await assert.rejects(() => services.waitReady(address, -1), /non-negative finite number/)
 
   services.follow(address, "lifecycle", null, event => lifecycle.push(event))
   services.follow(address, "events", "change", (_event, payload) => publications.push(payload))
+  services.follow(address, "events", "authorized", (_event, payload) => authorizedPublications.push(payload), () => permitted)
 
   await services.started(provider, "server")
   await services.started(provider, "client")
@@ -59,6 +62,13 @@ test("endpoint services use stable name addresses and ready availability", async
   await services.emit(provider, "server", "ignored", 1)
   await services.emit(provider, "server", "change", 2)
   assert.deepEqual(publications, [2])
+
+  await services.emit(provider, "server", "authorized", 3)
+  permitted = false
+  await services.emit(provider, "server", "authorized", 4)
+  permitted = true
+  await services.emit(provider, "server", "authorized", 5)
+  assert.deepEqual(authorizedPublications, [3, 5])
 
   provider.server = null
   await services.stopped(provider, "server", true)

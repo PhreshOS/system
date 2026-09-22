@@ -31,6 +31,9 @@ export default function (application: Application, debugging: boolean) {
 
             try {
 
+                // The correlation address exclusively owns an RPC result.
+                // Shared state changes use their own explicit publications;
+                // request handlers must not also broadcast their return value.
                 const results = await connection.publish(event, ...values)
 
                 await socketLink.$outbound.publish(responseUuid, succeeded(results))

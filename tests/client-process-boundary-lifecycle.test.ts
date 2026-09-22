@@ -58,8 +58,8 @@ test("a later Client request cannot overtake its Service subscription registrati
         async askService() { order.push("ask") }
     }
     const authManager = {
+        programManager: { programs: new Map([["flambo", { identity: "flambo", permissions: { services: [] } }]]) },
         processManager,
-        async grantsPermission() { return true }
     } as unknown as AuthManager
     const boundary = new ClientProcessBoundary(
         "process",
@@ -78,4 +78,48 @@ test("a later Client request cannot overtake its Service subscription registrati
     await vi.waitFor(() => assert.deepEqual(order, ["follow:start"]))
     completeFollow()
     await vi.waitFor(() => assert.deepEqual(order, ["follow:start", "follow:end", "ask"]))
+})
+
+test("a registered Service event is delivered without a second permission round-trip", async () => {
+
+    const sent: unknown[][] = []
+    let followed = false
+    const address = { program: "browser", process: "browser", endpoint: "server" } as const
+    const processManager = {
+        processes: new Map([["process", { program: "browser" }]]),
+        async ownFrame() {},
+        async releaseFrame() {},
+        async followService() { followed = true }
+    }
+    const authManager = {
+        programManager: { programs: new Map([["browser", { identity: "browser", permissions: { services: [] } }]]) },
+        processManager,
+    } as unknown as AuthManager
+    const traffic = {
+        observe() { return () => undefined }
+    } as unknown as ClientTraffic
+    const element = {
+        contentWindow: {
+            postMessage(message: unknown[]) {
+                sent.push(messagepack.deserialize(message[0] as Uint8Array) as unknown[])
+            }
+        }
+    } as unknown as HTMLIFrameElement
+    const boundary = new ClientProcessBoundary(
+        "process",
+        element,
+        authManager,
+        () => ({ size: { width: 800, height: 600 } }),
+        traffic,
+        { begin() {} } as unknown as WindowPresentationHost
+    )
+
+    await boundary.own("document")
+    boundary.receive(["boundary", "subscribe", "wire-subscription", "publish", "service-event", "service-subscription", null, false])
+    boundary.receive(["end-host", "service-follow", "service-subscription", address, "events", "workspace.changed", false])
+    await vi.waitFor(() => assert.equal(followed, true))
+
+    await boundary.deliver("service-event", "service-subscription", { revision: 1 })
+
+    assert.deepEqual(sent, [["service-event", "service-subscription", { revision: 1 }]])
 })

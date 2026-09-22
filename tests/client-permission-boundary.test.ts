@@ -6,16 +6,17 @@ import { permissionCatalog } from "@server/core/permissions"
 
 test("Client Program creation requires all before reaching the creation boundary", async () => {
     let permissions: Permissions = { programs: [] }
-    const program: ProgramSnapshot = {
+    const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "created", reference: "created-reference", assetId: "created-assets",
         name: "Created", version: "0.0.0", description: null, hasAgent: false,
-        server: null, client: null
+        server: null, client: null,
+        get permissions() { return permissions }
     }
     const create = vi.fn(async () => program.identity)
     const forceCreate = vi.fn(async () => program.identity)
     const auth = {
         programManager: { programs: new Map([[program.identity, program]]), create, forceCreate },
-        processManager: { processes: new Map() },
+        processManager: { processes: new Map([["caller", { identity: "caller", program: program.identity }]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
     const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => null, {} as never)
@@ -36,7 +37,9 @@ test("Program and Process discovery exposes only the accessible scope", async ()
 
     let permissions: Permissions = {}
     const owner = program("owner")
+    Object.defineProperty(owner, "permissions", { get: () => permissions })
     const outside = program("outside")
+    outside.permissions = { network: ["https://example.com"] }
     const current = process("current", owner)
     const hidden = process("hidden", outside)
     const auth = {
@@ -70,7 +73,9 @@ test("Program and Process discovery exposes only the accessible scope", async ()
 test("Program permission reads and requests require Program access while direct mutation alone requires all", async () => {
     let permissions: Permissions = { programs: ["outside"] }
     const owner = program("owner")
+    Object.defineProperty(owner, "permissions", { get: () => permissions })
     const outside = program("outside")
+    outside.permissions = { network: ["https://example.com"] }
     const current = process("current", owner)
     const read = vi.fn(async (_address, operation: string) => operation === "all"
         ? { network: ["https://example.com"] }
@@ -134,7 +139,7 @@ test.each([
     const sendService = vi.fn()
     const askService = vi.fn()
     const auth = {
-        programManager: { programs: new Map() },
+        programManager: { programs: new Map([["owner", { identity: "owner", get permissions() { return permissions } }]]) },
         processManager: {
             processes: new Map([
                 ["caller", { program: "owner" }],
@@ -178,7 +183,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
     const background = { program: "notes", process: "background", endpoint: "server" } as const
     const listServices = vi.fn(async (name?: string) => [mainServer, mainClient, background].filter(service => name === undefined || service.process === name))
     const auth = {
-        programManager: { programs: new Map() },
+        programManager: { programs: new Map([["owner", { identity: "owner", get permissions() { return permissions } }]]) },
         processManager: {
             processes: new Map([["caller", { program: "owner" }]]),
             listServices
@@ -201,7 +206,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
     await expect(answer("host-service-list")).resolves.toEqual([[mainServer, mainClient, background]])
 })
 
-function program(identity: string): ProgramSnapshot {
+function program(identity: string): ProgramSnapshot & { permissions: Permissions } {
 
     return {
         identity,
@@ -212,7 +217,8 @@ function program(identity: string): ProgramSnapshot {
         description: null,
         hasAgent: false,
         server: null,
-        client: null
+        client: null,
+        permissions: {}
     }
 }
 

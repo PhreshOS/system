@@ -14,7 +14,9 @@ import {
     isServiceAddress,
     isUploadFile,
     parseDesktopPreferencesUpdate,
+    parsePermission,
     parsePermissionName,
+    parsePermissions,
     type PermissionRequest,
     type ProgramIconSize
 } from "@phreshos/core"
@@ -28,6 +30,7 @@ import {
 } from "./window-presentation"
 import { isWindowPresentationProperty, requireWindowPresentationTransactions } from "@shared/window-layers"
 import SystemAccess from "./system-access"
+import { allowsSynchronizedPermission } from "@shared/permission-state"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -695,7 +698,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny" && operation !== "request") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
-            if (operation === "all") return [await programManager.permissions(address(program), operation)]
+            if (operation === "all") return [parsePermissions(program.permissions)]
 
             if (operation === "request") {
 
@@ -714,12 +717,26 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
             const permission = parsePermissionName(args[2])
 
-            if (operation === "allows") return [await programManager.permissions(
-                address(program),
-                operation,
-                permission,
-                args[3] as PermissionRequest<typeof permission>
-            )]
+            if (operation === "allows") {
+
+                // Native Storage scopes require host path canonicalization;
+                // every other permission is fully represented by the synced
+                // Program snapshot already held by this trusted Desktop.
+                if (permission === "storage") return [await programManager.permissions(
+                    address(program),
+                    operation,
+                    permission,
+                    args[3] as PermissionRequest<typeof permission>
+                )]
+
+                const requested = args[3] === undefined || args[3] === true
+                    ? []
+                    : parsePermission(permission, args[3])
+
+                if (!Array.isArray(requested)) throw new Error("A permission check must be true or a list of values")
+
+                return [allowsSynchronizedPermission(program.permissions, permission, requested)]
+            }
 
             if (operation === "allow") {
 
@@ -742,7 +759,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                 return []
             }
 
-            return [await programManager.permissions(address(program), operation, permission)]
+            return [program.permissions[permission] ?? null]
         }
 
         if (word === "startup") {

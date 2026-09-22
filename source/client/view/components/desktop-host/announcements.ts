@@ -187,6 +187,12 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         post(entry.identity, "host-program", "pinned", entry.identity, record, pinned)
         post(entry.identity, "program-host", "pinned", entry.reference, pinned)
     }, [post]))
+    programs.useSubscribe("/permissions", useCallback((entry: Program | null) => {
+        if (!entry) return
+        const record = sdkProgram(entry)
+        post(entry.identity, "host-program", "permissions", entry.identity, record)
+        post(entry.identity, "program-host", "permissions", entry.reference, record)
+    }, [post]))
 }
 
 function domainIdentity(value: unknown) {

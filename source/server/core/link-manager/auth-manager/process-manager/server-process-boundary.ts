@@ -214,7 +214,7 @@ export default class ServerProcessBoundary extends TheLink {
     }
 
     /** Follow one exact service route for this boundary's lifetime. */
-    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null) {
+    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null, permitted: () => boolean) {
 
         this.unfollowService(subscription)
 
@@ -223,7 +223,7 @@ export default class ServerProcessBoundary extends TheLink {
             const values = event === null ? [word, payload] : [payload]
 
             return this.deliver("service-event", subscription, ...values).catch(() => undefined)
-        })
+        }, permitted)
 
         this.serviceSubscriptions.set(subscription, stop)
     }

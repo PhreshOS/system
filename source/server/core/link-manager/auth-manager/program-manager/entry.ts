@@ -1,5 +1,5 @@
 import Program from "./program"
-import type { ProgramSnapshot } from "@phreshos/core"
+import type { Permissions, ProgramSnapshot } from "@phreshos/core"
 
 /**
  * One program in the runtime registry. Installation is a state of this
@@ -14,13 +14,27 @@ export default class Entry {
     /** Restore the durable installed Program when this runtime overlay ends. */
     public restoreInstalled: boolean
 
-    public constructor(program: Program, installed = true, restoreInstalled = false) {
+    private permissionState: Permissions
+
+    public constructor(program: Program, permissions: Permissions, installed = true, restoreInstalled = false) {
 
         this.program = program
+
+        this.permissionState = clonePermissions(permissions)
 
         this.installed = installed
 
         this.restoreInstalled = restoreInstalled
+    }
+
+    public permissions() {
+
+        return clonePermissions(this.permissionState)
+    }
+
+    public updatePermissions(permissions: Permissions) {
+
+        this.permissionState = clonePermissions(permissions)
     }
 
     public get identity() {
@@ -37,8 +51,10 @@ export default class Entry {
 
             ...this.program.record(),
 
+            permissions: this.permissions(),
+
             installed: this.installed
-        } satisfies ProgramSnapshot
+        } satisfies ProgramSnapshot & { permissions: Permissions }
     }
 
     public toJSON() {
@@ -48,3 +64,11 @@ export default class Entry {
 }
 
 export type ProgramRecord = ReturnType<Entry["record"]>
+
+function clonePermissions(permissions: Permissions): Permissions {
+
+    return Object.fromEntries(Object.entries(permissions).map(([name, permission]) => [
+        name,
+        Array.isArray(permission) ? [...permission] : permission
+    ]))
+}

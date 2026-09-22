@@ -17,15 +17,16 @@ function fixture(context: TestContext) {
     mkdirSync(client)
     writeFileSync(join(client, "index.html"), "<!doctype html>")
     const announceHost = vi.fn()
+    const announceSubject = vi.fn()
     const auth = Object.assign(new TheLink(), {
         linkManager: { application: { storage: new FileManager(directory, "system"), defaultProgramIcon: "" } },
-        processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject: vi.fn() }
+        processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
     function definition(permissions?: ProgramPermissionDeclarations) {
         return { identity: "example", storage: join(directory, "data"), permissions, client: { location: client } }
     }
-    return { directory, client, manager, announceHost, definition }
+    return { directory, client, manager, announceHost, announceSubject, definition }
 }
 
 test("a Program definition supplies permission fallback without initializing state", async context => {
@@ -101,6 +102,30 @@ test("Program state mutations do not rewrite an already-satisfied value", async 
 
     expect(startupWrite).toHaveBeenCalledTimes(2)
     expect(permissionWrite).toHaveBeenCalledTimes(1)
+})
+
+test("permission changes publish one complete effective snapshot through both Program event scopes", async context => {
+    const { manager, definition, announceHost, announceSubject } = fixture(context)
+    const program = await manager.create(definition({ uploads: true }))
+    const records: unknown[] = []
+    const stop = manager.$outbound.subscribe("/permissions-change", value => { records.push(value) })
+    context.onTestFinished(stop)
+    announceHost.mockClear()
+    announceSubject.mockClear()
+
+    await manager.setPermission(program, "network", ["https://api.example.test/**"])
+    await manager.setPermission(program, "network", ["https://api.example.test/**"])
+
+    const permissions = { uploads: [], network: ["https://api.example.test"] }
+    expect(manager.find(program.identity).record()).toMatchObject({ permissions })
+    expect(records).toHaveLength(1)
+    expect(records[0]).toMatchObject({ permissions })
+    expect(announceHost).toHaveBeenCalledExactlyOnceWith(
+        "program", "permissions", program.identity, manager.find(program.identity)
+    )
+    expect(announceSubject).toHaveBeenCalledExactlyOnceWith(
+        "program", "permissions", program.reference, permissions
+    )
 })
 
 test("pinning emits Program and global events only when the boolean changes", async context => {

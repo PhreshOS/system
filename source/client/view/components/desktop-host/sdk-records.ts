@@ -1,11 +1,13 @@
-import type { ProcessSnapshot, ProgramSnapshot } from "@phreshos/core"
+import type { Permissions, ProcessSnapshot, ProgramSnapshot } from "@phreshos/core"
 
 export type SdkProgramSource = ProgramSnapshot
+
+export type SdkProgramRecord = ProgramSnapshot & Readonly<{ permissions: Permissions }>
 
 export type SdkProcessSource = Omit<ProcessSnapshot, "program"> & { program: string }
 
 /** Plain SDK Program state carried across the iframe boundary. */
-export function sdkProgram(program: SdkProgramSource): ProgramSnapshot {
+export function sdkProgram(program: SdkProgramSource & { permissions: Permissions }): SdkProgramRecord {
 
     return {
 
@@ -27,12 +29,14 @@ export function sdkProgram(program: SdkProgramSource): ProgramSnapshot {
 
         server: program.server,
 
-        client: program.client
+        client: program.client,
+
+        permissions: program.permissions
     }
 }
 
 /** Plain Process state with its ownership chain embedded for synchronous navigation. */
-export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource): ProcessSnapshot {
+export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource & { permissions: Permissions }): ProcessSnapshot {
 
     return {
 

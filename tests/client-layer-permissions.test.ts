@@ -8,10 +8,11 @@ import { permissionCatalog } from "@server/core/permissions"
 
 function fixture() {
     let permissions: Permissions = {}
-    const program: ProgramSnapshot = {
+    const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
         version: "0.0.0", description: null, hasAgent: false, server: null,
-        client: { sandbox: true, start: true, service: false, title: null, header: null, frame: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null }
+        client: { sandbox: true, start: true, service: false, title: null, header: null, frame: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
+        get permissions() { return permissions }
     }
     const process = { identity: "caller", reference: "process-reference", program: program.identity, name: null, startedAt: 0, options: {}, server: null, client: null }
     const createProcess = vi.fn(async () => process.identity)

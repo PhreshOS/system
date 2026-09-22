@@ -2,6 +2,7 @@ import type AuthManager from "@client/core/link-manager/auth-manager/auth-manage
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { parseLaunch, type ClientLaunch, type ConnectionSnapshot, type PermissionName, type PermissionValue, type ServiceAddress } from "@phreshos/core"
+import { allowsSynchronizedPermission } from "@shared/permission-state"
 
 const denied = "Execution is not permitted"
 
@@ -22,24 +23,24 @@ export default class SystemAccess {
 
     public async all() {
 
-        return await this.authManager.grantsPermission(this.pane, "all", [])
+        return allowsSynchronizedPermission(this.permissions(), "all", [])
     }
 
     public async canProgram(program: Pick<Program, "identity">) {
 
         return this.ownsProgram(program)
-            || await this.authManager.grantsPermission(this.pane, "programs", [program.identity])
+            || allowsSynchronizedPermission(this.permissions(), "programs", [program.identity])
     }
 
     public async canProcess(process: Pick<Process, "program">) {
 
         return this.ownsProcess(process)
-            || await this.authManager.grantsPermission(this.pane, "programs", [process.program])
+            || allowsSynchronizedPermission(this.permissions(), "programs", [process.program])
     }
 
     public async canService(service: ServiceAddress) {
 
-        return await this.authManager.grantsPermission(this.pane, "services", [service.process])
+        return allowsSynchronizedPermission(this.permissions(), "services", [service.process])
     }
 
     /** Whether one Connection belongs to this Client's visible scope. */
@@ -145,7 +146,7 @@ export default class SystemAccess {
 
     public async require<Name extends PermissionName>(name: Name, values: readonly PermissionValue<Name>[]) {
 
-        if (!await this.authManager.grantsPermission(this.pane, name, values)) throw new Error(denied)
+        if (!allowsSynchronizedPermission(this.permissions(), name, values)) throw new Error(denied)
     }
 
     private async currentConnection(): Promise<ConnectionSnapshot> {
@@ -155,8 +156,8 @@ export default class SystemAccess {
 
     private async connectionScope(): Promise<"all" | ConnectionSnapshot | null> {
 
-        if (await this.authManager.grantsPermission(this.pane, "connections", [])) return "all"
-        if (!await this.authManager.grantsPermission(this.pane, "desktopConnection", [])) return null
+        if (allowsSynchronizedPermission(this.permissions(), "connections", [])) return "all"
+        if (!allowsSynchronizedPermission(this.permissions(), "desktopConnection", [])) return null
 
         return await this.currentConnection()
     }
@@ -168,5 +169,14 @@ export default class SystemAccess {
         if (!process) throw new Error("The desktop does not know this process")
 
         return process
+    }
+
+    private permissions() {
+
+        const program = this.authManager.programManager.programs.get(this.owner().program)
+
+        if (!program) throw new Error("The desktop does not know this program")
+
+        return program.permissions
     }
 }

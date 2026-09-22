@@ -1,4 +1,4 @@
-import { Connect, Subscribe } from "@the-link/core/decorators"
+import { Subscribe } from "@the-link/core/decorators"
 import { type Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import { Layer } from "../program-manager/config"
@@ -545,7 +545,7 @@ export default class ProcessManager extends TheLink {
 
         const answer = ["answer", values[1], values[2], values[3], failed(new Error(reason))]
 
-        this.authManager.publishToConnection(connection, "/process/end-end", pane, answer).catch(() => undefined)
+        this.authManager.publishToBoundary(connection, "/process/end-end", pane, answer).catch(() => undefined)
     }
 
     public releaseConnection(connection: string) {
@@ -581,11 +581,11 @@ export default class ProcessManager extends TheLink {
 
         const observation = value as Record<string, unknown>
         const event = observation.event === null || typeof observation.event === "string" ? observation.event : invalid("A System observation event must be text or null")
-        const followed = (received: string, payload: unknown) => this.authManager.publishToConnection(connection, "/process/followed", subscription, received, payload).catch(() => undefined)
+        const followed = (received: string, payload: unknown) => this.authManager.publishToBoundary(connection, "/process/followed", subscription, received, payload).catch(() => undefined)
         const impossible = (reason: string) => {
 
             this.removeConnectionObservation(connection, subscription)
-            this.authManager.publishToConnection(connection, "/process/impossible", subscription, reason).catch(() => undefined)
+            this.authManager.publishToBoundary(connection, "/process/impossible", subscription, reason).catch(() => undefined)
         }
 
         let stop: () => void
@@ -1459,7 +1459,7 @@ export default class ProcessManager extends TheLink {
     // One implementation for both roads — a process asks over its
     // channel, a pane over the link — because two that agreed today
     // would be two that could stop agreeing.
-    @Connect("/exit-all")
+    @Subscribe("/exit-all")
     public async exitAll(program: string, asker: string | null = null) {
 
         const owner = this.authManager.programManager.reachOrRefuse(program)
@@ -1476,7 +1476,7 @@ export default class ProcessManager extends TheLink {
     // A desktop supplies the publishing pane separately from the destination.
     // The pane comes from its structural frame gate rather than application
     // data, so a client cannot attribute its publication to another Process.
-    @Connect("/send")
+    @Subscribe("/send")
     public async publishClient(source: string, identity: string, which: string, values: unknown[]) {
 
         if (which !== "server" && which !== "client") throw new Error(`A process has no "${which}" end`)
@@ -1487,7 +1487,7 @@ export default class ProcessManager extends TheLink {
     }
 
     /** A Client emits from the structurally identified pane, never a claimed source. */
-    @Connect("/emit")
+    @Subscribe("/emit")
     public async emitClient(source: string, event: string, payload: unknown) {
 
         const process = this.find(source)
@@ -1502,7 +1502,7 @@ export default class ProcessManager extends TheLink {
         ])
     }
 
-    @Connect("/endpoint/is-service")
+    @Subscribe("/endpoint/is-service")
     protected async clientEndpointIsService(source: string, target: unknown, endpoint: unknown) {
 
         const process = this.find(source)
@@ -1518,16 +1518,16 @@ export default class ProcessManager extends TheLink {
         return endpoint === "server" ? held.server?.service === true : held.client?.service === true
     }
 
-    @Connect("/service/available")
+    @Subscribe("/service/available")
     protected async serviceAvailable(address: unknown) {
 
         return this.services.available(address)
     }
 
-    @Connect("/service/list")
+    @Subscribe("/service/list")
     protected async listServices() { return this.services.list() }
 
-    @Connect("/service/search")
+    @Subscribe("/service/search")
     protected async searchServices(name: unknown) {
 
         if (typeof name !== "string" || !name.trim()) throw new Error("A Service name is required")
@@ -1535,13 +1535,13 @@ export default class ProcessManager extends TheLink {
         return this.services.list(name)
     }
 
-    @Connect("/service/wait-ready")
+    @Subscribe("/service/wait-ready")
     protected async waitServiceReady(address: unknown, timeout: unknown) {
 
         await this.services.waitReady(address, timeout, this.authManager.connectionSignal())
     }
 
-    @Connect("/service/program-metadata")
+    @Subscribe("/service/program-metadata")
     protected async serviceProgramMetadata(address: unknown) {
 
         if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
@@ -1555,7 +1555,7 @@ export default class ProcessManager extends TheLink {
         return Object.freeze({ name: program.name, version: program.version })
     }
 
-    @Connect("/service/program-icon")
+    @Subscribe("/service/program-icon")
     protected async serviceProgramIcon(address: unknown, iconSize: unknown = "medium") {
 
         if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
@@ -1658,7 +1658,14 @@ export default class ProcessManager extends TheLink {
 
         if (event !== null && typeof event !== "string") return
 
-        boundary.followService(this.services, subscription, address, scope, event)
+        if (!this.grants(pane, "services", [address.process])) return
+
+        boundary.followService(this.services, subscription, address, scope, event, () => {
+
+            const process = this.processes.get(pane)
+
+            return process !== undefined && this.authManager.programManager.grantsPermission(process.program, "services", [address.process])
+        })
     }
 
     @Subscribe("/frame/service/unfollow")
@@ -2157,7 +2164,10 @@ export default class ProcessManager extends TheLink {
 
             if (!this.grants(process.identity, "services", [address.process])) return []
 
-            server.followService(this.services, subscription, address, scope, event)
+            server.followService(this.services, subscription, address, scope, event, () => (
+                this.processes.get(process.identity) === process
+                && this.authManager.programManager.grantsPermission(process.program, "services", [address.process])
+            ))
 
             return []
         }
@@ -3094,13 +3104,13 @@ export default class ProcessManager extends TheLink {
         await this.publish(identity, "client", identity, "server", values)
     }
 
-    @Connect("/exit")
+    @Subscribe("/exit")
     public async exit(identity: string) {
 
         return await this.exitProcess(identity)
     }
 
-    @Connect("/parent")
+    @Subscribe("/parent")
     protected async parent(value: unknown) {
 
         const process = this.system.holdProcess(value)
@@ -3108,7 +3118,7 @@ export default class ProcessManager extends TheLink {
         return process.parent ? processReference(process.parent) : null
     }
 
-    @Connect("/endpoint/start")
+    @Subscribe("/endpoint/start")
     protected async startEndpoint(identity: string, which: string, launch?: ServerLaunch | ClientLaunch) {
 
         if (which === "server") return await this.startServer(identity, launch as ServerLaunch | undefined)
@@ -3118,7 +3128,7 @@ export default class ProcessManager extends TheLink {
         throw new Error("A Process endpoint is server or client")
     }
 
-    @Connect("/endpoint/stop")
+    @Subscribe("/endpoint/stop")
     protected async stopEndpoint(identity: string, which: string) {
 
         if (which === "server") return await this.stopServer(identity)
@@ -3138,7 +3148,7 @@ export default class ProcessManager extends TheLink {
     // Minimized is untouched by both. Where a window is and whether it
     // is shown are two questions, so a hidden window can be moved and
     // resized and will appear where it now is.
-    @Connect("/move")
+    @Subscribe("/move")
     public async move(identity: string, position: Position) {
 
         const window = this.mutableWindowOf(identity)
@@ -3147,10 +3157,10 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "move", window.position)
 
-        return { identity, window }
+        return await this.publishWindowChange("/move", identity, window)
     }
 
-    @Connect("/resize")
+    @Subscribe("/resize")
     public async resize(identity: string, size: Size) {
 
         const window = this.mutableWindowOf(identity)
@@ -3159,10 +3169,10 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "resize", window.size)
 
-        return { identity, window }
+        return await this.publishWindowChange("/resize", identity, window)
     }
 
-    @Connect("/set-geometry")
+    @Subscribe("/set-geometry")
     public async setGeometry(identity: string, geometry: WindowGeometry) {
 
         const window = this.mutableWindowOf(identity)
@@ -3175,10 +3185,10 @@ export default class ProcessManager extends TheLink {
 
         if (changed.resized) this.said(identity, "resize", window.size)
 
-        return { identity, window }
+        return await this.publishWindowChange("/set-geometry", identity, window)
     }
 
-    @Connect("/set-title", "/change-title")
+    @Subscribe("/set-title")
     public async setTitle(identity: string, title: string) {
 
         const window = this.mutableWindowOf(identity)
@@ -3187,10 +3197,10 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "changeTitle", window.title)
 
-        return { identity, window }
+        return await this.publishWindowChange("/change-title", identity, window)
     }
 
-    @Connect("/set-header", "/change-header")
+    @Subscribe("/set-header")
     public async setHeader(identity: string, header: boolean) {
 
         const window = this.mutableWindowOf(identity)
@@ -3199,10 +3209,10 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "changeHeader", window.header)
 
-        return { identity, window }
+        return await this.publishWindowChange("/change-header", identity, window)
     }
 
-    @Connect("/set-frame", "/change-frame")
+    @Subscribe("/set-frame")
     public async setFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
 
         const window = this.mutableWindowOf(identity)
@@ -3211,10 +3221,10 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "changeFrame", window.frame)
 
-        return { identity, window }
+        return await this.publishWindowChange("/change-frame", identity, window)
     }
 
-    @Connect("/set-transaction", "/change-transaction")
+    @Subscribe("/set-transaction")
     public async setTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
 
         const window = this.mutableWindowOf(identity)
@@ -3223,7 +3233,7 @@ export default class ProcessManager extends TheLink {
 
         this.said(identity, "changeTransaction", window.transaction)
 
-        return { identity, window }
+        return await this.publishWindowChange("/change-transaction", identity, window)
     }
 
     // To the front of its own layer, and that is the whole of it.
@@ -3240,7 +3250,7 @@ export default class ProcessManager extends TheLink {
     // program a person believes they are typing into. Keyboard focus is
     // the browser's, reached by a person clicking and no other way, so
     // the system's word for ordering must not be called focus.
-    @Connect("/raise")
+    @Subscribe("/raise")
     public async raise(identity: string) {
 
         const window = this.mutableWindowOf(identity)
@@ -3253,13 +3263,13 @@ export default class ProcessManager extends TheLink {
 
         this.settleFront(window.layer, front)
 
-        return { identity, window }
+        return await this.publishWindowChange("/raise", identity, window)
     }
 
     // Shown, or not shown. Nothing else: the order is untouched, so a
     // window hidden and shown again comes back exactly where it was in
     // its layer rather than on top of it.
-    @Connect("/maximize")
+    @Subscribe("/maximize")
     public async maximize(identity: string, maximized: boolean) {
 
         if (typeof maximized !== "boolean") throw new Error("Window maximize takes a boolean state")
@@ -3267,10 +3277,10 @@ export default class ProcessManager extends TheLink {
         if (window.maximized === maximized) return { identity, window }
         window.maximized = maximized
         this.said(identity, "maximize", maximized)
-        return { identity, window }
+        return await this.publishWindowChange("/maximize", identity, window)
     }
 
-    @Connect("/minimize")
+    @Subscribe("/minimize")
     public async minimize(identity: string, minimized: boolean) {
 
         if (typeof minimized !== "boolean") throw new Error("Window minimize takes a boolean state")
@@ -3286,7 +3296,18 @@ export default class ProcessManager extends TheLink {
 
         this.settleFront(window.layer, front)
 
-        return { identity, window }
+        return await this.publishWindowChange("/minimize", identity, window)
+    }
+
+    // RPC results answer only their caller. A Window transition is separate
+    // shared state and is published explicitly, once, only after it changed.
+    private async publishWindowChange(event: string, identity: string, window: Window) {
+
+        const payload = { identity, window }
+
+        await this.$outbound.publish(event, payload)
+
+        return payload
     }
 
     // ── The front window of a layer ──────────────────────────────────

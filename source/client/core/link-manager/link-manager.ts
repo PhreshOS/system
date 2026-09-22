@@ -9,6 +9,7 @@ import { Property } from "@the-link/core"
 import Application from "../application"
 import { v4 as uuidv4 } from "uuid"
 import { type RequestOutcome, unwrap } from "@libs/request-outcome"
+import DesktopPreferencesState from "./desktop-preferences-state"
 
 export default class LinkManager extends TheLink {
 
@@ -20,7 +21,7 @@ export default class LinkManager extends TheLink {
     public readonly appearance: Property<Appearance>
 
     /** Complete effective local Desktop preferences and future updates. */
-    public readonly desktopPreferences: Property<DesktopPreferences>
+    public readonly desktopPreferences: DesktopPreferencesState
 
     public constructor(application: Application, sourceLink: TheLink, payload: LinkManagerSnapshot, desktopPreferences: DesktopPreferences) {
 
@@ -34,7 +35,7 @@ export default class LinkManager extends TheLink {
 
         this.appearance = Property.consumer(this, payload.appearance.key, payload.appearance.value)
 
-        this.desktopPreferences = Property.private(this, desktopPreferences)
+        this.desktopPreferences = new DesktopPreferencesState(desktopPreferences)
     }
 
     public requestDesktopPreferences(preferences: DesktopPreferencesUpdate) {

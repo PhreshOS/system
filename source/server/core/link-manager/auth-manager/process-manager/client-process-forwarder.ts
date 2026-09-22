@@ -62,7 +62,7 @@ export default class ClientProcessForwarder {
 
             const values = this.shapeObservedValues(event === null ? [word, ...payload] : payload)
 
-            this.authManager.publishToConnection(this.connection, "/process/observed", this.pane, this.owner, subscription, values).catch(() => undefined)
+            this.authManager.publishToBoundary(this.connection, "/process/observed", this.pane, this.owner, subscription, values).catch(() => undefined)
         }, reportImpossible ? reason => this.impossible(subscription, reason) : undefined)
 
         this.observations.set(subscription, stop)
@@ -72,7 +72,7 @@ export default class ClientProcessForwarder {
 
         this.unobserve(subscription)
 
-        this.authManager.publishToConnection(this.connection, "/process/impossible", this.pane, this.owner, subscription, reason).catch(() => undefined)
+        this.authManager.publishToBoundary(this.connection, "/process/impossible", this.pane, this.owner, subscription, reason).catch(() => undefined)
     }
 
     public unobserve(subscription: string) {
@@ -123,7 +123,7 @@ export default class ClientProcessForwarder {
 
             const values = event === null ? [word, payload] : [payload]
 
-            this.authManager.publishToConnection(this.connection, "/process/emitted", this.pane, this.owner, subscription, values).catch(() => undefined)
+            this.authManager.publishToBoundary(this.connection, "/process/emitted", this.pane, this.owner, subscription, values).catch(() => undefined)
         }, reportImpossible ? reason => this.impossibleFollow(subscription, reason) : undefined)
 
         this.endpointSubscriptions.set(subscription, stop)
@@ -131,7 +131,7 @@ export default class ClientProcessForwarder {
 
     private impossibleFollow(subscription: string, reason: string) {
 
-        this.authManager.publishToConnection(this.connection, "/process/impossible", this.pane, this.owner, subscription, reason).catch(() => undefined)
+        this.authManager.publishToBoundary(this.connection, "/process/impossible", this.pane, this.owner, subscription, reason).catch(() => undefined)
     }
 
     public unfollow(subscription: string) {
@@ -141,7 +141,7 @@ export default class ClientProcessForwarder {
         this.endpointSubscriptions.delete(subscription)
     }
 
-    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null) {
+    public followService(services: EndpointServices, subscription: string, address: ServiceAddress, scope: ServiceScope, event: string | null, permitted: () => boolean) {
 
         this.unfollowService(subscription)
 
@@ -149,8 +149,8 @@ export default class ClientProcessForwarder {
 
             const values = event === null ? [word, payload] : [payload]
 
-            return this.authManager.publishToConnection(this.connection, "/process/service-event", this.pane, this.owner, subscription, values).catch(() => undefined)
-        })
+            return this.authManager.publishToBoundary(this.connection, "/process/service-event", this.pane, this.owner, subscription, values).catch(() => undefined)
+        }, permitted)
 
         this.serviceSubscriptions.set(subscription, stop)
     }
@@ -204,6 +204,6 @@ export default class ClientProcessForwarder {
 
     private async send(values: unknown[]) {
 
-        await this.authManager.publishToConnection(this.connection, "/process/end-end", this.pane, values)
+        await this.authManager.publishToBoundary(this.connection, "/process/end-end", this.pane, values)
     }
 }

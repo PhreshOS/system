@@ -7,7 +7,7 @@ import Entry from "@server/core/link-manager/auth-manager/program-manager/entry"
 test("opening a Program uses Endpoint defaults while direct creation keeps its explicit request", async () => {
     const publish = vi.fn()
     const manager = { $outbound: { publish } } as unknown as ProgramManager
-    const record = new Entry(new RuntimeProgram({ identity: "example", client: { location: "." } })).record()
+    const record = new Entry(new RuntimeProgram({ identity: "example", client: { location: "." } }), {}).record()
     const program = new Program(manager, record)
     const address = { identity: record.identity, reference: record.reference }
 

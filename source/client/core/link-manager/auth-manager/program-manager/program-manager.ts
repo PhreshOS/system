@@ -90,6 +90,20 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/pinned", subject, operation) as boolean
     }
 
+    @Subscribe("/permissions-change")
+    protected async permissionsChanged(payload: ProgramRecord | null) {
+
+        if (!payload) return
+
+        const program = this.programs.get(payload.identity)
+
+        if (!program || program.reference !== payload.reference) return
+
+        program.updatePermissions(payload.permissions)
+
+        await this.$inbound.publish("/permissions", program, program.permissions)
+    }
+
     /** Atomically resolves one named Process at the authoritative host. */
     public async findOrCreateProcess(subject: unknown, launch: Launch & { name: string }, parent?: string) {
 

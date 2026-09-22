@@ -3,10 +3,10 @@ import { parseProcessSnapshot, type ProgramSnapshot } from "@phreshos/core"
 import { sdkProcess, type SdkProcessSource } from "@client/view/components/desktop-host/sdk-records"
 
 test("Desktop preserves Endpoint service roles in SDK snapshots", () => {
-  const program: ProgramSnapshot = {
+  const program: ProgramSnapshot & { permissions: {} } = {
     identity: "example", reference: "program-reference", assetId: "program-assets",
     name: "Example", version: "0.0.0", description: null, hasAgent: false,
-    server: { start: true, service: false }, client: null
+    server: { start: true, service: false }, client: null, permissions: {}
   }
   for (const server of [null, { service: false }, { service: true }]) {
     for (const client of [null, { service: false }, { service: true }]) {

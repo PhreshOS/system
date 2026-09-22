@@ -1,4 +1,4 @@
-import { Connect, Forward, Intercept, Subscribe } from "@the-link/core/decorators"
+import { Forward, Intercept, Subscribe } from "@the-link/core/decorators"
 import UploadManager, { uploadLimit } from "@server/core/upload-manager"
 import DialogManager from "@server/core/dialog-manager"
 import ProcessManager from "./process-manager/process-manager"
@@ -6,7 +6,6 @@ import ProgramManager from "./program-manager/program-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import { parsePermissionName, type PermissionRequest } from "@phreshos/core"
-import { permissionCatalog } from "@server/core/permissions"
 import ShellManager from "./shell-manager"
 
 export default class AuthManager extends TheLink {
@@ -107,7 +106,7 @@ export default class AuthManager extends TheLink {
         return this.programManager.streamArea(program, area, path, options)
     }
 
-    @Connect("/storage")
+    @Subscribe("/storage")
     protected async storage(operation: unknown, values: unknown, input?: unknown) {
 
         if (typeof operation !== "string" || !Array.isArray(values) || values.some(value => typeof value !== "string")) throw new Error("A System storage operation is invalid")
@@ -160,7 +159,7 @@ export default class AuthManager extends TheLink {
         throw new Error(`System storage does not know "${operation}"`)
     }
 
-    @Connect("/storage-watch")
+    @Subscribe("/storage-watch")
     protected async watchStorage(stream: unknown, target: unknown) {
 
         if (typeof stream !== "string" || !stream) throw new Error("A Storage watch needs an identity")
@@ -185,7 +184,7 @@ export default class AuthManager extends TheLink {
                 ? this.linkManager.application.home.watch(request.path, request.recursive, signal)
                 : this.programManager.watchArea(request.program, request.area, request.path, request.recursive, signal)
 
-            for await (const change of operation) await this.publishToConnection(connection, "/storage-change", stream, change)
+            for await (const change of operation) await this.publishToBoundary(connection, "/storage-change", stream, change)
         }
 
         finally {
@@ -202,31 +201,31 @@ export default class AuthManager extends TheLink {
         this.storageWatches.get(`${this.connection()}:${stream}`)?.abort()
     }
 
-    @Connect("/uploads/path")
+    @Subscribe("/uploads/path")
     protected async uploadsPath() {
 
         return this.uploads.fileManager.path
     }
 
-    @Connect("/uploads/access")
+    @Subscribe("/uploads/access")
     protected async uploadsAccess() {
 
         return { path: this.uploads.fileManager.path, limit: uploadLimit }
     }
 
-    @Connect("/uploads/stat")
+    @Subscribe("/uploads/stat")
     protected async uploadStat(file: unknown) {
 
         return this.uploads.stat(String(file))
     }
 
-    @Connect("/appearance/update")
+    @Subscribe("/appearance/update")
     protected async changeAppearance(value: unknown) {
 
         return await this.updateAppearance(value)
     }
 
-    @Connect("/session/sign-out-current")
+    @Subscribe("/session/sign-out-current")
     protected async signOutCurrentSession() {
 
         const session = this.linkManager.connection().session
@@ -236,7 +235,7 @@ export default class AuthManager extends TheLink {
         await this.linkManager.signOutSession(session)
     }
 
-    @Connect("/connection/list")
+    @Subscribe("/connection/list")
     protected async connections() {
 
         return this.linkManager.application.system.listConnections()
@@ -244,13 +243,13 @@ export default class AuthManager extends TheLink {
             .map(connection => this.linkManager.connectionSnapshot(connection))
     }
 
-    @Connect("/connection/current")
+    @Subscribe("/connection/current")
     protected async currentConnection() {
 
         return this.linkManager.connectionSnapshot(this.linkManager.connection())
     }
 
-    @Connect("/connection/find")
+    @Subscribe("/connection/find")
     protected async connectionFind(identity: unknown) {
 
         const connection = this.linkManager.application.system.findConnection(domainIdentity(identity, "Connection"))
@@ -258,25 +257,25 @@ export default class AuthManager extends TheLink {
         return connection ? this.linkManager.connectionSnapshot(connection) : null
     }
 
-    @Connect("/connection/state")
+    @Subscribe("/connection/state")
     protected async connectionState(identity: unknown) {
 
         return this.linkManager.application.system.connectionSnapshot(domainIdentity(identity, "Connection"))
     }
 
-    @Connect("/connection/session")
+    @Subscribe("/connection/session")
     protected async connectionSession(identity: unknown) {
 
         return this.linkManager.application.system.connectionSession(domainIdentity(identity, "Connection"))
     }
 
-    @Connect("/connection/sign-in")
+    @Subscribe("/connection/sign-in")
     protected async connectionSignIn(identity: unknown) {
 
         return this.linkManager.application.system.signInConnection(domainIdentity(identity, "Connection"))
     }
 
-    @Connect("/session/list")
+    @Subscribe("/session/list")
     protected async sessions() {
 
         return this.linkManager.application.system.listSessions()
@@ -284,7 +283,7 @@ export default class AuthManager extends TheLink {
             .map(identity => this.linkManager.sessionSnapshot(identity))
     }
 
-    @Connect("/session/find")
+    @Subscribe("/session/find")
     protected async sessionFind(identity: unknown) {
 
         const session = this.linkManager.application.system.findSession(domainIdentity(identity, "Session"))
@@ -292,13 +291,13 @@ export default class AuthManager extends TheLink {
         return session ? this.linkManager.sessionSnapshot(session) : null
     }
 
-    @Connect("/session/state")
+    @Subscribe("/session/state")
     protected async sessionState(identity: unknown) {
 
         return this.linkManager.application.system.sessionSnapshot(domainIdentity(identity, "Session"))
     }
 
-    @Connect("/session/connections")
+    @Subscribe("/session/connections")
     protected async sessionConnections(identity: unknown) {
 
         return this.linkManager.application.system.sessionConnections(domainIdentity(identity, "Session"))
@@ -306,7 +305,7 @@ export default class AuthManager extends TheLink {
             .map(connection => this.linkManager.connectionSnapshot(connection))
     }
 
-    @Connect("/session/sign-out")
+    @Subscribe("/session/sign-out")
     protected async sessionSignOut(identity: unknown) {
 
         return this.linkManager.application.system.signOutSession(domainIdentity(identity, "Session"))
@@ -318,30 +317,7 @@ export default class AuthManager extends TheLink {
         return await this.linkManager.updateAppearance(value)
     }
 
-    @Connect("/permission/get")
-    protected async permission(process: unknown, name: unknown) {
-
-        if (typeof process !== "string") throw new Error("A permission read is invalid")
-
-        return this.processManager.permission(process, parsePermissionName(name))
-    }
-
-    @Connect("/permission/grants")
-    protected async grantsPermission(process: unknown, name: unknown, requested: unknown) {
-
-        if (typeof process !== "string") {
-            throw new Error("A permission check is invalid")
-        }
-
-        const permission = parsePermissionName(name)
-        const values = permissionCatalog.resolve(permission, requested)
-
-        if (!Array.isArray(values)) throw new Error("A permission check is invalid")
-
-        return this.processManager.grants(process, permission, values)
-    }
-
-    @Connect("/permission/storage")
+    @Subscribe("/permission/storage")
     protected async grantsStorage(process: unknown, path: unknown, operation: unknown) {
 
         if (typeof process !== "string"
@@ -353,7 +329,7 @@ export default class AuthManager extends TheLink {
         return this.processManager.grantsStorage(process, path, operation)
     }
 
-    @Connect("/permission/request")
+    @Subscribe("/permission/request")
     protected async requestPermission(request: unknown, process: unknown, program: unknown, name: unknown, permission: unknown) {
 
         if (typeof request !== "string" || typeof process !== "string") throw new Error("A permission request is invalid")
@@ -383,14 +359,12 @@ export default class AuthManager extends TheLink {
         await this.programManager.appendArea(program, area, path, content, signal)
     }
 
-    // A targeted client observation belongs to one authorized desktop
-    // connection. Send its copy only there; the ordinary outbound road is a
-    // broadcast and would widen one frame's interest to every session.
-    public async publishToConnection(connectionIdentity: string, event: string, ...values: unknown[]) {
+    // Targeted observations also belong to trusted external boundaries, which
+    // are intentionally absent from the public Desktop Connection registry.
+    public async publishToBoundary(connectionIdentity: string, event: string, ...values: unknown[]) {
 
-        const connection = this.linkManager.findConnection(connectionIdentity)
-
-        if (!connection?.session) return
+        const connection = this.linkManager.boundaries.get(connectionIdentity)
+        if (!connection || !connection.external && !connection.session) return
 
         await connection.link.$outbound.publish(`/auth${event}`, ...values)
     }

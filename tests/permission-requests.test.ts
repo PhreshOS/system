@@ -67,8 +67,18 @@ test("permission requests contract", async () => {
       assert.equal(dialogs, 3)
       assert.deepEqual(stored(), { services: ["browser"] })
 
+      // Canonically equal authority already satisfies the request without an
+      // owner decision, while array order has no permission meaning.
+      choice = null
+      assert.deepEqual(await request("services", ["browser"]), ["browser"])
+      assert.equal(dialogs, 3)
+      assign("services", ["editor", "browser"])
+      assert.deepEqual(await request("services", ["browser", "editor"]), ["browser", "editor"])
+      assert.equal(dialogs, 3)
+
       // A Program handle requests for its target; the initiating Process is
       // only the request lifetime owner and never retargets the assignment.
+      choice = true
       const target = new Program({ identity: "target", storage: join(temporary, "target"), permissions: {}, server: { location: ".", command: "node server.js" } })
       assert.deepEqual(await programManager.requestPermission(target, "owner-request", "uploads", true), [])
       assert.equal(dialogProgram, target)
@@ -93,6 +103,9 @@ test("permission requests contract", async () => {
       new ProgramStateStorage(declared).setPermission("services", ["editor"])
       assert(!programManager.grantsPermission(declared, "services", ["browser"]))
       assert(programManager.grantsPermission(declared, "services", ["editor"]))
+      const dialogsBeforeDeclaredMatch = dialogs
+      assert.deepEqual(await programManager.requestPermission(declared, "declared-match", "programs", ["browser"]), ["browser"])
+      assert.equal(dialogs, dialogsBeforeDeclaredMatch)
 
       assign("all", false)
       assert.deepEqual(await request("all"), [])

@@ -112,16 +112,6 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/appearance/update", value)
     }
 
-    public async permission<Name extends PermissionName>(process: string, name: Name) {
-
-        return await this.$outbound.publishFirst("/permission/get", process, name)
-    }
-
-    public async grantsPermission<Name extends PermissionName>(process: string, name: Name, requested: PermissionRequest<Name>) {
-
-        return await this.$outbound.publishFirst("/permission/grants", process, name, requested) as boolean
-    }
-
     public async grantsStorage(process: string, path: string, operation?: "read" | "write" | "delete") {
 
         return await this.$outbound.publishFirst("/permission/storage", process, path, operation) as boolean

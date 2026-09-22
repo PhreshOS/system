@@ -12,14 +12,19 @@ test("client system access contract", async () => {
   const sibling = { identity: "process:sibling", program: "owner" }
   const outside = { identity: "process:outside", program: "outside" }
   let permissions: Permissions = {}
+  let permissionChecks = 0
+  const ownerProgramState = { identity: "owner", get permissions() { return permissions } }
 
   const authManager = {
+      programManager: { programs: new Map([[ownerProgramState.identity, ownerProgramState]]) },
       processManager: { processes: new Map([
           [owner.identity, owner],
           [sibling.identity, sibling],
           [outside.identity, outside]
       ]) },
       async grantsPermission(process: string, name: PermissionName, values: readonly string[]) {
+
+          permissionChecks++
 
           assert.equal(process, owner.identity)
 
@@ -64,6 +69,7 @@ test("client system access contract", async () => {
   await assert.rejects(access.require("desktopPreferences", []), /Execution is not permitted/)
   await assert.rejects(access.require("desktopConnection", []), /Execution is not permitted/)
   await assert.rejects(access.require("connections", []), /Execution is not permitted/)
+  assert.equal(permissionChecks, 0)
   assert.equal(await access.canConnection("desktop-connection"), false)
   assert.equal(await access.canSession("desktop-session"), false)
 
@@ -152,6 +158,7 @@ test("client system access contract", async () => {
   await access.requireStorage("/any/native/path", "delete")
   await access.require("uploads", [])
   await access.requireAll()
+  assert.equal(permissionChecks, 0)
 
   permissions = { all: [], services: false }
   await assert.rejects(access.service(ownService), /Execution is not permitted/)

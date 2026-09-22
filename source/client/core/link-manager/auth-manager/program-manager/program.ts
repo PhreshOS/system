@@ -1,5 +1,5 @@
 import { ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
-import { type Launch, type ProgramInstallOptions, type ProgramUninstallOptions } from "@phreshos/core"
+import { parsePermissions, type Launch, type Permissions, type ProgramInstallOptions, type ProgramUninstallOptions } from "@phreshos/core"
 import ProgramManager from "./program-manager"
 
 /**
@@ -39,6 +39,9 @@ export default class Program {
 
     public readonly client: ProgramRecord["client"]
 
+    /** Effective authority synchronized with the authoritative Program state. */
+    public permissions: Permissions
+
     public constructor(programManager: ProgramManager, payload: ProgramRecord) {
 
         this.programManager = programManager
@@ -66,6 +69,13 @@ export default class Program {
         this.server = payload.server
 
         this.client = payload.client
+
+        this.permissions = parsePermissions(payload.permissions)
+    }
+
+    public updatePermissions(permissions: unknown) {
+
+        this.permissions = parsePermissions(permissions)
     }
 
     public async createProcess(launch: Launch = {}) {

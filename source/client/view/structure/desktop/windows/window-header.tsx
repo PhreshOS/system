@@ -6,9 +6,12 @@ export default function WindowHeader({ title, icon, active, whole, stopping, onG
     return <Window.Header active={active} onPointerDown={onGrab} onDoubleClick={onMaximize}>
         <Window.Header.Identity icon={icon} title={title} />
         <Window.Header.Actions>
-            {onMinimize && <Window.Header.Minimize onPress={onMinimize} />}
+            {/* The Desktop transfers focus before either operation makes the
+                iframe unavailable. React Aria must not preserve focus in that
+                disappearing cross-document target. */}
+            {onMinimize && <Window.Header.Minimize preventFocusOnPress={false} onPress={onMinimize} />}
             {onMaximize && <Window.Header.Maximize maximized={whole} onPress={onMaximize} />}
-            {onClose && <Window.Header.Close onPress={onClose} disabled={stopping} />}
+            {onClose && <Window.Header.Close preventFocusOnPress={false} onPress={onClose} disabled={stopping} />}
         </Window.Header.Actions>
     </Window.Header>
 }

@@ -1,5 +1,5 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
-import { Connect, Subscribe } from "@the-link/core/decorators"
+import { Subscribe } from "@the-link/core/decorators"
 import { randomUUID } from "node:crypto"
 import { TheLink } from "@the-link/core"
 import SqliteDatabase from "@libs/sqlite-database"
@@ -173,6 +173,15 @@ export default class ProgramManager extends TheLink {
     /** Returns an independent effective snapshot without writing definition fallbacks to state. */
     public permissions(program: Program): Permissions {
 
+        const entry = this.programs?.get(program.identity)
+
+        if (entry?.program === program) return entry.permissions()
+
+        return this.resolvePermissions(program)
+    }
+
+    private resolvePermissions(program: Program): Permissions {
+
         return clonePermissions({ ...program.declaredPermissions, ...new ProgramStateStorage(program).permissions() })
     }
 
@@ -230,14 +239,38 @@ export default class ProgramManager extends TheLink {
 
         if (value === null) throw new Error("A stored Program permission cannot be null")
 
+        const entry = this.programs?.get(program.identity)
+        if (entry && entry.program !== program) throw new Error("The Program represented by this handle does not exist")
+
+        const before = entry?.permissions() ?? this.resolvePermissions(program)
         const state = new ProgramStateStorage(program)
         const stored = state.permissions()
-        const before = stored[name]
         const permission = permissionCatalog.resolve(name, value)
         if (permission === null) throw new Error("A stored Program permission cannot be null")
-        if (before === undefined || permissionCatalog.changed(before, permission)) {
-            state.setPermission(name, permission)
-        }
+        const previousStored = stored[name]
+
+        if (previousStored !== undefined && !permissionCatalog.changed(previousStored, permission)) return
+
+        state.setPermission(name, permission)
+
+        const after = this.resolvePermissions(program)
+        entry?.updatePermissions(after)
+
+        // Permission events carry one complete effective snapshot. Consumers
+        // can replace local authority atomically instead of reconstructing it
+        // from mutation history or issuing a follow-up read.
+        if (entry && !isDeepStrictEqual(before, after)) await this.announcePermissions(entry)
+    }
+
+    private async announcePermissions(entry: Entry) {
+
+        const permissions = entry.permissions()
+
+        await Promise.all([
+            this.authManager.processManager.announceHost("program", "permissions", entry.identity, entry),
+            this.authManager.processManager.announceSubject("program", "permissions", entry.program.reference, permissions),
+            this.$outbound.publish("/permissions-change", entry.record())
+        ])
     }
 
     /** Requests one owner decision for this target Program, independently of its initiator. */
@@ -252,6 +285,12 @@ export default class ProgramManager extends TheLink {
         const requested = permissionCatalog.resolve(name, input)
 
         if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
+        if (!request) throw new Error("A permission request needs a unique identity")
+
+        // A request asks for one exact canonical assignment. When effective
+        // authority already equals it, no owner decision or state write exists
+        // to perform; broader and narrower assignments remain distinct.
+        if (!permissionCatalog.changed(this.permission(program, name), requested)) return requested
 
         const choice = await this.authManager.dialogManager.requestPermission(program, request, name, requested, process)
 
@@ -265,7 +304,7 @@ export default class ProgramManager extends TheLink {
         return choice
     }
 
-    @Connect("/permissions")
+    @Subscribe("/permissions")
     protected async programPermissions(subject: unknown, operation: unknown, first?: unknown, second?: unknown, third?: unknown) {
 
         const program = this.held(subject)
@@ -318,25 +357,25 @@ export default class ProgramManager extends TheLink {
         throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
     }
 
-    @Connect("/create-program")
+    @Subscribe("/create-program")
     protected async createProgram(source: ProgramDefinition | string) {
 
         return (await this.create(source)).identity
     }
 
-    @Connect("/force-create-program")
+    @Subscribe("/force-create-program")
     protected async forceCreateProgram(source: ProgramDefinition | string, asker: string) {
 
         return (await this.forceCreate(source, asker)).identity
     }
 
-    @Connect("/startup")
+    @Subscribe("/startup")
     protected async startupProgram(subject: unknown, operation: string, value?: unknown) {
 
         return await this.startup(this.held(subject), operation, value)
     }
 
-    @Connect("/pinned")
+    @Subscribe("/pinned")
     protected async pinnedProgram(subject: unknown, operation: "get" | "pin" | "unpin") {
 
         return await this.pinned(this.held(subject), operation)
@@ -482,7 +521,7 @@ export default class ProgramManager extends TheLink {
         // that deliberately owns this identity across both representations.
         if (this.programs.has(program.identity) || (!transitionOwnsIdentity && (this.changing.has(program.identity) || existsSync(this.fileManager.join(program.identity, "program.json"))))) throw new Error("The system already knows this program identity")
 
-        const entry = new Entry(program, installed, restoreInstalled)
+        const entry = new Entry(program, this.resolvePermissions(program), installed, restoreInstalled)
 
         this.programs.set(entry.identity, entry)
 
@@ -595,7 +634,7 @@ export default class ProgramManager extends TheLink {
     // Read, and only ever read. The same word a process says over its
     // channel and a pane says over the link, because the two roads must
     // mean the same thing.
-    @Connect("/logs")
+    @Subscribe("/logs")
     public async logs(subject: unknown, sql: string, values: unknown[]) {
 
         return this.logsOf(this.held(subject)).query(sql, values)
@@ -621,14 +660,14 @@ export default class ProgramManager extends TheLink {
 
     // Read and written both: this file is the program's own, which is
     // the whole of why it is a file of its own.
-    @Connect("/database")
+    @Subscribe("/database")
     public async database(subject: unknown, sql: string, values: unknown[]) {
 
         return this.databaseOf(this.held(subject)).query(sql, values)
     }
 
     /** One authoritative icon operation shared by SDKs and HTTP hosting. */
-    @Connect("/icon")
+    @Subscribe("/icon")
     public async icon(subject: unknown, size: unknown) {
 
         if (!isIconSize(size)) throw new Error("A Program icon size is small, medium, or large")
@@ -637,14 +676,14 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Reads Program-specific operating knowledge for agents. */
-    @Connect("/agent")
+    @Subscribe("/agent")
     public async agent(subject: unknown) {
 
         return this.held(subject).agent()
     }
 
     /** Reads the canonical definition owned by one exact Program handle. */
-    @Connect("/definition")
+    @Subscribe("/definition")
     public async definition(subject: unknown) {
 
         return this.held(subject).definition()
@@ -721,7 +760,7 @@ export default class ProgramManager extends TheLink {
     // over its own channel and from a session over the link, and both
     // must mean the same thing. The exact handle always names a Program;
     // application persistence has no generic route through this manager.
-    @Connect("/store")
+    @Subscribe("/store")
     public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: number) {
 
         const store = this.storeOf(this.held(subject))
@@ -741,7 +780,7 @@ export default class ProgramManager extends TheLink {
 
     // Area metadata reached from a session over the link. Content stays
     // a byte stream at the storage door; locations remain server-only.
-    @Connect("/area")
+    @Subscribe("/area")
     public async area(subject: unknown, area: string, operation: string, args: unknown[]) {
 
         if (area !== "data" && area !== "cache") throw new Error(`The host does not know the place "${String(area)}"`)
@@ -868,13 +907,13 @@ export default class ProgramManager extends TheLink {
     // Installation changes every path a process may have remembered, so
     // validation happens first and every process ends before the live
     // Program is pointed at its canonical files.
-    @Connect("/forget-program")
+    @Subscribe("/forget-program")
     public async forgetNamed(subject: unknown, asker: string | null = null) {
 
         return await this.forget(this.held(subject), asker)
     }
 
-    @Connect("/command")
+    @Subscribe("/command")
     protected async command(stream: string, operation: string, subject: unknown, value: unknown, asker: string) {
 
         if (!stream || this.commands.has(stream)) throw new Error("A Program command needs a unique stream")
@@ -1107,6 +1146,7 @@ export default class ProgramManager extends TheLink {
                 await installed.installServer(output)
 
                 let entry = this.programs.get(source.identity)
+                const previousPermissions = entry?.permissions() ?? null
 
                 // Active callers can consume installation output until activation.
                 if (entry) await this.authManager.processManager.exitAll(source.identity, asker)
@@ -1124,6 +1164,8 @@ export default class ProgramManager extends TheLink {
                     entry.installed = true
 
                     entry.restoreInstalled = false
+
+                    entry.updatePermissions(this.resolvePermissions(entry.program))
                 }
 
                 else {
@@ -1139,12 +1181,13 @@ export default class ProgramManager extends TheLink {
 
                 await this.authManager.processManager.announceHost("program", "install", entry.identity, entry)
 
-                // Said to the sessions, though none of them may ask for it.
-                // `@Connect` used to be both the road in and the echo out,
-                // and removing the road took the echo with it — a desktop
-                // that never learns a program arrived is a desktop showing
-                // yesterday's list.
+                // Installation is shared registry state, so it is announced
+                // independently of the response returned to its caller.
                 await this.$outbound.publish("/install", entry.record())
+
+                if (previousPermissions && !isDeepStrictEqual(previousPermissions, entry.permissions())) {
+                    await this.announcePermissions(entry)
+                }
 
                 if (requestedLaunch !== undefined) {
                     await this.start(entry.program, requestedLaunch, undefined, null, true)
@@ -1299,7 +1342,7 @@ export default class ProgramManager extends TheLink {
         this.kept.delete(identity)
     }
 
-    @Connect("/create-process")
+    @Subscribe("/create-process")
     public async createProcess(subject: unknown, launch: Launch = {}, parent: Process | string | null = null) {
 
         const program = this.held(subject)
@@ -1330,7 +1373,7 @@ export default class ProgramManager extends TheLink {
         })
     }
 
-    @Connect("/find-or-create-process")
+    @Subscribe("/find-or-create-process")
     public async findOrCreateProcess(subject: unknown, launch: Launch & { name: string }, parent: Process | string | null = null) {
 
         const held = this.held(subject)
