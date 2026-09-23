@@ -5,7 +5,7 @@ import ServerProcessBoundary, { type HostVisibility } from "./server-process-bou
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
-import { type Layer, type WindowSurface, type WindowTransaction } from "@phreshos/core"
+import { type Layer } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "@server/core/server-runtime"
 
@@ -64,7 +64,7 @@ export default class Process {
     // belongs to the Desktop session and ends when this context stops.
     public client: ClientState | null = null
 
-    /** Permanent Client Endpoint state retained between execution contexts. */
+    /** Permanent Client Endpoint handle; its Window state exists only while running. */
     public readonly clientEndpoint: Readonly<{ window: Window }> | null
 
     // The process whose call to `program.createProcess()` created this
@@ -177,6 +177,10 @@ export default class Process {
         if (!this.client) return false
 
         this.client = null
+
+        // Stopping ends this incarnation rather than retaining values for the
+        // next start. Subscriptions remain attached to the stable handle.
+        this.clientEndpoint?.window.stop()
 
         for (const listener of this.clientStops) listener()
 
@@ -325,7 +329,7 @@ export default class Process {
             parent: this.parent?.record() ?? null,
 
             clientEndpoint: this.clientEndpoint
-                ? { window: this.clientEndpoint.window.toJSON() }
+                ? { window: this.client ? this.clientEndpoint.window.toJSON() : null }
                 : null,
 
             client: this.client ? { ...this.client, sandbox: this.program.client?.sandbox ?? true } : null
@@ -371,10 +375,6 @@ export interface ProcessLaunch {
         title: string
 
         header: boolean
-
-        surface: WindowSurface
-
-        transaction: WindowTransaction
 
         position: Position | null
 

@@ -241,7 +241,7 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        if (presentation.state(process.identity).minimized) minimize(process, false)
+        if (presentation.projection(process.identity).minimized) minimize(process, false)
 
         raise(process)
 

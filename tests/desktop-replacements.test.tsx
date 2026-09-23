@@ -118,7 +118,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
         identity: "wallpaper-process", program: "wallpaper-program",
         client: { window: {
             layer: "wallpaper", title: "Internal", position: { x: 200, y: 300 },
-            header: false, surface: false, transaction: false,
+            header: false,
             size: { width: 100, height: 100 }, minimized: true, maximized: false, depth: 20
         } }
     } as unknown as Process
@@ -151,7 +151,7 @@ test("Desktop replaces the complete built-in Shell and restores it after stop", 
         identity: "shell-process", program: "shell-program",
         client: { window: {
             layer: "shell", title: "Internal", position: { x: 200, y: 300 },
-            header: false, surface: false, transaction: false,
+            header: false,
             size: { width: 100, height: 100 }, minimized: true, maximized: false, depth: 20
         } }
     } as unknown as Process
@@ -162,8 +162,8 @@ test("Desktop replaces the complete built-in Shell and restores it after stop", 
     expect(running).not.toContain("data-default-start-menu")
     expect(running).not.toContain("data-taskbar")
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
-        layer: "shell", surface: false, minimized: true, maximized: false, entering: false,
-        position: { x: 200, y: 300 }, size: { width: 100, height: 100 }, depth: 20
+        layer: "shell", surface: false, minimized: false, maximized: false, entering: false,
+        position: { x: 0, y: 0 }, size: { width: 0, height: 0 }, depth: 20
     })
 
     record.client = null

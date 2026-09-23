@@ -1,9 +1,9 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { type PresentationAnimation, type PresentationMoveGestureController } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
-import { type Position, type Size, type Theme, type WindowSurface, type WindowLayer, type WindowTransaction } from "@phreshos/core"
+import { type Position, type Size, type Theme, type WindowPresentationSurface, type WindowLayer } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, transaction, icon, position, size, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, spacing, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, spacing, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -38,6 +38,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
     const snap = useCallback((position: Position, size: Size) => onSnap(record, position, size), [onSnap, record])
 
     const represent = useCallback((representation: PresentationGeometryRepresentation | null) => onPresentationRepresentation(record.identity, representation), [onPresentationRepresentation, record])
+
+    const moveGesture = useCallback((controller: PresentationMoveGestureController | null) => onPresentationMoveGesture(record.identity, controller), [onPresentationMoveGesture, record])
 
     const frameSource = programFrameSource(assetId, door)
 
@@ -100,8 +102,6 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         layer={layer}
 
-        transaction={transaction}
-
         icon={icon}
 
         position={position}
@@ -117,6 +117,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
         onPresentationAnimationComplete={onPresentationAnimationComplete}
 
         onPresentationRepresentation={represent}
+
+        onPresentationMoveGesture={moveGesture}
 
         paintSurfaceSize={paintSurfaceSize}
 
@@ -218,11 +220,9 @@ interface ProcessWindowProps {
 
     header: boolean
 
-    surface: WindowSurface
+    surface: WindowPresentationSurface
 
     layer: WindowLayer
-
-    transaction: WindowTransaction
 
     icon: string
 
@@ -239,6 +239,8 @@ interface ProcessWindowProps {
     onPresentationAnimationComplete: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
     onPresentationRepresentation: (identity: string, representation: PresentationGeometryRepresentation | null) => void
+
+    onPresentationMoveGesture: (identity: string, controller: PresentationMoveGestureController | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
 

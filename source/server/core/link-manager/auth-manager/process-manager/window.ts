@@ -1,227 +1,140 @@
 import {
     isRelativeValue,
-    parseWindowSurface,
-    parseWindowTransaction,
     type Position,
     type Size,
     type Value,
-    type WindowSurface,
     type WindowGeometry,
-    type WindowLayer,
-    type WindowState,
-    type WindowTransaction
+    type WindowLayer
 } from "@phreshos/core"
 
-/** Authoritative geometry, visibility, maximization, title, and layer ordering. */
-// What a Window says about the Program behind it. Resolved when the Process
-// first gains Window state and again only when a stopped client is restarted
-// with explicit overrides; ordinary live Window operations remain narrower.
+/** Values from which one running Client Endpoint begins its authoritative Window. */
 export interface Shown {
-
     title: string
-
     header: boolean
-
-    surface: WindowSurface
-
-    transaction: WindowTransaction
-
-    // Which structurally isolated Desktop layer this Window occupies.
     layer: WindowLayer
-
 }
 
-export default class Window implements Omit<WindowState, "front"> {
+/**
+ * Stable Window handle whose authoritative state exists only while its Client
+ * Endpoint is running. A restart replaces the complete state in one step.
+ */
+export default class Window {
+    private state: WindowSnapshot | null = null
 
-    public position: Position
-
-    public size: Size
-
-    public depth: number
-
-    // Whether it is shown. A window may be born hidden, which is a
-    // state at birth rather than an act afterwards: hidden from the
-    // first rendered frame is not the same as shown once and then hidden.
-    public minimized: boolean
-
-    public maximized: boolean
-
-    // What a person reads on it. Born from the program, the window's
-    // own afterwards.
-    public title: string
-
-    public header: boolean
-
-    // The Window's authoritative Desktop layer.
-    public layer: WindowLayer
-
-    public surface: WindowSurface
-
-    public transaction: WindowTransaction
-
-    public constructor(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean, maximized = false) {
-
-        this.title = shown.title
-
-        this.header = shown.header
-
-        this.surface = parseWindowSurface(shown.surface)
-
-        this.transaction = parseWindowTransaction(shown.transaction)
-
-        this.layer = shown.layer
-
-        this.position = position
-
-        this.size = size
-
+    public start(shown: Shown, position: Position, size: Size, depth: number, minimized: boolean, maximized = false) {
         validate(position.x, "x")
-
         validate(position.y, "y")
-
         validate(size.width, "width")
-
         validate(size.height, "height")
 
-        this.depth = depth
+        this.state = {
+            title: readableTitle(shown.title),
+            header: boolean(shown.header, "Window header state"),
+            layer: shown.layer,
+            position,
+            size,
+            depth,
+            minimized: boolean(minimized, "Window minimized state"),
+            maximized: boolean(maximized, "Window maximized state")
+        }
+    }
 
-        this.minimized = minimized
+    public stop() { this.state = null }
 
-        this.maximized = maximized
+    public get live() { return this.state !== null }
+    public get position() { return this.current.position }
+    public set position(value) { this.current.position = value }
+    public get size() { return this.current.size }
+    public set size(value) { this.current.size = value }
+    public get depth() { return this.current.depth }
+    public set depth(value) { this.current.depth = value }
+    public get minimized() { return this.current.minimized }
+    public set minimized(value) { this.current.minimized = value }
+    public get maximized() { return this.current.maximized }
+    public set maximized(value) { this.current.maximized = value }
+    public get title() { return this.current.title }
+    public set title(value) { this.current.title = value }
+    public get header() { return this.current.header }
+    public set header(value) { this.current.header = value }
+    public get layer() { return this.current.layer }
+    public set layer(value) { this.current.layer = value }
+
+    private get current() {
+        if (!this.state) throw new Error("This Client Endpoint is not running")
+        return this.state
     }
 
     public move(position: Position) {
-
         validate(position.x, "x")
-
         validate(position.y, "y")
-
         if (this.position.x === position.x && this.position.y === position.y) return false
-
         this.position = position
-
         return true
     }
 
     public resize(size: Size) {
-
         validate(size.width, "width")
-
         validate(size.height, "height")
-
         if (this.size.width === size.width && this.size.height === size.height) return false
-
         this.size = size
-
         return true
     }
 
     /** Validates and commits a complete geometry without an intermediate state. */
     public setGeometry(geometry: WindowGeometry) {
-
         validate(geometry.x, "x")
-
         validate(geometry.y, "y")
-
         validate(geometry.width, "width")
-
         validate(geometry.height, "height")
-
         const moved = this.position.x !== geometry.x || this.position.y !== geometry.y
-
         const resized = this.size.width !== geometry.width || this.size.height !== geometry.height
-
         if (!moved && !resized) return { moved, resized }
-
         this.position = { x: geometry.x, y: geometry.y }
-
         this.size = { width: geometry.width, height: geometry.height }
-
         return { moved, resized }
     }
 
     public setTitle(title: string) {
-
-        const said = String(title ?? "").trim()
-
-        if (!said) throw new Error("A window's title is something a person can read")
-
+        const said = readableTitle(title)
         if (this.title === said) return false
-
         this.title = said
-
         return true
     }
 
     public setHeader(header: boolean) {
-
-        if (typeof header !== "boolean") throw new Error("Window header state must be true or false")
-
-        if (this.header === header) return false
-
-        this.header = header
-
+        const value = boolean(header, "Window header state")
+        if (this.header === value) return false
+        this.header = value
         return true
     }
 
-    public setSurface(surface: WindowSurface) {
-
-        const parsed = parseWindowSurface(surface)
-
-        if (JSON.stringify(this.surface) === JSON.stringify(parsed)) return false
-
-        this.surface = parsed
-
-        return true
-    }
-
-    public setTransaction(transaction: WindowTransaction) {
-
-        const parsed = parseWindowTransaction(transaction)
-
-        if (JSON.stringify(this.transaction) === JSON.stringify(parsed)) return false
-
-        this.transaction = parsed
-
-        return true
-    }
-
-    public toJSON() {
-
-        return {
-
-            title: this.title,
-
-            header: this.header,
-
-            surface: this.surface,
-
-            transaction: this.transaction,
-
-            layer: this.layer,
-
-            position: this.position,
-
-            size: this.size,
-
-            depth: this.depth,
-
-            minimized: this.minimized,
-
-            maximized: this.maximized
-        }
-    }
+    public toJSON() { return { ...this.current } }
 }
 
-// A value is pixels or one linear relative expression; anything else is
-// refused where it is written, not where it is rendered.
+function readableTitle(value: unknown) {
+    const title = String(value ?? "").trim()
+    if (!title) throw new Error("A window's title is something a person can read")
+    return title
+}
+
+function boolean(value: unknown, name: string) {
+    if (typeof value !== "boolean") throw new Error(`${name} must be true or false`)
+    return value
+}
+
 function validate(value: Value, name: string) {
-
     if (isRelativeValue(value)) return
-
     throw new Error(`${name} must be a finite pixel number or a relative expression such as "50% + 10"`)
 }
 
-export type WindowSnapshot = ReturnType<Window["toJSON"]>
-
+export interface WindowSnapshot {
+    title: string
+    header: boolean
+    position: Position
+    size: Size
+    minimized: boolean
+    maximized: boolean
+    layer: WindowLayer
+    depth: number
+}
 export type { Position, Size, Value } from "@phreshos/core"

@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowSurface, parseWindowTransaction, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseProgramDefinition, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -232,10 +232,6 @@ export default class Program {
 
                 header: client.header ?? null,
 
-                surface: client.surface ?? null,
-
-                transaction: client.transaction ?? null,
-
                 size: client.size ?? null,
 
                 position: client.position ?? null,
@@ -411,10 +407,6 @@ function coherent(config: ProgramConfig) {
     if (config.client?.title !== undefined && typeof config.client.title !== "string") throw new Error("A client half's title must be text")
 
     if (config.client?.sandbox !== undefined && typeof config.client.sandbox !== "boolean") throw new Error("A client half's sandbox mode must be true or false")
-
-    if (config.client?.surface !== undefined) parseWindowSurface(config.client.surface)
-
-    if (config.client?.transaction !== undefined) parseWindowTransaction(config.client.transaction)
 
     if (config.client?.maximize !== undefined && typeof config.client.maximize !== "boolean") throw new Error("A client half's maximize default must be true or false")
     if (config.client?.minimize !== undefined && typeof config.client.minimize !== "boolean") throw new Error("A client half's minimize default must be true or false")

@@ -5,9 +5,8 @@ import Window from "./window"
 
 /**
  * A running instance, as this side holds it: rebuilt from what the core
- * transmitted. Its Client Endpoint retains its Window counterpart independently
- * of the current execution context. Every act is a request; the truth answers
- * with an echo.
+ * transmitted. Its Client Endpoint handle survives between runs, while the
+ * Window values belong only to the current execution context.
  */
 export default class Process {
 
@@ -31,7 +30,7 @@ export default class Process {
 
     public client: ClientState | null
 
-    /** Permanent Client Endpoint state retained between execution contexts. */
+    /** Permanent Client Endpoint handle retained between execution contexts. */
     public readonly clientEndpoint: Readonly<{ window: Window }> | null
 
     // Retained lineage from creation. It remains sufficient to reconstruct
@@ -95,7 +94,9 @@ export default class Process {
 
         if (!payload.client || !this.clientEndpoint) return
 
-        if (payload.clientEndpoint) this.clientEndpoint.window.follow(payload.clientEndpoint.window)
+        if (!payload.clientEndpoint?.window) throw new Error("A running Client Endpoint requires Window state")
+
+        this.clientEndpoint.window.start(payload.clientEndpoint.window)
 
         // A Process creation snapshot already contains every endpoint that is
         // live at birth. Its following lifecycle announcement describes that
@@ -109,6 +110,8 @@ export default class Process {
     public clientStopped() {
 
         this.client = null
+
+        this.clientEndpoint?.window.stop()
     }
 
 }

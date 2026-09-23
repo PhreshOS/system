@@ -38,13 +38,8 @@ test("window geometry contract", async () => {
       size: { width: 300, height: 200 }
   }
 
-  const authority = new ServerWindow(
-      { title: "Geometry", header: true, surface: true, transaction: false, layer: "window" },
-      initial.position,
-      initial.size,
-      1,
-      false
-  )
+  const authority = new ServerWindow()
+  authority.start({ title: "Geometry", header: true, layer: "window" }, initial.position, initial.size, 1, false)
 
   assert.throws(() => authority.setGeometry({
       x: 40,
@@ -112,11 +107,6 @@ test("window geometry contract", async () => {
   assert.equal(authority.header, false)
   assert.deepEqual(events.at(-1), ["process", "changeHeader", false])
 
-  const transaction = { duration: 240, easing: "ease-out" } as const
-  await ProcessManager.prototype.setTransaction.call(manager as unknown as ProcessManager, "process", transaction)
-  assert.deepEqual(authority.transaction, transaction)
-  assert.deepEqual(events.at(-1), ["process", "changeTransaction", transaction])
-
   const resized = { width: "1/2", height: 260 }
   await ProcessManager.prototype.setGeometry.call(manager as unknown as ProcessManager, "process", { ...nextPosition, ...resized })
   assert.deepEqual(events.at(-1), ["process", "resize", resized])
@@ -142,9 +132,6 @@ test("window geometry contract", async () => {
 
   await counterpart.setGeometry(next)
   assert.deepEqual(publications, [["/set-geometry", "process", next]])
-  await counterpart.setTransaction(false)
-  assert.deepEqual(publications.at(-1), ["/set-transaction", "process", false])
-
   authority.minimized = true
   await ProcessManager.prototype.maximize.call(manager as unknown as ProcessManager, "process", true)
   assert.equal(authority.maximized, true)

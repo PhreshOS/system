@@ -3,10 +3,10 @@ import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type Position, type Size, type WindowSurface as WindowSurfaceDefinition, type WindowLayer, type WindowTransaction } from "@phreshos/core"
+import { type Position, type Size, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
-import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { type PresentationAnimation, type PresentationMoveGestureController, type PresentationMovePoint } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
 import { motion } from "motion/react"
 import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
@@ -14,6 +14,7 @@ import { useAppearance } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
+import { createPortal } from "react-dom"
 
 /**
  * A window: a pure function of the record it is given. Every render
@@ -49,14 +50,14 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, transaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
     const appearanceTransaction = appearance.transaction
     const desktopScale = useDesktopScale()
     const standard = layer === "window"
-    const surfaceDefinition = surface ?? standard
+    const surfaceDefinition = surface ?? (standard ? true : false)
     const surfaceRadius = surfaceDefinition === false ? undefined : windowSurfaceRadius(surfaceDefinition, appearance)
     const presentationMinimum = standard ? { width: minWidth, height: minHeight } : undefined
 
@@ -85,6 +86,14 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const frameElement = geometryMotion.frame
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
+    const [externalMoveActive, setExternalMoveActive] = useState(false)
+    const externalMove = useRef<ExternalMove | null>(null)
+    const beginMoveGesture = useRef<(point: PresentationMovePoint) => ActivePointerGesture | null>(() => null)
+    beginMoveGesture.current = point => {
+        let active: ActivePointerGesture | null = null
+        grab(point, null, gesture => { active = gesture })
+        return active
+    }
 
     useLayoutEffect(function () {
 
@@ -103,6 +112,62 @@ export default function ({ title, header = true, surface, layer, icon, children,
         return () => onPresentationRepresentation(null)
 
     }, [onPresentationRepresentation])
+
+    const moveGestureController = useRef<PresentationMoveGestureController | null>(null)
+    if (!moveGestureController.current) {
+        moveGestureController.current = {
+            begin(origin, point) {
+                if (externalMove.current) throw new Error("This Window already has an active move gesture")
+                const pointer = beginMoveGesture.current(origin)
+                if (!pointer) throw new Error("This Window cannot currently begin a move gesture")
+                pointer.update(point)
+                let markReady: () => void = () => undefined
+                const ready = new Promise<void>(resolve => { markReady = resolve })
+                let finish: () => void = () => undefined
+                const finished = new Promise<void>(resolve => { finish = resolve })
+                externalMove.current = { pointer, markReady, finish }
+                setExternalMoveActive(true)
+                return { ready, finished, cancel: () => finishExternalMove(null) }
+            },
+            cancel: () => finishExternalMove(null)
+        }
+    }
+
+    function finishExternalMove(point: PresentationMovePoint | null) {
+        const active = externalMove.current
+        if (!active) return
+        externalMove.current = null
+        setExternalMoveActive(false)
+        // Cancellation may happen before the portal commits. Readiness must
+        // still settle so the remote owner can observe the completed gesture.
+        active.markReady()
+        if (point) active.pointer.end(point)
+        else active.pointer.cancel()
+        active.finish()
+    }
+
+    useLayoutEffect(function () {
+        if (!standard || !onPresentationMoveGesture) return
+        // Program-owned chrome supplies pointer intent, while this controller
+        // remains the single owner of geometry, snapping, and commit behavior.
+        onPresentationMoveGesture(moveGestureController.current)
+        return () => {
+            moveGestureController.current?.cancel()
+            onPresentationMoveGesture(null)
+        }
+    }, [standard, onPresentationMoveGesture])
+
+    useEffect(function () {
+        if (!externalMoveActive) return
+        const cancel = () => finishExternalMove(null)
+        const visibility = () => { if (document.hidden) cancel() }
+        window.addEventListener("blur", cancel)
+        document.addEventListener("visibilitychange", visibility)
+        return () => {
+            window.removeEventListener("blur", cancel)
+            document.removeEventListener("visibilitychange", visibility)
+        }
+    }, [externalMoveActive])
 
     const closureCompleted = useRef(false)
 
@@ -156,9 +221,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     }, [minimizeAnimation?.revision, reducedMotion])
 
-    const entryTransaction = layer === "under" || layer === "over"
-        ? resolveWindowTransaction(transaction, appearanceTransaction)
-        : standard ? appearanceTransaction : null
+    const entryTransaction = standard ? appearanceTransaction : null
     const opening = entering && !reducedMotion ? entryTransaction : null
     const [opened, setOpened] = useState(opening === null)
     const minimizeTransaction = minimizeAnimation
@@ -198,18 +261,23 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
     }
 
-    function grab(event: ReactPointerEvent<HTMLElement>, edge: WindowEdge | null) {
+    function grab(event: ReactPointerEvent<HTMLElement> | PresentationMovePoint, edge: WindowEdge | null, receive?: (gesture: ActivePointerGesture) => void) {
 
         if (maximized && edge !== null) return
+
+        const external = receive !== undefined
+        const pointer = external
+            ? event as PresentationMovePoint
+            : { x: (event as ReactPointerEvent<HTMLElement>).clientX, y: (event as ReactPointerEvent<HTMLElement>).clientY }
 
         // A cancelled pointerdown suppresses double-click synthesis, and
         // a shared window restores by double-click; absolute ones keep
         // it to block native drags.
-        if (absolute) event.preventDefault()
+        if (absolute && !external) (event as ReactPointerEvent<HTMLElement>).preventDefault()
 
-        const handle = event.currentTarget
+        const handle = external ? null : (event as ReactPointerEvent<HTMLElement>).currentTarget
 
-        handle.setPointerCapture(event.pointerId)
+        if (handle) handle.setPointerCapture((event as ReactPointerEvent<HTMLElement>).pointerId)
 
         const started = geometryMotion.beginGesture()
 
@@ -239,7 +307,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         let renderFrame = 0
 
-        const start = { pointerX: event.clientX, pointerY: event.clientY }
+        const start = { pointerX: pointer.x, pointerY: pointer.y }
 
         // Pointer hardware can report faster than the display can paint. Keep
         // gesture state authoritative while scheduling at most one React
@@ -259,11 +327,11 @@ export default function ({ title, header = true, surface, layer, icon, children,
         // Zones are where the pointer is — within 16px of an edge — and
         // they name shares of the surface, which each client resolves in
         // its own space.
-        function snapTerm(motion: globalThis.PointerEvent): Snap | null {
+        function snapTerm(motion: PresentationMovePoint): Snap | null {
 
-            const pointerX = physicalToDesktopPixels(motion.clientX - bounds!.left, desktopScale)
+            const pointerX = physicalToDesktopPixels(motion.x - bounds!.left, desktopScale)
 
-            const pointerY = physicalToDesktopPixels(motion.clientY - bounds!.top, desktopScale)
+            const pointerY = physicalToDesktopPixels(motion.y - bounds!.top, desktopScale)
 
             const west = pointerX <= 16
 
@@ -283,11 +351,11 @@ export default function ({ title, header = true, surface, layer, icon, children,
             }
         }
 
-        function move(motion: globalThis.PointerEvent) {
+        function move(motion: PresentationMovePoint) {
 
-            const physicalX = motion.clientX - start.pointerX
+            const physicalX = motion.x - start.pointerX
 
-            const physicalY = motion.clientY - start.pointerY
+            const physicalY = motion.y - start.pointerY
 
             const dx = physicalToDesktopPixels(physicalX, desktopScale)
 
@@ -306,9 +374,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 // The window returns to its floating size placed so the
                 // pointer keeps its proportional position across the
                 // header, and the same gesture carries on dragging.
-                const pointerX = physicalToDesktopPixels(motion.clientX - bounds!.left, desktopScale)
+                const pointerX = physicalToDesktopPixels(motion.x - bounds!.left, desktopScale)
 
-                const pointerY = physicalToDesktopPixels(motion.clientY - bounds!.top, desktopScale)
+                const pointerY = physicalToDesktopPixels(motion.y - bounds!.top, desktopScale)
 
                 const ratio = Math.min(Math.max((pointerX - origin.x) / origin.width, 0), 1)
 
@@ -324,9 +392,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 current = { ...origin }
 
-                start.pointerX = motion.clientX
+                start.pointerX = motion.x
 
-                start.pointerY = motion.clientY
+                start.pointerY = motion.y
 
                 onMove?.(origin.x, origin.y)
 
@@ -376,15 +444,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
             renderGesture()
         }
 
-        function release(motion: globalThis.PointerEvent) {
+        function release(motion: PresentationMovePoint, committed: boolean) {
 
             if (renderFrame) cancelAnimationFrame(renderFrame)
-
-            handle.removeEventListener("pointermove", move)
-
-            handle.removeEventListener("pointerup", release)
-
-            handle.removeEventListener("pointercancel", release)
 
             // A tiled press that never crossed the threshold changed
             // nothing: the render returns to the tile it never left.
@@ -396,7 +458,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 return
             }
 
-            const term = moved && edge === null && motion.type === "pointerup" ? snapTerm(motion) : null
+            const term = moved && edge === null && committed ? snapTerm(motion) : null
 
             // The outcome and the gesture's end land in one batch: the
             // record updates as the gesture stops overriding it, so the
@@ -407,7 +469,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 onSnap?.(term.position, term.size)
             }
 
-            else if (moved && motion.type === "pointerup") {
+            else if (moved && committed) {
 
                 geometryMotion.finishGesture()
 
@@ -421,18 +483,30 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             }
 
-            else if (motion.type === "pointercancel") geometryMotion.cancelGesture()
+            else if (!committed) geometryMotion.cancelGesture()
 
             else geometryMotion.finishGesture()
 
             setGesture(null)
         }
 
-        handle.addEventListener("pointermove", move)
-
-        handle.addEventListener("pointerup", release)
-
-        handle.addEventListener("pointercancel", release)
+        if (handle) {
+            const movePointer = (motion: globalThis.PointerEvent) => move({ x: motion.clientX, y: motion.clientY })
+            const releasePointer = (motion: globalThis.PointerEvent) => {
+                handle.removeEventListener("pointermove", movePointer)
+                handle.removeEventListener("pointerup", releasePointer)
+                handle.removeEventListener("pointercancel", releasePointer)
+                release({ x: motion.clientX, y: motion.clientY }, motion.type === "pointerup")
+            }
+            handle.addEventListener("pointermove", movePointer)
+            handle.addEventListener("pointerup", releasePointer)
+            handle.addEventListener("pointercancel", releasePointer)
+        }
+        else receive?.({
+            update: move,
+            end(point) { release(point, true) },
+            cancel() { release(pointer, false) }
+        })
 
         setGesture({ origin, current, zone, shown })
     }
@@ -446,6 +520,22 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, gesture?.current)
 
     return <>
+
+        {externalMoveActive && createPortal(<div
+            data-window-move-capture
+            ref={element => { if (element) externalMove.current?.markReady() }}
+            className="fixed inset-0 touch-none select-none cursor-move"
+            style={{ zIndex: 2147483647 }}
+            onPointerMove={event => {
+                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+                    try { event.currentTarget.setPointerCapture(event.pointerId) }
+                    catch { /* The full-viewport capture surface still owns in-bounds movement. */ }
+                }
+                externalMove.current?.pointer.update({ x: event.clientX, y: event.clientY })
+            }}
+            onPointerUp={event => finishExternalMove({ x: event.clientX, y: event.clientY })}
+            onPointerCancel={() => finishExternalMove(null)}
+        />, document.body)}
 
         {/* The snap preview and its result resolve the same edge contacts. */}
         {gesture?.shown && <SnapPreview
@@ -624,9 +714,6 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     /** Whether mounting this element represents a newly opened Window. */
     entering?: boolean
 
-    /** Default transaction used by presentation operations. */
-    transaction?: WindowTransaction
-
     position?: Position
 
     size?: Size
@@ -640,6 +727,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     onPresentationAnimationComplete?: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
     onPresentationRepresentation?: (representation: PresentationGeometryRepresentation | null) => void
+
+    onPresentationMoveGesture?: (controller: PresentationMoveGestureController | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize
@@ -662,4 +751,16 @@ interface Gesture {
     zone: Snap | null
 
     shown: Snap | null
+}
+
+interface ActivePointerGesture {
+    update(point: PresentationMovePoint): void
+    end(point: PresentationMovePoint): void
+    cancel(): void
+}
+
+interface ExternalMove {
+    pointer: ActivePointerGesture
+    markReady: () => void
+    finish: () => void
 }

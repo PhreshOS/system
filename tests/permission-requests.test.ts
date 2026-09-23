@@ -22,8 +22,9 @@ test("permission requests contract", async () => {
       let whilePending: (() => void) | undefined
       let dialogProgram: Program | null = null
 
-      const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic,
-          new Window({ title: "Client", header: true, surface: true, transaction: false, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false))
+      const window = new Window()
+      window.start({ title: "Client", header: true, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false)
+      const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic, window)
       process.startClient(false)
 
       const authManager = {

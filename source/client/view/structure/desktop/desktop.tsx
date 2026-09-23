@@ -128,8 +128,6 @@ export default function Workspace() {
 
             layer={presentation.layer}
 
-            transaction={presentation.transaction}
-
             icon={icon(record)}
 
             position={presentation.position}
@@ -145,6 +143,8 @@ export default function Workspace() {
             onPresentationAnimationComplete={(kind, revision) => windows.presentation.complete(record.identity, kind, revision)}
 
             onPresentationRepresentation={windows.presentation.represent}
+
+            onPresentationMoveGesture={windows.presentation.registerMoveGesture}
 
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.

@@ -355,20 +355,6 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
-    @Subscribe("/change-surface")
-    @Publish("/processes", "inbound")
-    protected async changeSurfaceHandle(payload: { identity: string, window: WindowSnapshot } | null) {
-
-        return this.followed(payload)
-    }
-
-    @Subscribe("/change-transaction")
-    @Publish("/processes", "inbound")
-    protected async changeTransactionHandle(payload: { identity: string, window: WindowSnapshot } | null) {
-
-        return this.followed(payload)
-    }
-
     @Subscribe("/maximize")
     @Publish("/processes", "inbound")
     protected async maximizeHandle(payload: { identity: string, window: WindowSnapshot } | null) {

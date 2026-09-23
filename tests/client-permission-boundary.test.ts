@@ -4,6 +4,12 @@ import type AuthManager from "@client/core/link-manager/auth-manager/auth-manage
 import host from "@client/view/components/desktop-host/host"
 import { permissionCatalog } from "@server/core/permissions"
 
+function moveCoordinates() {
+    return {
+        point: (point: { x: number, y: number }) => point
+    } as never
+}
+
 test("Client Program creation requires all before reaching the creation boundary", async () => {
     let permissions: Permissions = { programs: [] }
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
@@ -19,7 +25,7 @@ test("Client Program creation requires all before reaching the creation boundary
         processManager: { processes: new Map([["caller", { identity: "caller", program: program.identity }]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => null, {} as never)
+    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
     const source = { identity: "created" }
     for (const operation of ["host-program-create", "host-program-force-create"]) {
         await expect(answer(operation, source)).rejects.toThrow("Execution is not permitted")
@@ -47,7 +53,7 @@ test("Program and Process discovery exposes only the accessible scope", async ()
         processManager: { processes: new Map([[current.identity, current], [hidden.identity, hidden]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, {} as never)
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
 
     await expect(answer("host-program-list")).resolves.toEqual([[expect.objectContaining({ identity: owner.identity })]])
     await expect(answer("host-process-list")).resolves.toEqual([[expect.objectContaining({ identity: current.identity })]])
@@ -87,7 +93,7 @@ test("Program permission reads and requests require Program access while direct 
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions),
         requestPermission
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, {} as never)
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
     const target = { identity: outside.identity, reference: outside.reference }
 
     await expect(answer("program-permissions", target, "get", "network")).resolves.toEqual([["https://example.com"]])
@@ -149,7 +155,7 @@ test.each([
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", {} as never)
+    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", moveCoordinates(), {} as never)
     const key = { program: owningProgram, process: "main", endpoint: "server" } as const
     const operations = [
             ["service-available", key],
@@ -190,7 +196,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", {} as never)
+    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", moveCoordinates(), {} as never)
 
     await expect(answer("host-service-list")).resolves.toEqual([[]])
     await expect(answer("host-service-search", "main")).resolves.toEqual([[]])

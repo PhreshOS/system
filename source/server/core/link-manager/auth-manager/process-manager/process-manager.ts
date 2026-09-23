@@ -164,6 +164,10 @@ export default class ProcessManager extends TheLink {
 
     private mutableWindowOf(identity: string) {
 
+        const process = this.find(identity)
+
+        if (!process.client) throw new Error("This Client Endpoint is not running")
+
         const window = this.windowOf(identity)
 
         return window
@@ -175,13 +179,14 @@ export default class ProcessManager extends TheLink {
     public windowSnapshot(identity: string): WindowState {
 
         const process = this.find(identity)
+
+        if (!process.client) throw new Error("This Client Endpoint is not running")
+
         const window = this.windowOf(identity)
 
         return Object.freeze({
             title: window.title,
             header: window.header,
-            surface: window.surface,
-            transaction: window.transaction,
             position: window.position,
             size: window.size,
             minimized: window.minimized,
@@ -945,11 +950,21 @@ export default class ProcessManager extends TheLink {
         return target ? access.canProcess(target) : false
     }
 
-    private window(shape: Shape) {
+    private window() {
 
-        const shown = { title: shape.title, header: shape.header, surface: shape.surface, transaction: shape.transaction, layer: shape.layer }
+        return new Window()
+    }
 
-        return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
+    private startWindow(window: Window, shape: Shape) {
+
+        window.start(
+            { title: shape.title, header: shape.header, layer: shape.layer },
+            shape.position,
+            shape.size,
+            ++this.highest,
+            shape.minimize,
+            shape.maximize
+        )
     }
 
     private readonly layerClaims = new Map<SerializedClientLayer, Promise<unknown>>()
@@ -1021,7 +1036,7 @@ export default class ProcessManager extends TheLink {
         // do not hear about it.
         const front = shape && this.front(shape.layer)
 
-        const window = registration?.window ? this.window(registration.window) : shape ? this.window(shape) : null
+        const window = registration?.window || shape ? this.window() : null
 
         const process = new Process(
 
@@ -1061,7 +1076,10 @@ export default class ProcessManager extends TheLink {
             // order: Process creation, endpoint start, endpoint stop, Process exit.
             await this.transition(process, async () => {
 
-                if (client && window) this.activateClient(process, launch.client?.service ?? false)
+                if (client && window && shape) {
+                    this.startWindow(window, shape)
+                    this.activateClient(process, launch.client?.service ?? false)
+                }
 
                 if (runtime) this.activateServer(process, runtime, launch.server?.service ?? false)
 
@@ -1084,7 +1102,7 @@ export default class ProcessManager extends TheLink {
 
                 registration?.created?.(process)
 
-                if (window) this.settleFront(window.layer, front)
+                if (process.client && window) this.settleFront(window.layer, front)
 
                 if (process.server) await this.serverStarted(process)
 
@@ -1284,9 +1302,7 @@ export default class ProcessManager extends TheLink {
 
         const shape = this.authManager.programManager.clientShape(process.program, launch)
 
-        const layer = launch.layer ?? process.clientEndpoint?.window.layer ?? shape.layer
-
-        return await this.serializeClientLayer(layer, () => this.startClientInLayer(identity, launch, shape))
+        return await this.serializeClientLayer(shape.layer, () => this.startClientInLayer(identity, launch, shape))
     }
 
     private async startClientInLayer(identity: string, launch: ClientLaunch, shape: StandardShape) {
@@ -1307,7 +1323,9 @@ export default class ProcessManager extends TheLink {
 
             if (!window) throw new Error("This Program declared no Client Endpoint")
 
-            this.applyClientLaunch(process, window, shape, launch)
+            // Every Client execution owns a fresh authoritative Window. No
+            // value from the previous execution is available to inherit.
+            this.startWindow(window, shape)
 
             const before = this.front(window.layer)
 
@@ -1336,42 +1354,6 @@ export default class ProcessManager extends TheLink {
         })
 
         return identity
-    }
-
-    /** Explicit restart values replace their retained authoritative counterparts. */
-    private applyClientLaunch(process: Process, window: Window, shape: StandardShape, launch: ClientLaunch) {
-
-        if (launch.title !== undefined && window.setTitle(shape.title)) this.said(process.identity, "changeTitle", window.title)
-
-        if (launch.header !== undefined && window.setHeader(shape.header)) this.said(process.identity, "changeHeader", window.header)
-
-        if (launch.surface !== undefined && window.setSurface(shape.surface)) this.said(process.identity, "changeSurface", window.surface)
-
-        if (launch.transaction !== undefined && window.setTransaction(shape.transaction)) this.said(process.identity, "changeTransaction", window.transaction)
-
-        if (launch.position !== undefined && launch.size !== undefined) {
-            const changed = window.setGeometry({ ...shape.position, ...shape.size })
-            if (changed.moved || changed.resized) {
-                if (changed.moved) this.said(process.identity, "move", window.position)
-                if (changed.resized) this.said(process.identity, "resize", window.size)
-            }
-        }
-        else {
-            if (launch.position !== undefined && window.move(shape.position)) this.said(process.identity, "move", window.position)
-            if (launch.size !== undefined && window.resize(shape.size)) this.said(process.identity, "resize", window.size)
-        }
-
-        if (launch.minimize !== undefined && window.minimized !== shape.minimize) {
-            window.minimized = shape.minimize
-            this.said(process.identity, "minimize", window.minimized)
-        }
-
-        if (launch.maximize !== undefined && window.maximized !== shape.maximize) {
-            window.maximized = shape.maximize
-            this.said(process.identity, "maximize", window.maximized)
-        }
-
-        if (launch.layer !== undefined) window.layer = shape.layer
     }
 
     public async stopClient(identity: string) {
@@ -2349,24 +2331,6 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
-        if (word === "setSurface") {
-
-            const target = heldWindow(rest[0]).process
-
-            await this.system.setWindowSurface(target, rest[1] as never)
-
-            return [target.identity]
-        }
-
-        if (word === "setTransaction") {
-
-            const target = heldWindow(rest[0]).process
-
-            await this.system.setWindowTransaction(target, rest[1] as never)
-
-            return [target.identity]
-        }
-
         if (word === "raise") {
 
             const target = heldWindow(rest[0]).process
@@ -3270,30 +3234,6 @@ export default class ProcessManager extends TheLink {
         return await this.publishWindowChange("/change-header", identity, window)
     }
 
-    @Subscribe("/set-surface")
-    public async setSurface(identity: string, surface: import("@phreshos/core").WindowSurface) {
-
-        const window = this.mutableWindowOf(identity)
-
-        if (!window.setSurface(surface)) return { identity, window }
-
-        this.said(identity, "changeSurface", window.surface)
-
-        return await this.publishWindowChange("/change-surface", identity, window)
-    }
-
-    @Subscribe("/set-transaction")
-    public async setTransaction(identity: string, transaction: import("@phreshos/core").WindowTransaction) {
-
-        const window = this.mutableWindowOf(identity)
-
-        if (!window.setTransaction(transaction)) return { identity, window }
-
-        this.said(identity, "changeTransaction", window.transaction)
-
-        return await this.publishWindowChange("/change-transaction", identity, window)
-    }
-
     // To the front of its own layer, and that is the whole of it.
     //
     // It was called `focus` and it did three things: it showed a hidden
@@ -3577,10 +3517,6 @@ interface ShapeBase {
     title: string
 
     header: boolean
-
-    surface: import("@phreshos/core").WindowSurface
-
-    transaction: import("@phreshos/core").WindowTransaction
 
     position: Position
 

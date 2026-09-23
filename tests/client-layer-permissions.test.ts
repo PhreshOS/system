@@ -6,12 +6,18 @@ import SystemAccess from "@client/view/components/desktop-host/system-access"
 import host from "@client/view/components/desktop-host/host"
 import { permissionCatalog } from "@server/core/permissions"
 
+function moveCoordinates() {
+    return {
+        point: (point: { x: number, y: number }) => point
+    } as never
+}
+
 function fixture() {
     let permissions: Permissions = {}
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
         version: "0.0.0", description: null, hasAgent: false, server: null,
-        client: { sandbox: true, start: true, service: false, title: null, header: null, surface: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
+        client: { sandbox: true, start: true, service: false, title: null, header: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
         get permissions() { return permissions }
     }
     const process = { identity: "caller", reference: "process-reference", program: program.identity, name: null, startedAt: 0, options: {}, server: null, client: null }
@@ -56,7 +62,7 @@ function fixture() {
         authentication, connection, session,
         grantsPermission: async <Name extends PermissionName>(_pane: string, name: Name, values: readonly PermissionValue<Name>[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, process.identity, () => ({ size: { width: 100, height: 100 } }), () => "frame", {} as never)
+    const answer = host(auth, process.identity, () => ({ size: { width: 100, height: 100 } }), () => "frame", moveCoordinates(), {} as never)
     return {
         auth, program, process, answer, createProcess, findOrCreateProcess, startup, startEndpoint, command, connection,
         permissions(value: Permissions) { permissions = value }
@@ -148,7 +154,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
 test.each(restrictedLayers)("Client run streams authorize %s before creating an iterator", async layer => {
     const f = fixture()
     const boundary = new ClientProcessBoundary(f.process.identity, { contentWindow: null } as HTMLIFrameElement, f.auth,
-        () => ({ size: { width: 100, height: 100 } }), {} as never, { begin: vi.fn() } as never)
+        () => ({ size: { width: 100, height: 100 } }), {} as never, { begin: vi.fn(), cancelMoveGestures: vi.fn() } as never)
     const deliver = vi.spyOn(boundary, "deliver").mockResolvedValue()
     await boundary.own("frame")
     const program = { identity: f.program.identity, reference: f.program.reference }

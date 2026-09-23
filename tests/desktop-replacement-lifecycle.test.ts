@@ -17,7 +17,7 @@ function fixture(replacementLayer: DesktopReplacementLayer) {
     vi.spyOn(program, "validate").mockResolvedValue()
     vi.spyOn(other, "validate").mockResolvedValue()
     const shape = (layer: Layer = replacementLayer) => ({
-        title: "Replacement", header: layer === "window", surface: false, transaction: false,
+        title: "Replacement", header: layer === "window",
         position: { x: 20, y: 30 }, size: { width: 320, height: 240 },
         layer, minimize: false, maximize: false
     })

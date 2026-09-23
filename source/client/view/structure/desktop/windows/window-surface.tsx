@@ -3,7 +3,7 @@ import { resolveRadius, Surface, type Appearance, type Color, type MaterialOptio
 import { useLayoutEffect, useRef, useState } from "react"
 import { motion } from "motion/react"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
-import { type AppearanceColor, type WindowSurface as WindowSurfaceDefinition } from "@phreshos/core"
+import { type AppearanceColor, type WindowPresentationSurface as WindowSurfaceDefinition } from "@phreshos/core"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance } from "@phreshos/react-ui"
@@ -20,7 +20,7 @@ export default function WindowSurface({ surface, animation, onComplete }: Window
     const animated = revision !== undefined && transaction !== null
     const [hidden, setHidden] = useState(!visible)
     const completed = useRef<number | null>(null)
-    const retained = useRef<Exclude<WindowSurfaceDefinition, false>>(true)
+    const retained = useRef<VisibleWindowSurface>(true)
 
     if (surface !== false) retained.current = surface
 
@@ -74,7 +74,9 @@ interface WindowSurfaceProps {
     onComplete: (revision: number) => void
 }
 
-function surfaceColor(surface: Exclude<WindowSurfaceDefinition, false>): Color | undefined {
+type VisibleWindowSurface = Exclude<WindowSurfaceDefinition, false>
+
+function surfaceColor(surface: VisibleWindowSurface): Color | undefined {
 
     if (surface === true || surface.color === undefined) return undefined
 
@@ -83,7 +85,7 @@ function surfaceColor(surface: Exclude<WindowSurfaceDefinition, false>): Color |
         : surface.color
 }
 
-function surfaceMaterial(surface: Exclude<WindowSurfaceDefinition, false>): "none" | "full" | MaterialOptions {
+function surfaceMaterial(surface: VisibleWindowSurface): "none" | "full" | MaterialOptions {
 
     if (surface === true || surface.material === undefined) return "full"
 
@@ -95,7 +97,7 @@ function surfaceMaterial(surface: Exclude<WindowSurfaceDefinition, false>): "non
 const appearanceColors = ["background", "foreground", "default", "primary", "secondary", "success", "warning", "danger", "info"] as const satisfies readonly AppearanceColor[]
 
 /** Resolves the one boundary shared by Desktop paint and standard-window content. */
-export function windowSurfaceRadius(surface: Exclude<WindowSurfaceDefinition, false>, appearance: Appearance) {
+export function windowSurfaceRadius(surface: VisibleWindowSurface, appearance: Appearance) {
 
     const radius = typeof surface === "object" ? surface.radius : undefined
 

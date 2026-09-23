@@ -1,152 +1,48 @@
-import { type WindowSnapshot, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { type WindowSurface, type WindowGeometry, type WindowLayer, type WindowState, type WindowTransaction } from "@phreshos/core"
+import type { WindowSnapshot, Position, Size } from "@server/core/link-manager/auth-manager/process-manager/window"
+import type { WindowGeometry, WindowLayer, WindowState } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
-/**
- * How a process is shown, as this side holds it. The values are the core's
- * own — pixels or linear expressions of relative and pixel terms — and every
- * operation is a request: the truth changes on the server and the echo lands
- * back here, so a window never moves because a session wished it.
- *
- * Its own instance, rebuilt from what crossed. It shares no code with
- * the core's window; they are alike because they are the same idea.
- */
-export default class Window implements Omit<WindowState, "front"> {
+/** Desktop projection of the authoritative Window for the current Client run. */
+export default class Window {
+    private state: WindowSnapshot | null = null
 
-    public readonly processManager: ProcessManager
-
-    public readonly process: string
-
-    public position: Position
-
-    public size: Size
-
-    public depth: number
-
-    public minimized: boolean
-
-    public maximized: boolean
-
-    // What is shown on it, born from its program when the window was
-    // made. Not looked up again: how a thing is shown is not a fact
-    // about whether its program is installed. Changeable, because the
-    // window owns it.
-    public title: string
-
-    public header: boolean
-
-    public surface: WindowSurface
-
-    public transaction: WindowTransaction
-
-    // The authoritative Desktop layer.
-    public layer: WindowLayer
-
-    public constructor(processManager: ProcessManager, process: string, payload: WindowSnapshot) {
-
-        this.title = payload.title
-
-        this.header = payload.header
-
-        this.surface = payload.surface
-
-        this.transaction = payload.transaction
-
-        this.layer = payload.layer
-
-        this.processManager = processManager
-
-        this.process = process
-
-        this.position = payload.position
-
-        this.size = payload.size
-
-        this.depth = payload.depth
-
-        this.minimized = payload.minimized
-
-        this.maximized = payload.maximized
-
+    public constructor(
+        public readonly processManager: ProcessManager,
+        public readonly process: string,
+        payload: WindowSnapshot | null
+    ) {
+        if (payload) this.start(payload)
     }
 
-    // What the echo carries, applied whole: one shape for any change.
-    public follow(payload: WindowSnapshot) {
+    public start(payload: WindowSnapshot) { this.state = { ...payload } }
+    public stop() { this.state = null }
+    public follow(payload: WindowSnapshot) { this.start(payload) }
 
-        this.title = payload.title
+    public get live() { return this.state !== null }
+    public get position() { return this.current.position }
+    public get size() { return this.current.size }
+    public get depth() { return this.current.depth }
+    public get minimized() { return this.current.minimized }
+    public get maximized() { return this.current.maximized }
+    public get title() { return this.current.title }
+    public get header() { return this.current.header }
+    public get layer(): WindowLayer { return this.current.layer }
 
-        this.header = payload.header
-
-        this.surface = payload.surface
-
-        this.transaction = payload.transaction
-
-        this.layer = payload.layer
-
-        this.position = payload.position
-
-        this.size = payload.size
-
-        this.depth = payload.depth
-
-        this.minimized = payload.minimized
-
-        this.maximized = payload.maximized
-
+    private get current() {
+        if (!this.state) throw new Error("This Client Endpoint is not running")
+        return this.state
     }
 
-    public async move(position: Position) {
+    public stateSnapshot(): Omit<WindowState, "front"> & { depth: number } { return { ...this.current } }
 
-        await this.processManager.$outbound.publish("/move", this.process, position)
-    }
-
-    public async resize(size: Size) {
-
-        await this.processManager.$outbound.publish("/resize", this.process, size)
-    }
-
-    public async setGeometry(geometry: WindowGeometry) {
-
-        await this.processManager.$outbound.publish("/set-geometry", this.process, geometry)
-    }
-
-    public async setTitle(title: string) {
-
-        await this.processManager.$outbound.publish("/set-title", this.process, title)
-    }
-
-    public async setHeader(header: boolean) {
-
-        await this.processManager.$outbound.publish("/set-header", this.process, header)
-    }
-
-    public async setSurface(surface: WindowSurface) {
-
-        await this.processManager.$outbound.publish("/set-surface", this.process, surface)
-    }
-
-    public async setTransaction(transaction: WindowTransaction) {
-
-        await this.processManager.$outbound.publish("/set-transaction", this.process, transaction)
-    }
-
-    // To the front of its own layer, and nothing else. A hidden window
-    // raised stays hidden and appears at its new place in the order when
-    // it is shown.
-    public async raise() {
-
-        await this.processManager.$outbound.publish("/raise", this.process)
-    }
-
-    public async maximize(maximized: boolean) {
-
-        await this.processManager.$outbound.publish("/maximize", this.process, maximized)
-    }
-
-    public async minimize(minimized: boolean) {
-
-        await this.processManager.$outbound.publish("/minimize", this.process, minimized)
-    }
+    public async move(position: Position) { await this.processManager.$outbound.publish("/move", this.process, position) }
+    public async resize(size: Size) { await this.processManager.$outbound.publish("/resize", this.process, size) }
+    public async setGeometry(geometry: WindowGeometry) { await this.processManager.$outbound.publish("/set-geometry", this.process, geometry) }
+    public async setTitle(title: string) { await this.processManager.$outbound.publish("/set-title", this.process, title) }
+    public async setHeader(header: boolean) { await this.processManager.$outbound.publish("/set-header", this.process, header) }
+    public async raise() { await this.processManager.$outbound.publish("/raise", this.process) }
+    public async maximize(maximized: boolean) { await this.processManager.$outbound.publish("/maximize", this.process, maximized) }
+    public async minimize(minimized: boolean) { await this.processManager.$outbound.publish("/minimize", this.process, minimized) }
 }
 
 export type { Position, Size }

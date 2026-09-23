@@ -1585,10 +1585,6 @@ export default class ProgramManager extends TheLink {
 
             header: asked.header ?? client.header ?? defaults.header,
 
-            surface: asked.surface ?? client.surface ?? defaults.surface,
-
-            transaction: asked.transaction ?? client.transaction ?? defaults.transaction,
-
             position: asked.position ?? client.position ?? { x: 120 + shift, y: 80 + shift },
 
             size: asked.size ?? client.size ?? { width: 520, height: 340 },

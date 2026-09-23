@@ -1,4 +1,4 @@
-import { type AppearanceTransaction, type Easing, type WindowTransaction } from "@phreshos/core"
+import { type AppearanceTransaction, type Easing, type WindowPresentationTransaction } from "@phreshos/core"
 import { type Transition } from "motion/react"
 
 const easings: Record<Exclude<Easing, readonly number[]>, Transition["ease"]> = {
@@ -19,12 +19,10 @@ export function motionTransition(transaction: AppearanceTransaction, reduced = f
     }
 }
 
-/** Resolves a Window transaction against the current Appearance transaction. */
-export function resolveWindowTransaction(transaction: WindowTransaction, appearance: AppearanceTransaction): AppearanceTransaction | null {
+/** Resolves an optional presentation timing against the current Appearance. */
+export function resolveWindowTransaction(transaction: WindowPresentationTransaction | undefined, appearance: AppearanceTransaction): AppearanceTransaction {
 
-    if (transaction === false) return null
-
-    if (transaction === true) return appearance
+    if (transaction === undefined) return appearance
 
     if (typeof transaction === "number") return { duration: transaction, easing: appearance.easing }
 

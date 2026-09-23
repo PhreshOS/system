@@ -23,12 +23,13 @@ import {
 import {
     presentationSurface,
     presentationGeometry,
+    presentationMoveGestureStart,
     presentationPosition,
     presentationSize,
     presentationTransaction,
+    type PresentationMoveCoordinates,
     type WindowPresentationHost
 } from "./window-presentation"
-import { isWindowPresentationProperty, requireWindowPresentationTransactions } from "@shared/window-layers"
 import SystemAccess from "./system-access"
 import { allowsSynchronizedPermission } from "@shared/permission-state"
 
@@ -39,7 +40,7 @@ export class TransferredAnswer {
 }
 
 /** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
-export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, presentation: WindowPresentationHost) {
+export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, moveCoordinates: PresentationMoveCoordinates, presentation: WindowPresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -141,6 +142,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
     function windowOf(found: ClientProcess) {
 
         if (!found.clientEndpoint) throw new Error("This Program declared no Client Endpoint")
+
+        if (!found.client) throw new Error("This Client Endpoint is not running")
 
         return found.clientEndpoint.window
     }
@@ -826,10 +829,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                 header: shown.header,
 
-                surface: shown.surface,
-
-                transaction: shown.transaction,
-
                 position: shown.position,
 
                 size: shown.size,
@@ -865,22 +864,44 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [pane]
         }
 
-        if (word === "windowPresentationRead") {
+        if (word === "windowPresentationLayer") {
             const target = presentationProcess(args[0])
-            if (!isWindowPresentationProperty(args[1])) throw new Error("The Window presentation property does not exist")
-            return [presentation.read(target.identity, args[1])]
+            return [presentation.layer(target.identity)]
         }
 
-        const selectedTransaction = (target: ClientProcess) => {
-            const selected = presentationTransaction(args[2], args[3])
-            if (selected) requireWindowPresentationTransactions(clientOf(target).window.layer)
-            return selected
+        if (word === "windowPresentationMoveGestureBegin") {
+            const target = presentationProcess(args[0])
+            const gesture = gestureIdentity(args[1])
+            const start = presentationMoveGestureStart(args[2])
+            await presentation.beginMoveGesture(
+                target.identity,
+                gesture,
+                moveCoordinates.point(start.origin),
+                moveCoordinates.point(start.point)
+            )
+            return []
         }
+
+        if (word === "windowPresentationMoveGestureWait") {
+            const target = presentationProcess(args[0])
+            const gesture = gestureIdentity(args[1])
+            await presentation.waitMoveGesture(target.identity, gesture)
+            return []
+        }
+
+        if (word === "windowPresentationMoveGestureCancel") {
+            const target = presentationProcess(args[0])
+            const gesture = gestureIdentity(args[1])
+            presentation.cancelMoveGesture(target.identity, gesture)
+            return []
+        }
+
+        const selectedTransaction = () => presentationTransaction(args[2])
 
         if (word === "windowPresentationMove") {
 
             const target = presentationProcess(args[0])
-            await presentation.move(target.identity, presentationPosition(args[1]), selectedTransaction(target))
+            await presentation.move(target.identity, presentationPosition(args[1]), selectedTransaction())
 
             return []
         }
@@ -888,7 +909,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowPresentationResize") {
 
             const target = presentationProcess(args[0])
-            await presentation.resize(target.identity, presentationSize(args[1]), selectedTransaction(target))
+            await presentation.resize(target.identity, presentationSize(args[1]), selectedTransaction())
 
             return []
         }
@@ -896,63 +917,14 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "windowPresentationGeometry") {
 
             const target = presentationProcess(args[0])
-            await presentation.setGeometry(target.identity, presentationGeometry(args[1]), selectedTransaction(target))
+            await presentation.setGeometry(target.identity, presentationGeometry(args[1]), selectedTransaction())
 
-            return []
-        }
-
-        if (word === "windowPresentationTitle") {
-            const target = presentationProcess(args[0])
-            const title = String(args[1] ?? "").trim()
-            if (!title) throw new Error("A Window title must not be empty")
-            presentation.setTitle(target.identity, title)
-            return []
-        }
-
-        if (word === "windowPresentationHeader") {
-            const target = presentationProcess(args[0])
-            if (typeof args[1] !== "boolean") throw new Error("Window presentation header state must be true or false")
-            presentation.setHeader(target.identity, args[1])
             return []
         }
 
         if (word === "windowPresentationSurface") {
             const target = presentationProcess(args[0])
-            await presentation.setSurface(target.identity, presentationSurface(args[1]), selectedTransaction(target))
-            return []
-        }
-
-        if (word === "windowPresentationMaximize") {
-            const target = presentationProcess(args[0])
-            if (typeof args[1] !== "boolean") throw new Error("Window presentation maximize takes a boolean state")
-            await presentation.maximize(target.identity, args[1], selectedTransaction(target))
-            return []
-        }
-
-        if (word === "windowPresentationMinimize") {
-
-            const target = presentationProcess(args[0])
-
-            if (typeof args[1] !== "boolean") throw new Error("Window presentation minimize takes a boolean state")
-
-            await presentation.minimize(target.identity, args[1], selectedTransaction(target))
-
-            return []
-        }
-
-        if (word === "windowPresentationFollow") {
-
-            const target = presentationProcess(args[0])
-            await presentation.follow(target.identity, selectedTransaction(target))
-
-            return []
-        }
-
-        if (word === "windowPresentationUnfollow") {
-
-            const target = presentationProcess(args[0])
-            await presentation.unfollow(target.identity)
-
+            await presentation.setSurface(target.identity, presentationSurface(args[1]), selectedTransaction())
             return []
         }
 
@@ -976,20 +948,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             if (typeof args[1] !== "boolean") throw new Error("Window header state must be true or false")
 
             await windowOf(await permittedProcess(args[0])).setHeader(args[1])
-
-            return [pane]
-        }
-
-        if (word === "setSurface") {
-
-            await windowOf(await permittedProcess(args[0])).setSurface(args[1] as never)
-
-            return [pane]
-        }
-
-        if (word === "setTransaction") {
-
-            await windowOf(await permittedProcess(args[0])).setTransaction(args[1] as never)
 
             return [pane]
         }
@@ -1369,6 +1327,11 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         throw new Error(`The desktop does not know the word "${String(word)}"`)
     }
+}
+
+function gestureIdentity(value: unknown) {
+    if (typeof value !== "string" || value.length === 0) throw new Error("A Window move gesture identity is required")
+    return value
 }
 
 function isTrafficKind(value: unknown): value is TrafficKind {

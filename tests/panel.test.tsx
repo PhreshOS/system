@@ -51,10 +51,6 @@ test("panel contract", async () => {
   assert.match(windowPanel, /overflow:hidden/)
   assert.match(windowPanel, new RegExp(`border-radius:${resolveRadius("medium", defaultAppearance)}`))
 
-  const surfaceFreeWindow = markup(<Window layer="window" surface={false} icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
-  const surfaceFreePanel = surfaceFreeWindow.match(/<div style="([^"]*grid-template-rows:auto minmax\(0, 1fr\)[^"]*)">/)?.[1] ?? ""
-  assert.doesNotMatch(surfaceFreePanel, /border-radius:/)
-
   const bare = markup(<Window layer="over" icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
   assert.doesNotMatch(bare, /data-material/)
   assert.doesNotMatch(bare, /grid-template-rows:auto minmax\(0, 1fr\)/)

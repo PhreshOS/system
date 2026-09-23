@@ -1,52 +1,70 @@
 import {
     isRelativeValue,
-    parseWindowSurface,
-    parseWindowTransaction,
+    parseWindowPresentationSurface,
+    parseWindowPresentationTransaction,
     type Position,
     type Size,
-    type WindowSurface,
     type WindowGeometry,
-    type WindowState,
-    type WindowTransaction
+    type WindowLayer,
+    type WindowMoveGestureStart,
+    type WindowMovePoint,
+    type WindowPresentationSurface,
+    type WindowPresentationTransaction
 } from "@phreshos/core"
-import type { WindowPresentationProperty } from "@shared/window-layers"
 
 export type PresentationAnimation = Readonly<{
     revision: number
-    transaction: WindowTransaction
-}>
-
-/** Values this Desktop relies on for one Client Window, not measured rendered output. */
-export type WindowPresentationState = WindowState & Readonly<{
-    depth: number
-    surfaceAnimation: PresentationAnimation | null
-    geometryAnimation: PresentationAnimation | null
-    minimizeAnimation: PresentationAnimation | null
+    transaction?: WindowPresentationTransaction
 }>
 
 export type PresentationTransactionRequest = Readonly<{
-    transaction: WindowTransaction
+    transaction?: WindowPresentationTransaction
     wait: boolean
 }>
 
-/** The only interface through which an iframe changes or observes its Desktop presentation. */
+export type PresentationMovePoint = Readonly<{ x: number, y: number }>
+
+export interface PresentationMoveCoordinates {
+    point(point: WindowMovePoint): PresentationMovePoint
+}
+
+export interface PresentationMoveGestureController {
+    begin(origin: PresentationMovePoint, point: PresentationMovePoint): PresentationMoveGesture
+    cancel(): void
+}
+
+export interface PresentationMoveGesture {
+    ready: Promise<void>
+    finished: Promise<void>
+    cancel(): void
+}
+
+/** Local commands available to the current Client representation. */
 export interface WindowPresentationHost {
-    /** Begins a new iframe presentation from the authoritative Window state. */
     begin(identity: string): void
-    read(identity: string, property: WindowPresentationProperty): unknown
+    layer(identity: string): WindowLayer
+    beginMoveGesture(identity: string, gesture: string, origin: PresentationMovePoint, point: PresentationMovePoint): Promise<void>
+    waitMoveGesture(identity: string, gesture: string): Promise<void>
+    cancelMoveGesture(identity: string, gesture: string): void
+    cancelMoveGestures(identity: string): void
     move(identity: string, position: Position, transaction?: PresentationTransactionRequest): Promise<void>
     resize(identity: string, size: Size, transaction?: PresentationTransactionRequest): Promise<void>
     setGeometry(identity: string, geometry: WindowGeometry, transaction?: PresentationTransactionRequest): Promise<void>
-    maximize(identity: string, maximized: boolean, transaction?: PresentationTransactionRequest): Promise<void>
-    minimize(identity: string, minimized: boolean, transaction?: PresentationTransactionRequest): Promise<void>
-    follow(identity: string, transaction?: PresentationTransactionRequest): Promise<void>
-    unfollow(identity: string): Promise<void>
-    setTitle(identity: string, title: string): void
-    setHeader(identity: string, header: boolean): void
-    setSurface(identity: string, surface: WindowSurface, transaction?: PresentationTransactionRequest): Promise<void>
+    setSurface(identity: string, surface: WindowPresentationSurface, transaction?: PresentationTransactionRequest): Promise<void>
     raise(identity: string): void
-    observe(identity: string, event: string | null, listener: (event: string, value: unknown) => void): () => void
-    complete(identity: string, kind: "geometry" | "minimize" | "surface", revision: number): void
+    complete(identity: string, kind: "geometry" | "surface", revision: number): void
+}
+
+export function presentationMovePoint(value: unknown): WindowMovePoint {
+    const record = plain(value, "Window move point")
+    if (typeof record.x !== "number" || !Number.isFinite(record.x)) throw new Error("Window move point x must be a finite number")
+    if (typeof record.y !== "number" || !Number.isFinite(record.y)) throw new Error("Window move point y must be a finite number")
+    return Object.freeze({ x: record.x, y: record.y })
+}
+
+export function presentationMoveGestureStart(value: unknown): WindowMoveGestureStart {
+    const record = plain(value, "Window move gesture start")
+    return Object.freeze({ origin: presentationMovePoint(record.origin), point: presentationMovePoint(record.point) })
 }
 
 export function presentationPosition(value: unknown): Position {
@@ -73,13 +91,17 @@ export function presentationGeometry(value: unknown): WindowGeometry {
 }
 
 export function presentationSurface(value: unknown) {
-    return parseWindowSurface(value)
+    return parseWindowPresentationSurface(value)
 }
 
-export function presentationTransaction(value: unknown, wait: unknown): PresentationTransactionRequest | undefined {
-    if (value === undefined) return undefined
-    if (wait !== undefined && typeof wait !== "boolean") throw new Error("A Window presentation wait value must be true or false")
-    return Object.freeze({ transaction: parseWindowTransaction(value), wait: wait === true })
+export function presentationTransaction(value: unknown): PresentationTransactionRequest | undefined {
+    if (value === null || value === undefined) return undefined
+    const selected = plain(value, "Window presentation transaction selection")
+    if (typeof selected.wait !== "boolean") throw new Error("A Window presentation wait value must be true or false")
+    return Object.freeze({
+        ...selected.transaction === undefined ? {} : { transaction: parseWindowPresentationTransaction(selected.transaction) },
+        wait: selected.wait
+    })
 }
 
 function valueTerm(value: unknown, name: string) {

@@ -4,8 +4,8 @@ import host, { TransferredAnswer } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceAddress, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceAddress, type ShellOptions } from "@phreshos/core"
-import { type WindowPresentationHost } from "./window-presentation"
+import { isServiceAddress, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceAddress, type ShellOptions, type WindowMovePoint } from "@phreshos/core"
+import { type PresentationMoveCoordinates, type PresentationMovePoint, type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 import SystemAccess from "./system-access"
@@ -25,7 +25,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly presentation: WindowPresentationHost
 
-    private readonly presentationSubscriptions = new Map<string, () => void>()
+    private readonly moveCoordinates: PresentationMoveCoordinates
 
     private readonly systemAccess: SystemAccess
 
@@ -83,6 +83,8 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.presentation = presentation
 
+        this.moveCoordinates = new FrameMoveCoordinates(element)
+
         this.systemAccess = new SystemAccess(authManager, pane)
 
         this.$outbound.forwardTo((route, ...values) => {
@@ -136,6 +138,8 @@ export default class ClientProcessBoundary extends TheLink {
     }
 
     public async release() {
+
+        this.presentation.cancelMoveGestures(this.pane)
 
         const owner = this.leased
 
@@ -288,7 +292,14 @@ export default class ClientProcessBoundary extends TheLink {
 
     private runHost(word: unknown, args: unknown[]) {
 
-        const operation = () => host(this.authManager, this.pane, this.viewport, () => this.owner, this.presentation)(word, ...args)
+        const operation = () => host(
+            this.authManager,
+            this.pane,
+            this.viewport,
+            () => this.owner,
+            this.moveCoordinates,
+            this.presentation
+        )(word, ...args)
 
         return hostRegistrationOperation(word)
             ? this.orderHostRegistration(operation)
@@ -492,12 +503,6 @@ export default class ClientProcessBoundary extends TheLink {
             const description = { kind, route, event, subject }
 
             this.subscriptions.set(subscription, description)
-
-            if (presentationSubscription(description)) {
-                this.presentationSubscriptions.set(subscription, this.presentation.observe(this.pane, event, (word, value) => {
-                    this.deliver("presentation", word, value).catch(() => undefined)
-                }))
-            }
 
             if (!desktopOwnedSubscription(description)) this.addTraffic(kind, route, event)
 
@@ -920,10 +925,6 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.subscriptions.delete(subscription)
 
-        this.presentationSubscriptions.get(subscription)?.()
-
-        this.presentationSubscriptions.delete(subscription)
-
         if (this.desktopPreferencesSubscriptions.delete(subscription) && this.desktopPreferencesSubscriptions.size === 0) {
 
             this.stopDesktopPreferences?.()
@@ -1033,10 +1034,6 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.appearanceSubscriptions.clear()
 
-        for (const stop of this.presentationSubscriptions.values()) stop()
-
-        this.presentationSubscriptions.clear()
-
         this.stopDesktopPreferences?.()
 
         this.stopDesktopPreferences = null
@@ -1058,6 +1055,23 @@ export default class ClientProcessBoundary extends TheLink {
         this.pending.length = 0
     }
 
+}
+
+export function frameMovePoint(frame: HTMLIFrameElement, point: PresentationMovePoint): PresentationMovePoint {
+    const bounds = frame.getBoundingClientRect()
+    // Frame-local CSS pixels must enter the same physical viewport coordinate
+    // space as pointer events captured directly by the Desktop.
+    const scaleX = frame.clientWidth === 0 ? 1 : bounds.width / frame.clientWidth
+    const scaleY = frame.clientHeight === 0 ? 1 : bounds.height / frame.clientHeight
+    return { x: bounds.left + point.x * scaleX, y: bounds.top + point.y * scaleY }
+}
+
+export class FrameMoveCoordinates implements PresentationMoveCoordinates {
+    public constructor(private readonly frame: HTMLIFrameElement) {}
+
+    public point(point: WindowMovePoint) {
+        return frameMovePoint(this.frame, point)
+    }
 }
 
 function storagePath(value: unknown) {
@@ -1182,14 +1196,9 @@ function appearanceSubscription(subscription: EndpointSubscription) {
     return subscription.kind === "publish" && subscription.route === "host-appearance" && (subscription.event === null || subscription.event === "change")
 }
 
-function presentationSubscription(subscription: EndpointSubscription) {
-
-    return subscription.kind === "publish" && subscription.route === "presentation"
-}
-
 function desktopOwnedSubscription(subscription: EndpointSubscription) {
 
-    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription) || presentationSubscription(subscription)
+    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription)
 }
 
 function directSubscription(subscription: EndpointSubscription) {

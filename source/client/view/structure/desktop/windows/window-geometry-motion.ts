@@ -1,7 +1,7 @@
 import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
-import { type AppearanceTransaction, type Position, type Size, type WindowTransaction } from "@phreshos/core"
+import { type AppearanceTransaction, type Position, type Size, type WindowPresentationTransaction } from "@phreshos/core"
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
@@ -11,7 +11,7 @@ interface WindowGeometryMotionOptions {
     position: Position
     size: Size
     animation?: PresentationAnimation | null
-    transaction?: WindowTransaction | null
+    transaction?: WindowPresentationTransaction | null
     immediate: boolean
     minimumSize?: WindowSurfaceSize
     onComplete?: (revision: number) => void

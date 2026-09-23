@@ -22,18 +22,7 @@ test("client sandbox contract", async () => {
 
       {} as HostTraffic,
 
-      new Window(
-
-          { title: "Client", header: true, surface: true, transaction: false, layer: "window" },
-
-          { x: 0, y: 0 },
-
-          { width: 640, height: 480 },
-
-          1,
-
-          false
-      )
+      liveWindow()
   )
 
   sandboxed.startClient(false)
@@ -48,15 +37,15 @@ test("client sandbox contract", async () => {
       { server: null, client: null, options: {} },
       null,
       {} as HostTraffic,
-      new Window(
-          { title: "Client", header: true, surface: true, transaction: false, layer: "window" },
-          { x: 0, y: 0 },
-          { width: 640, height: 480 },
-          1,
-          false
-      )
+      liveWindow()
   )
   trusted.startClient(false)
 
   assert.equal(trusted.hosted().client?.sandbox, false)
 }, 120_000)
+
+function liveWindow() {
+  const window = new Window()
+  window.start({ title: "Client", header: true, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false)
+  return window
+}
