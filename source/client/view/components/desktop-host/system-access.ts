@@ -156,7 +156,7 @@ export default class SystemAccess {
 
     private async connectionScope(): Promise<"all" | ConnectionSnapshot | null> {
 
-        if (allowsSynchronizedPermission(this.permissions(), "connections", [])) return "all"
+        if (allowsSynchronizedPermission(this.permissions(), "authentication", [])) return "all"
         if (!allowsSynchronizedPermission(this.permissions(), "desktopConnection", [])) return null
 
         return await this.currentConnection()

@@ -56,24 +56,6 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         animator.current!.stop()
     }
 
-    function listen(changed: () => void) {
-        let active = true
-        let queued = false
-        const notify = () => {
-            if (queued) return
-            queued = true
-            queueMicrotask(() => {
-                queued = false
-                if (active) changed()
-            })
-        }
-        const cleanup = [x, y, width, height].map(value => value.on("change", notify))
-        return () => {
-            active = false
-            for (const release of cleanup) release()
-        }
-    }
-
     function completeGestureRestore() {
 
         if (!restoringGesture.current) return
@@ -259,7 +241,6 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         style: { x, y, width: layoutWidth, height: layoutHeight, scaleX, scaleY, transformOrigin } satisfies MotionStyle,
         read,
         present,
-        listen,
         beginGesture,
         updateGesture,
         restoreGesture,

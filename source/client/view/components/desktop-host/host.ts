@@ -21,7 +21,7 @@ import {
     type ProgramIconSize
 } from "@phreshos/core"
 import {
-    presentationFrame,
+    presentationSurface,
     presentationGeometry,
     presentationPosition,
     presentationSize,
@@ -189,25 +189,50 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [visible.map(sdkProgram)]
         }
 
-        if (typeof word === "string" && word.startsWith("host-connection-")) {
+        if (typeof word === "string" && word.startsWith("host-authentication-")) {
 
-            const operation = word.slice("host-connection-".length) as "list" | "find" | "state" | "session" | "sign-in"
+            const operation = word.slice("host-authentication-".length) as "state" | "requirements" | "set-credentials" | "sign-out-all-sessions" | "connections" | "connection" | "sessions" | "session"
 
-            if (operation === "list") {
+            if (operation === "state" || operation === "requirements" || operation === "set-credentials" || operation === "sign-out-all-sessions") {
 
-                const connections = await authManager.connection("list") as { identity: string }[]
+                await access.require("authentication", [])
+
+                return [await authManager.authentication(operation, args[0])]
+            }
+
+            if (operation === "connections") {
+
+                const connections = await authManager.authentication("connections") as { identity: string }[]
 
                 return [await access.connections(connections)]
             }
 
+            if (operation === "sessions") {
+
+                const sessions = await authManager.authentication("sessions") as { identity: string }[]
+
+                return [await access.sessions(sessions)]
+            }
+
             const identity = String(args[0])
 
-            if (operation === "find") {
+            if (operation === "connection") {
 
-                const connection = await authManager.connection("find", identity) as { identity: string } | null
+                const connection = await authManager.authentication("connection", identity) as { identity: string } | null
 
                 return [connection && await access.canConnection(connection.identity) ? connection : null]
             }
+
+            const session = await authManager.authentication("session", identity) as { identity: string } | null
+
+            return [session && await access.canSession(session.identity) ? session : null]
+        }
+
+        if (typeof word === "string" && word.startsWith("host-connection-")) {
+
+            const operation = word.slice("host-connection-".length) as "state" | "session" | "sign-in"
+
+            const identity = String(args[0])
 
             if (!await access.canConnection(identity)) throw new Error("Connection not found")
 
@@ -216,23 +241,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (typeof word === "string" && word.startsWith("host-session-")) {
 
-            const operation = word.slice("host-session-".length) as "list" | "find" | "state" | "connections" | "sign-out"
-
-            if (operation === "list") {
-
-                const sessions = await authManager.session("list") as { identity: string }[]
-
-                return [await access.sessions(sessions)]
-            }
+            const operation = word.slice("host-session-".length) as "state" | "connections" | "sign-out"
 
             const identity = String(args[0])
-
-            if (operation === "find") {
-
-                const session = await authManager.session("find", identity) as { identity: string } | null
-
-                return [session && await access.canSession(session.identity) ? session : null]
-            }
 
             if (!await access.canSession(identity)) throw new Error("Session not found")
 
@@ -815,7 +826,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
                 header: shown.header,
 
-                frame: shown.frame,
+                surface: shown.surface,
 
                 transaction: shown.transaction,
 
@@ -905,9 +916,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
-        if (word === "windowPresentationFrame") {
+        if (word === "windowPresentationSurface") {
             const target = presentationProcess(args[0])
-            await presentation.setFrame(target.identity, presentationFrame(args[1]), selectedTransaction(target))
+            await presentation.setSurface(target.identity, presentationSurface(args[1]), selectedTransaction(target))
             return []
         }
 
@@ -969,9 +980,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [pane]
         }
 
-        if (word === "setFrame") {
+        if (word === "setSurface") {
 
-            await windowOf(await permittedProcess(args[0])).setFrame(args[1] as never)
+            await windowOf(await permittedProcess(args[0])).setSurface(args[1] as never)
 
             return [pane]
         }

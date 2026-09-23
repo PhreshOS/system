@@ -13,7 +13,7 @@ export function allowsSynchronizedPermission<Name extends PermissionName>(
     requested: readonly PermissionValue<Name>[]
 ) {
 
-    if (name === "desktopConnection" && allowsSynchronizedPermission(permissions, "connections", [])) return true
+    if (name === "desktopConnection" && allowsSynchronizedPermission(permissions, "authentication", [])) return true
 
     const assigned = permissions[name]
 

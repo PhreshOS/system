@@ -2,19 +2,16 @@ import { type Layer } from "@phreshos/core"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
-import DesktopDisplay from "./desktop-display"
+import DesktopLayers from "./layers/desktop-layers"
 import useDesktopFocus from "./desktop-focus"
 import programIcon from "./programs/program-icon"
 import ProgramAccessProbe, { type ProgramAccess } from "../../components/program-access"
-import StartMenu from "./taskbar/launcher/start-menu"
-import OverflowRow from "./taskbar/programs/overflow-row"
-import SignOut from "./taskbar/system/sign-out"
-import SystemDialogs from "./taskbar/system/system-dialogs"
-import Taskbar from "./taskbar/taskbar"
-import WindowTaskbarItem from "./taskbar/programs/window-taskbar-item"
+import DefaultShell from "./layers/shell/default-shell"
+import OverflowRow from "./layers/shell/taskbar/programs/overflow-row"
+import WindowTaskbarItem from "./layers/shell/taskbar/programs/window-taskbar-item"
 import ProcessWindow from "./windows/process-window"
 import useWindows from "../../components/window-manager/window-manager"
-import { ReadyWallpaper, WallpaperBackground } from "./wallpaper/wallpaper"
+import { ReadyWallpaper, WallpaperBackground } from "./layers/wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
 import { usePreferences, useThemedValue } from "@phreshos/react-ui"
@@ -48,7 +45,7 @@ export default function Workspace() {
     const [fileWallpaperReady, setFileWallpaperReady] = useState(false)
 
     const hasWallpaperClient = windows.records.some(record => record.client?.window.layer === "wallpaper")
-    const hasStartMenuClient = windows.records.some(record => record.client?.window.layer === "start-menu")
+    const hasShellClient = windows.records.some(record => record.client?.window.layer === "shell")
     const wallpaperReady = hasWallpaperClient || fileWallpaperReady
 
     const desktop = useRef<HTMLDivElement>(null)
@@ -127,7 +124,7 @@ export default function Workspace() {
 
             header={presentation.header}
 
-            frame={presentation.frame}
+            surface={presentation.surface}
 
             layer={presentation.layer}
 
@@ -139,7 +136,7 @@ export default function Workspace() {
 
             size={presentation.size}
 
-            frameAnimation={presentation.frameAnimation}
+            surfaceAnimation={presentation.surfaceAnimation}
 
             geometryAnimation={presentation.geometryAnimation}
 
@@ -152,6 +149,8 @@ export default function Workspace() {
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.
             paintSurfaceSize={layer === "window" ? windowSurfaceSize : undefined}
+
+            spacing={appearance.spacing}
 
             depth={presentation.depth}
 
@@ -200,69 +199,69 @@ export default function Workspace() {
         />)
     }
 
-    const taskbar = <Taskbar
+    const taskbarOrientation = appearance.taskbar.position === "top" || appearance.taskbar.position === "bottom" ? "horizontal" : "vertical"
 
-        leading={<StartMenu replacement={hasStartMenuClient ? renderWindows("start-menu") : undefined} />}
-
-        trailing={<SignOut />}
-
-        dialogs={<SystemDialogs />}
-
-        className="z-4"
-
+    const taskbarItems = <OverflowRow
+        orientation={taskbarOrientation}
+        className="h-full w-full"
+        aria-label="Open windows"
+        backwardLabel="Earlier windows"
+        forwardLabel="Later windows"
     >
 
         {/* What a press means is composed here because it is a person's
             expectation, not a system operation: the front window hides;
             another window is shown and brought forward. */}
-        <OverflowRow aria-label="Open windows" backwardLabel="Earlier windows" forwardLabel="Later windows">
+        {windows.listed.map(record => {
 
-            {windows.listed.map(record => {
+            const window = windows.presentation.projection(record.identity)
 
-                const window = windows.presentation.projection(record.identity)
+            return <WindowTaskbarItem
 
-                return <WindowTaskbarItem
+                key={record.identity}
 
-                    key={record.identity}
+                record={record}
 
-                    record={record}
+                title={window.title}
 
-                    title={window.title}
+                icon={icon(record)}
 
-                    icon={icon(record)}
+                position={appearance.taskbar.position}
 
-                    active={fronts.window?.identity === record.identity}
+                active={fronts.window?.identity === record.identity}
 
-                    minimized={window.minimized}
+                minimized={window.minimized}
 
-                    maximized={window.maximized}
+                maximized={window.maximized}
 
-                    onElement={focus.taskbarItem}
+                onElement={focus.taskbarItem}
 
-                    onMinimize={focus.minimize}
+                onMinimize={focus.minimize}
 
-                    onShow={windows.show}
+                onShow={windows.show}
 
-                    onFill={windows.fill}
+                onFill={windows.fill}
 
-                    onClose={focus.close}
+                onClose={focus.close}
 
-                />
-            })}
+            />
+        })}
 
-        </OverflowRow>
-
-    </Taskbar>
+    </OverflowRow>
 
     const wallpaper = hasWallpaperClient
         ? renderWindows("wallpaper")
         : <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
-    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate grid min-h-0 grid-cols-1 grid-rows-1 outline-none" style={{ color: foreground }}>
+    const shell = hasShellClient
+        ? renderWindows("shell")
+        : <DefaultShell spacing={appearance.spacing} taskbar={appearance.taskbar}>{taskbarItems}</DefaultShell>
+
+    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate h-full min-h-0 w-full overflow-hidden outline-none" style={{ color: foreground }}>
 
         <ProgramAccessProbe door={application.doors.program} setAccess={setProgramAccess} />
 
-        <DesktopDisplay
+        <DesktopLayers
 
             wallpaper={wallpaper}
 
@@ -276,11 +275,16 @@ export default function Workspace() {
 
             windowSurfaceRef={windowSurfaceRef}
 
-            taskbar={taskbar}
+            spacing={appearance.spacing}
+
+            taskbar={appearance.taskbar}
+
+            shell={<>
+                {shell}
+                {!wallpaperReady && <Loading />}
+            </>}
 
         />
-
-        {!wallpaperReady && <Loading />}
 
         {wallpaperReady && <ReadyWallpaper />}
 

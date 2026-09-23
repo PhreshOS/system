@@ -159,7 +159,7 @@ export default function useWindows(authManager: AuthManager) {
     const summit = useCallback((layer: Layer) => [...peer.processes.values()].reduce((highest, process) => process.client?.window.layer === layer ? Math.max(highest, process.client.window.depth) : highest, 0), [peer])
 
     // Resolve the front window of every layer in one pass.
-    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null, "start-menu": null }
+    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null, shell: null }
 
     for (const process of records) {
 
@@ -316,7 +316,7 @@ export default function useWindows(authManager: AuthManager) {
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
 
-    const panesByLayer: Record<Layer, typeof panes> = { wallpaper: [], under: [], window: [], over: [], "start-menu": [] }
+    const panesByLayer: Record<Layer, typeof panes> = { wallpaper: [], under: [], window: [], over: [], shell: [] }
 
     for (const pane of panes) {
 

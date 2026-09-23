@@ -39,6 +39,12 @@ import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-ru
 import SystemAccess from "./system-access"
 import { WebSocket } from "ws"
 
+type SerializedClientLayer = DesktopReplacementLayer | "shell"
+
+function isSerializedClientLayer(layer: Layer | undefined): layer is SerializedClientLayer {
+    return layer === "shell" || isDesktopReplacementLayer(layer)
+}
+
 /**
  * The core's processes: the wire and the collection. Each process owns
  * itself — its Endpoint execution contexts and serialisation — and this manager
@@ -174,7 +180,7 @@ export default class ProcessManager extends TheLink {
         return Object.freeze({
             title: window.title,
             header: window.header,
-            frame: window.frame,
+            surface: window.surface,
             transaction: window.transaction,
             position: window.position,
             size: window.size,
@@ -921,7 +927,7 @@ export default class ProcessManager extends TheLink {
 
         const access = new SystemAccess(this, process)
 
-        if (domain === "connection" || domain === "session") return access.canConnections()
+        if (domain === "connection" || domain === "session") return access.canAuthentication()
 
         if (!subject) return false
 
@@ -941,24 +947,38 @@ export default class ProcessManager extends TheLink {
 
     private window(shape: Shape) {
 
-        const shown = { title: shape.title, header: shape.header, frame: shape.frame, transaction: shape.transaction, layer: shape.layer }
+        const shown = { title: shape.title, header: shape.header, surface: shape.surface, transaction: shape.transaction, layer: shape.layer }
 
         return new Window(shown, shape.position, shape.size, ++this.highest, shape.minimize, shape.maximize)
     }
 
-    private readonly replacementChanges = new Map<DesktopReplacementLayer, Promise<unknown>>()
+    private readonly layerClaims = new Map<SerializedClientLayer, Promise<unknown>>()
 
     private serializeClientLayer<Result>(layer: Layer | undefined, work: () => Promise<Result>): Promise<Result> {
-        if (!isDesktopReplacementLayer(layer)) return work()
-        const current = this.replacementChanges.get(layer) ?? Promise.resolve()
+        if (!isSerializedClientLayer(layer)) return work()
+        const current = this.layerClaims.get(layer) ?? Promise.resolve()
         const next = current.catch(() => undefined).then(work)
-        this.replacementChanges.set(layer, next.catch(() => undefined))
+        this.layerClaims.set(layer, next.catch(() => undefined))
         return next
     }
 
     private async replaceDesktopPresentation(layer: DesktopReplacementLayer) {
         const occupied = [...this.processes.values()].filter(process => process.client && process.clientEndpoint?.window.layer === layer)
         for (const process of occupied) await this.exitProcess(process.identity, "complete")
+    }
+
+    private async claimShell(program: Program) {
+        // Shell ownership belongs to a Program: its sibling Processes coexist,
+        // while another Program must observe the previous owner fully stopped.
+        const displaced = [...this.processes.values()].filter(process =>
+            process.program !== program && process.client && process.clientEndpoint?.window.layer === "shell"
+        )
+        for (const process of displaced) await this.exitProcess(process.identity, "complete")
+    }
+
+    private async prepareClientLayer(layer: Layer, program: Program) {
+        if (layer === "shell") return this.claimShell(program)
+        if (isDesktopReplacementLayer(layer)) return this.replaceDesktopPresentation(layer)
     }
 
     /** Claims the role after serialized replacement has released its previous owner. */
@@ -968,6 +988,9 @@ export default class ProcessManager extends TheLink {
         if (isDesktopReplacementLayer(window.layer) && [...this.processes.values()].some(
             current => current !== process && current.client && current.clientEndpoint?.window.layer === window.layer
         )) throw new Error(`A Client Endpoint is already running in the ${window.layer} layer`)
+        if (window.layer === "shell" && [...this.processes.values()].some(
+            current => current !== process && current.program !== process.program && current.client && current.clientEndpoint?.window.layer === "shell"
+        )) throw new Error("Another Program already occupies the shell layer")
 
         process.startClient(service)
     }
@@ -990,7 +1013,7 @@ export default class ProcessManager extends TheLink {
             throw new Error("This program already has a process with that name")
         }
 
-        if (client && shape && isDesktopReplacementLayer(shape.layer)) await this.replaceDesktopPresentation(shape.layer)
+        if (client && shape) await this.prepareClientLayer(shape.layer, program)
 
         // Who had focus before this one opened, in the layer it is
         // opening into. A window is born on top of its own layer and
@@ -1288,7 +1311,7 @@ export default class ProcessManager extends TheLink {
 
             const before = this.front(window.layer)
 
-            if (isDesktopReplacementLayer(window.layer)) await this.replaceDesktopPresentation(window.layer)
+            await this.prepareClientLayer(window.layer, process.program)
 
             this.activateClient(process, launch.service ?? declaration.service)
 
@@ -1322,7 +1345,7 @@ export default class ProcessManager extends TheLink {
 
         if (launch.header !== undefined && window.setHeader(shape.header)) this.said(process.identity, "changeHeader", window.header)
 
-        if (launch.frame !== undefined && window.setFrame(shape.frame)) this.said(process.identity, "changeFrame", window.frame)
+        if (launch.surface !== undefined && window.setSurface(shape.surface)) this.said(process.identity, "changeSurface", window.surface)
 
         if (launch.transaction !== undefined && window.setTransaction(shape.transaction)) this.said(process.identity, "changeTransaction", window.transaction)
 
@@ -1796,25 +1819,76 @@ export default class ProcessManager extends TheLink {
 
         if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true).filter(program => access.canProgram(program))]
 
-        if (typeof word === "string" && (word.startsWith("host-connection-") || word.startsWith("host-session-"))) {
+        if (typeof word === "string" && word.startsWith("host-authentication-")) {
 
-            if (word === "host-connection-list") {
+            if (word === "host-authentication-state") {
 
-                if (!access.canConnections()) return [[]]
+                access.require("authentication", [])
+
+                return [this.system.authenticationState()]
+            }
+
+            if (word === "host-authentication-requirements") {
+
+                access.require("authentication", [])
+
+                return [this.system.authenticationRequirements()]
+            }
+
+            if (word === "host-authentication-set-credentials") {
+
+                access.require("authentication", [])
+
+                await this.system.setAuthenticationCredentials(rest[0])
+
+                return []
+            }
+
+            if (word === "host-authentication-sign-out-all-sessions") {
+
+                access.require("authentication", [])
+
+                await this.system.signOutAllSessions()
+
+                return []
+            }
+
+            if (word === "host-authentication-connections") {
+
+                if (!access.canAuthentication()) return [[]]
 
                 return [this.system.listConnections().map(connection => this.authManager.linkManager.connectionSnapshot(connection))]
             }
 
-            if (word === "host-connection-find") {
+            if (word === "host-authentication-connection") {
 
-                if (!access.canConnections()) return [null]
+                if (!access.canAuthentication()) return [null]
 
                 const connection = this.system.findConnection(String(rest[0]))
 
                 return [connection ? this.authManager.linkManager.connectionSnapshot(connection) : null]
             }
 
-            if (word.startsWith("host-connection-") && !access.canConnections()) throw new Error("Connection not found")
+            if (word === "host-authentication-sessions") {
+
+                if (!access.canAuthentication()) return [[]]
+
+                return [this.system.listSessions().map(identity => this.authManager.linkManager.sessionSnapshot(identity))]
+            }
+
+            if (word === "host-authentication-session") {
+
+                if (!access.canAuthentication()) return [null]
+
+                const session = this.system.findSession(String(rest[0]))
+
+                return [session ? this.authManager.linkManager.sessionSnapshot(session) : null]
+            }
+        }
+
+        if (typeof word === "string" && (word.startsWith("host-connection-") || word.startsWith("host-session-"))) {
+
+            if (word.startsWith("host-connection-") && !access.canAuthentication()) throw new Error("Connection not found")
 
             if (word === "host-connection-state") return [this.system.connectionSnapshot(String(rest[0]))]
 
@@ -1822,23 +1896,7 @@ export default class ProcessManager extends TheLink {
 
             if (word === "host-connection-sign-in") return [await this.system.signInConnection(String(rest[0]))]
 
-            if (word === "host-session-list") {
-
-                if (!access.canConnections()) return [[]]
-
-                return [this.system.listSessions().map(identity => this.authManager.linkManager.sessionSnapshot(identity))]
-            }
-
-            if (word === "host-session-find") {
-
-                if (!access.canConnections()) return [null]
-
-                const session = this.system.findSession(String(rest[0]))
-
-                return [session ? this.authManager.linkManager.sessionSnapshot(session) : null]
-            }
-
-            if (!access.canConnections()) throw new Error("Session not found")
+            if (!access.canAuthentication()) throw new Error("Session not found")
 
             if (word === "host-session-state") return [this.system.sessionSnapshot(String(rest[0]))]
 
@@ -2291,11 +2349,11 @@ export default class ProcessManager extends TheLink {
             return [target.identity]
         }
 
-        if (word === "setFrame") {
+        if (word === "setSurface") {
 
             const target = heldWindow(rest[0]).process
 
-            await this.system.setWindowFrame(target, rest[1] as never)
+            await this.system.setWindowSurface(target, rest[1] as never)
 
             return [target.identity]
         }
@@ -3212,16 +3270,16 @@ export default class ProcessManager extends TheLink {
         return await this.publishWindowChange("/change-header", identity, window)
     }
 
-    @Subscribe("/set-frame")
-    public async setFrame(identity: string, frame: import("@phreshos/core").WindowFrame) {
+    @Subscribe("/set-surface")
+    public async setSurface(identity: string, surface: import("@phreshos/core").WindowSurface) {
 
         const window = this.mutableWindowOf(identity)
 
-        if (!window.setFrame(frame)) return { identity, window }
+        if (!window.setSurface(surface)) return { identity, window }
 
-        this.said(identity, "changeFrame", window.frame)
+        this.said(identity, "changeSurface", window.surface)
 
-        return await this.publishWindowChange("/change-frame", identity, window)
+        return await this.publishWindowChange("/change-surface", identity, window)
     }
 
     @Subscribe("/set-transaction")
@@ -3520,7 +3578,7 @@ interface ShapeBase {
 
     header: boolean
 
-    frame: import("@phreshos/core").WindowFrame
+    surface: import("@phreshos/core").WindowSurface
 
     transaction: import("@phreshos/core").WindowTransaction
 

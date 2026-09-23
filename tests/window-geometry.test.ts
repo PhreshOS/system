@@ -3,7 +3,8 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import { constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry } from "@client/view/components/window-manager/window-geometry"
+import { constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
+import { defaultAppearance } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import { test } from "vitest"
 
@@ -20,6 +21,17 @@ test("a standard presentation enforces its minimum after resolving authoritative
   })
 })
 
+test("tiled standard windows share the Appearance gap inside the equally inset surface", () => {
+  const surface = { width: 1000, height: 600 }
+  const half = defaultAppearance.spacing / 2
+  const left = windowPaintInsets({ x: 0, y: 0 }, { width: "1/2", height: "1/1" }, surface, half)
+  const right = windowPaintInsets({ x: "1/2", y: 0 }, { width: "1/2", height: "1/1" }, surface, half)
+
+  assert.deepEqual(left, { top: 0, right: half, bottom: 0, left: 0 })
+  assert.deepEqual(right, { top: 0, right: 0, bottom: 0, left: half })
+  assert.equal(left.right + right.left, defaultAppearance.spacing)
+})
+
 test("window geometry contract", async () => {
   const initial = {
       position: { x: 10, y: 20 },
@@ -27,7 +39,7 @@ test("window geometry contract", async () => {
   }
 
   const authority = new ServerWindow(
-      { title: "Geometry", header: true, frame: true, transaction: false, layer: "window" },
+      { title: "Geometry", header: true, surface: true, transaction: false, layer: "window" },
       initial.position,
       initial.size,
       1,

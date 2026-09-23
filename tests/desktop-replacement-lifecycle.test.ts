@@ -7,15 +7,17 @@ import ProcessManager from "@server/core/link-manager/auth-manager/process-manag
 import type { ServerRuntimeFactory } from "@server/core/server-runtime"
 import type { DesktopReplacementLayer } from "@shared/window-layers"
 
-const replacementLayers = ["wallpaper", "start-menu"] as const satisfies readonly DesktopReplacementLayer[]
+const replacementLayers = ["wallpaper"] as const satisfies readonly DesktopReplacementLayer[]
 
 function fixture(replacementLayer: DesktopReplacementLayer) {
     const auth = new TheLink() as unknown as AuthManager
     const manager = new ProcessManager(auth)
     const program = new Program({ identity: "replacement-test", client: { location: "https://example.test/" } })
+    const other = new Program({ identity: "other-test", client: { location: "https://example.test/" } })
     vi.spyOn(program, "validate").mockResolvedValue()
+    vi.spyOn(other, "validate").mockResolvedValue()
     const shape = (layer: Layer = replacementLayer) => ({
-        title: "Replacement", header: layer === "window", frame: false, transaction: false,
+        title: "Replacement", header: layer === "window", surface: false, transaction: false,
         position: { x: 20, y: 30 }, size: { width: 320, height: 240 },
         layer, minimize: false, maximize: false
     })
@@ -25,11 +27,11 @@ function fixture(replacementLayer: DesktopReplacementLayer) {
             clientShape(_program: Program, launch: ClientLaunch) { return shape(launch.layer) }
         }
     })
-    const register = (identity: string, layer: Layer | null = replacementLayer, runtime: ServerRuntimeFactory<Program> | null = null) => manager.register(
-        identity, null, program, {}, { server: null, client: null, options: {} },
+    const register = (identity: string, layer: Layer | null = replacementLayer, runtime: ServerRuntimeFactory<Program> | null = null, owner = program) => manager.register(
+        identity, null, owner, {}, { server: null, client: null, options: {} },
         runtime, layer !== null, shape(layer ?? replacementLayer), null
     )
-    return { manager, register }
+    return { manager, program, other, register }
 }
 
 test.each(replacementLayers)("concurrent %s launches replace the incumbent Process in order", async replacementLayer => {
@@ -96,4 +98,39 @@ test.each(replacementLayers)("failed activation releases the %s claim", async re
     fail = false
     await manager.startClient("existing", { layer: replacementLayer })
     expect(manager.processes.get("existing")!.clientEndpoint?.window.layer).toBe(replacementLayer)
+})
+
+test("shell ownership keeps sibling Processes and terminates a displaced Program", async () => {
+    const { manager, program, other, register } = fixture("wallpaper")
+    await Promise.all([
+        register("first", "shell", null, program),
+        register("second", "shell", null, program)
+    ])
+    await register("ordinary", "window", null, program)
+
+    expect(manager.processes.has("first")).toBe(true)
+    expect(manager.processes.has("second")).toBe(true)
+
+    const runtime: ServerRuntimeFactory<Program> = vi.fn(() => {
+        expect(manager.processes.has("first")).toBe(false)
+        expect(manager.processes.has("second")).toBe(false)
+        throw new Error("runtime creation failed")
+    })
+    await expect(register("failed", "shell", runtime, other)).rejects.toThrow("runtime creation failed")
+    await register("replacement", "shell", null, other)
+
+    expect(runtime).toHaveBeenCalledOnce()
+    expect(manager.processes.has("ordinary")).toBe(true)
+    expect(manager.processes.has("replacement")).toBe(true)
+})
+
+test("starting a shell Client claims the layer for its Program", async () => {
+    const { manager, program, other, register } = fixture("wallpaper")
+    await register("incumbent", "shell", null, program)
+    await register("waiting", null, null, other)
+
+    await manager.startClient("waiting", { layer: "shell" })
+
+    expect(manager.processes.has("incumbent")).toBe(false)
+    expect(manager.processes.get("waiting")!.clientEndpoint?.window.layer).toBe("shell")
 })

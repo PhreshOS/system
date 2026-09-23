@@ -3,16 +3,15 @@ import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type Position, type Size, type WindowFrame as WindowFrameDefinition, type WindowLayer, type WindowTransaction } from "@phreshos/core"
+import { type Position, type Size, type WindowSurface as WindowSurfaceDefinition, type WindowLayer, type WindowTransaction } from "@phreshos/core"
 import WindowHeader from "./window-header"
-import WindowFrame from "./window-frame"
+import WindowSurface, { windowSurfaceRadius } from "./window-surface"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
 import { motion } from "motion/react"
 import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
-import { windowPaintInset } from "../geometry"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 
@@ -50,12 +49,15 @@ const edges: { edge: WindowEdge, className: string }[] = [
 
 const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
 
-export default function ({ title, header = true, frame: frameDefinition = false, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, transaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, frameAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, transaction = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
-    const appearanceTransaction = useAppearance().transaction
+    const appearance = useAppearance()
+    const appearanceTransaction = appearance.transaction
     const desktopScale = useDesktopScale()
     const standard = layer === "window"
+    const surfaceDefinition = surface ?? standard
+    const surfaceRadius = surfaceDefinition === false ? undefined : windowSurfaceRadius(surfaceDefinition, appearance)
     const presentationMinimum = standard ? { width: minWidth, height: minHeight } : undefined
 
     function resolvePresentedGeometry(selectedPosition: Position, selectedSize: Size, surface: WindowSurfaceSize) {
@@ -93,8 +95,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
             present: geometryMotion.present,
             begin: () => geometryMotion.beginGesture()?.region ?? null,
             finish: geometryMotion.finishGesture,
-            cancel: geometryMotion.cancelGesture,
-            listen: geometryMotion.listen
+            cancel: geometryMotion.cancelGesture
         }
 
         onPresentationRepresentation(representation)
@@ -438,7 +439,11 @@ export default function ({ title, header = true, frame: frameDefinition = false,
 
     // ------------------------------------------------------------ render
 
-    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, windowPaintInset, gesture?.current)
+    // Shared geometry remains contiguous. Each neighboring Window contributes
+    // half of Appearance spacing so the painted gap equals the layer inset.
+    const paintInset = standard ? spacing / 2 : 0
+
+    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, gesture?.current)
 
     return <>
 
@@ -449,6 +454,7 @@ export default function ({ title, header = true, frame: frameDefinition = false,
             bare={!standard}
             minimumSize={presentationMinimum}
             paintSurfaceSize={paintSurfaceSize}
+            paintInset={paintInset}
             reducedMotion={reducedMotion}
             zIndex={style?.zIndex}
         />}
@@ -482,13 +488,12 @@ export default function ({ title, header = true, frame: frameDefinition = false,
 
         >
 
-            {/* The painted frame, inset inside the box. The box is where
+            {/* The painted surface, inset inside the box. The box is where
                 the window *is*; this is what a person sees of it, and the
                 difference between them is the gap.
 
-                Bare, there is no difference: the frame fills the box, so
-                the window is exactly as large as it asked to be and its
-                boundaries are the ones its own content draws. */}
+                Without a Desktop surface, Program content fills the box and
+                owns its visible boundary. */}
             {!standard ? <motion.div
                 data-window-container
                 initial={initialPresence}
@@ -499,10 +504,10 @@ export default function ({ title, header = true, frame: frameDefinition = false,
                 style={{ visibility: minimized && presenceHidden ? "hidden" : "visible" }}
             >
 
-                {(layer === "under" || layer === "over") && <WindowFrame
-                    frame={frameDefinition}
-                    animation={frameAnimation ?? null}
-                    onComplete={revision => onPresentationAnimationComplete?.("frame", revision)}
+                {(layer === "under" || layer === "over" || layer === "shell") && <WindowSurface
+                    surface={surfaceDefinition}
+                    animation={surfaceAnimation ?? null}
+                    onComplete={revision => onPresentationAnimationComplete?.("surface", revision)}
                 />}
 
                 <div data-window-content className="relative min-h-0">{children}</div>
@@ -515,8 +520,16 @@ export default function ({ title, header = true, frame: frameDefinition = false,
                 onAnimationComplete={completePresence}
                 style={{ position: "absolute", visibility: minimized && presenceHidden ? "hidden" : "visible", ...paintedInsets }}
             >
+                <WindowSurface
+                    surface={surfaceDefinition}
+                    animation={surfaceAnimation ?? null}
+                    onComplete={revision => onPresentationAnimationComplete?.("surface", revision)}
+                />
+
                 <WindowPanel
-                style={{ position: "absolute", inset: 0 }}
+                // Surface paint and Program content are siblings. The content
+                // must independently clip to the same Desktop-owned boundary.
+                style={{ position: "absolute", inset: 0, borderRadius: surfaceRadius }}
                 header={header ? <WindowHeader
 
                     title={title}
@@ -567,8 +580,8 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     /** Whether the Desktop-owned standard Window header is shown. */
     header?: boolean
 
-    /** Frame definition applied by under and over presentations. */
-    frame?: WindowFrameDefinition
+    /** Desktop-painted Window backing surface. */
+    surface?: WindowSurfaceDefinition
 
     /** Presentation role currently occupied by the Window. */
     layer: WindowLayer
@@ -611,25 +624,28 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     /** Whether mounting this element represents a newly opened Window. */
     entering?: boolean
 
-    /** Default transaction used by under and over presentations. */
+    /** Default transaction used by presentation operations. */
     transaction?: WindowTransaction
 
     position?: Position
 
     size?: Size
 
-    frameAnimation?: PresentationAnimation | null
+    surfaceAnimation?: PresentationAnimation | null
 
     geometryAnimation?: PresentationAnimation | null
 
     minimizeAnimation?: PresentationAnimation | null
 
-    onPresentationAnimationComplete?: (kind: "geometry" | "minimize" | "frame", revision: number) => void
+    onPresentationAnimationComplete?: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
     onPresentationRepresentation?: (representation: PresentationGeometryRepresentation | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize
+
+    /** Appearance spacing shared by the layer boundary and tiled gaps. */
+    spacing?: number
 
     minWidth?: number
 

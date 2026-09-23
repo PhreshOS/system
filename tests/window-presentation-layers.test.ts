@@ -7,7 +7,7 @@ function fixture(layer: WindowLayer) {
         layer: selected,
         title: "Original",
         header: selected === "window",
-        frame: selected === "window",
+        surface: selected === "window",
         transaction: false,
         position: { x: 20, y: 30 },
         size: { width: 320, height: 240 },
@@ -23,11 +23,12 @@ function fixture(layer: WindowLayer) {
     return { own, entries, presentations }
 }
 
-test.each(["wallpaper", "start-menu"] as const)("%s exposes only concepts understood by its presentation", async layer => {
+test("wallpaper exposes only concepts understood by its presentation", async () => {
+    const layer = "wallpaper"
     const { own, entries, presentations } = fixture(layer)
 
     expect(presentations.read("own", "layer")).toBe(layer)
-    for (const property of ["title", "position", "size", "minimized", "maximized", "header", "frame", "front"] as const) {
+    for (const property of ["title", "position", "size", "minimized", "maximized", "header", "surface", "front"] as const) {
         expect(() => presentations.read("own", property)).toThrow(new RegExp(`${layer} layer has no`))
     }
 
@@ -39,10 +40,10 @@ test.each(["wallpaper", "start-menu"] as const)("%s exposes only concepts unders
         () => presentations.maximize("own", false),
         () => presentations.setTitle("own", "Changed"),
         () => presentations.setHeader("own", false),
-        () => presentations.setFrame("own", true),
+        () => presentations.setSurface("own", true),
         () => presentations.raise("own")
     ]
-    for (const operation of unsupported) expect(operation).toThrow(new RegExp(`${layer} layer does not allow direct`))
+    for (const operation of unsupported) expect(operation).toThrow(new RegExp(`${layer} layer cannot apply`))
 
     own.window.position = { x: 500, y: 600 }
     own.window.title = "Changed"
@@ -50,12 +51,13 @@ test.each(["wallpaper", "start-menu"] as const)("%s exposes only concepts unders
     expect(presentations.projection("own").position).toEqual({ x: 0, y: 0 })
     expect(presentations.projection("own").title).toBe("Original")
 
-    expect(() => presentations.follow("own")).toThrow(new RegExp(`${layer} layer cannot follow`))
+    await expect(presentations.follow("own")).resolves.toBeUndefined()
+    await expect(presentations.unfollow("own")).resolves.toBeUndefined()
     expect(presentations.projection("own").title).toBe("Original")
     expect(presentations.projection("own").position).toEqual({ x: 0, y: 0 })
 })
 
-test.each(["under", "over"] as const)("%s presents geometry and frame without a header", async layer => {
+test.each(["under", "over", "shell"] as const)("%s presents geometry and surface without a header", async layer => {
     const { own, entries, presentations } = fixture(layer)
 
     expect(() => presentations.read("own", "header")).toThrow(new RegExp(`${layer} layer has no header`))
@@ -63,15 +65,15 @@ test.each(["under", "over"] as const)("%s presents geometry and frame without a 
     expect(() => presentations.setHeader("own", false)).toThrow(new RegExp(`${layer} layer cannot apply header`))
     expect(() => presentations.setTitle("own", "Changed")).toThrow(new RegExp(`${layer} layer cannot apply title`))
 
-    await presentations.setFrame("own", { color: "primary", radius: "full" })
-    expect(presentations.read("own", "frame")).toEqual({ color: "primary", radius: "full" })
+    await presentations.setSurface("own", { color: "primary", radius: "full" })
+    expect(presentations.read("own", "surface")).toEqual({ color: "primary", radius: "full" })
 
     await presentations.follow("own")
     own.window.position = { x: 100, y: 200 }
-    own.window.frame = true
+    own.window.surface = true
     presentations.reconcile(entries)
     expect(presentations.projection("own").position).toEqual({ x: 100, y: 200 })
-    expect(presentations.projection("own").frame).toBe(true)
+    expect(presentations.projection("own").surface).toBe(true)
 
     await presentations.unfollow("own")
     own.window.position = { x: 900, y: 900 }
@@ -79,34 +81,31 @@ test.each(["under", "over"] as const)("%s presents geometry and frame without a 
     expect(presentations.projection("own").position).toEqual({ x: 100, y: 200 })
 })
 
-test("a standard presentation is observed locally and controlled through its authoritative Window", async () => {
+test("a standard presentation can leave authoritative following and take local control", async () => {
     const { presentations } = fixture("window")
 
-    expect(presentations.read("own", "frame")).toBe(true)
-    const mutations = [
-        () => presentations.move("own", { x: 1, y: 2 }),
-        () => presentations.resize("own", { width: 300, height: 200 }),
-        () => presentations.setGeometry("own", { x: 1, y: 2, width: 300, height: 200 }),
-        () => presentations.minimize("own", true),
-        () => presentations.maximize("own", true),
-        () => presentations.setTitle("own", "Changed"),
-        () => presentations.setHeader("own", false),
-        () => presentations.setFrame("own", false),
-        () => presentations.raise("own")
-    ]
-    for (const mutation of mutations) expect(mutation).toThrow(/window layer does not allow direct/)
+    expect(presentations.read("own", "surface")).toBe(true)
+    await presentations.unfollow("own")
+    await presentations.setGeometry("own", { x: 1, y: 2, width: 300, height: 200 })
+    presentations.setTitle("own", "Changed")
+    presentations.setHeader("own", false)
+    await presentations.setSurface("own", false)
+    expect(presentations.state("own")).toMatchObject({
+        title: "Changed", header: false, surface: false,
+        position: { x: 1, y: 2 }, size: { width: 300, height: 200 }
+    })
     await expect(presentations.follow("own")).resolves.toBeUndefined()
-    expect(() => presentations.unfollow("own")).toThrow(/window layer cannot unfollow/)
+    await expect(presentations.unfollow("own")).resolves.toBeUndefined()
 })
 
-test("unsupported presentation events remain silent", () => {
+test("unsupported presentation events remain silent", async () => {
     const { own, entries, presentations } = fixture("wallpaper")
     const received: string[] = []
     presentations.observe("own", null, event => received.push(event))
 
     own.window.position = { x: 500, y: 600 }
     own.window.title = "Changed"
-    expect(() => presentations.follow("own")).toThrow(/wallpaper layer cannot follow/)
+    await expect(presentations.follow("own")).resolves.toBeUndefined()
     presentations.reconcile(entries)
 
     expect(received).toEqual([])

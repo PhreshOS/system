@@ -3,7 +3,7 @@ import type Process from "@client/core/link-manager/auth-manager/process-manager
 import usePromise from "@libs/react-promise"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { ApplicationContext } from "@client/view/contexts"
-import programIcon from "../../../programs/program-icon"
+import programIcon from "@client/view/structure/desktop/programs/program-icon"
 
 /** The exit action requests authority; the live list owns removal. */
 export default function ProcessItem({ process, program }: Readonly<{ process: Process, program: Program | undefined }>) {

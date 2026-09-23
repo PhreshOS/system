@@ -4,6 +4,8 @@ import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
 import type {
     ClientLaunch,
+    AuthenticationRequirements,
+    AuthenticationState,
     Launch,
     ProgramInstallOptions,
     ProgramUninstallOptions,
@@ -13,7 +15,7 @@ import type {
     ServerLaunch,
     ShellOptions,
     Size,
-    WindowFrame,
+    WindowSurface,
     WindowGeometry,
     WindowTransaction
 } from "@phreshos/core"
@@ -225,6 +227,26 @@ export default class System {
         return this.application.linkManager.connections()
     }
 
+    public authenticationState(): AuthenticationState {
+
+        return Object.freeze({ username: this.application.authentication.username })
+    }
+
+    public authenticationRequirements(): AuthenticationRequirements {
+
+        return this.application.authentication.requirements()
+    }
+
+    public setAuthenticationCredentials(credentials: unknown) {
+
+        return this.application.authentication.setCredentials(credentials)
+    }
+
+    public signOutAllSessions() {
+
+        return this.application.linkManager.signOutAllSessions()
+    }
+
     public findConnection(identity: string) {
 
         return this.application.linkManager.findConnection(identity)
@@ -350,9 +372,9 @@ export default class System {
         await this.processManager.setHeader(process.identity, header)
     }
 
-    public async setWindowFrame(process: Process, frame: WindowFrame) {
+    public async setWindowSurface(process: Process, surface: WindowSurface) {
 
-        await this.processManager.setFrame(process.identity, frame)
+        await this.processManager.setSurface(process.identity, surface)
     }
 
     public async setWindowTransaction(process: Process, transaction: WindowTransaction) {
@@ -384,7 +406,7 @@ export default class System {
                 service: program.client.service,
                 title: program.client.title ?? null,
                 header: program.client.header ?? null,
-                frame: program.client.frame ?? null,
+                surface: program.client.surface ?? null,
                 transaction: program.client.transaction ?? null,
                 size: program.client.size ?? null,
                 position: program.client.position ?? null,

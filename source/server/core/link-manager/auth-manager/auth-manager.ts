@@ -235,7 +235,31 @@ export default class AuthManager extends TheLink {
         await this.linkManager.signOutSession(session)
     }
 
-    @Subscribe("/connection/list")
+    @Subscribe("/authentication/state")
+    protected authenticationState() {
+
+        return this.linkManager.application.system.authenticationState()
+    }
+
+    @Subscribe("/authentication/requirements")
+    protected authenticationRequirements() {
+
+        return this.linkManager.application.system.authenticationRequirements()
+    }
+
+    @Subscribe("/authentication/set-credentials")
+    protected async setAuthenticationCredentials(credentials: unknown) {
+
+        await this.linkManager.application.system.setAuthenticationCredentials(credentials)
+    }
+
+    @Subscribe("/authentication/sign-out-all-sessions")
+    protected async signOutAllSessions() {
+
+        await this.linkManager.application.system.signOutAllSessions()
+    }
+
+    @Subscribe("/authentication/connections")
     protected async connections() {
 
         return this.linkManager.application.system.listConnections()
@@ -249,7 +273,7 @@ export default class AuthManager extends TheLink {
         return this.linkManager.connectionSnapshot(this.linkManager.connection())
     }
 
-    @Subscribe("/connection/find")
+    @Subscribe("/authentication/connection")
     protected async connectionFind(identity: unknown) {
 
         const connection = this.linkManager.application.system.findConnection(domainIdentity(identity, "Connection"))
@@ -275,7 +299,7 @@ export default class AuthManager extends TheLink {
         return this.linkManager.application.system.signInConnection(domainIdentity(identity, "Connection"))
     }
 
-    @Subscribe("/session/list")
+    @Subscribe("/authentication/sessions")
     protected async sessions() {
 
         return this.linkManager.application.system.listSessions()
@@ -283,7 +307,7 @@ export default class AuthManager extends TheLink {
             .map(identity => this.linkManager.sessionSnapshot(identity))
     }
 
-    @Subscribe("/session/find")
+    @Subscribe("/authentication/session")
     protected async sessionFind(identity: unknown) {
 
         const session = this.linkManager.application.system.findSession(domainIdentity(identity, "Session"))

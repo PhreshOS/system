@@ -25,7 +25,7 @@ export default class SystemAccess {
         return this.ownsProcess(process) || this.manager.grants(this.owner.identity, "programs", [process.program.identity])
     }
 
-    public canConnections() { return this.manager.grants(this.owner.identity, "connections", []) }
+    public canAuthentication() { return this.manager.grants(this.owner.identity, "authentication", []) }
 
     public program<Subject extends Program>(program: Subject) {
 

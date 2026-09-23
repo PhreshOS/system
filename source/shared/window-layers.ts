@@ -4,7 +4,7 @@ import type { WindowLayer, WindowTransaction } from "@phreshos/core"
 export type WindowPresentationProperty =
     | "title"
     | "header"
-    | "frame"
+    | "surface"
     | "position"
     | "size"
     | "minimized"
@@ -24,70 +24,52 @@ type WindowLayerPresentation = Readonly<{
 
     /** Facts the Desktop can apply from authoritative state and emit. */
     applicable: readonly WindowPresentationProperty[]
-    /** Whether a Program may directly mutate this Desktop presentation. */
-    mutable: boolean
-    /** Whether projection from the authoritative Window is optional, required, or forbidden. */
-    following: "optional" | "required" | "forbidden"
     defaults: Readonly<{
-        frame: boolean
+        surface: boolean
         header: boolean
         transaction: WindowTransaction
     }>
     fixed: boolean
-    exclusive: boolean
     transactions: boolean
 }>
 
 export const windowLayerModel: Readonly<Record<WindowLayer, WindowLayerPresentation>> = Object.freeze({
-    window: Object.freeze({
-        readable: Object.freeze(["title", "header", "frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["title", "header", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        mutable: false,
-        following: "required",
-        defaults: Object.freeze({ frame: true, header: true, transaction: false }),
-        fixed: false,
-        exclusive: false,
-        transactions: false
-    }),
-    under: Object.freeze({
-        readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        mutable: true,
-        following: "optional",
-        defaults: Object.freeze({ frame: false, header: false, transaction: false }),
-        fixed: false,
-        exclusive: false,
-        transactions: true
-    }),
-    over: Object.freeze({
-        readable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["frame", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
-        mutable: true,
-        following: "optional",
-        defaults: Object.freeze({ frame: false, header: false, transaction: false }),
-        fixed: false,
-        exclusive: false,
-        transactions: true
-    }),
     wallpaper: Object.freeze({
         readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
         applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
-        mutable: false,
-        following: "forbidden",
-        defaults: Object.freeze({ frame: false, header: false, transaction: false }),
+        defaults: Object.freeze({ surface: false, header: false, transaction: false }),
         fixed: true,
-        exclusive: true,
         transactions: false
     }),
-    "start-menu": Object.freeze({
-        readable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
-        applicable: Object.freeze(["layer"] satisfies WindowPresentationProperty[]),
-        mutable: false,
-        following: "forbidden",
-        defaults: Object.freeze({ frame: false, header: false, transaction: false }),
-        fixed: true,
-        exclusive: true,
-        transactions: false
+    under: Object.freeze({
+        readable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        defaults: Object.freeze({ surface: false, header: false, transaction: false }),
+        fixed: false,
+        transactions: true
+    }),
+    window: Object.freeze({
+        readable: Object.freeze(["title", "header", "surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["title", "header", "surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        // Standard Window motion uses the shared Appearance transaction unless
+        // its authoritative Window value explicitly selects another behavior.
+        defaults: Object.freeze({ surface: true, header: true, transaction: true }),
+        fixed: false,
+        transactions: true
+    }),
+    over: Object.freeze({
+        readable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        defaults: Object.freeze({ surface: false, header: false, transaction: false }),
+        fixed: false,
+        transactions: true
+    }),
+    shell: Object.freeze({
+        readable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        applicable: Object.freeze(["surface", "position", "size", "minimized", "maximized", "front", "layer"] satisfies WindowPresentationProperty[]),
+        defaults: Object.freeze({ surface: false, header: false, transaction: false }),
+        fixed: false,
+        transactions: true
     })
 })
 
@@ -119,16 +101,8 @@ export function requireWindowPresentationApplication(layer: WindowLayer, propert
     }
 }
 
-/** Rejects public local control while preserving application for following and Desktop ownership. */
 export function requireWindowPresentationMutation(layer: WindowLayer, property: WindowPresentationProperty) {
-    if (!windowLayerModel[layer].mutable) {
-        throw new Error(`The ${layer} layer does not allow direct presentation changes`)
-    }
     requireWindowPresentationApplication(layer, property)
-}
-
-export function windowPresentationFollowing(layer: WindowLayer) {
-    return windowLayerModel[layer].following
 }
 
 export function supportsWindowPresentationTransactions(layer: WindowLayer) {
@@ -136,10 +110,10 @@ export function supportsWindowPresentationTransactions(layer: WindowLayer) {
 }
 
 /** Window roles that own one fixed Desktop presentation at a time. */
-export type DesktopReplacementLayer = Extract<WindowLayer, "wallpaper" | "start-menu">
+export type DesktopReplacementLayer = Extract<WindowLayer, "wallpaper">
 
 export function isDesktopReplacementLayer(layer: WindowLayer | undefined): layer is DesktopReplacementLayer {
-    return layer !== undefined && windowLayerModel[layer].exclusive
+    return layer === "wallpaper"
 }
 
 export function isFixedWindowPresentationLayer(layer: WindowLayer) {
@@ -152,4 +126,4 @@ export function requireWindowPresentationTransactions(layer: WindowLayer) {
     }
 }
 
-const presentationProperties = ["title", "header", "frame", "position", "size", "minimized", "maximized", "front", "layer"] as const satisfies readonly WindowPresentationProperty[]
+const presentationProperties = ["title", "header", "surface", "position", "size", "minimized", "maximized", "front", "layer"] as const satisfies readonly WindowPresentationProperty[]

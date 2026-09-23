@@ -355,9 +355,9 @@ export default class ProcessManager extends TheLink {
         return this.followed(payload)
     }
 
-    @Subscribe("/change-frame")
+    @Subscribe("/change-surface")
     @Publish("/processes", "inbound")
-    protected async changeFrameHandle(payload: { identity: string, window: WindowSnapshot } | null) {
+    protected async changeSurfaceHandle(payload: { identity: string, window: WindowSnapshot } | null) {
 
         return this.followed(payload)
     }

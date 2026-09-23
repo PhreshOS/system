@@ -65,12 +65,17 @@ export default class AuthManager extends TheLink {
         await this.$outbound.publishFirst("/session/sign-out-current")
     }
 
-    public connection(operation: "current" | "list" | "find" | "state" | "session" | "sign-in", identity?: string) {
+    public authentication(operation: "state" | "requirements" | "set-credentials" | "sign-out-all-sessions" | "connections" | "connection" | "sessions" | "session", value?: unknown) {
+
+        return this.$outbound.publishFirst(`/authentication/${operation}`, ...(value === undefined ? [] : [value]))
+    }
+
+    public connection(operation: "current" | "state" | "session" | "sign-in", identity?: string) {
 
         return this.$outbound.publishFirst(`/connection/${operation}`, ...(identity === undefined ? [] : [identity]))
     }
 
-    public session(operation: "list" | "find" | "state" | "connections" | "sign-out", identity?: string) {
+    public session(operation: "state" | "connections" | "sign-out", identity?: string) {
 
         return this.$outbound.publishFirst(`/session/${operation}`, ...(identity === undefined ? [] : [identity]))
     }

@@ -18,7 +18,7 @@ test("an RPC result returns only to its requesting boundary", async () => {
     const stop = link.$outbound.forwardTo((event, ...values) => { broadcasts.push([event, ...values]) })
 
     try {
-        assert.deepEqual(await boundary.publish("/auth/connection/list"), [[]])
+        assert.deepEqual(await boundary.publish("/auth/authentication/connections"), [[]])
         assert.equal(broadcasts.length, 0)
 
         const identity = "request-routing"

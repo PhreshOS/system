@@ -239,6 +239,17 @@ export default class LinkManager extends TheLink {
         await this.announceSessionEnd(identity, "signedOut", connections)
     }
 
+    /** Ends the Sessions present at this operation's authoritative snapshot. */
+    public async signOutAllSessions() {
+
+        const sessions = this.application.authentication.sessionsList()
+
+        for (const identity of sessions) {
+
+            if (this.application.authentication.sessionFind(identity)) await this.signOutSession(identity)
+        }
+    }
+
     @Subscribe("/owner/state")
     protected authenticationState(): AuthenticationState {
 

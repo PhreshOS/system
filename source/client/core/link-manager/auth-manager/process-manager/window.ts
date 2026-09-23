@@ -1,5 +1,5 @@
 import { type WindowSnapshot, type Position, type Size } from "@server/core/link-manager/auth-manager/process-manager/window"
-import { type WindowFrame, type WindowGeometry, type WindowLayer, type WindowState, type WindowTransaction } from "@phreshos/core"
+import { type WindowSurface, type WindowGeometry, type WindowLayer, type WindowState, type WindowTransaction } from "@phreshos/core"
 import ProcessManager from "./process-manager"
 
 /**
@@ -35,7 +35,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
     public header: boolean
 
-    public frame: WindowFrame
+    public surface: WindowSurface
 
     public transaction: WindowTransaction
 
@@ -48,7 +48,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
         this.header = payload.header
 
-        this.frame = payload.frame
+        this.surface = payload.surface
 
         this.transaction = payload.transaction
 
@@ -77,7 +77,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
         this.header = payload.header
 
-        this.frame = payload.frame
+        this.surface = payload.surface
 
         this.transaction = payload.transaction
 
@@ -120,9 +120,9 @@ export default class Window implements Omit<WindowState, "front"> {
         await this.processManager.$outbound.publish("/set-header", this.process, header)
     }
 
-    public async setFrame(frame: WindowFrame) {
+    public async setSurface(surface: WindowSurface) {
 
-        await this.processManager.$outbound.publish("/set-frame", this.process, frame)
+        await this.processManager.$outbound.publish("/set-surface", this.process, surface)
     }
 
     public async setTransaction(transaction: WindowTransaction) {

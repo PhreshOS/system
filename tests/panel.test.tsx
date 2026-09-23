@@ -2,12 +2,12 @@ import assert from "node:assert/strict"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { defaultAppearance } from "@phreshos/core"
-import { UIProvider } from "@phreshos/react-ui"
+import { resolveRadius, UIProvider } from "@phreshos/react-ui"
 import CredentialsForm from "@client/view/structure/authentication/credentials-form"
-import TaskbarSurface, { taskbarSurfaceClassName } from "@client/view/structure/desktop/taskbar/taskbar-surface"
-import Launcher from "@client/view/structure/desktop/taskbar/launcher/launcher"
+import ShellSurface, { shellSurfaceClassName } from "@client/view/structure/desktop/layers/shell/shell-surface"
 import Window from "@client/view/structure/desktop/windows/window"
-import StartMenuPanel from "@client/view/structure/desktop/taskbar/launcher/start-menu-panel"
+import StartMenuPanel from "@client/view/structure/desktop/layers/shell/start-menu/start-menu-panel"
+import Taskbar from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
 import { test } from "vitest"
@@ -33,10 +33,10 @@ test("panel contract", async () => {
       assert.match(html, /margin:6px;margin-top:0/)
   }
 
-  const taskbar = markup(<TaskbarSurface label="Title" labelId="title"><button>Action</button></TaskbarSurface>)
-  panel(taskbar)
-  assert.match(taskbar, /<h2 id="title"/)
-  assert.match(taskbar, /<button>Action<\/button>/)
+  const shell = markup(<ShellSurface label="Title" labelId="title"><button>Action</button></ShellSurface>)
+  panel(shell)
+  assert.match(shell, /<h2 id="title"/)
+  assert.match(shell, /<button>Action<\/button>/)
 
   const window = markup(<Window layer="window" icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
   assert.equal(window.match(/data-material=""/g)?.length, 1)
@@ -47,6 +47,13 @@ test("panel contract", async () => {
   assert.match(window, /data-window-container/)
   assert.match(window, /<iframe title="Content"/)
   assert.doesNotMatch(window, /class="p-px"/)
+  const windowPanel = window.match(/<div style="([^"]*grid-template-rows:auto minmax\(0, 1fr\)[^"]*)">/)?.[1] ?? ""
+  assert.match(windowPanel, /overflow:hidden/)
+  assert.match(windowPanel, new RegExp(`border-radius:${resolveRadius("medium", defaultAppearance)}`))
+
+  const surfaceFreeWindow = markup(<Window layer="window" surface={false} icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
+  const surfaceFreePanel = surfaceFreeWindow.match(/<div style="([^"]*grid-template-rows:auto minmax\(0, 1fr\)[^"]*)">/)?.[1] ?? ""
+  assert.doesNotMatch(surfaceFreePanel, /border-radius:/)
 
   const bare = markup(<Window layer="over" icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
   assert.doesNotMatch(bare, /data-material/)
@@ -79,8 +86,8 @@ test("panel contract", async () => {
   assert.match(authenticationFailure, /role="alert"/)
   assert.match(authenticationFailure, /The request failed\./)
 
-  const launcher = markup(<Launcher label="Example System" trigger="Open">{(_close, labelId) => <StartMenuPanel labelId={labelId} name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />}</Launcher>)
-  assert.equal(launcher.match(/data-material=""/g)?.length, 4)
+  const launcher = markup(<StartMenuPanel labelId="start-menu-label" name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />)
+  assert.equal(launcher.match(/data-material=""/g)?.length, 3)
   assert.match(launcher, /grid-cols-2/)
   assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\);min-height:0/)
   assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:8px;padding:8px;padding-top:0/)
@@ -92,26 +99,17 @@ test("panel contract", async () => {
   assert.match(launcher, /type="search"/)
   assert.doesNotMatch(launcher, /<(?:main|section|article|aside|nav|header|footer)\b/)
   assert.match(launcher, /size-4 rounded-sm object-contain/)
-  // Native popover visibility belongs to the outer host, not Panel's grid.
-  const popover = launcher.match(/<div[^>]*popover="auto"[^>]*>/)?.[0]
-  assert(popover)
-  assert.match(popover, /overflow-visible/)
-  assert.doesNotMatch(popover, /\bgrid\b/)
-  // Popovers and native dialogs share a non-clipping host for independently owned outer effects.
-  assert(taskbarSurfaceClassName.split(" ").includes("overflow-visible"))
+  // Independent Shell overlays share a non-clipping host for outer effects.
+  assert(shellSurfaceClassName.split(" ").includes("overflow-visible"))
 
-  const replacement = markup(<StartMenuPanel
-      labelId="start-menu"
-      name="Example System"
-      version="1.2.3"
-      left={<button>Programs</button>}
-      right={<p>Processes</p>}
-      footer={<input type="search" />}
-      replacement={<iframe title="Client Start Menu" />}
-  />)
-  assert.equal(replacement.match(/data-material=""/g)?.length, 1)
-  assert.match(replacement, /<iframe title="Client Start Menu"/)
-  assert.doesNotMatch(replacement, /<button>Programs<\/button>/)
-  assert.doesNotMatch(replacement, /<p>Processes<\/p>/)
-  assert.doesNotMatch(replacement, /type="search"/)
+  const taskbar = markup(<Taskbar
+      leading={<button>Start</button>}
+      trailing={<button>Sign out</button>}
+      taskbar={{ position: "bottom", size: 44 }}
+      spacing={8}
+  ><button>Window</button></Taskbar>)
+  assert.match(taskbar, /role="toolbar"/)
+  assert.match(taskbar, /aria-label="Taskbar"/)
+  assert.match(taskbar, /aria-orientation="horizontal"/)
+
 }, 120_000)

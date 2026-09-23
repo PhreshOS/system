@@ -1,11 +1,12 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
+import { type TaskbarPosition } from "@phreshos/core"
 import { ContextMenu, Menu } from "@phreshos/react-ui"
-import { useDesktopScaleContainer } from "../../desktop-scale"
+import { useDesktopScaleContainer } from "../../../../desktop-scale"
 import TaskbarItem from "./taskbar-item"
 import { memo, useCallback } from "react"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
-export default memo(function ({ record, title, icon, active, minimized, maximized, onElement, onMinimize, onShow, onFill, onClose }: WindowTaskbarItemProps) {
+export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onFill, onClose }: WindowTaskbarItemProps) {
 
     const scaleContainer = useDesktopScaleContainer()
 
@@ -32,7 +33,7 @@ export default memo(function ({ record, title, icon, active, minimized, maximize
 
         <ContextMenu.Trigger>
 
-            <TaskbarItem ref={source} active={active} icon={icon} onPress={press}>
+            <TaskbarItem ref={source} active={active} icon={icon} position={position} onPress={press}>
 
                 {title}
 
@@ -66,6 +67,8 @@ interface WindowTaskbarItemProps {
     title: string
 
     icon: string
+
+    position: TaskbarPosition
 
     active: boolean
 

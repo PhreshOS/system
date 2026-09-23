@@ -68,7 +68,7 @@ test("client system access contract", async () => {
   await assert.rejects(access.require("appearance", []), /Execution is not permitted/)
   await assert.rejects(access.require("desktopPreferences", []), /Execution is not permitted/)
   await assert.rejects(access.require("desktopConnection", []), /Execution is not permitted/)
-  await assert.rejects(access.require("connections", []), /Execution is not permitted/)
+  await assert.rejects(access.require("authentication", []), /Execution is not permitted/)
   assert.equal(permissionChecks, 0)
   assert.equal(await access.canConnection("desktop-connection"), false)
   assert.equal(await access.canSession("desktop-session"), false)
@@ -101,11 +101,11 @@ test("client system access contract", async () => {
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
   await assert.rejects(access.service(outsideService), /Execution is not permitted/)
 
-  permissions = { appearance: [], desktopPreferences: [], connections: [] }
+  permissions = { appearance: [], desktopPreferences: [], authentication: [] }
 
   await access.require("appearance", [])
   await access.require("desktopPreferences", [])
-  await access.require("connections", [])
+  await access.require("authentication", [])
   await access.require("desktopConnection", [])
   assert.equal(await access.canConnection("desktop-connection"), true)
   assert.equal(await access.canConnection("another-connection"), true)
@@ -116,7 +116,7 @@ test("client system access contract", async () => {
   permissions = { desktopConnection: [] }
 
   await access.require("desktopConnection", [])
-  await assert.rejects(access.require("connections", []), /Execution is not permitted/)
+  await assert.rejects(access.require("authentication", []), /Execution is not permitted/)
   assert.equal(await access.canConnection("desktop-connection"), true)
   assert.equal(await access.canConnection("another-connection"), false)
   assert.equal(await access.canSession("desktop-session"), true)
@@ -153,7 +153,7 @@ test("client system access contract", async () => {
   assert.equal(await access.service(outsideService), outsideService)
   await access.require("appearance", [])
   await access.require("desktopPreferences", [])
-  await access.require("connections", [])
+  await access.require("authentication", [])
   await access.requireNetwork("wss://events.example.com/socket")
   await access.requireStorage("/any/native/path", "delete")
   await access.require("uploads", [])

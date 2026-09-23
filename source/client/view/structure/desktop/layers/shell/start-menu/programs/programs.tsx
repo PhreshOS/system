@@ -1,6 +1,6 @@
 import LauncherItem from "./launcher-item"
-import programIcon from "../../../programs/program-icon"
-import usePrograms from "../../../programs/programs"
+import programIcon from "@client/view/structure/desktop/programs/program-icon"
+import usePrograms from "@client/view/structure/desktop/programs/programs"
 import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"

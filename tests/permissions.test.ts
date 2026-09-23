@@ -23,7 +23,7 @@ test("permissions contract", async () => {
       layers: {
           default: [],
           title: "Window layers",
-          description: "Select the under, over, wallpaper, and start-menu layers in Client Endpoint launches."
+          description: "Select the under, over, wallpaper, and shell layers in Client Endpoint launches."
       },
       network: {
           default: [],
@@ -55,10 +55,10 @@ test("permissions contract", async () => {
           title: "Desktop connection",
           description: "Access the browser Connection carrying this Desktop and its Session."
       },
-      connections: {
+      authentication: {
           default: [],
-          title: "Connections",
-          description: "Access every browser Connection and its Session."
+          title: "Authentication",
+          description: "Access and manage owner authentication, browser Connections, and Sessions."
       }
   })
 
@@ -136,11 +136,11 @@ test("permissions contract", async () => {
   assert(!catalog.allows("programs", ["browser"], { services: [] }))
   assert(!catalog.allows("services", ["browser"], { programs: [], services: false }))
   assert(catalog.allows("desktopConnection", [], { desktopConnection: [] }))
-  assert(catalog.allows("desktopConnection", [], { connections: [] }))
-  assert(catalog.allows("desktopConnection", [], { connections: [], desktopConnection: false }))
-  assert(!catalog.allows("connections", [], { desktopConnection: [] }))
-  assert(catalog.allows("desktopConnection", [], { all: [], connections: false }))
-  assert(!catalog.allows("desktopConnection", [], { all: [], connections: false, desktopConnection: false }))
+  assert(catalog.allows("desktopConnection", [], { authentication: [] }))
+  assert(catalog.allows("desktopConnection", [], { authentication: [], desktopConnection: false }))
+  assert(!catalog.allows("authentication", [], { desktopConnection: [] }))
+  assert(catalog.allows("desktopConnection", [], { all: [], authentication: false }))
+  assert(!catalog.allows("desktopConnection", [], { all: [], authentication: false, desktopConnection: false }))
   assert(!catalog.allows("network", ["https://elsewhere.example"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allows("network", ["https://api.example.com/v1"], { all: [], network: ["https://api.example.com"] }))
   assert(catalog.allowsStorage([], null, "Documents/report.txt", "read"))
@@ -175,7 +175,7 @@ test("permissions contract", async () => {
       appearance: catalog.definition("appearance"),
       desktopPreferences: catalog.definition("desktopPreferences"),
       desktopConnection: catalog.definition("desktopConnection"),
-      connections: catalog.definition("connections")
+      authentication: catalog.definition("authentication")
   } as never), /invalid default/)
 
   assert.deepEqual(permissionCatalog.resolve("all", true), [])

@@ -1,14 +1,13 @@
 import { type CSSProperties } from "react"
 import { motion } from "motion/react"
 import { windowPaintInsets, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { windowPaintInset } from "../geometry"
 import { type Position, type Size } from "@phreshos/core"
 import { Surface, useAppearance } from "@phreshos/react-ui"
 import { motionTransition } from "@client/view/appearance/motion"
 import useWindowGeometryMotion from "./window-geometry-motion"
 
 /** Preview of the placement currently offered by a drag. */
-export default function SnapPreview({ shown, visible, bare, minimumSize, paintSurfaceSize, reducedMotion, zIndex }: SnapPreviewProps) {
+export default function SnapPreview({ shown, visible, bare, minimumSize, paintSurfaceSize, paintInset, reducedMotion, zIndex }: SnapPreviewProps) {
 
     const transaction = useAppearance().transaction
 
@@ -37,7 +36,7 @@ export default function SnapPreview({ shown, visible, bare, minimumSize, paintSu
                 material={{ opacity: "small" }}
                 style={{
                     position: "absolute",
-                    ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, windowPaintInset))
+                    ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, paintInset))
                 }}
             />
         </motion.div>
@@ -55,6 +54,7 @@ interface SnapPreviewProps {
     bare: boolean
     minimumSize?: WindowSurfaceSize
     paintSurfaceSize: WindowSurfaceSize
+    paintInset: number
     reducedMotion: boolean
     zIndex: CSSProperties["zIndex"]
 }

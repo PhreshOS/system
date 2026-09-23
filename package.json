@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.85",
+    "version": "0.1.86",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -37,7 +37,7 @@
     "@fontsource/roboto": "^5.3.0",
     "@hono/node-server": "^2.1.1",
     "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
-    "@phreshos/core": "^0.1.57",
+        "@phreshos/core": "^0.1.58",
     "@phreshos/react-ui": "^0.1.32",
     "@the-link/core": "^0.3.1",
     "@the-link/http": "^0.1.1",

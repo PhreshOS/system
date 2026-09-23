@@ -1,5 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises"
-import { randomBytes, scrypt as derive, timingSafeEqual } from "node:crypto"
+import { readFile, rename, rm, writeFile } from "node:fs/promises"
+import { randomBytes, randomUUID, scrypt as derive, timingSafeEqual } from "node:crypto"
+import { parseAuthenticationCredentials, type AuthenticationRequirements } from "@phreshos/core"
 import Sessions from "./sessions"
 import Keyv from "keyv"
 
@@ -14,22 +15,22 @@ const parameters = {
     keyLength: 64
 } as const
 
-const requirements = {
+const requirements: AuthenticationRequirements = Object.freeze({
 
-    username: {
+    username: Object.freeze({
 
         minimumLength: 1,
 
         maximumLength: 64
-    },
+    }),
 
-    password: {
+    password: Object.freeze({
 
         minimumLength: 8,
 
         maximumLength: 1_024
-    }
-} as const
+    })
+})
 
 /** Persistent credentials for the sole owner of one installation. */
 export default class Authentication {
@@ -39,6 +40,8 @@ export default class Authentication {
     private readonly path: string
 
     private readonly sessions: Sessions
+
+    private changingCredentials: Promise<void> = Promise.resolve()
 
     private constructor(path: string, owner: Owner | null, sessions: Sessions) {
 
@@ -81,7 +84,38 @@ export default class Authentication {
         }
     }
 
+    public requirements(): AuthenticationRequirements {
+
+        return requirements
+    }
+
+    /** Replaces only the credential record; Session authority is independent. */
+    public setCredentials(value: unknown) {
+
+        const credentials = parseAuthenticationCredentials(value)
+
+        return this.changeCredentials(async () => {
+
+            const username = normalizeUsername(credentials.username)
+
+            const invalid = validate(username, credentials.password)
+
+            if (invalid) throw new Error(`The credentials are invalid: ${invalid}`)
+
+            const owner = await createOwner(username, credentials.password)
+
+            await this.replaceOwner(owner)
+
+            this.owner = owner
+        })
+    }
+
     public async signUp(username: string, password: string): Promise<SignUpResult> {
+
+        return this.changeCredentials(() => this.signUpNow(username, password))
+    }
+
+    private async signUpNow(username: string, password: string): Promise<SignUpResult> {
 
         if (this.owner) return { error: "signed-up" }
 
@@ -91,27 +125,7 @@ export default class Authentication {
 
         if (invalid) return { error: invalid }
 
-        const salt = randomBytes(16)
-
-        const hash = await hashPassword(password, salt, parameters)
-
-        const owner: Owner = {
-
-            version: 1,
-
-            username: normalizedUsername,
-
-            password: {
-
-                algorithm: "scrypt",
-
-                salt: salt.toString("base64"),
-
-                hash: hash.toString("base64"),
-
-                ...parameters
-            }
-        }
+        const owner = await createOwner(normalizedUsername, password)
 
         try {
 
@@ -131,6 +145,34 @@ export default class Authentication {
             this.owner = parse(await readFile(this.path, "utf8"))
 
             return { error: "signed-up" }
+        }
+    }
+
+    private changeCredentials<Result>(change: () => Promise<Result>): Promise<Result> {
+
+        const next = this.changingCredentials.then(change, change)
+
+        this.changingCredentials = next.then(() => undefined, () => undefined)
+
+        return next
+    }
+
+    private async replaceOwner(owner: Owner) {
+
+        const temporary = `${this.path}.${randomUUID()}.changing`
+
+        // Credential replacement crosses one filesystem boundary so an
+        // interrupted update cannot leave an unreadable authentication record.
+        try {
+
+            await writeFile(temporary, JSON.stringify(owner), { flag: "wx", mode: 0o600 })
+
+            await rename(temporary, this.path)
+        }
+
+        finally {
+
+            await rm(temporary, { force: true }).catch(() => undefined)
         }
     }
 
@@ -259,6 +301,31 @@ function hashPassword(password: string, salt: Buffer, parameters: ScryptParamete
     })
 }
 
+async function createOwner(username: string, password: string): Promise<Owner> {
+
+    const salt = randomBytes(16)
+
+    const hash = await hashPassword(password, salt, parameters)
+
+    return {
+
+        version: 1,
+
+        username,
+
+        password: {
+
+            algorithm: "scrypt",
+
+            salt: salt.toString("base64"),
+
+            hash: hash.toString("base64"),
+
+            ...parameters
+        }
+    }
+}
+
 function parse(contents: string): Owner {
 
     const value: unknown = JSON.parse(contents)
@@ -316,22 +383,7 @@ export interface AuthenticationState {
 
     signedUp: boolean
 
-    requirements: {
-
-        username: {
-
-            minimumLength: number
-
-            maximumLength: number
-        }
-
-        password: {
-
-            minimumLength: number
-
-            maximumLength: number
-        }
-    }
+    requirements: AuthenticationRequirements
 }
 
 export type SignUpResult = {

@@ -29,7 +29,7 @@ test("process lifecycle contract", async () => {
                   return {
                       title: launch.title ?? "Client",
                       header: launch.header ?? true,
-                      frame: launch.frame ?? true,
+                      surface: launch.surface ?? true,
                       transaction: launch.transaction ?? false,
                       position: launch.position ?? { x: 0, y: 0 },
                       size: launch.size ?? { width: 640, height: 480 },
@@ -76,7 +76,7 @@ test("process lifecycle contract", async () => {
       const initial = {
           title: "Initial",
           header: true,
-          frame: true,
+          surface: true,
           transaction: false,
           position: { x: 12, y: 24 },
           size: { width: 640, height: 480 },
@@ -105,13 +105,13 @@ test("process lifecycle contract", async () => {
 
       await manager.move(process.identity, { x: 80, y: 90 })
       await manager.setHeader(process.identity, false)
-      await manager.setFrame(process.identity, { radius: "full", color: "primary" })
+      await manager.setSurface(process.identity, { radius: "full", color: "primary" })
 
       await manager.startClient(process.identity)
 
       assert.deepEqual(process.clientEndpoint.window.position, { x: 80, y: 90 })
       assert.equal(process.clientEndpoint.window.header, false)
-      assert.deepEqual(process.clientEndpoint.window.frame, { radius: "full", color: "primary" })
+      assert.deepEqual(process.clientEndpoint.window.surface, { radius: "full", color: "primary" })
 
       await manager.stopClient(process.identity)
       await manager.startClient(process.identity, { layer: "over", title: "Overlay" })
@@ -129,7 +129,7 @@ test("process lifecycle contract", async () => {
       assert.equal(process.clientEndpoint.window.layer, "window")
       assert.equal(process.clientEndpoint.window.header, true)
       assert.deepEqual(process.clientEndpoint.window.position, { x: 140, y: 150 })
-      assert.deepEqual(process.clientEndpoint.window.frame, { radius: "full", color: "primary" })
+      assert.deepEqual(process.clientEndpoint.window.surface, { radius: "full", color: "primary" })
   }
 
   function program(identity: string) {
@@ -165,7 +165,7 @@ test("process lifecycle contract", async () => {
           {
               title: "Client",
               header: true,
-              frame: true,
+              surface: true,
               transaction: false,
               position: { x: 0, y: 0 },
               size: { width: 640, height: 480 },
@@ -260,10 +260,10 @@ test("process lifecycle contract", async () => {
           null,
           client,
           {},
-          { ...launch, client: { title: "Partial", header: true, frame: true, transaction: false, position: null, size: null, layer: "window", minimize: false, maximize: false, service: false } },
+          { ...launch, client: { title: "Partial", header: true, surface: true, transaction: false, position: null, size: null, layer: "window", minimize: false, maximize: false, service: false } },
           null,
           true,
-          { title: "Partial", header: true, frame: true, transaction: false, position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
+          { title: "Partial", header: true, surface: true, transaction: false, position: { x: 0, y: 0 }, size: { width: 320, height: 240 }, layer: "window", minimize: false, maximize: false },
           null
       ), /creation publication failed/)
 

@@ -28,6 +28,9 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
     let secondRemoved = false
 
     try {
+        expect(await application.authentication.signUp("owner", "initial-password")).toEqual({ signedUp: true })
+        expect(application.system.authenticationState()).toEqual({ username: "owner" })
+        expect(await application.authentication.verify("owner", "initial-password")).toBe(true)
         expect(await connection.publish("/session-authenticate", null)).toEqual([false])
         expect(application.system.listConnections()).toEqual([connection])
         expect(application.system.connectionSession(connection.identity)).toBeNull()
@@ -45,7 +48,17 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
         expect(application.system.connectionSession(secondConnection.identity)).toEqual(created)
         expect(application.system.sessionConnections(created.identity)).toEqual([connection, secondConnection])
 
-        await application.system.signOutSession(created.identity)
+        await application.system.setAuthenticationCredentials({ username: "next-owner", password: "next-password" })
+
+        // Credential replacement changes future authentication only; existing
+        // Session authority remains valid until an explicit sign-out operation.
+        expect(application.system.authenticationState()).toEqual({ username: "next-owner" })
+        expect(await application.authentication.verify("owner", "initial-password")).toBe(false)
+        expect(await application.authentication.verify("next-owner", "next-password")).toBe(true)
+        expect(application.system.listSessions()).toEqual([created.identity])
+        expect(application.system.sessionConnections(created.identity)).toEqual([connection, secondConnection])
+
+        await application.system.signOutAllSessions()
 
         expect(signedOut).toBe(2)
         expect(application.system.listSessions()).toEqual([])

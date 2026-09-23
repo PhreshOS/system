@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowFrame, parseWindowTransaction, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseProgramDefinition, parseWindowSurface, parseWindowTransaction, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -232,7 +232,7 @@ export default class Program {
 
                 header: client.header ?? null,
 
-                frame: client.frame ?? null,
+                surface: client.surface ?? null,
 
                 transaction: client.transaction ?? null,
 
@@ -412,7 +412,7 @@ function coherent(config: ProgramConfig) {
 
     if (config.client?.sandbox !== undefined && typeof config.client.sandbox !== "boolean") throw new Error("A client half's sandbox mode must be true or false")
 
-    if (config.client?.frame !== undefined) parseWindowFrame(config.client.frame)
+    if (config.client?.surface !== undefined) parseWindowSurface(config.client.surface)
 
     if (config.client?.transaction !== undefined) parseWindowTransaction(config.client.transaction)
 

@@ -3,7 +3,7 @@ import ClientState from "@client/core/link-manager/auth-manager/process-manager/
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
-import { type Position, type Size, type Theme, type WindowFrame, type WindowLayer, type WindowTransaction } from "@phreshos/core"
+import { type Position, type Size, type Theme, type WindowSurface, type WindowLayer, type WindowTransaction } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
@@ -17,7 +17,7 @@ const settleDelay = 80
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, frame, layer, transaction, icon, position, size, frameAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, transaction, icon, position, size, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, paintSurfaceSize, spacing, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -86,9 +86,9 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
-    const framed = layer === "window" || (layer === "under" || layer === "over") && frame !== false
+    const surfaced = surface !== false && layer !== "wallpaper"
 
-    const progress = framed && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
+    const progress = surfaced && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
 
     return <Window
 
@@ -96,7 +96,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         header={header}
 
-        frame={frame}
+        surface={surface}
 
         layer={layer}
 
@@ -108,7 +108,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         size={size}
 
-        frameAnimation={frameAnimation}
+        surfaceAnimation={surfaceAnimation}
 
         geometryAnimation={geometryAnimation}
 
@@ -119,6 +119,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
         onPresentationRepresentation={represent}
 
         paintSurfaceSize={paintSurfaceSize}
+
+        spacing={spacing}
 
         active={active}
 
@@ -216,7 +218,7 @@ interface ProcessWindowProps {
 
     header: boolean
 
-    frame: WindowFrame
+    surface: WindowSurface
 
     layer: WindowLayer
 
@@ -228,17 +230,19 @@ interface ProcessWindowProps {
 
     size: Size
 
-    frameAnimation: PresentationAnimation | null
+    surfaceAnimation: PresentationAnimation | null
 
     geometryAnimation: PresentationAnimation | null
 
     minimizeAnimation: PresentationAnimation | null
 
-    onPresentationAnimationComplete: (kind: "geometry" | "minimize" | "frame", revision: number) => void
+    onPresentationAnimationComplete: (kind: "geometry" | "minimize" | "surface", revision: number) => void
 
     onPresentationRepresentation: (identity: string, representation: PresentationGeometryRepresentation | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
+
+    spacing: number
 
     depth: number
 

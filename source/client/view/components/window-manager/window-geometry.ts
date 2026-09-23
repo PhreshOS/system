@@ -70,7 +70,7 @@ export function constrainWindowGeometry(region: WindowRegion, surface: WindowSur
 }
 
 /**
- * The window's box is its geometry; an ordinary painted frame is inset only
+ * The window's box is its geometry; an ordinary painted surface is inset only
  * on edges that do not touch that box's containing surface. Snap previews use
  * this same function, so preview and final paint cannot disagree.
  */

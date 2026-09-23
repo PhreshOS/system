@@ -84,7 +84,6 @@ html[data-phreshos-theme-transition]::view-transition-new(root) {
 
     --text-taskbar-status: 0.625rem;
 
-    --spacing-taskbar: 2.75rem;
 
     --shadow-taskbar-control: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 

@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { UIProvider } from "@phreshos/react-ui"
 import { defaultAppearance } from "@phreshos/core"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
-import SearchBar from "@client/view/structure/desktop/taskbar/launcher/search-bar"
-import { matchesProcess, matchesProgram, searchTerms } from "@client/view/structure/desktop/taskbar/launcher/search"
+import SearchBar from "@client/view/structure/desktop/layers/shell/start-menu/search-bar"
+import { matchesProcess, matchesProgram, searchTerms } from "@client/view/structure/desktop/layers/shell/start-menu/search"
 import { test } from "vitest"
 
 test("start menu search contract", async () => {

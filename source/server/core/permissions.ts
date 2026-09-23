@@ -167,7 +167,7 @@ export class PermissionCatalog {
 
         if (name === "desktopConnection") {
 
-            if (this.allows("connections", [], permissions)) return true
+            if (this.allows("authentication", [], permissions)) return true
         }
 
         const assigned = permissions[name]
@@ -296,7 +296,7 @@ export const permissionCatalog = new PermissionCatalog({
     layers: {
         default: [],
         title: "Window layers",
-        description: "Select the under, over, wallpaper, and start-menu layers in Client Endpoint launches."
+        description: "Select the under, over, wallpaper, and shell layers in Client Endpoint launches."
     },
     network: {
         default: [],
@@ -328,9 +328,9 @@ export const permissionCatalog = new PermissionCatalog({
         title: "Desktop connection",
         description: "Access the browser Connection carrying this Desktop and its Session."
     },
-    connections: {
+    authentication: {
         default: [],
-        title: "Connections",
-        description: "Access every browser Connection and its Session."
+        title: "Authentication",
+        description: "Access and manage owner authentication, browser Connections, and Sessions."
     }
 })

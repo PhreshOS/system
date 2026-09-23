@@ -1,11 +1,11 @@
 import {
     isRelativeValue,
-    parseWindowFrame,
+    parseWindowSurface,
     parseWindowTransaction,
     type Position,
     type Size,
     type Value,
-    type WindowFrame,
+    type WindowSurface,
     type WindowGeometry,
     type WindowLayer,
     type WindowState,
@@ -22,7 +22,7 @@ export interface Shown {
 
     header: boolean
 
-    frame: WindowFrame
+    surface: WindowSurface
 
     transaction: WindowTransaction
 
@@ -41,7 +41,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
     // Whether it is shown. A window may be born hidden, which is a
     // state at birth rather than an act afterwards: hidden from the
-    // first frame is not the same as shown once and then hidden.
+    // first rendered frame is not the same as shown once and then hidden.
     public minimized: boolean
 
     public maximized: boolean
@@ -55,7 +55,7 @@ export default class Window implements Omit<WindowState, "front"> {
     // The Window's authoritative Desktop layer.
     public layer: WindowLayer
 
-    public frame: WindowFrame
+    public surface: WindowSurface
 
     public transaction: WindowTransaction
 
@@ -65,7 +65,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
         this.header = shown.header
 
-        this.frame = parseWindowFrame(shown.frame)
+        this.surface = parseWindowSurface(shown.surface)
 
         this.transaction = parseWindowTransaction(shown.transaction)
 
@@ -164,13 +164,13 @@ export default class Window implements Omit<WindowState, "front"> {
         return true
     }
 
-    public setFrame(frame: WindowFrame) {
+    public setSurface(surface: WindowSurface) {
 
-        const parsed = parseWindowFrame(frame)
+        const parsed = parseWindowSurface(surface)
 
-        if (JSON.stringify(this.frame) === JSON.stringify(parsed)) return false
+        if (JSON.stringify(this.surface) === JSON.stringify(parsed)) return false
 
-        this.frame = parsed
+        this.surface = parsed
 
         return true
     }
@@ -194,7 +194,7 @@ export default class Window implements Omit<WindowState, "front"> {
 
             header: this.header,
 
-            frame: this.frame,
+            surface: this.surface,
 
             transaction: this.transaction,
 

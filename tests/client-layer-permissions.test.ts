@@ -11,7 +11,7 @@ function fixture() {
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
         version: "0.0.0", description: null, hasAgent: false, server: null,
-        client: { sandbox: true, start: true, service: false, title: null, header: null, frame: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
+        client: { sandbox: true, start: true, service: false, title: null, header: null, surface: null, transaction: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
         get permissions() { return permissions }
     }
     const process = { identity: "caller", reference: "process-reference", program: program.identity, name: null, startedAt: 0, options: {}, server: null, client: null }
@@ -42,11 +42,18 @@ function fixture() {
         if (operation === "connections") return connections.filter(value => value.session === identity)
         return sessions.find(value => value.identity === identity) ?? null
     })
+    const authentication = vi.fn(async (operation: string, identity?: string) => {
+        if (operation === "connections") return connections
+        if (operation === "connection") return connections.find(value => value.identity === identity) ?? null
+        if (operation === "sessions") return sessions
+        if (operation === "session") return sessions.find(value => value.identity === identity) ?? null
+        return null
+    })
     const command = vi.fn(async function* () {})
     const auth = {
         programManager: { programs: new Map([[program.identity, program]]), createProcess, findOrCreateProcess, startup, command },
         processManager: { processes: new Map([[process.identity, process]]), startEndpoint, ownFrame: vi.fn(), releaseFrame: vi.fn() },
-        connection, session,
+        authentication, connection, session,
         grantsPermission: async <Name extends PermissionName>(_pane: string, name: Name, values: readonly PermissionValue<Name>[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
     const answer = host(auth, process.identity, () => ({ size: { width: 100, height: 100 } }), () => "frame", {} as never)
@@ -56,7 +63,7 @@ function fixture() {
     }
 }
 
-const restrictedLayers = ["under", "over", "wallpaper", "start-menu"] as const
+const restrictedLayers = ["under", "over", "wallpaper", "shell"] as const
 
 test.each(restrictedLayers)("Client launch routes check %s before delegation", async layer => {
     const f = fixture()
@@ -90,27 +97,30 @@ test("Connection permissions define one opaque accessible scope", async () => {
     const f = fixture()
 
     await expect(f.answer("desktop-connection")).rejects.toThrow("Execution is not permitted")
-    await expect(f.answer("host-connection-list")).resolves.toEqual([[]])
-    await expect(f.answer("host-session-list")).resolves.toEqual([[]])
-    await expect(f.answer("host-connection-find", "desktop-connection")).resolves.toEqual([null])
-    await expect(f.answer("host-session-find", "desktop-session")).resolves.toEqual([null])
+    await expect(f.answer("host-authentication-state")).rejects.toThrow("Execution is not permitted")
+    await expect(f.answer("host-authentication-connections")).resolves.toEqual([[]])
+    await expect(f.answer("host-authentication-sessions")).resolves.toEqual([[]])
+    await expect(f.answer("host-authentication-connection", "desktop-connection")).resolves.toEqual([null])
+    await expect(f.answer("host-authentication-session", "desktop-session")).resolves.toEqual([null])
     await expect(f.answer("host-connection-state", "desktop-connection")).rejects.toThrow("Connection not found")
     await expect(f.answer("host-session-state", "desktop-session")).rejects.toThrow("Session not found")
 
     f.permissions({ desktopConnection: [] })
 
     await expect(f.answer("desktop-connection")).resolves.toEqual([expect.objectContaining({ identity: "desktop-connection" })])
-    await expect(f.answer("host-connection-list")).resolves.toEqual([[expect.objectContaining({ identity: "desktop-connection" })]])
-    await expect(f.answer("host-session-list")).resolves.toEqual([[expect.objectContaining({ identity: "desktop-session" })]])
-    await expect(f.answer("host-connection-find", "outside-connection")).resolves.toEqual([null])
-    await expect(f.answer("host-session-find", "outside-session")).resolves.toEqual([null])
+    await expect(f.answer("host-authentication-connections")).resolves.toEqual([[expect.objectContaining({ identity: "desktop-connection" })]])
+    await expect(f.answer("host-authentication-sessions")).resolves.toEqual([[expect.objectContaining({ identity: "desktop-session" })]])
+    await expect(f.answer("host-authentication-connection", "outside-connection")).resolves.toEqual([null])
+    await expect(f.answer("host-authentication-session", "outside-session")).resolves.toEqual([null])
     await expect(f.answer("host-session-connections", "desktop-session")).resolves.toEqual([[expect.objectContaining({ identity: "desktop-connection" })]])
+    await expect(f.answer("host-authentication-state")).rejects.toThrow("Execution is not permitted")
 
-    f.permissions({ connections: [] })
+    f.permissions({ authentication: [] })
 
     await expect(f.answer("desktop-connection")).resolves.toEqual([expect.objectContaining({ identity: "desktop-connection" })])
-    await expect(f.answer("host-connection-list")).resolves.toEqual([connectionsNamed("desktop-connection", "outside-connection")])
-    await expect(f.answer("host-session-list")).resolves.toEqual([connectionsNamed("desktop-session", "outside-session")])
+    await expect(f.answer("host-authentication-connections")).resolves.toEqual([connectionsNamed("desktop-connection", "outside-connection")])
+    await expect(f.answer("host-authentication-sessions")).resolves.toEqual([connectionsNamed("desktop-session", "outside-session")])
+    await expect(f.answer("host-authentication-state")).resolves.toEqual([null])
     expect(f.connection).toHaveBeenCalledWith("current")
 })
 
@@ -161,7 +171,7 @@ test("the layer catalog uses exact assignments before all", () => {
     expect(permissionCatalog.allows("layers", ["under"], { layers: ["under"] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["under", "over"], { layers: [] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["wallpaper"], { layers: [] })).toBe(true)
-    expect(permissionCatalog.allows("layers", ["start-menu"], { layers: [] })).toBe(true)
+    expect(permissionCatalog.allows("layers", ["shell"], { layers: [] })).toBe(true)
     expect(permissionCatalog.allows("layers", ["over"], { all: [], layers: false })).toBe(false)
     expect(permissionCatalog.allows("layers", ["over"], { all: [] })).toBe(true)
     expect(() => permissionCatalog.declarations({ layers: false })).toThrow()

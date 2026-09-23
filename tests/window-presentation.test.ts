@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
 import { presentationTransaction } from "@client/view/components/desktop-host/window-presentation"
 import WindowPresentations, { type WindowPresentationEntry } from "@client/view/components/window-manager/window-presentations"
-import { requireWindowPresentationTransactions } from "@shared/window-layers"
+import { requireWindowPresentationTransactions, windowLayerDefaults } from "@shared/window-layers"
 import type { WindowLayer, WindowTransaction } from "@phreshos/core"
 import { test } from "vitest"
 
@@ -17,7 +17,8 @@ test("Window presentation transactions remain independent from Appearance limits
   assert.throws(() => presentationTransaction(true, "yes"), /true or false/)
   assert.doesNotThrow(() => requireWindowPresentationTransactions("under"))
   assert.doesNotThrow(() => requireWindowPresentationTransactions("over"))
-  assert.throws(() => requireWindowPresentationTransactions("window"), /does not support/)
+  assert.doesNotThrow(() => requireWindowPresentationTransactions("window"))
+  assert.doesNotThrow(() => requireWindowPresentationTransactions("shell"))
   assert.throws(() => requireWindowPresentationTransactions("wallpaper"), /does not support/)
 })
 
@@ -32,10 +33,11 @@ test("each Desktop owns an independent Window presentation", async () => {
   const first = new WindowPresentations(entries, identity => byProcess.get(identity) as never ?? null)
   const second = new WindowPresentations(entries, identity => byProcess.get(identity) as never ?? null)
 
-  assert.throws(() => first.move("ordinary", { x: 40, y: 50 }), /does not allow direct/)
+  await first.unfollow("ordinary")
+  await first.move("ordinary", { x: 40, y: 50 })
   await first.move("overlay", { x: 60, y: 70 })
 
-  assert.deepEqual(first.state("ordinary").position, { x: 0, y: 0 })
+  assert.deepEqual(first.state("ordinary").position, { x: 40, y: 50 })
   assert.deepEqual(first.state("overlay").position, { x: 60, y: 70 })
   assert.deepEqual(second.state("ordinary").position, { x: 0, y: 0 })
   assert.deepEqual(ordinary.window.position, { x: 0, y: 0 })
@@ -44,7 +46,7 @@ test("each Desktop owns an independent Window presentation", async () => {
   overlay.window.position = { x: 20, y: 30 }
   first.reconcile(entries)
 
-  assert.deepEqual(first.state("ordinary").position, { x: 15, y: 25 })
+  assert.deepEqual(first.state("ordinary").position, { x: 40, y: 50 })
   assert.deepEqual(first.state("overlay").position, { x: 60, y: 70 })
 
   await first.follow("overlay")
@@ -77,11 +79,11 @@ test("transactionAndWait semantics resolve on completion and reject on interrupt
   await presentations.move("overlay", { x: 70, y: 80 })
   await assert.rejects(interrupted, /interrupted/)
 
-  const changingFrame = presentations.setFrame("overlay", { color: "primary", radius: "full" }, request)
-  const frameRevision = presentations.projection("overlay").frameAnimation?.revision
-  presentations.complete("overlay", "frame", frameRevision!)
-  await changingFrame
-  assert.deepEqual(presentations.state("overlay").frame, { color: "primary", radius: "full" })
+  const changingSurface = presentations.setSurface("overlay", { color: "primary", radius: "full" }, request)
+  const surfaceRevision = presentations.projection("overlay").surfaceAnimation?.revision
+  presentations.complete("overlay", "surface", surfaceRevision!)
+  await changingSurface
+  assert.deepEqual(presentations.state("overlay").surface, { color: "primary", radius: "full" })
 })
 
 test("transaction-capable presentations use the authoritative Window transaction by default", async () => {
@@ -112,8 +114,9 @@ test("transaction-capable presentations use the authoritative Window transaction
   await inherited
 })
 
-test("authoritative standard Window geometry uses the Desktop Appearance transaction", async () => {
+test("standard Window presentation uses its authoritative default transaction", async () => {
   const ordinary = client("window")
+  ordinary.window.transaction = { duration: 160, easing: "ease-out" }
   const entries = new Map([
       ["ordinary", { identity: "ordinary:0", client: ordinary }]
   ]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
@@ -121,35 +124,44 @@ test("authoritative standard Window geometry uses the Desktop Appearance transac
 
   ordinary.window.position = { x: 80, y: 90 }
   presentations.reconcile(entries)
-  assert.equal(presentations.projection("ordinary").geometryAnimation?.transaction, true)
+  assert.deepEqual(presentations.projection("ordinary").geometryAnimation?.transaction, ordinary.window.transaction)
 })
 
-test("presentation geometry events expose each applied representation change", () => {
+test("standard Windows default to the shared Appearance transaction", () => {
+  assert.equal(windowLayerDefaults("window").transaction, true)
+  assert.equal(windowLayerDefaults("under").transaction, false)
+  assert.equal(windowLayerDefaults("over").transaction, false)
+  assert.equal(windowLayerDefaults("shell").transaction, false)
+})
+
+test("presentation state and events do not expose renderer measurements", () => {
   const ordinary = client("window")
   const entries = new Map([
       ["ordinary", { identity: "ordinary:0", client: ordinary }]
   ]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
   const presentations = new WindowPresentations(entries, () => ordinary as never)
   const moves: unknown[] = []
-  let changed: () => void = () => undefined
-  let geometry = { x: 0, y: 0, width: 300, height: 200 }
 
   presentations.observe("ordinary", "move", (_event, value) => moves.push(value))
   presentations.represent("ordinary", {
-      read: () => geometry,
-      present: value => { geometry = value },
-      begin: () => geometry,
+      read: () => ({ x: 0, y: 0, width: 1200, height: 800 }),
+      present() {},
+      begin: () => null,
       finish() {},
-      cancel() {},
-      listen: listener => { changed = listener; return () => undefined }
+      cancel() {}
   })
 
-  geometry = { ...geometry, x: 10 }
-  changed()
-  geometry = { ...geometry, x: 20 }
-  changed()
+  // A maximized renderer may occupy the viewport, but those measurements are
+  // not presentation values and cannot overwrite the retained geometry.
+  ordinary.window.maximized = true
+  presentations.reconcile(entries)
+  assert.deepEqual(presentations.state("ordinary").position, { x: 0, y: 0 })
+  assert.deepEqual(presentations.state("ordinary").size, { width: 300, height: 200 })
+  assert.deepEqual(moves, [])
 
-  assert.deepEqual(moves, [{ x: 10, y: 0 }, { x: 20, y: 0 }])
+  ordinary.window.position = { x: 20, y: 30 }
+  presentations.reconcile(entries)
+  assert.deepEqual(moves, [{ x: 20, y: 30 }])
 })
 
 test("a Client boundary begins each document from authoritative presentation state without resetting on release", async () => {
@@ -175,7 +187,7 @@ function client(layer: WindowLayer) {
       window: {
           title: "Window",
           header: layer === "window",
-          frame: layer === "window",
+          surface: layer === "window",
           transaction: false as WindowTransaction,
           position: { x: 0, y: 0 },
           size: { width: 300, height: 200 },

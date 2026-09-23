@@ -1,13 +1,13 @@
 import { followedState, requirePresentationMutation } from "./layer-policy"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import {
-    type WindowFrame,
+    type WindowSurface,
     type WindowGeometry,
     type WindowState
 } from "@phreshos/core"
 import { type PresentationTransactionRequest, type WindowPresentationHost, type WindowPresentationState } from "../desktop-host/window-presentation"
 import { type WindowRegion } from "./window-geometry"
-import { isFixedWindowPresentationLayer, requireWindowPresentationRead, supportsWindowPresentationApplication, windowPresentationFollowing } from "@shared/window-layers"
+import { isFixedWindowPresentationLayer, requireWindowPresentationRead, supportsWindowPresentationApplication } from "@shared/window-layers"
 
 export interface WindowPresentationEntry {
     identity: string
@@ -23,7 +23,6 @@ export default class WindowPresentations implements WindowPresentationHost {
     private readonly authoritative = new Map<string, WindowPresentationState>()
     private readonly waiting = new Map<string, WaitingAnimation>()
     private readonly representations = new Map<string, PresentationGeometryRepresentation>()
-    private readonly representationListeners = new Map<string, () => void>()
     private readonly following = new Map<string, FollowingWindow>()
     private readonly observers = new Map<string, Set<(event: string, value: unknown) => void>>()
     private readonly emitted = new Map<string, WindowState>()
@@ -48,7 +47,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             if (current.get(process)?.identity === identity) continue
             this.cancel(identity, "geometry", "The Window presentation was removed")
             this.cancel(identity, "minimize", "The Window presentation was removed")
-            this.cancel(identity, "frame", "The Window presentation was removed")
+            this.cancel(identity, "surface", "The Window presentation was removed")
             this.following.delete(identity)
             this.authoritative.delete(identity)
         }
@@ -115,11 +114,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     public state(process: string) {
 
         const { identity, state } = this.existing(process)
-        const geometry = this.representations.get(identity)?.read()
-        return windowState(state, frontmost(this.windows, state.layer) === identity, geometry && {
-            position: { x: geometry.x, y: geometry.y },
-            size: { width: geometry.width, height: geometry.height }
-        })
+        return windowState(state, frontmost(this.windows, state.layer) === identity)
     }
 
     public read(process: string, property: import("@shared/window-layers").WindowPresentationProperty) {
@@ -145,13 +140,6 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (representation) {
 
             this.representations.set(identity, representation)
-
-            this.representationListeners.set(identity, representation.listen(() => {
-
-                if (this.representations.get(identity) !== representation) return
-
-                this.emitPresentationEvents()
-            }))
         }
 
         this.publish(new Map(this.windows))
@@ -239,10 +227,9 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     public follow(process: string, transaction?: PresentationTransactionRequest) {
-        const { identity, state } = this.existing(process)
-        const relationship = windowPresentationFollowing(state.layer)
-        if (relationship === "required") return Promise.resolve()
-        if (relationship === "forbidden") throw new Error(`The ${state.layer} layer cannot follow an authoritative Window`)
+        // Following is an intersection with the current layer's capabilities;
+        // an empty intersection is a successful no-op, never a layer error.
+        const { identity } = this.existing(process)
         const snapshot = this.authoritative.get(identity)!
         this.following.set(identity, { snapshot })
         const current = this.windows.get(identity)!
@@ -266,10 +253,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     public unfollow(process: string) {
-        const { identity, state } = this.existing(process)
-        const relationship = windowPresentationFollowing(state.layer)
-        if (relationship === "required") throw new Error(`The ${state.layer} layer cannot unfollow its authoritative Window`)
-        if (relationship === "forbidden") return Promise.resolve()
+        const { identity } = this.existing(process)
         this.following.delete(identity)
         return Promise.resolve()
     }
@@ -314,16 +298,16 @@ export default class WindowPresentations implements WindowPresentationHost {
         }
     }
 
-    public setFrame(process: string, frame: WindowFrame, transaction?: PresentationTransactionRequest) {
+    public setSurface(process: string, surface: WindowSurface, transaction?: PresentationTransactionRequest) {
 
         const { identity, state } = this.existing(process)
-        requirePresentationMutation(state.layer, "frame")
-        if (JSON.stringify(state.frame) === JSON.stringify(frame)) return Promise.resolve()
+        requirePresentationMutation(state.layer, "surface")
+        if (JSON.stringify(state.surface) === JSON.stringify(surface)) return Promise.resolve()
 
-        this.cancel(identity, "frame")
+        this.cancel(identity, "surface")
         const animation = presentationAnimation(++this.revision, defaultPresentationTransaction(state), transaction)
-        this.replace(identity, { ...state, frame, frameAnimation: animation })
-        return this.waitFor(identity, "frame", animation, transaction)
+        this.replace(identity, { ...state, surface, surfaceAnimation: animation })
+        return this.waitFor(identity, "surface", animation, transaction)
     }
 
     public complete(process: string, kind: AnimationKind, revision: number) {
@@ -335,14 +319,14 @@ export default class WindowPresentations implements WindowPresentationHost {
             ? state?.geometryAnimation
             : kind === "minimize"
                 ? state?.minimizeAnimation
-                : state?.frameAnimation
+                : state?.surfaceAnimation
         if (!state || animation?.revision !== revision) return
 
         this.replace(identity, kind === "geometry"
             ? { ...state, geometryAnimation: null }
             : kind === "minimize"
                 ? { ...state, minimizeAnimation: null }
-                : { ...state, frameAnimation: null })
+                : { ...state, surfaceAnimation: null })
 
         const key = animationKey(identity, kind)
         const waiting = this.waiting.get(key)
@@ -358,7 +342,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (!identity) return
         this.cancel(identity, "geometry", "The Window presentation was removed")
         this.cancel(identity, "minimize", "The Window presentation was removed")
-        this.cancel(identity, "frame", "The Window presentation was removed")
+        this.cancel(identity, "surface", "The Window presentation was removed")
 
         const client = this.client(process)
         if (!client) return
@@ -385,10 +369,6 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 
     private removeRepresentation(identity: string) {
-
-        this.representationListeners.get(identity)?.()
-
-        this.representationListeners.delete(identity)
 
         this.representations.delete(identity)
     }
@@ -434,11 +414,10 @@ export default class WindowPresentations implements WindowPresentationHost {
     private emitPresentationEvents() {
 
         for (const [identity, presentation] of this.windows) {
-            const represented = this.representations.get(identity)?.read()
-            const current = windowState(presentation, frontmost(this.windows, presentation.layer) === identity, represented && {
-                position: { x: represented.x, y: represented.y },
-                size: { width: represented.width, height: represented.height }
-            })
+            // Renderer measurements are private output. Presentation events expose
+            // the values the Desktop relies on, so maximize and animation cannot
+            // rewrite or continuously reinterpret the retained geometry.
+            const current = windowState(presentation, frontmost(this.windows, presentation.layer) === identity)
             const previous = this.emitted.get(identity)
             this.emitted.set(identity, current)
             if (!previous) continue
@@ -456,7 +435,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             if (previous.maximized !== current.maximized) emit("maximized", "maximize", current.maximized)
             if (previous.title !== current.title) emit("title", "changeTitle", current.title)
             if (previous.header !== current.header) emit("header", "changeHeader", current.header)
-            if (JSON.stringify(previous.frame) !== JSON.stringify(current.frame)) emit("frame", "changeFrame", current.frame)
+            if (JSON.stringify(previous.surface) !== JSON.stringify(current.surface)) emit("surface", "changeSurface", current.surface)
             if (previous.front !== current.front) emit("front", "front", current.front)
         }
     }
@@ -480,7 +459,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     }
 }
 
-type AnimationKind = "geometry" | "minimize" | "frame"
+type AnimationKind = "geometry" | "minimize" | "surface"
 
 interface WaitingAnimation {
     revision: number
@@ -505,10 +484,8 @@ function presentationAnimation(revision: number, fallback: WindowState["transact
     return transaction === false ? null : Object.freeze({ revision, transaction })
 }
 
-/** Standard Window motion belongs to the Desktop; other layers use their Window value. */
 function defaultPresentationTransaction(state: Pick<WindowPresentationState, "layer" | "transaction">) {
-
-    return state.layer === "window" ? true : state.transaction
+    return state.transaction
 }
 
 function initialPresentationState(client: ClientState): WindowPresentationState {
@@ -519,13 +496,13 @@ function initialPresentationState(client: ClientState): WindowPresentationState 
         ...authoritativeState(client),
         title: window.title,
         header: window.layer === "window" ? window.header : false,
-        frame: window.layer === "window" ? true : fixed ? false : window.frame,
+        surface: fixed ? false : window.surface,
         position: fixed ? { x: 0, y: 0 } : window.position,
         size: fixed ? { width: "100%", height: "100%" } : window.size,
         minimized: fixed ? false : window.minimized,
         maximized: fixed ? true : window.maximized,
         depth: fixed ? 0 : window.depth,
-        frameAnimation: null,
+        surfaceAnimation: null,
     }
 }
 
@@ -534,7 +511,7 @@ function authoritativeState(client: ClientState): WindowPresentationState {
     return {
         title: window.title,
         header: window.header,
-        frame: window.frame,
+        surface: window.surface,
         transaction: window.transaction,
         position: window.position,
         size: window.size,
@@ -543,21 +520,21 @@ function authoritativeState(client: ClientState): WindowPresentationState {
         front: false,
         layer: window.layer,
         depth: window.depth,
-        frameAnimation: null,
+        surfaceAnimation: null,
         geometryAnimation: null,
         minimizeAnimation: null
     }
 }
 
-function windowState(local: WindowPresentationState, front: boolean, geometry?: Readonly<{ position: WindowState["position"], size: WindowState["size"] }>): WindowState {
+function windowState(local: WindowPresentationState, front: boolean): WindowState {
 
     return {
         title: local.title,
         header: local.header,
-        frame: local.frame,
+        surface: local.surface,
         transaction: local.transaction,
-        position: geometry?.position ?? local.position,
-        size: geometry?.size ?? local.size,
+        position: local.position,
+        size: local.size,
         minimized: local.minimized,
         maximized: local.maximized,
         front,
@@ -576,8 +553,6 @@ export interface PresentationGeometryRepresentation {
     finish: () => void
 
     cancel: () => void
-
-    listen: (settled: () => void) => () => void
 }
 
 function frontmost(windows: ReadonlyMap<string, WindowPresentationState>, layer: WindowPresentationState["layer"]) {

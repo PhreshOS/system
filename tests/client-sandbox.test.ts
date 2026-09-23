@@ -24,7 +24,7 @@ test("client sandbox contract", async () => {
 
       new Window(
 
-          { title: "Client", header: true, frame: true, transaction: false, layer: "window" },
+          { title: "Client", header: true, surface: true, transaction: false, layer: "window" },
 
           { x: 0, y: 0 },
 
@@ -49,7 +49,7 @@ test("client sandbox contract", async () => {
       null,
       {} as HostTraffic,
       new Window(
-          { title: "Client", header: true, frame: true, transaction: false, layer: "window" },
+          { title: "Client", header: true, surface: true, transaction: false, layer: "window" },
           { x: 0, y: 0 },
           { width: 640, height: 480 },
           1,

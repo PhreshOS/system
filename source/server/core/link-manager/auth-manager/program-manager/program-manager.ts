@@ -1585,7 +1585,7 @@ export default class ProgramManager extends TheLink {
 
             header: asked.header ?? client.header ?? defaults.header,
 
-            frame: asked.frame ?? client.frame ?? defaults.frame,
+            surface: asked.surface ?? client.surface ?? defaults.surface,
 
             transaction: asked.transaction ?? client.transaction ?? defaults.transaction,
 

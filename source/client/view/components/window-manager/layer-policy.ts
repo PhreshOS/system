@@ -15,4 +15,4 @@ export function followedState(current: WindowPresentationState, target: WindowPr
     return changes
 }
 
-const followedProperties = ["title", "header", "frame", "position", "size", "minimized", "maximized"] as const satisfies readonly WindowPresentationProperty[]
+const followedProperties = ["title", "header", "surface", "position", "size", "minimized", "maximized"] as const satisfies readonly WindowPresentationProperty[]

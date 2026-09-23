@@ -1,17 +1,16 @@
 import { type PermissionChoice, type PermissionDialog, type ServerCrashDialog } from "@server/core/dialog-manager"
 import { ReactTunnel } from "@the-link/react"
-import { surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { useEffect, useId, useRef } from "react"
 import { AuthManagerContext } from "@client/view/contexts"
-import TaskbarSurface, { taskbarSurfaceClassName } from "../taskbar-surface"
-import TaskbarButton from "../taskbar-button"
+import ShellSurface, { shellSurfaceClassName } from "../shell-surface"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
-import { useAppearance } from "@phreshos/react-ui"
+import { Button, useAppearance } from "@phreshos/react-ui"
 
-/** Taskbar-owned presentation of the system's authoritative dialog queue. */
+/** Centered Shell presentation of the system's authoritative dialog queue. */
 export default function SystemDialogs() {
 
     const authManager = AuthManagerContext.useValue()
@@ -64,19 +63,19 @@ export default function SystemDialogs() {
 
         aria-describedby={description}
 
-        initial={reducedMotion ? surfacePresencePose.entered : surfacePresencePose.entering}
+        initial={reducedMotion ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
 
-        animate={surfacePresencePose.entered}
+        animate={surfaceLifecyclePose.visible}
 
         transition={surfacePresenceTransition(reducedMotion, transaction)}
 
         onCancel={event => event.preventDefault()}
 
-        className={`${taskbarSurfaceClassName} inset-auto inset-be-[calc(anchor(top)+var(--desktop-gutter))] inset-s-[anchor(center)] w-[min(28rem,calc(100vw-var(--desktop-gutter)*2))] -translate-x-1/2 backdrop:bg-transparent [position-anchor:--desktop-taskbar]`}
+        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(28rem,calc(100vw-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
 
     >
 
-        <TaskbarSurface material="full" label={dialog.kind === "permission" ? "Permission request" : "System error"} labelId={title}>
+        <ShellSurface material="full" label={dialog.kind === "permission" ? "Permission request" : "System error"} labelId={title}>
 
             {dialog.kind === "permission"
 
@@ -84,7 +83,7 @@ export default function SystemDialogs() {
 
                 : <CrashReport key={dialog.identity} dialog={dialog} description={description} acknowledge={() => dialogManager.acknowledge(dialog.identity)} />}
 
-        </TaskbarSurface>
+        </ShellSurface>
 
     </motion.dialog>
 }
@@ -109,11 +108,11 @@ function PermissionRequest({ dialog, description, decide }: PermissionRequestPro
 
         <div className="col-span-full flex flex-wrap justify-end gap-2">
 
-            <TaskbarButton small disabled={decision.isPending} onPress={() => decision.safeExecute(false)}>Deny</TaskbarButton>
+            <Button size="xsmall" disabled={decision.isPending} onPress={() => decision.safeExecute(false)}>Deny</Button>
 
-            <TaskbarButton small autoFocus disabled={decision.isPending} onPress={() => decision.safeExecute(null)}>Later</TaskbarButton>
+            <Button size="xsmall" autoFocus disabled={decision.isPending} onPress={() => decision.safeExecute(null)}>Later</Button>
 
-            <TaskbarButton small disabled={decision.isPending} onPress={() => decision.safeExecute(true)}>Allow for this Program</TaskbarButton>
+            <Button size="xsmall" disabled={decision.isPending} onPress={() => decision.safeExecute(true)}>Allow for this Program</Button>
 
         </div>
 
@@ -138,9 +137,9 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
 
         </div>
 
-        <TaskbarButton
+        <Button
 
-            small
+            size="xsmall"
 
             autoFocus
 
@@ -154,7 +153,7 @@ function CrashReport({ dialog, description, acknowledge }: CrashReportProps) {
 
             I understand
 
-        </TaskbarButton>
+        </Button>
 
         {acknowledgment.exception && <Alert className="col-span-full text-sm">{String(acknowledgment.exception.current)}</Alert>}
 

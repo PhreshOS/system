@@ -2,8 +2,8 @@ import { ComponentProps, useId, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { Button } from "@phreshos/react-ui"
 
-/** A horizontal row that reveals its own overflow without owning its items. */
-export default function OverflowRow({ children, backwardLabel = "Scroll backward", forwardLabel = "Scroll forward", className, ...props }: OverflowRowProps) {
+/** A Taskbar-axis list that reveals its own overflow without owning its items. */
+export default function OverflowRow({ children, orientation = "horizontal", backwardLabel = "Scroll backward", forwardLabel = "Scroll forward", className, ...props }: OverflowRowProps) {
 
     const reducedMotion = useReducedMotion()
 
@@ -29,16 +29,20 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
         function measure() {
 
-            const end = Math.max(0, view!.scrollWidth - view!.clientWidth)
+            const horizontal = orientation === "horizontal"
 
-            const offset = getComputedStyle(view!).direction === "rtl" ? -view!.scrollLeft : view!.scrollLeft
+            const end = Math.max(0, horizontal ? view!.scrollWidth - view!.clientWidth : view!.scrollHeight - view!.clientHeight)
+
+            const offset = horizontal
+                ? getComputedStyle(view!).direction === "rtl" ? -view!.scrollLeft : view!.scrollLeft
+                : view!.scrollTop
 
             const next = {
 
                 // Compare natural content with the whole row, not the
                 // viewport after controls take their places. That avoids
                 // controls keeping themselves alive after content shrinks.
-                overflowing: row!.scrollWidth > box!.clientWidth + 1,
+                overflowing: horizontal ? row!.scrollWidth > box!.clientWidth + 1 : row!.scrollHeight > box!.clientHeight + 1,
 
                 start: offset <= 1,
 
@@ -67,7 +71,7 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
             view.removeEventListener("scroll", measure)
         }
 
-    }, [])
+    }, [orientation])
 
     function scroll(direction: -1 | 1) {
 
@@ -75,18 +79,27 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
         if (!view) return
 
+        if (orientation === "vertical") {
+
+            view.scrollBy({ top: direction * view.clientHeight * 0.8, behavior: reducedMotion ? "auto" : "smooth" })
+
+            return
+        }
+
         const inlineDirection = getComputedStyle(view).direction === "rtl" ? -1 : 1
 
         view.scrollBy({ left: inlineDirection * direction * view.clientWidth * 0.8, behavior: reducedMotion ? "auto" : "smooth" })
     }
 
-    return <div ref={container} role="group" className={`flex min-w-0 items-center gap-1 ${className ?? ""}`} {...props}>
+    const vertical = orientation === "vertical"
 
-        {edges.overflowing && <ScrollButton label={backwardLabel} controls={viewportId} direction="backward" disabled={edges.start} onClick={() => scroll(-1)} />}
+    return <div ref={container} role="group" className={`flex min-h-0 min-w-0 items-center gap-1 ${vertical ? "flex-col" : ""} ${className ?? ""}`} {...props}>
 
-        <div id={viewportId} ref={viewport} className="-m-2 min-w-0 flex-1 overflow-x-auto p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {edges.overflowing && <ScrollButton label={backwardLabel} controls={viewportId} direction="backward" orientation={orientation} disabled={edges.start} onClick={() => scroll(-1)} />}
 
-            <div ref={content} className="flex w-max min-w-full items-center gap-1.5">
+        <div id={viewportId} ref={viewport} className={`-m-2 min-h-0 min-w-0 flex-1 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${vertical ? "overflow-y-auto" : "overflow-x-auto"}`}>
+
+            <div ref={content} className={`flex items-center gap-1.5 ${vertical ? "h-max min-h-full flex-col" : "w-max min-w-full"}`}>
 
                 {children}
 
@@ -94,12 +107,12 @@ export default function OverflowRow({ children, backwardLabel = "Scroll backward
 
         </div>
 
-        {edges.overflowing && <ScrollButton label={forwardLabel} controls={viewportId} direction="forward" disabled={edges.end} onClick={() => scroll(1)} />}
+        {edges.overflowing && <ScrollButton label={forwardLabel} controls={viewportId} direction="forward" orientation={orientation} disabled={edges.end} onClick={() => scroll(1)} />}
 
     </div>
 }
 
-function ScrollButton({ label, controls, direction, disabled, onClick }: ScrollButtonProps) {
+function ScrollButton({ label, controls, direction, orientation, disabled, onClick }: ScrollButtonProps) {
 
     return <Button
         aria-label={label}
@@ -108,11 +121,11 @@ function ScrollButton({ label, controls, direction, disabled, onClick }: ScrollB
         onPress={onClick}
         size="xsmall"
         className="shrink-0"
-        style={{ inlineSize: 28, paddingInline: 0 }}
+        style={{ inlineSize: 28, blockSize: 28, paddingInline: 0 }}
 
     >
 
-        <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-3 rtl:-scale-x-100">
+        <svg aria-hidden="true" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`size-3 ${orientation === "vertical" ? "rotate-90" : "rtl:-scale-x-100"}`}>
 
             <path d={direction === "backward" ? "m7.5 2.5-3.5 3.5 3.5 3.5" : "m4.5 2.5 3.5 3.5-3.5 3.5"} />
 
@@ -122,6 +135,8 @@ function ScrollButton({ label, controls, direction, disabled, onClick }: ScrollB
 }
 
 interface OverflowRowProps extends ComponentProps<"div"> {
+
+    orientation?: "horizontal" | "vertical"
 
     backwardLabel?: string
 
@@ -135,6 +150,8 @@ interface ScrollButtonProps {
     controls: string
 
     direction: "backward" | "forward"
+
+    orientation: "horizontal" | "vertical"
 
     disabled: boolean
 

@@ -1,10 +1,10 @@
 import {
     isRelativeValue,
-    parseWindowFrame,
+    parseWindowSurface,
     parseWindowTransaction,
     type Position,
     type Size,
-    type WindowFrame,
+    type WindowSurface,
     type WindowGeometry,
     type WindowState,
     type WindowTransaction
@@ -16,10 +16,10 @@ export type PresentationAnimation = Readonly<{
     transaction: WindowTransaction
 }>
 
-/** Everything physically represented by one exact live Client iframe. */
+/** Values this Desktop relies on for one Client Window, not measured rendered output. */
 export type WindowPresentationState = WindowState & Readonly<{
     depth: number
-    frameAnimation: PresentationAnimation | null
+    surfaceAnimation: PresentationAnimation | null
     geometryAnimation: PresentationAnimation | null
     minimizeAnimation: PresentationAnimation | null
 }>
@@ -43,10 +43,10 @@ export interface WindowPresentationHost {
     unfollow(identity: string): Promise<void>
     setTitle(identity: string, title: string): void
     setHeader(identity: string, header: boolean): void
-    setFrame(identity: string, frame: WindowFrame, transaction?: PresentationTransactionRequest): Promise<void>
+    setSurface(identity: string, surface: WindowSurface, transaction?: PresentationTransactionRequest): Promise<void>
     raise(identity: string): void
     observe(identity: string, event: string | null, listener: (event: string, value: unknown) => void): () => void
-    complete(identity: string, kind: "geometry" | "minimize" | "frame", revision: number): void
+    complete(identity: string, kind: "geometry" | "minimize" | "surface", revision: number): void
 }
 
 export function presentationPosition(value: unknown): Position {
@@ -72,8 +72,8 @@ export function presentationGeometry(value: unknown): WindowGeometry {
     return Object.freeze({ x: record.x, y: record.y, width: record.width, height: record.height }) as WindowGeometry
 }
 
-export function presentationFrame(value: unknown) {
-    return parseWindowFrame(value)
+export function presentationSurface(value: unknown) {
+    return parseWindowSurface(value)
 }
 
 export function presentationTransaction(value: unknown, wait: unknown): PresentationTransactionRequest | undefined {

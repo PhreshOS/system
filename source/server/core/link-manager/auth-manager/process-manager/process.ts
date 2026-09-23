@@ -5,7 +5,7 @@ import ServerProcessBoundary, { type HostVisibility } from "./server-process-bou
 import HostTraffic from "./host-traffic"
 import ClientState from "./client-state"
 import { randomUUID } from "node:crypto"
-import { type Layer, type WindowFrame, type WindowTransaction } from "@phreshos/core"
+import { type Layer, type WindowSurface, type WindowTransaction } from "@phreshos/core"
 import { Tunnel } from "@the-link/core"
 import type { ServerRuntime } from "@server/core/server-runtime"
 
@@ -316,7 +316,7 @@ export default class Process {
             ...this.record(),
 
             // The trusted desktop counterpart keeps this essential fact
-            // current. Framed program records are shaped separately.
+            // current. Surfaced program records are shaped separately.
             server: this.server ? { ready: this.server.ready, service: this.server.service } : null,
 
             // The trusted desktop needs the relationship in order to
@@ -372,7 +372,7 @@ export interface ProcessLaunch {
 
         header: boolean
 
-        frame: WindowFrame
+        surface: WindowSurface
 
         transaction: WindowTransaction
 

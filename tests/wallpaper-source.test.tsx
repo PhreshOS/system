@@ -4,7 +4,7 @@ import { UIProvider } from "@phreshos/react-ui"
 import { defaultAppearance } from "@phreshos/core"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
-import { WallpaperBackground } from "@client/view/structure/desktop/wallpaper/wallpaper"
+import { WallpaperBackground } from "@client/view/structure/desktop/layers/wallpaper/wallpaper"
 import { test } from "vitest"
 
 test("wallpaper source contract", () => {

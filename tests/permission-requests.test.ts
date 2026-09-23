@@ -23,7 +23,7 @@ test("permission requests contract", async () => {
       let dialogProgram: Program | null = null
 
       const process = new Process("process", null, program, {}, { server: null, client: null, options: {} }, null, {} as HostTraffic,
-          new Window({ title: "Client", header: true, frame: true, transaction: false, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false))
+          new Window({ title: "Client", header: true, surface: true, transaction: false, layer: "window" }, { x: 0, y: 0 }, { width: 640, height: 480 }, 1, false))
       process.startClient(false)
 
       const authManager = {
