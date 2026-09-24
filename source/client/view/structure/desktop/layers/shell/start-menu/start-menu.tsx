@@ -203,6 +203,11 @@ function useStartMenuControl() {
     return value
 }
 
+/** Whether the default Shell's Start Menu currently retains its Taskbar anchor. */
+export function useStartMenuOpen() {
+    return useStartMenuControl().open
+}
+
 interface StartMenuControl {
     id: string
     surface: RefObject<HTMLDivElement | null>

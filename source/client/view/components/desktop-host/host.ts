@@ -928,6 +928,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return []
         }
 
+        if (word === "windowPresentationInteractive") {
+            const target = presentationProcess(args[0])
+            if (typeof args[1] !== "boolean") throw new Error("Window presentation interaction must be true or false")
+            presentation.setInteractive(target.identity, args[1])
+            return []
+        }
+
         if (word === "windowPresentationRaise") {
 
             const target = presentationProcess(args[0])

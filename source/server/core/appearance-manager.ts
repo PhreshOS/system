@@ -1,6 +1,6 @@
 import Keyv from "keyv"
 import { isDeepStrictEqual } from "node:util"
-import { applyAppearanceUpdate, defaultAppearance, parseAppearance, type Appearance } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, type Appearance } from "@phreshos/core"
 import UploadManager from "./upload-manager"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
@@ -17,9 +17,15 @@ export default class AppearanceManager {
 
     public static async open(store: Keyv, uploads: UploadManager) {
         const stored = await store.get(storageKey)
-        const appearance = parseAppearance(stored ?? defaultAppearance)
+        const appearance = stored === undefined
+            ? defaultAppearance
+            : applyAppearanceUpdate(defaultAppearance, stored)
 
-        if (stored === undefined) await store.set(storageKey, appearance)
+        // Persisted Appearance values may predate newly introduced fields. They
+        // remain overrides of the current defaults, then become canonical here.
+        if (stored === undefined || !isDeepStrictEqual(stored, appearance)) {
+            await store.set(storageKey, appearance)
+        }
 
         return new AppearanceManager(store, uploads, appearance)
     }

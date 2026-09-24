@@ -55,6 +55,10 @@ test("panel contract", async () => {
   assert.doesNotMatch(bare, /data-material/)
   assert.doesNotMatch(bare, /grid-template-rows:auto minmax\(0, 1fr\)/)
 
+  const passThrough = markup(<Window layer="over" icon="/icon.svg" title="Pass-through" interactive={false}><iframe title="Content" /></Window>)
+  assert.match(passThrough, /pointer-events-none/)
+  assert.match(passThrough, /inert=""/)
+
   const authentication = markup(<CredentialsForm title="Sign in" description="Welcome" submitLabel="Continue" passwordAutocomplete="current-password" pending={false} onSubmit={() => {}} />)
   panel(authentication, 5)
   assert.equal(authentication.match(/<form\b/g)?.length, 1)
@@ -101,7 +105,7 @@ test("panel contract", async () => {
   const taskbar = markup(<Taskbar
       leading={<button>Start</button>}
       trailing={<button>Sign out</button>}
-      taskbar={{ position: "bottom", size: 44 }}
+      taskbar={{ position: "bottom", size: 44, overlay: false }}
       spacing={8}
   ><button>Window</button></Taskbar>)
   assert.match(taskbar, /role="toolbar"/)

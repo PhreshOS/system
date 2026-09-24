@@ -76,7 +76,7 @@ interface DesktopLayersProps {
     shell: ReactNode
 }
 
-/** Keeps one Appearance gap outside the Taskbar and another before windows. */
+/** Reserves the Taskbar edge unless it overlays the standard Window surface. */
 export function windowSurfaceInsets(spacing: number, taskbar: AppearanceTaskbar): CSSProperties {
     const inset = {
         top: spacing,
@@ -85,7 +85,7 @@ export function windowSurfaceInsets(spacing: number, taskbar: AppearanceTaskbar)
         left: spacing
     }
 
-    inset[taskbar.position] += taskbar.size + spacing
+    if (!taskbar.overlay) inset[taskbar.position] += taskbar.size + spacing
 
     return inset
 }

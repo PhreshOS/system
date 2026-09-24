@@ -24,11 +24,15 @@ test("each Desktop owns an independent raw presentation initialized at zero", as
   assert.deepEqual(first.projection("overlay").position, { x: 0, y: 0 })
   assert.deepEqual(first.projection("overlay").size, { width: 0, height: 0 })
   assert.equal(first.projection("overlay").surface, false)
+  assert.equal(first.projection("overlay").interactive, true)
 
   await first.setGeometry("overlay", { x: 40, y: 50, width: 600, height: 400 })
   await first.setSurface("overlay", { color: "primary", radius: "full" })
+  first.setInteractive("overlay", false)
   assert.deepEqual(first.projection("overlay").position, { x: 40, y: 50 })
   assert.deepEqual(second.projection("overlay").position, { x: 0, y: 0 })
+  assert.equal(first.projection("overlay").interactive, false)
+  assert.equal(second.projection("overlay").interactive, true)
 
   await first.setSurface("overlay", false)
   assert.equal(first.projection("overlay").surface, false)
@@ -146,6 +150,23 @@ test("a new Client document preserves its mounted Desktop geometry representatio
   presentations.reconcile(new Map())
 
   assert.equal(presentations.representedGeometry("ordinary"), null)
+})
+
+test("a standard Window presentation survives its iframe document load", () => {
+  const ordinary = client("window")
+  const entries = entry("ordinary", ordinary)
+  const presentations = new WindowPresentations(entries, () => ordinary as never)
+
+  ordinary.window.position = { x: 80, y: 90 }
+  ordinary.window.maximized = true
+  presentations.reconcile(entries)
+
+  const before = presentations.projection("ordinary")
+  assert.ok(before.geometryAnimation)
+
+  presentations.begin("ordinary")
+
+  assert.equal(presentations.projection("ordinary"), before)
 })
 
 function entry(process: string, selected: ReturnType<typeof client>) {

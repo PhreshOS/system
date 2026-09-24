@@ -3,7 +3,7 @@ import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type BeginWindowMoveGesture, type Position, type Size, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
+import { type BeginWindowMoveGesture, type Position, type Size, type TaskbarPosition, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
 import { type PresentationAnimation, type PresentationMoveGestureController, type PresentationMovePoint } from "@client/view/components/desktop-host/window-presentation"
@@ -48,9 +48,24 @@ const edges: { edge: WindowEdge, className: string }[] = [
     { edge: "se", className: "bottom-0 right-0 size-4 cursor-nwse-resize" }
 ]
 
-const minimizedSurfacePose = { scale: 0.86, y: 28, opacity: 0 }
+const windowSurfaceLifecyclePose = Object.freeze({
+    visible: { ...surfaceLifecyclePose.visible, x: 0 },
+    hidden: { ...surfaceLifecyclePose.hidden, x: 0 }
+})
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, entering = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export function windowMinimizePose(position: TaskbarPosition) {
+
+    const distance = 28
+
+    return {
+        scale: 0.86,
+        x: position === "left" ? -distance : position === "right" ? distance : 0,
+        y: position === "top" ? -distance : position === "bottom" ? distance : 0,
+        opacity: 0
+    }
+}
+
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -231,13 +246,15 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const minimizeTransaction = minimizeAnimation
         ? resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
         : null
-    const initialPresence = opening ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible
+    const initialPresence = standard
+        ? opening ? windowSurfaceLifecyclePose.hidden : windowSurfaceLifecyclePose.visible
+        : opening ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible
 
     const presencePose = closing && standard
-        ? surfaceLifecyclePose.hidden
+        ? windowSurfaceLifecyclePose.hidden
         : minimized
-            ? standard ? minimizedSurfacePose : surfacePresencePose.entering
-            : surfaceLifecyclePose.visible
+            ? standard ? windowMinimizePose(taskbarPosition) : surfacePresencePose.entering
+            : standard ? windowSurfaceLifecyclePose.visible : surfaceLifecyclePose.visible
 
     const presenceTransition = reducedMotion
         ? { duration: 0 }
@@ -568,7 +585,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 onFocusCapture?.(event)
             }}
 
-            className={`absolute ${minimized || closing ? "pointer-events-none" : "pointer-events-auto"} ${className ?? ""}`}
+            // Only the Desktop can make the iframe's host box transparent to
+            // lower layers; content inside the iframe cannot cross that boundary.
+            className={`absolute ${minimized || closing || !interactive ? "pointer-events-none" : "pointer-events-auto"} ${className ?? ""}`}
 
             style={{ ...style, left: 0, top: 0, ...geometryMotion.style }}
 
@@ -577,7 +596,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             // A hidden pane is absent from sequential focus as well as
             // pointer hit-testing. Visibility currently provides the same
             // effect visually; inert states the interaction rule directly.
-            inert={minimized || closing}
+            inert={minimized || closing || !interactive}
 
         >
 
@@ -714,12 +733,18 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     maximized?: boolean
 
+    /** Whether this presentation participates in focus and hit testing. */
+    interactive?: boolean
+
     /** Whether mounting this element represents a newly opened Window. */
     entering?: boolean
 
     position?: Position
 
     size?: Size
+
+    /** Desktop edge toward which this standard Window minimizes. */
+    taskbarPosition?: TaskbarPosition
 
     surfaceAnimation?: PresentationAnimation | null
 

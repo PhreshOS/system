@@ -1,5 +1,5 @@
 import DesktopPreferencesProvider, { useDesktopPreferences, useDesktopThemeTransaction } from "./desktop-preferences"
-import { defaultAppearance, parseAppearance, type Appearance } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, type Appearance } from "@phreshos/core"
 import { UIProvider } from "@phreshos/react-ui"
 import ReducedMotion from "@libs/react-motion"
 import { createContext, type PropsWithChildren, useCallback, useContext, useLayoutEffect, useState } from "react"
@@ -70,12 +70,12 @@ export function useRememberSystemAppearance(appearance: Appearance) {
     useLayoutEffect(() => remember(appearance), [appearance, remember])
 }
 
-/** Restores one complete cached Appearance or falls back to the System default. */
+/** Resolves cached Appearance overrides against the current System default. */
 export function resolveStoredAppearance(value: string | null): Appearance {
     if (value === null) return defaultAppearance
 
     try {
-        return parseAppearance(JSON.parse(value))
+        return applyAppearanceUpdate(defaultAppearance, JSON.parse(value))
     }
     catch {
         return defaultAppearance

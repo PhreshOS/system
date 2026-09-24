@@ -40,6 +40,23 @@ test("appearance contract", async () => {
   assert(Object.isFrozen(manager.value))
   assert.deepEqual(await store.get("appearance"), defaultAppearance)
 
+  const legacyStore = new Keyv()
+  const { overlay: _overlay, ...legacyTaskbar } = defaultAppearance.taskbar
+  const legacyAppearance = {
+    ...defaultAppearance,
+    spacing: 15,
+    taskbar: { ...legacyTaskbar, position: "top" as const }
+  }
+  await legacyStore.set("appearance", legacyAppearance)
+
+  const migrated = await AppearanceManager.open(legacyStore, uploads)
+
+  assert.deepEqual(migrated.value, {
+    ...legacyAppearance,
+    taskbar: { ...legacyAppearance.taskbar, overlay: false }
+  })
+  assert.deepEqual(await legacyStore.get("appearance"), migrated.value)
+
   const initial = manager.value
   assert.equal(await manager.update(defaultAppearance), initial)
   assert.equal(manager.value, initial)

@@ -3,7 +3,7 @@ import useWindows from "../../components/window-manager/window-manager"
 import { type FocusEvent, type RefObject, useCallback, useRef } from "react"
 
 /** Focus transfer between the workspace, its windows and their taskbar items. */
-export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null>, windows: ReturnType<typeof useWindows>) {
+export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null>, windows: ReturnType<typeof useWindows>, taskbarOverlay: boolean) {
 
     const focusedWindow = useRef<string | null>(null)
 
@@ -23,9 +23,9 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
 
     const focusTaskbar = useCallback(function (record: Process) {
 
-        taskbarItems.current.get(record.identity)?.focus()
+        focusAfterMinimize(desktop.current, taskbarItems.current.get(record.identity), taskbarOverlay)
 
-    }, [])
+    }, [desktop, taskbarOverlay])
 
     const focusAfter = useCallback(function (record: Process) {
 
@@ -70,9 +70,9 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
 
         windows.minimize(record, minimized)
 
-        if (minimized) focusTaskbar(record)
-
-    }, [focusTaskbar, windows.minimize])
+        // If the request came from Window chrome, its later unavailable event
+        // transfers focus. A Taskbar-origin request already owns correct focus.
+    }, [windows.minimize])
 
     const close = useCallback(function (record: Process) {
 
@@ -83,4 +83,13 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
     }, [focusAfter, windows.close])
 
     return { taskbarItem, remember, unavailable, minimize, close }
+}
+
+export function focusAfterMinimize(desktop: HTMLDivElement | null, taskbarItem: HTMLButtonElement | undefined, taskbarOverlay: boolean) {
+    if (taskbarOverlay) {
+        desktop?.focus({ preventScroll: true })
+        return
+    }
+
+    taskbarItem?.focus()
 }

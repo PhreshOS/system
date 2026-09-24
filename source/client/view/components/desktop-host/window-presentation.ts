@@ -51,6 +51,7 @@ export interface WindowPresentationHost {
     resize(identity: string, size: Size, transaction?: PresentationTransactionRequest): Promise<void>
     setGeometry(identity: string, geometry: WindowGeometry, transaction?: PresentationTransactionRequest): Promise<void>
     setSurface(identity: string, surface: WindowPresentationSurface, transaction?: PresentationTransactionRequest): Promise<void>
+    setInteractive(identity: string, interactive: boolean): void
     raise(identity: string): void
     complete(identity: string, kind: "geometry" | "surface", revision: number): void
 }

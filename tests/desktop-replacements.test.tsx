@@ -4,9 +4,10 @@ import { UIProvider } from "@phreshos/react-ui"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import Workspace from "@client/view/structure/desktop/desktop"
 import { windowSurfaceInsets } from "@client/view/structure/desktop/layers/desktop-layers"
-import { taskbarStyle } from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
+import Taskbar, { taskbarConfigurationChanged, taskbarOverlayTransform, taskbarRegionStyle, taskbarRetentionDistance, taskbarRevealRegionStyle, taskbarStyle, taskbarVisible } from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { startMenuStyle } from "@client/view/structure/desktop/layers/shell/start-menu/start-menu"
 import { taskbarIndicatorClassName } from "@client/view/structure/desktop/layers/shell/taskbar/programs/taskbar-item"
+import { windowMinimizePose } from "@client/view/structure/desktop/windows/window"
 import type { ReactNode } from "react"
 import { defaultAppearance } from "@phreshos/core"
 
@@ -69,7 +70,7 @@ test("Desktop composes five full-bound stacked layers without a layout track", (
 test.each(["top", "right", "bottom", "left"] as const)("standard window surface reserves the %s Taskbar edge", position => {
     const spacing = 12
     const size = 44
-    const insets = windowSurfaceInsets(spacing, { position, size })
+    const insets = windowSurfaceInsets(spacing, { position, size, overlay: false })
 
     expect(insets).toEqual({
         top: position === "top" ? 68 : 12,
@@ -79,10 +80,61 @@ test.each(["top", "right", "bottom", "left"] as const)("standard window surface 
     })
 })
 
+test.each(["top", "right", "bottom", "left"] as const)("an overlay Taskbar does not reserve the %s standard-window edge", position => {
+    expect(windowSurfaceInsets(12, { position, size: 44, overlay: true })).toEqual({
+        top: 12,
+        right: 12,
+        bottom: 12,
+        left: 12
+    })
+})
+
+test.each(["top", "right", "bottom", "left"] as const)("an overlay Taskbar hides beyond and listens at the %s edge", position => {
+    const taskbar = { position, size: 44, overlay: true }
+    const region = taskbarRegionStyle(taskbar, 12)
+    const reveal = taskbarRevealRegionStyle(position, 12)
+
+    expect(region).toMatchObject({ [position]: 0 })
+    expect(reveal).toMatchObject({ [position]: 0 })
+    expect(position === "top" || position === "bottom" ? region.height : region.width).toBe(56 + taskbarRetentionDistance)
+    expect(position === "top" || position === "bottom" ? reveal.height : reveal.width).toBe(12)
+    expect(taskbarOverlayTransform(position, true, 12)).toBe("translate(0)")
+    expect(taskbarOverlayTransform(position, false, 12)).toContain(position === "top" || position === "bottom" ? "translateY" : "translateX")
+})
+
+test("an open anchored Shell surface retains the overlay Taskbar", () => {
+    const render = (keepVisible: boolean) => renderToStaticMarkup(<UIProvider preferences={{ theme: "light", animations: true }}>
+        <Taskbar
+            leading={null}
+            trailing={null}
+            taskbar={{ position: "bottom", size: 44, overlay: true }}
+            spacing={12}
+            keepVisible={keepVisible}
+        >
+            {null}
+        </Taskbar>
+    </UIProvider>)
+
+    expect(render(true)).toContain("transform:translate(0)")
+    expect(render(true)).toContain("data-taskbar-retention-region")
+    expect(render(false)).toContain("transform:translateY(calc(100% + 12px))")
+    expect(render(false)).not.toContain("data-taskbar-retention-region")
+})
+
+test("moving an overlay Taskbar invalidates the reveal from its previous edge", () => {
+    const previous = { position: "bottom", overlay: true } as const
+    const current = { position: "left", size: 44, overlay: true } as const
+    const changed = taskbarConfigurationChanged(previous, current)
+
+    expect(changed).toBe(true)
+    expect(taskbarVisible(current, true, false, changed)).toBe(false)
+    expect(taskbarVisible(current, true, true, changed)).toBe(true)
+})
+
 test.each(["top", "right", "bottom", "left"] as const)("Taskbar occupies its configured %s edge and Start Menu opens inward", position => {
     const spacing = 12
     const size = 44
-    const taskbar = { position, size }
+    const taskbar = { position, size, overlay: false }
     const bar = taskbarStyle(taskbar, spacing)
     const menu = startMenuStyle(taskbar, spacing)
 
@@ -104,6 +156,15 @@ test.each(["top", "right", "bottom", "left"] as const)("Taskbar occupies its con
 
 test.each(["top", "right", "bottom", "left"] as const)("active Taskbar indicator stays on the configured %s edge", position => {
     expect(taskbarIndicatorClassName(position)).toContain(`${position}-0`)
+})
+
+test.each([
+    ["top", { x: 0, y: -28 }],
+    ["right", { x: 28, y: 0 }],
+    ["bottom", { x: 0, y: 28 }],
+    ["left", { x: -28, y: 0 }]
+] as const)("standard windows minimize toward the %s Taskbar", (position, offset) => {
+    expect(windowMinimizePose(position)).toEqual({ scale: 0.86, ...offset, opacity: 0 })
 })
 
 test("Desktop replaces its default wallpaper with the running Client and restores the fallback after stop", () => {

@@ -30,6 +30,7 @@ export interface PresentedWindow {
     size: Size
     minimized: boolean
     maximized: boolean
+    interactive: boolean
     layer: WindowLayer
     depth: number
     surfaceAnimation: PresentationAnimation | null
@@ -195,6 +196,12 @@ export default class WindowPresentations implements WindowPresentationHost {
         return this.waitFor(identity, "surface", animation, transaction)
     }
 
+    public setInteractive(process: string, interactive: boolean) {
+        const { identity, state } = this.raw(process)
+        if (state.interactive === interactive) return
+        this.replace(identity, { ...state, interactive })
+    }
+
     public raise(process: string) {
         const { identity, state } = this.raw(process)
         if (frontmost(this.windows, state.layer) === identity) return
@@ -228,6 +235,17 @@ export default class WindowPresentations implements WindowPresentationHost {
         const identity = this.live.get(process)
         const client = this.client(process)
         if (!identity || !client) return
+
+        const state = this.windows.get(identity)
+        if (!state) return
+
+        if (state.layer === "window") {
+            // A document owns only gestures it originated. Standard Window
+            // geometry belongs to the Desktop and must survive iframe load.
+            this.cancelIdentityMoveGestures(identity)
+            return
+        }
+
         this.releaseTransient(identity, "The Window presentation was replaced")
         this.replace(identity, initialPresentationState(client))
     }
@@ -344,6 +362,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         size: window.size,
         minimized: window.minimized,
         maximized: window.maximized,
+        interactive: true,
         layer,
         depth: window.depth,
         surfaceAnimation: null,
@@ -358,6 +377,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         size: { width: "100%", height: "100%" },
         minimized: false,
         maximized: true,
+        interactive: true,
         layer,
         depth: 0,
         surfaceAnimation: null,
@@ -374,6 +394,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         size: { width: 0, height: 0 },
         minimized: false,
         maximized: false,
+        interactive: true,
         layer,
         depth: window.depth,
         surfaceAnimation: null,

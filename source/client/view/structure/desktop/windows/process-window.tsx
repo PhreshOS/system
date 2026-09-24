@@ -3,7 +3,7 @@ import ClientState from "@client/core/link-manager/auth-manager/process-manager/
 import { type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation, type PresentationMoveGestureController } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
-import { type Position, type Size, type Theme, type WindowPresentationSurface, type WindowLayer } from "@phreshos/core"
+import { type Position, type Size, type TaskbarPosition, type Theme, type WindowPresentationSurface, type WindowLayer } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
@@ -24,7 +24,7 @@ export function processWindowProgress(layer: WindowLayer, loading: boolean, stop
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, spacing, depth, active, minimized, maximized, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, spacing, depth, active, minimized, maximized, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -115,6 +115,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         size={size}
 
+        taskbarPosition={taskbarPosition}
+
         surfaceAnimation={surfaceAnimation}
 
         geometryAnimation={geometryAnimation}
@@ -136,6 +138,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
         minimized={minimized}
 
         maximized={maximized}
+
+        interactive={interactive}
 
         closing={closing}
 
@@ -237,6 +241,9 @@ interface ProcessWindowProps {
 
     size: Size
 
+    /** Desktop-owned presentation destination for minimizing standard Windows. */
+    taskbarPosition: TaskbarPosition
+
     surfaceAnimation: PresentationAnimation | null
 
     geometryAnimation: PresentationAnimation | null
@@ -260,6 +267,8 @@ interface ProcessWindowProps {
     minimized: boolean
 
     maximized: boolean
+
+    interactive: boolean
 
     closing: boolean
 

@@ -87,7 +87,7 @@ export default function Workspace() {
 
     }, [])
 
-    const focus = useDesktopFocus(desktop, windows)
+    const focus = useDesktopFocus(desktop, windows, appearance.taskbar.overlay)
 
     // Resolved once per desktop render. Asking inside every window and
     // taskbar item would repeat the same linear scan for each process.
@@ -135,6 +135,8 @@ export default function Workspace() {
 
             size={presentation.size}
 
+            taskbarPosition={appearance.taskbar.position}
+
             surfaceAnimation={presentation.surfaceAnimation}
 
             geometryAnimation={presentation.geometryAnimation}
@@ -160,6 +162,8 @@ export default function Workspace() {
             minimized={presentation.minimized}
 
             maximized={presentation.maximized}
+
+            interactive={presentation.interactive}
 
             closing={closing}
 
