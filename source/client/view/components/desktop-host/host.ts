@@ -17,7 +17,7 @@ import {
     parsePermission,
     parsePermissionName,
     parsePermissions,
-    type PermissionRequest,
+    type PermissionRequestInput,
     type ProgramIconSize
 } from "@phreshos/core"
 import {
@@ -704,30 +704,53 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [sdkProgram(program)]
         }
 
+        if (word === "context-permission-request") {
+
+            if (typeof args[0] !== "string") throw new Error("A permission request needs a unique identity")
+
+            const permission = parsePermissionName(args[1])
+
+            return [await authManager.requestPermission(
+                pane,
+                args[0],
+                permission,
+                args[2] as PermissionRequestInput<typeof permission>,
+                args[3]
+            )]
+        }
+
+        if (word === "host-permission-requests") {
+
+            await access.requireAll()
+
+            return [authManager.permissionManager.list()]
+        }
+
+        if (typeof word === "string" && word.startsWith("permission-request-")) {
+
+            await access.requireAll()
+
+            const operation = word.slice("permission-request-".length)
+            const identity = String(args[0])
+
+            if (operation === "pending") return [authManager.permissionManager.pending(identity)]
+            if (operation === "allow") await authManager.permissionManager.allow(identity)
+            else if (operation === "deny") await authManager.permissionManager.deny(identity)
+            else if (operation === "cancel") await authManager.permissionManager.cancel(identity)
+            else throw new Error(`The System does not know the PermissionRequest operation "${operation}"`)
+
+            return []
+        }
+
         if (word === "program-permissions") {
 
             const program = await permittedProgram(args[0])
 
             const operation = args[1]
 
-            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny" && operation !== "request") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
             if (operation === "all") return [parsePermissions(program.permissions)]
-
-            if (operation === "request") {
-
-                if (typeof args[2] !== "string") throw new Error("A permission request needs an identity")
-
-                const permission = parsePermissionName(args[3])
-
-                return [await authManager.requestPermission(
-                    pane,
-                    address(program),
-                    args[2],
-                    permission,
-                    args[4] as PermissionRequest<typeof permission>
-                )]
-            }
 
             const permission = parsePermissionName(args[2])
 
@@ -740,7 +763,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                     address(program),
                     operation,
                     permission,
-                    args[3] as PermissionRequest<typeof permission>
+                    args[3] as PermissionRequestInput<typeof permission>
                 )]
 
                 const requested = args[3] === undefined || args[3] === true
@@ -759,7 +782,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
                     address(program),
                     operation,
                     permission,
-                    args[3] as PermissionRequest<typeof permission>
+                    args[3] as PermissionRequestInput<typeof permission>
                 )
 
                 return []
@@ -1087,6 +1110,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         if (word === "logs") {
 
             return [await programManager.logs(address(await permittedProgram(args[0])), String(args[1]), Array.isArray(args[2]) ? args[2] : [])]
+        }
+
+        if (word === "system-logs") {
+
+            await access.require("logs", [])
+
+            return [await authManager.logs(String(args[0]), Array.isArray(args[1]) ? args[1] : [])]
         }
 
         // Read and write one exact Program database.

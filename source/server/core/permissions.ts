@@ -25,9 +25,6 @@ export class PermissionCatalog {
             const rule = rules[name]
 
             if (!rule || typeof rule !== "object") throw new Error(`Permission "${name}" needs a definition`)
-            if (typeof rule.title !== "string" || !rule.title.trim()) throw new Error(`Permission "${name}" needs a title`)
-            if (typeof rule.description !== "string" || !rule.description.trim()) throw new Error(`Permission "${name}" needs a description`)
-
             let defaults: PermissionValue<typeof name>[]
 
             try {
@@ -46,9 +43,7 @@ export class PermissionCatalog {
 
             validated[name] = Object.freeze({
                 valueDomain: programPermissionCatalog[name],
-                default: Object.freeze(defaults),
-                title: rule.title,
-                description: rule.description
+                default: Object.freeze(defaults)
             })
 
         }
@@ -217,8 +212,6 @@ type PermissionGrant = readonly string[] | false | null
 type PermissionDefinition<Name extends PermissionName = PermissionName> = Readonly<{
     valueDomain: PermissionValueDomain<Name>
     default: readonly PermissionValue<Name>[]
-    title: string
-    description: string
 }>
 
 type PermissionDefinitions = Readonly<{
@@ -238,8 +231,6 @@ type PermissionRules = Readonly<{
 type StoredDefinition = Readonly<{
     valueDomain: PermissionValueDomain
     default: readonly string[]
-    title: string
-    description: string
 }>
 
 function strings(value: unknown, subject: string): string[] {
@@ -276,61 +267,42 @@ function valueCovers(domain: PermissionValueDomain, grant: string, requested: st
     return false
 }
 
-/** The presentation and defaults for every Core-defined permission. */
+/** Authoritative defaults for every Core-defined permission. */
 export const permissionCatalog = new PermissionCatalog({
     all: {
-        default: [],
-        title: "All permissions",
-        description: "Grant every available Program permission."
+        default: []
     },
     services: {
-        default: [],
-        title: "Services",
-        description: "Access Services by their Process and Service name."
+        default: []
     },
     programs: {
-        default: [],
-        title: "Programs",
-        description: "Access every Program or selected Programs."
+        default: []
     },
     layers: {
-        default: [],
-        title: "Window layers",
-        description: "Select the under, over, wallpaper, and shell layers in Client Endpoint launches."
+        default: []
     },
     network: {
-        default: [],
-        title: "Network",
-        description: "Use System networking with every request target or selected target scopes."
+        default: []
     },
     storage: {
-        default: [],
-        title: "Storage",
-        description: "Use every native filesystem path or selected operation-and-path scopes."
+        default: []
     },
     uploads: {
-        default: [],
-        title: "Uploads",
-        description: "Create values in the System uploads collection."
+        default: []
+    },
+    logs: {
+        default: []
     },
     appearance: {
-        default: [],
-        title: "Appearance",
-        description: "Change the System Appearance."
+        default: []
     },
     desktopPreferences: {
-        default: [],
-        title: "Desktop preferences",
-        description: "Change this Desktop's preferences."
+        default: []
     },
     desktopConnection: {
-        default: [],
-        title: "Desktop connection",
-        description: "Access the browser Connection carrying this Desktop and its Session."
+        default: []
     },
     authentication: {
-        default: [],
-        title: "Authentication",
-        description: "Access and manage owner authentication, browser Connections, and Sessions."
+        default: []
     }
 })

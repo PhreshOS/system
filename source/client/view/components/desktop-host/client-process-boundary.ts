@@ -582,12 +582,12 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        if (args[0] === "program-permissions" && args[2] === "request" && typeof args[3] === "string") {
+        if (args[0] === "context-permission-request" && typeof args[1] === "string") {
 
             this.answerRequest(
                 question,
                 this.runHost(args[0], args.slice(1)),
-                () => { this.authManager.cancelPermission(this.pane, args[3] as string).catch(() => undefined) }
+                () => { this.authManager.permissionManager.cancel(args[1] as string).catch(() => undefined) }
             )
 
             return

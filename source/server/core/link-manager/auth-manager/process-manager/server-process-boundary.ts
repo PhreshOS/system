@@ -372,6 +372,9 @@ export default class ServerProcessBoundary extends TheLink {
                 : route === "host-connection" || route === "connection-host" ? "connection"
                 : route === "host-session" || route === "session-host" ? "session"
                 : route === "host-service" || route === "service-host" ? "service"
+                : route === "host-permission" || route === "permission-host" ? "permission"
+                : route === "host-log" ? "log"
+                : route === "program-log" ? "programLog"
                 : route === "host-end" ? "window"
                 : null
 
@@ -535,4 +538,4 @@ export type { Stream } from "@server/core/server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
 
-export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "service" | "window", subject: string | null) => boolean
+export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "log" | "programLog", subject: string | null) => boolean

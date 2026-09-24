@@ -2,15 +2,10 @@ import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth
 import { Intercept, Subscribe } from "@the-link/core/decorators"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
-import DialogManager from "./dialog-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import {
-    type Permission,
-    type PermissionName,
-    type PermissionRequest
-} from "@phreshos/core"
 import ShellManager from "./shell-manager"
+import PermissionManager from "./permission-manager"
 import StreamRelay from "@client/core/link-manager/stream-relay"
 import { type StorageChange } from "@phreshos/core"
 
@@ -26,7 +21,7 @@ export default class AuthManager extends TheLink {
 
     public readonly processManager: ProcessManager
 
-    public readonly dialogManager: DialogManager
+    public readonly permissionManager: PermissionManager
 
     public readonly shellManager: ShellManager
 
@@ -48,7 +43,7 @@ export default class AuthManager extends TheLink {
 
         this.processManager = new ProcessManager(this, payload.processManager)
 
-        this.dialogManager = new DialogManager(this, payload.dialogManager)
+        this.permissionManager = new PermissionManager(this, payload.permissionManager)
 
         this.shellManager = new ShellManager(this)
     }
@@ -78,6 +73,11 @@ export default class AuthManager extends TheLink {
     public session(operation: "state" | "connections" | "sign-out", identity?: string) {
 
         return this.$outbound.publishFirst(`/session/${operation}`, ...(identity === undefined ? [] : [identity]))
+    }
+
+    public logs(statement: string, values: unknown[] = []) {
+
+        return this.$outbound.publishFirst("/logs/query", statement, values)
     }
 
     /** Emit one authorized private fact without creating a response path. */
@@ -122,20 +122,13 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/permission/storage", process, path, operation) as boolean
     }
 
-    public async requestPermission<Name extends PermissionName>(
-        process: string,
-        program: unknown,
-        request: string,
-        name: Name,
-        permission: PermissionRequest<Name>
-    ): Promise<Permission<Name>> {
+    public async requestPermission(process: string, request: string, name: unknown, input: unknown, timeout: unknown) {
 
-        return await this.$outbound.publishFirst("/permission/request", request, process, program, name, permission) as Permission<Name>
-    }
+        const values = [request, process, name, input]
 
-    public async cancelPermission(process: string, request: string) {
+        if (timeout !== undefined) values.push(timeout)
 
-        await this.$outbound.publish("/permission/cancel", request, process)
+        return await this.$outbound.publishFirst("/permission/request", ...values)
     }
 
     public disconnect() {

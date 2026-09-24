@@ -26,6 +26,11 @@ export default class SystemAccess {
         return allowsSynchronizedPermission(this.permissions(), "all", [])
     }
 
+    public async systemLogs() {
+
+        return allowsSynchronizedPermission(this.permissions(), "logs", [])
+    }
+
     public async canProgram(program: Pick<Program, "identity">) {
 
         return this.ownsProgram(program)

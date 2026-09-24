@@ -25,7 +25,7 @@ import {
     type Launch,
     type Permission,
     type PermissionName,
-    type PermissionRequest,
+    type PermissionRequestInput,
     type PermissionValue,
     type ProgramIconSize,
     type ServerLaunch,
@@ -38,6 +38,8 @@ import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
 import SystemAccess from "./system-access"
 import { WebSocket } from "ws"
+import { permissionCatalog } from "@server/core/permissions"
+import { defaultPermissionRequestTimeout } from "@server/core/permission-manager"
 
 type SerializedClientLayer = DesktopReplacementLayer | "shell"
 
@@ -197,7 +199,7 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Observe one authoritative host fact without creating a Program boundary. */
-    public observeHost(domain: "program" | "process" | "window" | "connection" | "session" | "service", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
+    public observeHost(domain: "program" | "process" | "window" | "connection" | "session" | "service" | "permission", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.hostTraffic.observe(domain, event, subject, (_delivery, word, ...values) => subscriber(word, ...values))
     }
@@ -883,14 +885,26 @@ export default class ProcessManager extends TheLink {
 
                 () => this.endpointEvent("endpointStop", process, "server"),
 
-                // A server crash invalidates the complete execution. Only the
+                // An unexpected server end invalidates the complete execution. Only the
                 // explicit server.stop() road may intentionally leave the client
                 // state alive without its server counterpart.
                 async () => {
 
                     if (explicitlyStopped) return
 
-                    await this.authManager.linkManager.application.dialogManager.serverCrashed(process, code, signal)
+                    this.authManager.linkManager.application.logs.record(
+                        "error",
+                        "process",
+                        "unexpectedServerEndpointExit",
+                        unexpectedServerEndpointExitContent(process, code, signal),
+                        {
+                            program: { identity: process.program.identity, name: process.program.name },
+                            process: { identity: process.identity, name: process.name },
+                            endpoint: "server",
+                            code,
+                            signal
+                        }
+                    )
                 },
 
                 async () => {
@@ -928,11 +942,24 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window", subject: string | null) {
+    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "log" | "programLog", subject: string | null) {
 
         const access = new SystemAccess(this, process)
 
         if (domain === "connection" || domain === "session") return access.canAuthentication()
+
+        if (domain === "permission") return access.all()
+
+        if (domain === "log") return this.grants(process.identity, "logs", [])
+
+        if (domain === "programLog") {
+
+            if (!subject) return false
+
+            const program = [...this.authManager.programManager.programs.values()].find(entry => entry.program.reference === subject)?.program
+
+            return program ? access.canProgram(program) : false
+        }
 
         if (!subject) return false
 
@@ -1694,13 +1721,13 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Announces one fact only through an authoritative Host registry. */
-    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service", event: string, subject: string, ...values: unknown[]) {
+    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitHost(domain, event, subject, ...values)
     }
 
     /** Announces one fact only to observers of an exact Program or Process subject. */
-    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service", event: string, subject: string, ...values: unknown[]) {
+    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
@@ -1727,27 +1754,29 @@ export default class ProcessManager extends TheLink {
         return this.authManager.programManager.grantsStorage(process.program, path, operation)
     }
 
-    /** Requests owner approval and replaces the authoritative stored permission. */
+    /** Requests one owner decision for the Program of an exact live Endpoint. */
     public async requestPermission<Name extends PermissionName>(
         identity: string,
-        subject: unknown,
+        endpoint: "server" | "client",
         request: string,
         name: Name,
-        input: PermissionRequest<Name>
+        input: PermissionRequestInput<Name>,
+        timeout: unknown
     ): Promise<Permission<Name>> {
 
         const process = this.find(identity)
-        const access = new SystemAccess(this, process)
-        const program = access.program(this.system.holdProgram(subject, process.program))
+        const requested = permissionCatalog.resolve(name, input)
+        const duration = timeout === undefined ? defaultPermissionRequestTimeout : timeout
 
-        return this.authManager.programManager.requestPermission(program, request, name, input, process)
-    }
+        if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
+        if (!request) throw new Error("A permission request needs a unique identity")
+        if (typeof duration !== "number" || !Number.isFinite(duration) || duration < 0) throw new Error("A permission timeout must be a non-negative finite number")
+        if (Number.isNaN(new Date(Date.now() + duration).getTime())) throw new Error("A permission request expiration is invalid")
 
-    public cancelPermission(identity: string, request: string) {
+        // An already-satisfied request has no pending lifecycle occurrence.
+        if (!permissionCatalog.changed(this.authManager.programManager.permission(process.program, name), requested)) return requested
 
-        const process = this.processes.get(identity)
-
-        return process ? this.authManager.dialogManager.cancelPermission(request, process.reference) : Promise.resolve()
+        return this.authManager.permissionManager.request(process, endpoint, request, name, requested, duration)
     }
 
     // A window's news, said once and heard by both kinds of half.
@@ -1906,6 +1935,44 @@ export default class ProcessManager extends TheLink {
 
         if (word === "current-program") return [this.system.requireProgram(process.program.identity)]
 
+        if (word === "context-permission-request") {
+
+            if (typeof rest[0] !== "string") throw new Error("A permission request needs a unique identity")
+
+            const permission = parsePermissionName(rest[1])
+
+            return [await this.requestPermission(
+                process.identity,
+                "server",
+                rest[0],
+                permission,
+                rest[2] as PermissionRequestInput<typeof permission>,
+                rest[3]
+            )]
+        }
+
+        if (word === "host-permission-requests") {
+
+            access.requireAll()
+
+            return [this.authManager.permissionManager.requests()]
+        }
+
+        if (typeof word === "string" && word.startsWith("permission-request-")) {
+
+            access.requireAll()
+
+            const operation = word.slice("permission-request-".length)
+
+            if (operation === "pending") return [this.authManager.permissionManager.pending(String(rest[0]))]
+            if (operation === "allow") await this.authManager.permissionManager.allow(rest[0])
+            else if (operation === "deny") await this.authManager.permissionManager.deny(rest[0])
+            else if (operation === "cancel") await this.authManager.permissionManager.cancel(rest[0])
+            else throw new Error(`The System does not know the PermissionRequest operation "${operation}"`)
+
+            return []
+        }
+
         if (word === "program-permissions") {
 
             const program = heldProgram(rest[0])
@@ -1918,7 +1985,7 @@ export default class ProcessManager extends TheLink {
 
                 const permission = parsePermissionName(rest[2])
 
-                return [this.authManager.programManager.allowsPermission(program, permission, rest[3] as PermissionRequest<typeof permission>)]
+                return [this.authManager.programManager.allowsPermission(program, permission, rest[3] as PermissionRequestInput<typeof permission>)]
             }
             if (operation === "allow") {
 
@@ -1928,7 +1995,7 @@ export default class ProcessManager extends TheLink {
                 await this.authManager.programManager.setPermission(
                     program,
                     permission,
-                    rest[3] as PermissionRequest<typeof permission>
+                    rest[3] as PermissionRequestInput<typeof permission>
                 )
 
                 return []
@@ -1939,20 +2006,6 @@ export default class ProcessManager extends TheLink {
                 await this.authManager.programManager.setPermission(program, parsePermissionName(rest[2]), false)
 
                 return []
-            }
-            if (operation === "request") {
-
-                if (typeof rest[2] !== "string") throw new Error("A permission request needs a unique identity")
-
-                const permission = parsePermissionName(rest[3])
-
-                return [await this.authManager.programManager.requestPermission(
-                    program,
-                    rest[2],
-                    permission,
-                    rest[4] as PermissionRequest<typeof permission>,
-                    process
-                )]
             }
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
         }
@@ -2605,6 +2658,13 @@ export default class ProcessManager extends TheLink {
             return [this.system.programQuery(program, "logs", String(rest[1]), Array.isArray(rest[2]) ? rest[2] : [])]
         }
 
+        if (word === "system-logs") {
+
+            access.require("logs", [])
+
+            return [this.authManager.linkManager.application.logs.query(String(rest[0]), Array.isArray(rest[1]) ? rest[1] : [])]
+        }
+
         // A program's own database. Written as well as read, unlike the
         // log above: that is the system's account of a program and this
         // is the program's own, which is why they are two files.
@@ -2755,13 +2815,6 @@ export default class ProcessManager extends TheLink {
             // wire carries one value, so the list is that value. A
             // program's own endpoint answers a value directly; these are
             // the two shapes and they meet here.
-            if (args[0] === "program-permissions" && args[2] === "request" && typeof args[3] === "string") {
-
-                // A timed SDK request forgets its transport question. Retain
-                // the matching dialog cancellation at that same boundary.
-                server.retain(question, () => { this.cancelPermission(process.identity, args[3] as string).catch(() => undefined) })
-            }
-
             const result = await this.endHost(process, server, args)
 
             this.say(server, "host-end", "answer", question, succeeded(result))
@@ -3442,6 +3495,17 @@ function isHandleAddress(value: unknown): value is HandleAddress {
 
     return typeof value === "object" && value !== null && "identity" in value && "reference" in value
         && typeof value.identity === "string" && typeof value.reference === "string"
+}
+
+function unexpectedServerEndpointExitContent(process: Process, code: number | null, signal: NodeJS.Signals | null) {
+
+    const endpoint = process.name ? `the “${process.name}” Process's server Endpoint` : "its server Endpoint"
+
+    if (signal) return `${process.program.name} stopped unexpectedly because ${endpoint} was terminated by ${signal}.`
+
+    if (code !== null) return `${process.program.name} stopped unexpectedly because ${endpoint} exited with code ${code}.`
+
+    return `${process.program.name} stopped because ${endpoint} ended unexpectedly.`
 }
 
 function stringPath(value: unknown) {

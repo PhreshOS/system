@@ -15,6 +15,9 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     const processes = ReactTunnel.useFactory(authManager.processManager.$inbound)
     const programs = ReactTunnel.useFactory(authManager.programManager.$inbound)
     const authentication = ReactTunnel.useFactory(authManager.$inbound)
+    const permissions = ReactTunnel.useFactory(authManager.permissionManager.$inbound)
+
+    const logs = ReactTunnel.useFactory(authManager.$inbound)
 
     const post = useCallback(function (program: string, route: string, ...message: unknown[]) {
 
@@ -193,6 +196,59 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         post(entry.identity, "host-program", "permissions", entry.identity, record)
         post(entry.identity, "program-host", "permissions", entry.reference, record)
     }, [post]))
+
+    programs.useSubscribe("/log", useCallback((reference: unknown, record: unknown) => {
+
+        if (typeof reference !== "string") return
+
+        const entry = [...authManager.programManager.programs.values()].find(program => program.reference === reference)
+
+        if (!entry) return
+
+        postVisible(access => access.canProgram(entry), "program-log", "log", reference, record)
+    }, [authManager, postVisible]))
+
+    logs.useSubscribe("/logs/log", useCallback((record: unknown) => {
+
+        postVisible(access => access.systemLogs(), "host-log", "log", "system", record)
+    }, [postVisible]))
+
+    permissions.useSubscribe("/request", useCallback((request: unknown) => {
+
+        const program = permissionProgram(request)
+
+        if (program) postVisible(access => access.all(), "host-permission", "request", program, request)
+    }, [postVisible]))
+
+    permissions.useSubscribe("/resolve", useCallback((request: unknown, permission: unknown) => {
+
+        const program = permissionProgram(request)
+        const identity = domainIdentity(request)
+
+        if (!program || !identity) return
+
+        postVisible(access => access.all(), "host-permission", "resolve", program, request, permission)
+        postVisible(access => access.all(), "permission-host", "resolve", identity, request, permission)
+    }, [postVisible]))
+}
+
+function permissionProgram(value: unknown) {
+
+    if (!value || typeof value !== "object") return null
+
+    const from = (value as { from?: unknown }).from
+
+    if (!from || typeof from !== "object") return null
+
+    const process = (from as { process?: unknown }).process
+
+    if (!process || typeof process !== "object") return null
+
+    const program = (process as { program?: unknown }).program
+
+    if (!program || typeof program !== "object") return null
+
+    return domainIdentity(program)
 }
 
 function domainIdentity(value: unknown) {

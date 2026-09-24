@@ -76,7 +76,7 @@ test("Program and Process discovery exposes only the accessible scope", async ()
     await expect(answer("host-process-find", hidden.identity)).resolves.toEqual([expect.objectContaining({ identity: hidden.identity })])
 })
 
-test("Program permission reads and requests require Program access while direct mutation alone requires all", async () => {
+test("Program permission reads require Program access while owner decisions require all", async () => {
     let permissions: Permissions = { programs: ["outside"] }
     const owner = program("owner")
     Object.defineProperty(owner, "permissions", { get: () => permissions })
@@ -86,26 +86,91 @@ test("Program permission reads and requests require Program access while direct 
     const read = vi.fn(async (_address, operation: string) => operation === "all"
         ? { network: ["https://example.com"] }
         : ["https://example.com"])
-    const requestPermission = vi.fn(async () => ["https://example.com"])
     const auth = {
         programManager: { programs: new Map([[owner.identity, owner], [outside.identity, outside]]), permissions: read },
         processManager: { processes: new Map([[current.identity, current]]) },
-        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions),
-        requestPermission
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
     const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
     const target = { identity: outside.identity, reference: outside.reference }
 
     await expect(answer("program-permissions", target, "get", "network")).resolves.toEqual([["https://example.com"]])
     await expect(answer("program-permissions", target, "all")).resolves.toEqual([{ network: ["https://example.com"] }])
-    await expect(answer("program-permissions", target, "request", "request", "network", ["https://example.com"])).resolves.toEqual([["https://example.com"]])
-    expect(requestPermission).toHaveBeenCalledWith("current", target, "request", "network", ["https://example.com"])
+    await expect(answer("program-permissions", target, "request", "request", "network", ["https://example.com"])).rejects.toThrow("does not know")
     await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).rejects.toThrow("Execution is not permitted")
     await expect(answer("program-permissions", target, "deny", "network")).rejects.toThrow("Execution is not permitted")
 
     permissions = { all: [] }
     await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).resolves.toEqual([])
     await expect(answer("program-permissions", target, "deny", "network")).resolves.toEqual([])
+})
+
+test("Program log access follows the Program handle while System logs require logs", async () => {
+    let permissions: Permissions = {}
+    const owner = program("owner")
+    Object.defineProperty(owner, "permissions", { get: () => permissions })
+    const outside = program("outside")
+    const current = process("current", owner)
+    const programLogs = vi.fn(async () => [{ kind: "stdout" }])
+    const systemLogs = vi.fn(async () => [{ kind: "system" }])
+    const auth = {
+        programManager: { programs: new Map([[owner.identity, owner], [outside.identity, outside]]), logs: programLogs },
+        processManager: { processes: new Map([[current.identity, current]]) },
+        logs: systemLogs,
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
+    } as unknown as AuthManager
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const own = { identity: owner.identity, reference: owner.reference }
+    const other = { identity: outside.identity, reference: outside.reference }
+
+    await expect(answer("logs", own, "select * from logs", [])).resolves.toEqual([[{ kind: "stdout" }]])
+    await expect(answer("logs", other, "select * from logs", [])).rejects.toThrow("Program represented by this handle does not exist")
+    await expect(answer("system-logs", "select * from logs", [])).rejects.toThrow("Execution is not permitted")
+
+    permissions = { programs: [outside.identity] }
+    await expect(answer("logs", other, "select * from logs", [])).resolves.toEqual([[{ kind: "stdout" }]])
+    await expect(answer("system-logs", "select * from logs", [])).rejects.toThrow("Execution is not permitted")
+
+    permissions = { logs: [] }
+    await expect(answer("system-logs", "select * from logs", [])).resolves.toEqual([[{ kind: "system" }]])
+})
+
+test("a Client Context requests only for its own Endpoint Program", async () => {
+    const owner = program("owner")
+    const current = process("current", owner)
+    const requestPermission = vi.fn(async () => ["https://example.com"])
+    const auth = {
+        programManager: { programs: new Map([[owner.identity, owner]]) },
+        processManager: { processes: new Map([[current.identity, current]]) },
+        requestPermission
+    } as unknown as AuthManager
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const timeout = 1_000
+
+    await expect(answer("context-permission-request", "request", "network", ["https://example.com"], timeout))
+        .resolves.toEqual([["https://example.com"]])
+    expect(requestPermission).toHaveBeenCalledWith("current", "request", "network", ["https://example.com"], timeout)
+})
+
+test("the system-wide permission registry requires all", async () => {
+    let permissions: Permissions = {}
+    const owner = program("owner")
+    Object.defineProperty(owner, "permissions", { get: () => permissions })
+    const current = process("current", owner)
+    const list = vi.fn(() => [{ identity: "request" }])
+    const auth = {
+        programManager: { programs: new Map([[owner.identity, owner]]) },
+        processManager: { processes: new Map([[current.identity, current]]) },
+        permissionManager: { list },
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
+    } as unknown as AuthManager
+    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+
+    await expect(answer("host-permission-requests")).rejects.toThrow("Execution is not permitted")
+    expect(list).not.toHaveBeenCalled()
+
+    permissions = { all: [] }
+    await expect(answer("host-permission-requests")).resolves.toEqual([[{ identity: "request" }]])
 })
 
 test.each([

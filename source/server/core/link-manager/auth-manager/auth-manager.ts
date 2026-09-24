@@ -1,12 +1,12 @@
 import { Forward, Intercept, Subscribe } from "@the-link/core/decorators"
 import UploadManager, { uploadLimit } from "@server/core/upload-manager"
-import DialogManager from "@server/core/dialog-manager"
 import ProcessManager from "./process-manager/process-manager"
 import ProgramManager from "./program-manager/program-manager"
 import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
-import { parsePermissionName, type PermissionRequest } from "@phreshos/core"
+import { parsePermissionName, type PermissionRequestInput } from "@phreshos/core"
 import ShellManager from "./shell-manager"
+import PermissionManager from "../../permission-manager"
 
 export default class AuthManager extends TheLink {
 
@@ -18,7 +18,7 @@ export default class AuthManager extends TheLink {
 
     public readonly processManager: ProcessManager
 
-    public readonly dialogManager: DialogManager
+    public readonly permissionManager: PermissionManager
 
     public readonly shellManager: ShellManager
 
@@ -28,15 +28,20 @@ export default class AuthManager extends TheLink {
 
         this.linkManager = linkManager
 
+        this.permissionManager = new PermissionManager(this)
+
         this.programManager = new ProgramManager(this)
 
         this.processManager = new ProcessManager(this)
 
-        this.dialogManager = this.linkManager.application.dialogManager
-
         this.shellManager = new ShellManager(this)
 
-        this.dialogManager.connectTo(this, "/dialog")
+        this.linkManager.application.logs.subscribe(record => {
+
+            this.$outbound.publish("/logs/log", record).catch(() => undefined)
+
+            this.processManager.announceHost("log", "log", "system", record).catch(() => undefined)
+        })
 
         this.subscribeTo(this.linkManager, "/auth")
     }
@@ -354,19 +359,56 @@ export default class AuthManager extends TheLink {
     }
 
     @Subscribe("/permission/request")
-    protected async requestPermission(request: unknown, process: unknown, program: unknown, name: unknown, permission: unknown) {
+    protected async requestPermission(request: unknown, process: unknown, name: unknown, permission: unknown, timeout: unknown) {
 
         if (typeof request !== "string" || typeof process !== "string") throw new Error("A permission request is invalid")
 
         const permissionName = parsePermissionName(name)
 
-        return this.processManager.requestPermission(process, program, request, permissionName, permission as PermissionRequest<typeof permissionName>)
+        return this.processManager.requestPermission(
+            process,
+            "client",
+            request,
+            permissionName,
+            permission as PermissionRequestInput<typeof permissionName>,
+            timeout
+        )
     }
 
-    @Subscribe("/permission/cancel")
-    protected async cancelPermission(request: unknown, process: unknown) {
+    @Subscribe("/permissions/requests")
+    protected permissionRequests() {
 
-        if (typeof request === "string" && typeof process === "string") await this.processManager.cancelPermission(process, request)
+        return this.permissionManager.requests()
+    }
+
+    @Subscribe("/permissions/pending")
+    protected permissionPending(identity: unknown) {
+
+        return typeof identity === "string" && this.permissionManager.pending(identity)
+    }
+
+    @Subscribe("/permissions/allow")
+    protected async allowPermissionRequest(identity: unknown) {
+
+        await this.permissionManager.allow(identity)
+    }
+
+    @Subscribe("/permissions/deny")
+    protected async denyPermissionRequest(identity: unknown) {
+
+        await this.permissionManager.deny(identity)
+    }
+
+    @Subscribe("/permissions/cancel")
+    protected async cancelPermissionRequest(identity: unknown) {
+
+        await this.permissionManager.cancel(identity)
+    }
+
+    @Subscribe("/logs/query")
+    protected systemLogs(statement: unknown, values: unknown) {
+
+        return this.linkManager.application.logs.query(String(statement), Array.isArray(values) ? values : [])
     }
 
     public async writeArea(sessionToken: unknown, program: unknown, area: "data" | "cache", path: string[], content: ReadableStream<Uint8Array> | null, signal?: AbortSignal, overwrite = true) {
@@ -414,7 +456,7 @@ export default class AuthManager extends TheLink {
 
             processManager: this.processManager,
 
-            dialogManager: this.dialogManager
+            permissionManager: this.permissionManager
         }
     }
 }
@@ -469,5 +511,5 @@ export interface AuthManagerSnapshot {
 
     processManager: import("./process-manager/process-manager").ProcessManagerSnapshot
 
-    dialogManager: ReturnType<DialogManager["toJSON"]>
+    permissionManager: import("../../permission-manager").PermissionManagerSnapshot
 }

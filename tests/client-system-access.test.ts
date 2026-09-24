@@ -65,6 +65,7 @@ test("client system access contract", async () => {
   await assert.rejects(access.requireNetwork("https://api.example.com/v1/users"), /Execution is not permitted/)
   await assert.rejects(access.requireStorage("/Users/person/Documents/report.txt", "read"), /Execution is not permitted/)
   await assert.rejects(access.require("uploads", []), /Execution is not permitted/)
+  await assert.rejects(access.require("logs", []), /Execution is not permitted/)
   await assert.rejects(access.require("appearance", []), /Execution is not permitted/)
   await assert.rejects(access.require("desktopPreferences", []), /Execution is not permitted/)
   await assert.rejects(access.require("desktopConnection", []), /Execution is not permitted/)
@@ -127,6 +128,11 @@ test("client system access contract", async () => {
   await access.require("uploads", [])
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 
+  permissions = { logs: [] }
+
+  await access.require("logs", [])
+  await assert.rejects(access.require("uploads", []), /Execution is not permitted/)
+
   permissions = { network: ["https://*.example.com/v1/**"] }
 
   await access.requireNetwork("https://api.example.com/v1/users")
@@ -157,6 +163,7 @@ test("client system access contract", async () => {
   await access.requireNetwork("wss://events.example.com/socket")
   await access.requireStorage("/any/native/path", "delete")
   await access.require("uploads", [])
+  await access.require("logs", [])
   await access.requireAll()
   assert.equal(permissionChecks, 0)
 

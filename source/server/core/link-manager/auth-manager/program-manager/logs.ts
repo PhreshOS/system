@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite"
 import { existsSync, mkdirSync } from "node:fs"
 import { dirname } from "node:path"
+import type { ProgramLogRecord } from "@phreshos/core"
+
+type Listener = (record: ProgramLogRecord) => unknown
 
 /**
  * What a program's halves have said, kept.
@@ -57,7 +60,7 @@ export default class Logs {
 
     private since = 0
 
-    public constructor(path: string) {
+    public constructor(path: string, private readonly listener?: Listener) {
 
         this.path = path
     }
@@ -189,7 +192,16 @@ export default class Logs {
 
             const insert = database.prepare("insert into logs (createdAt, process, source, kind, content) values (?, ?, ?, ?, ?)")
 
-            for (const [process, source, kind, content] of rows) insert.run(at, process, source, kind, content)
+            for (const [process, source, kind, content] of rows) {
+
+                const record = Object.freeze({ createdAt: at, process, source, kind, content }) satisfies ProgramLogRecord
+
+                insert.run(record.createdAt, record.process, record.source, record.kind, record.content)
+
+                try { this.listener?.(record) }
+
+                catch { /* One live listener cannot obstruct the durable log. */ }
+            }
 
             this.since += rows.length
 

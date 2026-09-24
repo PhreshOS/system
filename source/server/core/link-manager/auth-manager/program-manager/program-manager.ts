@@ -25,7 +25,7 @@ import {
     type Permission,
     type PermissionInput,
     type PermissionName,
-    type PermissionRequest,
+    type PermissionRequestInput,
     type PermissionValue,
     type Permissions
 } from "@phreshos/core"
@@ -189,7 +189,7 @@ export default class ProgramManager extends TheLink {
     public allowsPermission<Name extends PermissionName>(
         program: Program,
         name: Name,
-        input: PermissionRequest<Name> = true
+        input: PermissionRequestInput<Name> = true
     ) {
 
         const requested = permissionCatalog.resolve(name, input)
@@ -273,39 +273,8 @@ export default class ProgramManager extends TheLink {
         ])
     }
 
-    /** Requests one owner decision for this target Program, independently of its initiator. */
-    public async requestPermission<Name extends PermissionName>(
-        program: Program,
-        request: string,
-        name: Name,
-        input: PermissionRequest<Name>,
-        process: Process | null = null
-    ): Promise<Permission<Name>> {
-
-        const requested = permissionCatalog.resolve(name, input)
-
-        if (!Array.isArray(requested)) throw new Error("A permission request must be true or a list of values")
-        if (!request) throw new Error("A permission request needs a unique identity")
-
-        // A request asks for one exact canonical assignment. When effective
-        // authority already equals it, no owner decision or state write exists
-        // to perform; broader and narrower assignments remain distinct.
-        if (!permissionCatalog.changed(this.permission(program, name), requested)) return requested
-
-        const choice = await this.authManager.dialogManager.requestPermission(program, request, name, requested, process)
-
-        if (choice === true) {
-
-            await this.setPermission(program, name, requested)
-
-            return requested
-        }
-
-        return choice
-    }
-
     @Subscribe("/permissions")
-    protected async programPermissions(subject: unknown, operation: unknown, first?: unknown, second?: unknown, third?: unknown) {
+    protected async programPermissions(subject: unknown, operation: unknown, first?: unknown, second?: unknown) {
 
         const program = this.held(subject)
 
@@ -315,42 +284,19 @@ export default class ProgramManager extends TheLink {
 
             const permission = parsePermissionName(first)
 
-            return this.allowsPermission(program, permission, second as PermissionRequest<typeof permission>)
+            return this.allowsPermission(program, permission, second as PermissionRequestInput<typeof permission>)
         }
         if (operation === "allow") {
 
             const permission = parsePermissionName(first)
 
-            await this.setPermission(program, permission, second as PermissionRequest<typeof permission>)
+            await this.setPermission(program, permission, second as PermissionRequestInput<typeof permission>)
 
             return
         }
         if (operation === "deny") {
 
             await this.setPermission(program, parsePermissionName(first), false)
-
-            return
-        }
-        if (operation === "request") {
-
-            if (typeof first !== "string") throw new Error("A permission request needs a unique identity")
-
-            const permission = parsePermissionName(second)
-            const signal = this.authManager.connectionSignal()
-            const cancel = () => { this.authManager.dialogManager.cancelPermission(first).catch(() => undefined) }
-
-            signal.addEventListener("abort", cancel, { once: true })
-
-            try {
-                return await this.requestPermission(program, first, permission, third as PermissionRequest<typeof permission>)
-            }
-            finally {
-                signal.removeEventListener("abort", cancel)
-            }
-        }
-        if (operation === "cancel-request") {
-
-            if (typeof first === "string") await this.authManager.dialogManager.cancelPermission(first)
 
             return
         }
@@ -616,7 +562,14 @@ export default class ProgramManager extends TheLink {
 
         if (already) return already
 
-        const logs = new Logs(join(program.storagePath, "logs.sqlite"))
+        const logs = new Logs(join(program.storagePath, "logs.sqlite"), record => {
+
+            // Persistence owns the fact; the boundaries only forward the
+            // post-commit record to observers that are authorized to see it.
+            this.$outbound.publish("/log", program.reference, record).catch(() => undefined)
+
+            this.authManager.processManager.announceSubject("programLog", "log", program.reference, record).catch(() => undefined)
+        })
 
         this.said.set(program.identity, logs)
 

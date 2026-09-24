@@ -6,91 +6,62 @@ import { test } from "vitest"
 test("permissions contract", async () => {
   const catalog = new PermissionCatalog({
       all: {
-          default: [],
-          title: "All permissions",
-          description: "Grant every available Program permission."
+          default: []
       },
       services: {
-          default: [],
-          title: "Services",
-          description: "Access Services without broader authority over their Programs."
+          default: []
       },
       programs: {
-          default: [],
-          title: "Programs",
-          description: "Access every Program or selected Programs, including their Services."
+          default: []
       },
       layers: {
-          default: [],
-          title: "Window layers",
-          description: "Select the under, over, wallpaper, and shell layers in Client Endpoint launches."
+          default: []
       },
       network: {
-          default: [],
-          title: "Network",
-          description: "Use System networking with every request target or selected target scopes."
+          default: []
       },
       storage: {
-          default: [],
-          title: "Storage",
-          description: "Use every native filesystem path or selected operation-and-path scopes."
+          default: []
       },
       uploads: {
-          default: [],
-          title: "Uploads",
-          description: "Create values in the System uploads collection."
+          default: []
+      },
+      logs: {
+          default: []
       },
       appearance: {
-          default: [],
-          title: "Appearance",
-          description: "Change the System Appearance."
+          default: []
       },
       desktopPreferences: {
-          default: [],
-          title: "Desktop preferences",
-          description: "Change this Desktop's preferences."
+          default: []
       },
       desktopConnection: {
-          default: [],
-          title: "Desktop connection",
-          description: "Access the browser Connection carrying this Desktop and its Session."
+          default: []
       },
       authentication: {
-          default: [],
-          title: "Authentication",
-          description: "Access and manage owner authentication, browser Connections, and Sessions."
+          default: []
       }
   })
 
   assert.deepEqual(catalog.definition("all"), {
       valueDomain: "none",
-      default: [],
-      title: "All permissions",
-      description: "Grant every available Program permission."
+      default: []
   })
   assert.deepEqual(catalog.definition("programs"), {
       valueDomain: "program",
-      default: [],
-      title: "Programs",
-      description: "Access every Program or selected Programs, including their Services."
+      default: []
   })
   assert.deepEqual(catalog.definition("network"), {
       valueDomain: "network",
-      default: [],
-      title: "Network",
-      description: "Use System networking with every request target or selected target scopes."
+      default: []
   })
   assert.deepEqual(catalog.definition("storage"), {
       valueDomain: "storage",
-      default: [],
-      title: "Storage",
-      description: "Use every native filesystem path or selected operation-and-path scopes."
+      default: []
   })
   assert.deepEqual(catalog.definition("uploads"), {
       valueDomain: "none",
-      default: [],
-      title: "Uploads",
-      description: "Create values in the System uploads collection."
+      default: []
   })
   assert.deepEqual(catalog.resolve("all", true), [])
   assert.deepEqual(catalog.resolve("all", []), [])
@@ -163,9 +134,7 @@ test("permissions contract", async () => {
   assert.throws(() => new PermissionCatalog({} as never), /needs a definition/)
   assert.throws(() => new PermissionCatalog({
       all: {
-          default: ["unknown"],
-          title: "All permissions",
-          description: "Invalid default."
+          default: ["unknown"]
       },
       services: catalog.definition("services"),
       programs: catalog.definition("programs"),

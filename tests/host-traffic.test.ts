@@ -10,6 +10,8 @@ test("host traffic contract", async () => {
   const programProcess: unknown[][] = []
   const hostConnection: unknown[][] = []
   const ownSession: unknown[][] = []
+  const systemLogs: unknown[][] = []
+  const programLogs: unknown[][] = []
 
   traffic.observe("program", "uninstall", null, (_delivery, event, ...values) => hostProgram.push([event, ...values]))
   traffic.observe("program", "uninstall", "program-reference", (_delivery, event, ...values) => ownProgram.push([event, ...values]))
@@ -17,6 +19,8 @@ test("host traffic contract", async () => {
   traffic.observe("process", "create", "program-reference", (_delivery, event, ...values) => programProcess.push([event, ...values]))
   traffic.observe("connection", "create", null, (_delivery, event, ...values) => hostConnection.push([event, ...values]))
   traffic.observe("session", "connectionAttach", "session-identity", (_delivery, event, ...values) => ownSession.push([event, ...values]))
+  traffic.observe("log", "log", null, (_delivery, event, ...values) => systemLogs.push([event, ...values]))
+  traffic.observe("programLog", "log", "program-reference", (_delivery, event, ...values) => programLogs.push([event, ...values]))
 
   const program = { identity: "counter", reference: "program-reference" }
   const process = { identity: "worker", reference: "process-reference" }
@@ -37,7 +41,11 @@ test("host traffic contract", async () => {
 
   await traffic.emitHost("connection", "create", "connection-identity", { identity: "connection-identity" })
   await traffic.emitSubject("session", "connectionAttach", "session-identity", { identity: "connection-identity" })
+  await traffic.emitHost("log", "log", "system", { kind: "started" })
+  await traffic.emitSubject("programLog", "log", "program-reference", { kind: "stdout" })
 
   assert.deepEqual(hostConnection, [["create", "connection-identity", { identity: "connection-identity" }]])
   assert.deepEqual(ownSession, [["connectionAttach", "session-identity", { identity: "connection-identity" }]])
+  assert.deepEqual(systemLogs, [["log", "system", { kind: "started" }]])
+  assert.deepEqual(programLogs, [["log", "program-reference", { kind: "stdout" }]])
 }, 120_000)

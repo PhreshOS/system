@@ -2,7 +2,6 @@ import LinkManager from "./link-manager/link-manager"
 import Authentication from "./authentication/authentication"
 import FileManager from "@libs/file-manager"
 import UploadManager from "./upload-manager"
-import DialogManager from "./dialog-manager"
 import AppearanceManager from "./appearance-manager"
 import openStore from "./open-store"
 import Keyv from "keyv"
@@ -10,6 +9,7 @@ import FileArea, { FileSystem } from "@libs/file-area"
 import { homedir } from "node:os"
 import System from "./system"
 import createServerRuntime from "./server-runtime/factory"
+import SystemLogs from "./logs"
 
 export default class Application {
 
@@ -34,7 +34,8 @@ export default class Application {
 
     public readonly uploads: UploadManager
 
-    public readonly dialogManager: DialogManager
+    /** System-owned persistent records and their internal write capability. */
+    public readonly logs: SystemLogs
 
     public readonly appearanceManager: AppearanceManager
 
@@ -70,7 +71,7 @@ export default class Application {
 
         this.createServerRuntime = createServerRuntime
 
-        this.dialogManager = new DialogManager()
+        this.logs = new SystemLogs(this.storage.join("logs.sqlite"))
 
         this.linkManager = new LinkManager(this)
 

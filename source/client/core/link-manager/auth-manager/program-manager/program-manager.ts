@@ -7,7 +7,7 @@ import Program from "./program"
 import {
     type Launch,
     type PermissionName,
-    type PermissionRequest,
+    type PermissionRequestInput,
     type ProgramCommandChunk,
     type ProgramIconSize
 } from "@phreshos/core"
@@ -94,7 +94,7 @@ export default class ProgramManager extends TheLink {
         subject: unknown,
         operation: "all" | "get" | "allows" | "allow" | "deny",
         name?: Name,
-        value?: PermissionRequest<Name>
+        value?: PermissionRequestInput<Name>
     ) {
 
         return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
