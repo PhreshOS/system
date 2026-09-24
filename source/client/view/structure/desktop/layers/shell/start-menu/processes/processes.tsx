@@ -1,23 +1,23 @@
-import { ReactTunnel } from "@the-link/react"
 import { AuthManagerContext } from "@client/view/contexts"
 import ProcessItem from "./process-item"
 import { matchesProcess } from "../search"
 import { ScrollArea } from "@phreshos/react-ui"
+import { useLayoutEffect, useState } from "react"
 
 /** All live Processes, including those without a Client window. */
 export default function Processes({ terms }: Readonly<{ terms: readonly string[] }>) {
 
     const manager = AuthManagerContext.useValue().processManager
 
-    const inbound = ReactTunnel.useFactory(manager.$inbound)
-
-    const processes = inbound.useFirstState("/processes", [...manager.processes.values()])
+    const [processes, setProcesses] = useState(() => [...manager.processes.values()])
 
     const programManager = manager.authManager.programManager
 
-    const programsInbound = ReactTunnel.useFactory(programManager.$inbound)
+    const [programs, setPrograms] = useState(() => [...programManager.programs.values()])
 
-    const programs = programsInbound.useFirstState("/programs", [...programManager.programs.values()])
+    useLayoutEffect(() => manager.subscribeProcesses(setProcesses), [manager])
+
+    useLayoutEffect(() => programManager.subscribePrograms(setPrograms), [programManager])
 
     const programsByIdentity = new Map(programs.map(program => [program.identity, program]))
 

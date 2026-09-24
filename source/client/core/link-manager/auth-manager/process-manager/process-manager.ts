@@ -42,6 +42,20 @@ export default class ProcessManager extends TheLink {
         return [...this.processes.values()]
     }
 
+    /**
+     * Observe the complete current collection without a snapshot/subscription
+     * gap. The collection may change between a React render and its effect;
+     * subscribing before the immediate read preserves that transition.
+     */
+    public subscribeProcesses(subscriber: (processes: Process[]) => void) {
+
+        this.$inbound.subscribe("/processes", subscriber)
+
+        subscriber(this.list())
+
+        return () => this.$inbound.unsubscribe("/processes", subscriber)
+    }
+
     /** The shown authoritative Window at the front of one projected layer. */
     public front(layer: WindowLayer) {
 

@@ -11,11 +11,16 @@ import { useDesktopPreferences } from "../appearance/desktop-preferences"
 import { useRememberSystemAppearance } from "../appearance/appearance"
 import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
-import Readiness, { useReady } from "@libs/readiness"
+import Readiness, { useReadiness, useReady } from "@libs/readiness"
 import { type DesktopPreferencesUpdate } from "@phreshos/core"
 import { cssEasing } from "../appearance/motion"
-
-const startupRequirements = ["connection", "session", "wallpaper"] as const
+import {
+    connectionRequirement,
+    sessionRequirement,
+    startupRequirements,
+    type DesktopReadinessRequirement,
+    wallpaperRequirement
+} from "./readiness-requirements"
 
 export default function () {
     const appearance = useAppearance()
@@ -24,25 +29,30 @@ export default function () {
 
         <Desktop />
 
-        <Readiness.Pending>
-
-            {pending => <Loading
-
-                aria-hidden={pending.length === 0}
-
-
-                className={pending.length ? "opacity-100" : "pointer-events-none opacity-0"}
-
-                style={{
-                    transitionDuration: String(appearance.transaction.duration) + "ms",
-                    transitionTimingFunction: cssEasing(appearance.transaction.easing),
-                    transitionProperty: "opacity"
-                }}
-            />}
-
-        </Readiness.Pending>
+        <DesktopReadiness appearance={appearance} />
 
     </Readiness>
+}
+
+function DesktopReadiness({ appearance }: { appearance: ReturnType<typeof useAppearance> }) {
+
+    const { pending } = useReadiness<DesktopReadinessRequirement>()
+
+    return <Loading
+
+        aria-hidden={pending.length === 0}
+
+        className={pending.length ? "opacity-100" : "pointer-events-none opacity-0"}
+
+        style={{
+            // New pending work must cover the next representation
+            // immediately; only completed readiness fades away.
+            transitionDuration: pending.length ? "0ms" : String(appearance.transaction.duration) + "ms",
+            transitionTimingFunction: cssEasing(appearance.transaction.easing),
+            transitionProperty: "opacity"
+        }}
+
+    >{pending[0]?.message ?? "Loading…"}</Loading>
 }
 
 function Desktop() {
@@ -87,11 +97,11 @@ function Desktop() {
 
 function FailedConnection({ exception, retry }: { exception: unknown, retry: () => void }) {
 
-    useReady("connection")
+    useReady(connectionRequirement)
 
-    useReady("session")
+    useReady(sessionRequirement)
 
-    useReady("wallpaper")
+    useReady(wallpaperRequirement)
 
     return <Alert className="m-auto grid w-fit gap-3">
 
@@ -104,7 +114,7 @@ function FailedConnection({ exception, retry }: { exception: unknown, retry: () 
 
 function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
-    useReady("connection")
+    useReady(connectionRequirement)
 
     const { preferences, update } = useDesktopPreferences()
 

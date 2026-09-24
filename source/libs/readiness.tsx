@@ -1,61 +1,59 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 /** The immutable state beneath a readiness boundary. */
-export class ReadinessState {
+export class ReadinessState<Requirement = unknown> {
 
-    public readonly requirements: readonly string[]
+    public readonly requirements: readonly Requirement[]
 
-    public readonly pending: readonly string[]
+    public readonly pending: readonly Requirement[]
 
-    private constructor(requirements: readonly string[], pending: readonly string[]) {
+    private constructor(requirements: readonly Requirement[], pending: readonly Requirement[]) {
 
         this.requirements = [...requirements]
 
         this.pending = [...pending]
     }
 
-    public static start(requirements: readonly string[]) {
+    public static start<Requirement>(requirements: readonly Requirement[]) {
 
         validate(requirements)
 
-        return new ReadinessState(requirements, requirements)
+        return new ReadinessState<Requirement>(requirements, requirements)
     }
 
     /** Mark one known requirement ready. Repeated readiness is harmless. */
-    public ready(requirement: string) {
+    public ready(requirement: Requirement) {
 
-        if (!this.requirements.includes(requirement)) throw new Error(`Readiness does not know the requirement "${requirement}"`)
+        if (!hasRequirement(this.requirements, requirement)) throw new Error("Readiness does not know that requirement")
 
-        if (!this.pending.includes(requirement)) return this
+        if (!hasRequirement(this.pending, requirement)) return this
 
-        const pending = this.pending.filter(candidate => candidate !== requirement)
+        const pending = this.pending.filter(candidate => !Object.is(candidate, requirement))
 
-        return new ReadinessState(this.requirements, pending)
+        return new ReadinessState<Requirement>(this.requirements, pending)
     }
 
     /** Add new work or restore one completed requirement. */
-    public require(requirement: string) {
+    public require(requirement: Requirement) {
 
-        validateRequirement(requirement)
+        if (hasRequirement(this.pending, requirement)) return this
 
-        if (this.pending.includes(requirement)) return this
-
-        const requirements = this.requirements.includes(requirement)
+        const requirements = hasRequirement(this.requirements, requirement)
             ? this.requirements
             : [...this.requirements, requirement]
 
-        const restored = new Set([...this.pending, requirement])
+        const restored = [...this.pending, requirement]
 
-        return new ReadinessState(requirements, requirements.filter(candidate => restored.has(candidate)))
+        return new ReadinessState<Requirement>(requirements, requirements.filter(candidate => hasRequirement(restored, candidate)))
     }
 }
 
-const ReadinessContext = createContext<ReadinessValue | null>(null)
+const ReadinessContext = createContext<ReadinessValue<unknown> | null>(null)
 
 /** Provides one readiness lifecycle to every operation inside the boundary. */
-export default function Readiness({ requirements, children }: ReadinessProps) {
+export default function Readiness<Requirement>({ requirements, children }: ReadinessProps<Requirement>) {
 
-    const declared = useRef<readonly string[] | null>(null)
+    const declared = useRef<readonly Requirement[] | null>(null)
 
     declared.current ??= [...requirements]
 
@@ -65,7 +63,7 @@ export default function Readiness({ requirements, children }: ReadinessProps) {
 
     const current = useRef(state)
 
-    const change = useCallback(function (next: ReadinessState) {
+    const change = useCallback(function (next: ReadinessState<Requirement>) {
 
         if (next === current.current) return
 
@@ -74,17 +72,17 @@ export default function Readiness({ requirements, children }: ReadinessProps) {
         setState(next)
     }, [])
 
-    const ready = useCallback(function (requirement: string) {
+    const ready = useCallback(function (requirement: Requirement) {
 
         change(current.current.ready(requirement))
     }, [change])
 
-    const require = useCallback(function (requirement: string) {
+    const require = useCallback(function (requirement: Requirement) {
 
         change(current.current.require(requirement))
     }, [change])
 
-    const value = useMemo<ReadinessValue>(() => ({
+    const value = useMemo<ReadinessValue<Requirement>>(() => ({
 
         pending: state.pending,
 
@@ -94,13 +92,13 @@ export default function Readiness({ requirements, children }: ReadinessProps) {
 
     }), [ready, require, state.pending])
 
-    return <ReadinessContext.Provider value={value}>{children}</ReadinessContext.Provider>
+    return <ReadinessContext.Provider value={value as unknown as ReadinessValue<unknown>}>{children}</ReadinessContext.Provider>
 }
 
 /** Observe pending work or render one representation only while work remains. */
-function Pending({ children }: PendingProps) {
+function Pending<Requirement = unknown>({ children }: PendingProps<Requirement>) {
 
-    const { pending } = useReadiness()
+    const { pending } = useReadiness<Requirement>()
 
     if (typeof children === "function") return children(pending)
 
@@ -110,19 +108,19 @@ function Pending({ children }: PendingProps) {
 Readiness.Pending = Pending
 
 /** Access the nearest readiness boundary. */
-export function useReadiness() {
+export function useReadiness<Requirement = unknown>() {
 
     const readiness = useContext(ReadinessContext)
 
     if (!readiness) throw new Error("Readiness was not provided")
 
-    return readiness
+    return readiness as ReadinessValue<Requirement>
 }
 
 /** Register pending work owned by this component and return its completion. */
-export function useRequirement(requirement: string) {
+export function useRequirement<Requirement>(requirement: Requirement) {
 
-    const { ready, require } = useReadiness()
+    const { ready, require } = useReadiness<Requirement>()
 
     useLayoutEffect(function () {
 
@@ -135,9 +133,9 @@ export function useRequirement(requirement: string) {
 }
 
 /** Treat this component's mounted presence as proof of readiness. */
-export function useReady(requirement: string) {
+export function useReady<Requirement>(requirement: Requirement) {
 
-    const { ready, require } = useReadiness()
+    const { ready, require } = useReadiness<Requirement>()
 
     useLayoutEffect(function () {
 
@@ -147,47 +145,47 @@ export function useReady(requirement: string) {
     }, [ready, require, requirement])
 }
 
-function sameRequirements(left: readonly string[], right: readonly string[]) {
+function sameRequirements<Requirement>(left: readonly Requirement[], right: readonly Requirement[]) {
 
-    return left.length === right.length && left.every((requirement, index) => requirement === right[index])
+    return left.length === right.length && left.every((requirement, index) => Object.is(requirement, right[index]))
 }
 
-function validate(requirements: readonly string[]) {
+function hasRequirement<Requirement>(requirements: readonly Requirement[], requirement: Requirement) {
 
-    const known = new Set<string>()
+    // Requirements are opaque to readiness; their own identity is the only
+    // relation the lifecycle may use.
+    return requirements.some(candidate => Object.is(candidate, requirement))
+}
+
+function validate<Requirement>(requirements: readonly Requirement[]) {
+
+    const known: Requirement[] = []
 
     for (const requirement of requirements) {
 
-        validateRequirement(requirement)
+        if (hasRequirement(known, requirement)) throw new Error("Readiness already knows that requirement")
 
-        if (known.has(requirement)) throw new Error(`Readiness already knows the requirement "${requirement}"`)
-
-        known.add(requirement)
+        known.push(requirement)
     }
 }
 
-function validateRequirement(requirement: string) {
+interface ReadinessProps<Requirement> {
 
-    if (!requirement.trim()) throw new Error("A readiness requirement must have a name")
-}
-
-interface ReadinessProps {
-
-    requirements: readonly string[]
+    requirements: readonly Requirement[]
 
     children: ReactNode
 }
 
-interface PendingProps {
+interface PendingProps<Requirement> {
 
-    children: ReactNode | ((pending: readonly string[]) => ReactNode)
+    children: ReactNode | ((pending: readonly Requirement[]) => ReactNode)
 }
 
-export interface ReadinessValue {
+export interface ReadinessValue<Requirement = unknown> {
 
-    pending: readonly string[]
+    pending: readonly Requirement[]
 
-    ready: (requirement: string) => void
+    ready: (requirement: Requirement) => void
 
-    require: (requirement: string) => void
+    require: (requirement: Requirement) => void
 }

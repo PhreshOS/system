@@ -1,5 +1,5 @@
-import { ReactTunnel } from "@the-link/react"
 import { AuthManagerContext } from "@client/view/contexts"
+import { useLayoutEffect, useState } from "react"
 
 /**
  * The authorized view's programs: the list the peer re-emits on its
@@ -10,7 +10,11 @@ export default function usePrograms() {
 
     const authManager = AuthManagerContext.useValue()
 
-    const inbound = ReactTunnel.useFactory(authManager.programManager.$inbound)
+    const manager = authManager.programManager
 
-    return inbound.useFirstState("/programs", [...authManager.programManager.programs.values()]).filter(program => program.installed)
+    const [programs, setPrograms] = useState(() => [...manager.programs.values()])
+
+    useLayoutEffect(() => manager.subscribePrograms(setPrograms), [manager])
+
+    return programs.filter(program => program.installed)
 }

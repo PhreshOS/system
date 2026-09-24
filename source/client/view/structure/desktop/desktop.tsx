@@ -17,6 +17,7 @@ import { useRequirement } from "@libs/readiness"
 import { usePreferences, useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
+import { programsRequirement } from "../readiness-requirements"
 
 export default function Workspace() {
 
@@ -34,7 +35,7 @@ export default function Workspace() {
 
     const windows = useWindows(authManager)
 
-    const completePrograms = useRequirement("programs")
+    const completePrograms = useRequirement(programsRequirement)
 
     const initialPrograms = useRef<ReadonlySet<string> | null>(null)
 

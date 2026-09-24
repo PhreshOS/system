@@ -1,16 +1,16 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type Position, type Size, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
+import { type BeginWindowMoveGesture, type Position, type Size, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
 import { type PresentationAnimation, type PresentationMoveGestureController, type PresentationMovePoint } from "@client/view/components/desktop-host/window-presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
 import { motion } from "motion/react"
 import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
-import { useAppearance } from "@phreshos/react-ui"
+import { useAppearance, Window as UIWindow } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
@@ -88,8 +88,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const [gesture, setGesture] = useState<Gesture | null>(null)
     const [externalMoveActive, setExternalMoveActive] = useState(false)
     const externalMove = useRef<ExternalMove | null>(null)
-    const beginMoveGesture = useRef<(point: PresentationMovePoint) => ActivePointerGesture | null>(() => null)
-    beginMoveGesture.current = point => {
+    const beginPointerGesture = useRef<(point: PresentationMovePoint) => ActivePointerGesture | null>(() => null)
+    beginPointerGesture.current = point => {
         let active: ActivePointerGesture | null = null
         grab(point, null, gesture => { active = gesture })
         return active
@@ -118,7 +118,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
         moveGestureController.current = {
             begin(origin, point) {
                 if (externalMove.current) throw new Error("This Window already has an active move gesture")
-                const pointer = beginMoveGesture.current(origin)
+                const pointer = beginPointerGesture.current(origin)
                 if (!pointer) throw new Error("This Window cannot currently begin a move gesture")
                 pointer.update(point)
                 let markReady: () => void = () => undefined
@@ -132,6 +132,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
             cancel: () => finishExternalMove(null)
         }
     }
+
+    const beginWindowMoveGesture = useCallback<BeginWindowMoveGesture>(start => {
+        return moveGestureController.current!.begin(start.origin, start.point)
+    }, [])
 
     function finishExternalMove(point: PresentationMovePoint | null) {
         const active = externalMove.current
@@ -521,10 +525,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     return <>
 
-        {externalMoveActive && createPortal(<div
+        {externalMoveActive && createPortal(<UIWindow.MoveCapture
             data-window-move-capture
             ref={element => { if (element) externalMove.current?.markReady() }}
-            className="fixed inset-0 touch-none select-none cursor-move"
             style={{ zIndex: 2147483647 }}
             onPointerMove={event => {
                 if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -630,7 +633,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                     whole={whole}
 
-                    onGrab={event => grab(event, null)}
+                    beginMoveGesture={beginWindowMoveGesture}
 
                     onMinimize={onMinimize}
 

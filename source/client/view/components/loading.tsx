@@ -4,7 +4,9 @@ import Spinner from "./spinner"
 type LoadingProps = Omit<SurfaceProps, "material">
 
 /** A complete loading surface for unresolved content. */
-export default function ({ className, style, ...props }: LoadingProps) {
+export default function ({ className, style, children, ...props }: LoadingProps) {
+    const described = children !== undefined
+
     return <Surface
 
         {...props}
@@ -15,7 +17,13 @@ export default function ({ className, style, ...props }: LoadingProps) {
 
     >
 
-        <Spinner className="m-auto size-6" />
+        <div className="m-auto grid justify-items-center gap-3" role={described ? "status" : undefined}>
+
+            <Spinner aria-hidden={described ? true : undefined} className="size-6" />
+
+            {described && <span data-loading-message className="text-sm opacity-60">{children}</span>}
+
+        </div>
 
     </Surface>
 }

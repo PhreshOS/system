@@ -13,6 +13,7 @@ import { WallpaperStage } from "../desktop/layers/wallpaper/wallpaper"
 import { useReady } from "@libs/readiness"
 import { useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
+import { sessionRequirement, wallpaperRequirement } from "../readiness-requirements"
 
 export default function () {
 
@@ -109,16 +110,16 @@ export default function () {
 
 function ReadySession({ children }: { children: ReactNode }) {
 
-    useReady("session")
+    useReady(sessionRequirement)
 
     return children
 }
 
 function FailedSession({ children }: { children: ReactNode }) {
 
-    useReady("session")
+    useReady(sessionRequirement)
 
-    useReady("wallpaper")
+    useReady(wallpaperRequirement)
 
     return children
 }

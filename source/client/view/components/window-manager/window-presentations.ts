@@ -307,11 +307,13 @@ export default class WindowPresentations implements WindowPresentationHost {
         this.cancel(identity, "geometry", reason)
         this.cancel(identity, "surface", reason)
         this.cancelIdentityMoveGestures(identity)
-        this.representations.delete(identity)
     }
 
     private release(identity: string, reason: string) {
         this.releaseTransient(identity, reason)
+        // The geometry representation belongs to the mounted Desktop Window,
+        // not to an iframe document that may be replaced inside it.
+        this.representations.delete(identity)
         this.moveGestureControllers.delete(identity)
     }
 }
@@ -383,6 +385,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
 function followStandardWindow(current: PresentedWindow, client: ClientState, revision: number): PresentedWindow {
     const window = client.window
     const geometryChanged = JSON.stringify([current.position, current.size]) !== JSON.stringify([window.position, window.size])
+    const maximizedChanged = current.maximized !== window.maximized
     const minimizedChanged = current.minimized !== window.minimized
     return {
         ...current,
@@ -393,7 +396,9 @@ function followStandardWindow(current: PresentedWindow, client: ClientState, rev
         minimized: window.minimized,
         maximized: window.maximized,
         depth: window.depth,
-        geometryAnimation: geometryChanged && !window.minimized
+        // Maximization changes the Desktop-owned projection without changing
+        // the authoritative position or size, so it still needs geometry motion.
+        geometryAnimation: (geometryChanged || maximizedChanged) && !window.minimized
             ? { revision }
             : current.geometryAnimation,
         minimizeAnimation: minimizedChanged

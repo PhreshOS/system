@@ -72,6 +72,20 @@ test("a standard Window follows authoritative state but accepts only move gestur
   assert.throws(() => presentations.move("ordinary", { x: 1, y: 2 }), /does not support raw/)
   assert.throws(() => presentations.setSurface("ordinary", false), /does not support raw/)
 
+  ordinary.window.maximized = true
+  presentations.reconcile(entries)
+  const maximizing = presentations.projection("ordinary").geometryAnimation
+  assert.equal(presentations.projection("ordinary").maximized, true)
+  assert.ok(maximizing)
+
+  presentations.complete("ordinary", "geometry", maximizing.revision)
+  ordinary.window.maximized = false
+  presentations.reconcile(entries)
+  const restoring = presentations.projection("ordinary").geometryAnimation
+  assert.equal(presentations.projection("ordinary").maximized, false)
+  assert.ok(restoring)
+  assert.notEqual(restoring.revision, maximizing.revision)
+
   const events: unknown[] = []
   let ready!: () => void
   let finish!: () => void
@@ -109,6 +123,29 @@ test("a Client boundary initializes each new document exactly once", async () =>
   await boundary.own("second-owner")
   await boundary.release()
   assert.deepEqual(lifecycle, ["requester", "requester"])
+})
+
+test("a new Client document preserves its mounted Desktop geometry representation", () => {
+  const ordinary = client("window")
+  const entries = entry("ordinary", ordinary)
+  const presentations = new WindowPresentations(entries, () => ordinary as never)
+  const geometry = { x: 20, y: 30, width: 400, height: 300 }
+
+  presentations.represent("ordinary", {
+    read: () => geometry,
+    present() {},
+    begin: () => geometry,
+    finish() {},
+    cancel() {}
+  })
+
+  presentations.begin("ordinary")
+
+  assert.deepEqual(presentations.representedGeometry("ordinary"), geometry)
+
+  presentations.reconcile(new Map())
+
+  assert.equal(presentations.representedGeometry("ordinary"), null)
 })
 
 function entry(process: string, selected: ReturnType<typeof client>) {

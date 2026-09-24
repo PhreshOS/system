@@ -1,10 +1,9 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import { ReactTunnel } from "@the-link/react"
 import { type Layer, type Position, type Size, type Value } from "@phreshos/core"
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import WindowPresentations from "./window-presentations"
+import WindowPresentations, { type PresentedWindow } from "./window-presentations"
 import { isDesktopReplacementLayer } from "@shared/window-layers"
 import { type SharedResizeWindow } from "./shared-resize"
 import { type WindowRegion } from "./window-geometry"
@@ -18,16 +17,14 @@ import { type WindowRegion } from "./window-geometry"
  * Following starts enabled for ordinary windows and disabled for the other layers.
  * Each Client can subsequently follow an authoritative Window or detach.
  *
- * Departure is representation. Stopping a Client removes only its execution
- * context; its Client Endpoint-owned authoritative Window remains. The last
- * desktop-owned representation is kept until its exit animation reports
- * done, while the iframe leaves as soon as the stop is confirmed.
+ * Departure is representation. Stopping a Client invalidates its live Window
+ * state. The last desktop-owned representation is kept until its exit
+ * animation reports done, while the iframe leaves as soon as the stop is
+ * confirmed.
  */
 export default function useWindows(authManager: AuthManager) {
 
     const peer = authManager.processManager
-
-    const inbound = ReactTunnel.useFactory(peer.$inbound)
 
     const [processes, setProcesses] = useState(() => [...peer.processes.values()])
 
@@ -46,7 +43,7 @@ export default function useWindows(authManager: AuthManager) {
             incarnationIds.current.set(client, identity)
         }
 
-        return { identity, record, client }
+        return captureWindowIncarnation(identity, record, client)
 
     }, [])
 
@@ -72,7 +69,7 @@ export default function useWindows(authManager: AuthManager) {
     // not launched, so their representations must not replay an entrance.
     const inheritedClients = useRef(new WeakSet([...initialClients.values()].map(({ client }) => client)))
 
-    const [leaving, setLeaving] = useState<WindowIncarnation[]>([])
+    const [leaving, setLeaving] = useState<LeavingWindow[]>([])
 
     // A close press asks the core to terminate the Process. Keep that request
     // visible until the Process actually leaves the authoritative collection.
@@ -97,8 +94,6 @@ export default function useWindows(authManager: AuthManager) {
 
         const currentClients = new Map(list.flatMap(record => record.client ? [[record.identity, incarnation(record, record.client)] as const] : []))
 
-        presentation.reconcile(currentClients)
-
         let settled = false
 
         for (const identity of stopping.current) {
@@ -114,11 +109,22 @@ export default function useWindows(authManager: AuthManager) {
 
         const gone = [...previousClients.current.values()].filter(previous => currentClients.get(previous.record.identity)?.client !== previous.client)
 
-        const departed = new Set(gone.filter(({ client }) => isDesktopReplacementLayer(client.window.layer)).map(({ identity }) => identity))
+        // Window state ends before the Process collection announces departure.
+        // Use the layer captured while this incarnation was live; consulting
+        // the retained Window handle here would abort the collection broadcast.
+        const departed = new Set(gone.filter(({ layer }) => isDesktopReplacementLayer(layer)).map(({ identity }) => identity))
 
-        for (const identity of departed) presentation.remove(identity)
+        // The controller now forgets the ended Client, but an ordinary
+        // departure still owns one immutable visual snapshot until its exit
+        // animation completes.
+        const animated = gone
+            .filter(({ identity }) => !departed.has(identity))
+            .flatMap(window => {
+                const retained = captureLeavingWindow(window, presentation.windows)
+                return retained ? [retained] : []
+            })
 
-        const animated = gone.filter(({ identity }) => !departed.has(identity))
+        presentation.reconcile(currentClients)
 
         if (animated.length) setLeaving(function (current) {
 
@@ -142,7 +148,7 @@ export default function useWindows(authManager: AuthManager) {
 
     }, [incarnation])
 
-    inbound.useSubscribe("/processes", subscriber)
+    useLayoutEffect(() => peer.subscribeProcesses(subscriber), [peer, subscriber])
 
     const records = processes.filter(process => process.client)
 
@@ -311,7 +317,7 @@ export default function useWindows(authManager: AuthManager) {
             return { ...live, presentation: presentations.get(live.identity)!, closing: false, stopping: stopping.current.has(record.identity), entering: !inheritedClients.current.has(live.client) }
         }),
 
-        ...leaving.map(window => ({ ...window, presentation: presentations.get(window.identity)!, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
+        ...leaving.map(window => ({ ...window, closing: true, stopping: false, entering: !inheritedClients.current.has(window.client) }))
     ]
 
         .sort((one, other) => (rank.get(one.identity) ?? Number.MAX_SAFE_INTEGER) - (rank.get(other.identity) ?? Number.MAX_SAFE_INTEGER))
@@ -451,11 +457,30 @@ export default function useWindows(authManager: AuthManager) {
 
 export type DesktopWindows = ReturnType<typeof useWindows>
 
-interface WindowIncarnation {
+export interface WindowIncarnation {
 
     identity: string
 
     record: Process
 
     client: ClientState
+
+    layer: Layer
+}
+
+export interface LeavingWindow extends WindowIncarnation {
+
+    presentation: PresentedWindow
+}
+
+export function captureWindowIncarnation(identity: string, record: Process, client: ClientState): WindowIncarnation {
+
+    return { identity, record, client, layer: client.window.layer }
+}
+
+export function captureLeavingWindow(window: WindowIncarnation, presentations: ReadonlyMap<string, PresentedWindow>): LeavingWindow | null {
+
+    const presentation = presentations.get(window.identity)
+
+    return presentation ? { ...window, presentation } : null
 }

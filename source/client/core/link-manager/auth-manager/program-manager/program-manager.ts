@@ -44,6 +44,21 @@ export default class ProgramManager extends TheLink {
         this.connectTo(this.authManager, "/program")
     }
 
+    private list() {
+
+        return [...this.programs.values()]
+    }
+
+    /** Observe the complete collection without a snapshot/subscription gap. */
+    public subscribePrograms(subscriber: (programs: Program[]) => void) {
+
+        this.$inbound.subscribe("/programs", subscriber)
+
+        subscriber(this.list())
+
+        return () => this.$inbound.unsubscribe("/programs", subscriber)
+    }
+
     // A store's five controls, asked of the core. The desktop answers a
     // pane's store words with this, so a client half means the same
     // thing by them as a server half does — one implementation, two
@@ -175,7 +190,7 @@ export default class ProgramManager extends TheLink {
 
         this.programs.set(payload.identity, new Program(this, payload))
 
-        return [...this.programs.values()]
+        return this.list()
     }
 
     @Subscribe("/create")
@@ -219,7 +234,7 @@ export default class ProgramManager extends TheLink {
 
         if (program) await this.$inbound.publish("/forgotten", program)
 
-        return [...this.programs.values()]
+        return this.list()
     }
 }
 

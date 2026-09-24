@@ -4,7 +4,7 @@ import workerThreadPlugin from "./source/libs/worker-thread-plugin.js"
 
 export default defineConfig({
   plugins: [decoratorPlugin(), workerThreadPlugin()],
-  resolve: { tsconfigPaths: true },
+  resolve: { tsconfigPaths: true, dedupe: ["react", "react-dom"] },
   test: {
     pool: "forks",
     maxWorkers: 2,

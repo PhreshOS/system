@@ -4,6 +4,7 @@ import { ApplicationContext } from "@client/view/contexts"
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type TransitionEvent } from "react"
 import Loading from "@client/view/components/loading"
 import { useReady } from "@libs/readiness"
+import { wallpaperRequirement } from "../../../readiness-requirements"
 import { useAppearance, usePreferences } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
 import { cssEasing } from "@client/view/appearance/motion"
@@ -213,7 +214,7 @@ export function WallpaperStage({ file, children }: WallpaperStageProps) {
 }
 
 export function ReadyWallpaper() {
-    useReady("wallpaper")
+    useReady(wallpaperRequirement)
 
     return null
 }

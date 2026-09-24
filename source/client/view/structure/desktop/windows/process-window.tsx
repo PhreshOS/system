@@ -12,6 +12,13 @@ import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "rea
 
 const settleDelay = 80
 
+export function processWindowProgress(layer: WindowLayer, loading: boolean, stopping: boolean, closing: boolean) {
+
+    if (layer !== "window") return null
+
+    return stopping || closing ? "Closing" : loading ? "Loading" : null
+}
+
 /**
  * One process pane at the React boundary. Its primitive window values are
  * props so memoization can see which process actually changed even though
@@ -88,9 +95,9 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const frameLoading = programAccess === "available" && (loading.source !== frameSource || loading.phase !== "ready")
 
-    const surfaced = surface !== false && layer !== "wallpaper"
-
-    const progress = surfaced && (stopping || closing ? "Closing" : frameLoading ? "Loading" : null)
+    // Raw layers belong to their Programs. Desktop progress paint is part of
+    // the standard Window representation and must never cover raw content.
+    const progress = processWindowProgress(layer, frameLoading, stopping, closing)
 
     return <Window
 
