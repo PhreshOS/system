@@ -190,6 +190,24 @@ export default function useWindows(authManager: AuthManager) {
         request.catch(() => undefined)
     }, [])
 
+    // A pointer gesture must retain its visible result until the authoritative
+    // request settles. Returning failure as data keeps ignored button presses
+    // handled while allowing the gesture owner to restore authoritative state.
+    const settle = useCallback(async function (request: Promise<void>) {
+
+        try {
+
+            await request
+
+            return true
+        }
+
+        catch {
+
+            return false
+        }
+    }, [])
+
     const close = useCallback(function (process: Process) {
 
         if (stopping.current.has(process.identity)) return
@@ -257,48 +275,47 @@ export default function useWindows(authManager: AuthManager) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve(false)
 
-        commit(window.move({ x, y }))
+        return settle(window.move({ x, y }))
 
-    }, [commit])
+    }, [settle])
 
     const resize = useCallback(function (process: Process, width: Value, height: Value, position: Position | null) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve(false)
 
         if (!position) {
-            commit(window.resize({ width, height }))
+            return settle(window.resize({ width, height }))
 
-            return
         }
 
         const geometry = { ...position, width, height }
 
-        commit(window.setGeometry(geometry))
+        return settle(window.setGeometry(geometry))
 
-    }, [commit])
+    }, [settle])
 
     const snap = useCallback(function (process: Process, position: Position, size: Size) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve(false)
 
         const geometry = { ...position, ...size }
 
-        commit(window.setGeometry(geometry))
+        return settle(window.setGeometry(geometry))
 
-    }, [commit])
+    }, [settle])
 
     const fill = useCallback(function (process: Process) {
         const window = process.client?.window
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve(false)
         const maximized = !presentation.projection(process.identity).maximized
-        commit(window.maximize(maximized))
-    }, [commit])
+        return settle(window.maximize(maximized))
+    }, [presentation, settle])
 
     // Every window on the desktop, in one list and one order.
     //

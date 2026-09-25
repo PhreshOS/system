@@ -32,6 +32,20 @@ test("tiled standard windows share the Appearance gap inside the equally inset s
   assert.equal(left.right + right.left, defaultAppearance.spacing)
 })
 
+test("settling paint follows released geometry instead of its former boundary contacts", () => {
+  const surface = { width: 1000, height: 600 }
+  const half = defaultAppearance.spacing / 2
+  const released = { x: 120, y: 90, width: 500, height: 300 }
+  const former = windowPaintInsets({ x: 0, y: 0 }, { width: 500, height: 300 }, surface, half)
+
+  assert.deepEqual(former, { top: 0, right: half, bottom: half, left: 0 })
+
+  assert.deepEqual(
+      windowPaintInsets({ x: 0, y: 0 }, { width: 500, height: 300 }, surface, half, released),
+      { top: half, right: half, bottom: half, left: half }
+  )
+})
+
 test("window geometry contract", async () => {
   const initial = {
       position: { x: 10, y: 20 },

@@ -13,6 +13,7 @@ import { motionTransition, resolveWindowTransaction } from "@client/view/appeara
 import { useAppearance, Window as UIWindow } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
+import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 import { createPortal } from "react-dom"
 
@@ -27,8 +28,8 @@ import { createPortal } from "react-dom"
  * through a gesture, and into the next target. Release reports the outcome
  * (onMove or onResize with resting pixels —
  * a resize carrying an origin only when the edge dragged moved one —
- * onSnap with the shares a zone names) and drops the gesture in the same
- * batch the record updates, so nothing jumps.
+ * onSnap with the shares a zone names). The gesture retains the visible
+ * result until those ordered authoritative mutations settle, then yields.
  *
  * Motion owns every local interpolation, never the authoritative record.
  *
@@ -101,6 +102,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const frameElement = geometryMotion.frame
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
+    const [settlingGeometry, setSettlingGeometry] = useState<WindowRegion | null>(null)
     const [externalMoveActive, setExternalMoveActive] = useState(false)
     const externalMove = useRef<ExternalMove | null>(null)
     const beginPointerGesture = useRef<(point: PresentationMovePoint) => ActivePointerGesture | null>(() => null)
@@ -304,7 +306,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         if (!started) return
 
-        const { bounds } = started
+        const { bounds, revision } = started
+
+        setSettlingGeometry(null)
 
         // The Motion values are the current visible representation, including
         // a geometry animation interrupted by this press.
@@ -327,6 +331,25 @@ export default function ({ title, header = true, surface, layer, icon, children,
         let shown: Snap | null = null
 
         let renderFrame = 0
+
+        const commit = new WindowGestureCommit()
+
+        function request(operation: () => Promise<boolean> | undefined) {
+
+            commit.request(operation)
+        }
+
+        function settle() {
+
+            void commit.settle().then(committed => {
+
+                const current = committed
+                    ? geometryMotion.settleGesture(revision)
+                    : geometryMotion.cancelGesture(revision)
+
+                if (current) setSettlingGeometry(null)
+            })
+        }
 
         const start = { pointerX: pointer.x, pointerY: pointer.y }
 
@@ -406,7 +429,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 if (restoringMaximized) {
                     const stored = resolvePresentedGeometry(position, size, bounds)
                     origin = { ...origin, width: stored.width, height: stored.height }
-                    onMaximize?.()
+                    request(() => onMaximize?.())
                 }
 
                 origin = { x: pointerX - origin.width * ratio, y: pointerY - Math.min(Math.max(pointerY - origin.y, 0), 40), width: origin.width, height: origin.height }
@@ -417,7 +440,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 start.pointerY = motion.y
 
-                onMove?.(origin.x, origin.y)
+                request(() => onMove?.(origin.x, origin.y))
 
                 if (restoringMaximized) geometryMotion.restoreGesture(current)
 
@@ -473,7 +496,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
             // nothing: the render returns to the tile it never left.
             if (restoring) {
 
-                geometryMotion.finishGesture()
+                geometryMotion.finishGesture(undefined, revision)
+                setSettlingGeometry(null)
                 setGesture(null)
 
                 return
@@ -481,32 +505,44 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             const term = moved && edge === null && committed ? snapTerm(motion) : null
 
-            // The outcome and the gesture's end land in one batch: the
-            // record updates as the gesture stops overriding it, so the
-            // frame never shows a stale in-between.
+            // Pointer input has ended, but visible gesture ownership remains
+            // until every authoritative mutation below has settled.
             if (term) {
 
-                geometryMotion.finishGesture(resolvePresentedGeometry(term.position, term.size, bounds))
-                onSnap?.(term.position, term.size)
+                const target = resolvePresentedGeometry(term.position, term.size, bounds)
+                geometryMotion.targetGesture(revision, target)
+                setSettlingGeometry(target)
+                request(() => onSnap?.(term.position, term.size))
+                settle()
             }
 
             else if (moved && committed) {
 
-                geometryMotion.finishGesture()
+                setSettlingGeometry(current)
 
-                if (edge === null) onMove?.(current.x, current.y)
+                if (edge === null) request(() => onMove?.(current.x, current.y))
 
                 // Only the west and north edges move the origin. A drag
                 // on any other reports no position, because none was
                 // chosen — and a position nobody chose would replace a
                 // share with the pixels it happened to resolve to.
-                else onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: current.x, y: current.y })
+                else request(() => onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: current.x, y: current.y }))
+
+                settle()
 
             }
 
-            else if (!committed) geometryMotion.cancelGesture()
+            else if (!committed) {
 
-            else geometryMotion.finishGesture()
+                geometryMotion.cancelGesture(revision)
+                setSettlingGeometry(null)
+            }
+
+            else {
+
+                geometryMotion.finishGesture(undefined, revision)
+                setSettlingGeometry(null)
+            }
 
             setGesture(null)
         }
@@ -538,7 +574,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // half of Appearance spacing so the painted gap equals the layer inset.
     const paintInset = standard ? spacing / 2 : 0
 
-    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, gesture?.current)
+    // Pointer input may end before its authoritative mutation settles. Paint
+    // follows the same locally owned geometry throughout that interval so an
+    // old boundary contact cannot flash back for one frame.
+    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, gesture?.current ?? settlingGeometry ?? undefined)
 
     return <>
 
@@ -709,18 +748,18 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     onMinimize?: () => void
 
-    onMaximize?: () => void
+    onMaximize?: () => Promise<boolean>
 
     onActivate?: () => void
 
     /** The window is leaving interaction; its composition chooses new focus. */
     onUnavailable?: (reason: "minimize" | "close") => void
 
-    onMove?: (x: number, y: number) => void
+    onMove?: (x: number, y: number) => Promise<boolean>
 
-    onResize?: (width: number, height: number, position: { x: number, y: number } | null) => void
+    onResize?: (width: number, height: number, position: { x: number, y: number } | null) => Promise<boolean>
 
-    onSnap?: (position: Position, size: Size) => void
+    onSnap?: (position: Position, size: Size) => Promise<boolean>
 
     active?: boolean
 

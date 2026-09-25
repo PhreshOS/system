@@ -292,7 +292,7 @@ interface ProcessWindowProps {
 
     onMinimize: (record: Process, minimized: boolean) => void
 
-    onFill: (record: Process) => void
+    onFill: (record: Process) => Promise<boolean>
 
     onClose: (record: Process) => void
 
@@ -300,11 +300,11 @@ interface ProcessWindowProps {
 
     onUnavailable: (record: Process, reason: "minimize" | "close") => void
 
-    onMove: (record: Process, x: number, y: number) => void
+    onMove: (record: Process, x: number, y: number) => Promise<boolean>
 
-    onResize: (record: Process, width: number, height: number, position: { x: number, y: number } | null) => void
+    onResize: (record: Process, width: number, height: number, position: { x: number, y: number } | null) => Promise<boolean>
 
-    onSnap: (record: Process, position: Position, size: Size) => void
+    onSnap: (record: Process, position: Position, size: Size) => Promise<boolean>
 }
 
 interface LoadingState {

@@ -40,6 +40,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const animator = useRef<WindowGeometryAnimation | null>(null)
     if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height }, { width: layoutWidth, height: layoutHeight })
     const gesturing = useRef(false)
+    const gestureRevision = useRef(0)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
     const values = useRef({ position, size, animation, transaction, immediate, minimumSize, onComplete })
@@ -179,13 +180,15 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
         completeGestureRestore()
         gesturing.current = true
+        const revision = ++gestureRevision.current
         stop()
 
         const physical = parent.getBoundingClientRect()
 
         return {
             bounds: { left: physical.left, top: physical.top, ...logicalSize(parent) },
-            region: read()
+            region: read(),
+            revision
         }
     }
 
@@ -212,7 +215,31 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         })
     }
 
-    function finishGesture(region?: WindowRegion) {
+    function targetGesture(revision: number, region: WindowRegion) {
+
+        if (gestureRevision.current !== revision) return false
+
+        completeGestureRestore()
+        transition(region)
+
+        return true
+    }
+
+    function settleGesture(revision: number) {
+
+        if (gestureRevision.current !== revision) return false
+
+        // The authoritative request has now settled. The visible values
+        // already express its result, so ownership can change without
+        // retargeting Motion through an earlier server snapshot.
+        gesturing.current = false
+
+        return true
+    }
+
+    function finishGesture(region?: WindowRegion, revision = gestureRevision.current) {
+
+        if (gestureRevision.current !== revision) return false
 
         gesturing.current = false
 
@@ -221,9 +248,13 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
             completeGestureRestore()
             transition(region)
         }
+
+        return true
     }
 
-    function cancelGesture() {
+    function cancelGesture(revision = gestureRevision.current) {
+
+        if (gestureRevision.current !== revision) return false
 
         gesturing.current = false
         completeGestureRestore()
@@ -234,6 +265,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
             set(region)
         }
+
+        return true
     }
 
     return {
@@ -244,6 +277,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         beginGesture,
         updateGesture,
         restoreGesture,
+        targetGesture,
+        settleGesture,
         finishGesture,
         cancelGesture
     }
