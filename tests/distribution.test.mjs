@@ -111,7 +111,12 @@ test("distribution contract", async () => {
 
     runtime = spawn(process.execPath, ["server/main.js"], {
       cwd: directory,
-      env: { ...process.env, PHRESHOS_HOME: join(temporary, "home"), [portVariable]: String(port) },
+      env: {
+        ...process.env,
+        PHRESHOS_HOME: join(temporary, "home"),
+        PHRESHOS_HOST: "0.0.0.0",
+        [portVariable]: String(port)
+      },
       stdio: ["ignore", "pipe", "pipe"]
     })
 

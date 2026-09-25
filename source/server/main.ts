@@ -1,6 +1,6 @@
 import { displayName, name, version } from "@/package.json"
 import view from "./view/view"
-import { defaultHome, defaultPorts, environmentHome, environmentPorts, requestedHome, requestedPorts } from "./view/configuration"
+import { defaultHome, defaultHostname, defaultPorts, environmentHome, environmentHostname, environmentPorts, requestedHome, requestedPorts } from "./view/configuration"
 import { fileURLToPath } from "node:url"
 
 const development = process.env.NODE_ENV === "development"
@@ -19,6 +19,10 @@ await view({
     version,
 
     mode: "production",
+
+    // A published container port cannot reach a listener confined to the
+    // container's loopback interface, so the deployment owns this selection.
+    hostname: environmentHostname(name, process.env) ?? defaultHostname(),
 
     home,
 

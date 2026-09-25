@@ -22,6 +22,24 @@ export function defaultPorts(development: boolean) {
     return development ? portRange(5300, 5399) : portRange(4300, 4399)
 }
 
+/** Select the default interface exposed by the System listener. */
+export function defaultHostname() {
+
+    return "localhost"
+}
+
+/** Read the optional interface selected for the production listener. */
+export function environmentHostname(name: string, variables: NodeJS.ProcessEnv) {
+
+    const selected = environment(name, "HOST", variables)
+    const value = selected.value
+
+    if (value === undefined) return undefined
+    if (!value || value !== value.trim() || /\s/.test(value)) throw new Error(`${selected.key} must contain one hostname or IP address`)
+
+    return value
+}
+
 /** Read the optional ordered production port selection. */
 export function environmentPorts(name: string, variables: NodeJS.ProcessEnv) {
 
