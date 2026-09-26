@@ -81,7 +81,7 @@ export default function SystemErrors() {
 
         <ShellSurface material="full" label="System error" labelId={title}>
 
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5 p-4">
+            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5">
 
                 <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium">!</span>
 

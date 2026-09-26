@@ -44,13 +44,15 @@ test("theme transitions capture one complete old and new document state", async 
     await ready.promise
     await Promise.resolve()
 
-    assert.equal(document.documentElement.dataset.phreshosThemeCapture, undefined)
+    // The new view stays live while it animates, so changes stay instant until it finishes.
+    assert.equal(document.documentElement.dataset.phreshosThemeCapture, "")
     assert.equal(document.documentElement.dataset.phreshosThemeTransition, "")
 
     finished.resolve()
     await complete
     await Promise.resolve()
 
+    assert.equal(document.documentElement.dataset.phreshosThemeCapture, undefined)
     assert.equal(document.documentElement.dataset.phreshosThemeTransition, undefined)
     assert.equal(document.documentElement.style.values.size, 0)
 })

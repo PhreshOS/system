@@ -66,10 +66,8 @@ export function transitionTheme(
 
     active.set(document, { revision, transition: view })
 
-    settle(view.ready, () => {
-        if (revisions.get(document) === revision) delete root.dataset.phreshosThemeCapture
-    })
-
+    // The new view is live, not a still image: any late commit would animate
+    // inside it. Changes stay instant until the whole transition finishes.
     settle(view.finished, () => {
         if (active.get(document)?.revision !== revision) return
 

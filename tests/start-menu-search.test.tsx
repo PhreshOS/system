@@ -44,7 +44,7 @@ test("start menu search contract", async () => {
   assert.match(footer, /<input\b/)
   assert.match(footer, /value="notes"/)
   assert.match(footer, /aria-label="Search Programs and Processes"/)
-  assert.equal(footer.match(/data-material=""/g)?.length, 1)
+  assert.equal(footer.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 1)
   assert.doesNotMatch(footer, /<(?:main|section|article|aside|nav|header|footer)\b/)
   assert.doesNotMatch(footer, /Signed in as/)
 }, 120_000)

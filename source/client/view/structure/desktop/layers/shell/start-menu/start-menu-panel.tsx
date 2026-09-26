@@ -16,7 +16,7 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
     return <Surface material="full" style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, height: "100%", maxHeight: "inherit", overflow: "hidden" }}>
 
-        <SystemHeader labelId={labelId} name={name} version={version} />
+        <div className="grid h-10 shrink-0 items-center px-3.5"><SystemHeader labelId={labelId} name={name} version={version} /></div>
 
         <div className="grid min-h-0 min-w-0" style={{ gridTemplateRows: "minmax(0, 1fr) auto", gap: spacing, padding: spacing, paddingTop: 0 }}>
 

@@ -41,17 +41,21 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
         </ContextMenu.Trigger>
 
-        <ContextMenu.Content UNSTABLE_portalContainer={scaleContainer ?? undefined}>
+        <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
-            <Menu aria-label={`${title} window actions`} size="small">
+            <Menu aria-label={`${title} window actions`} size="small" onAction={action => {
+                if (action === "visibility") changeVisibility()
+                else if (action === "fill") fill()
+                else if (action === "close") close()
+            }}>
 
-                <Menu.Item onAction={changeVisibility}>{minimized ? "Show" : "Minimize"}</Menu.Item>
+                <Menu.Item id="visibility">{minimized ? "Show" : "Minimize"}</Menu.Item>
 
-                <Menu.Item onAction={fill}>{maximized ? "Restore" : "Maximize"}</Menu.Item>
+                <Menu.Item id="fill">{maximized ? "Restore" : "Maximize"}</Menu.Item>
 
                 <Menu.Separator />
 
-                <Menu.Item color="danger:base" onAction={close}>Close</Menu.Item>
+                <Menu.Item id="close" color="danger">Close</Menu.Item>
 
             </Menu>
 

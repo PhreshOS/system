@@ -1,6 +1,9 @@
 import logo from "@/assets/bundled/logo.png"
 
-/** The System identity header shared by System-owned panels. */
+/**
+ * The System identity shared by System-owned panels. It is content only: the
+ * holder, such as a Panel header, decides the space around it.
+ */
 export default function SystemHeader({ labelId, name, version }: Readonly<{
 
     labelId?: string
@@ -10,7 +13,7 @@ export default function SystemHeader({ labelId, name, version }: Readonly<{
     version: string
 }>) {
 
-    return <div className="relative grid h-10 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-3.5 select-none">
+    return <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 select-none">
 
         <img src={logo} alt="" draggable={false} className="size-4 rounded-sm object-contain" />
 

@@ -101,5 +101,5 @@ export function windowSurfaceRadius(surface: VisibleWindowSurface, appearance: A
 
     const radius = typeof surface === "object" ? surface.radius : undefined
 
-    return resolveRadius(radius ?? "medium", appearance)
+    return resolveRadius(radius ?? "medium", appearance.radius)
 }

@@ -1,4 +1,4 @@
-import logo from "@/assets/bundled/logo.png"
+import PhreshOSIcon from "@client/view/components/phreshos-icon"
 import { createContext, memo, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type PropsWithChildren, type RefObject } from "react"
 import Programs from "./programs/programs"
 import Processes from "./processes/processes"
@@ -92,10 +92,10 @@ export const StartMenuButton = memo(function StartMenuButton({ showLabel = true 
     const control = useStartMenuControl()
 
     return <TaskbarButton
-        icon={<img src={logo} alt="" draggable={false} className="block size-full object-contain" />}
+        icon={<PhreshOSIcon className="block size-full" />}
         label={application.displayName}
         showLabel={showLabel}
-        color="primary:base"
+        color="default:base"
         aria-controls={control.id}
         aria-expanded={control.open}
         aria-haspopup="dialog"

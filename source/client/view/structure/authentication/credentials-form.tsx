@@ -2,7 +2,7 @@ import { type AuthenticationState } from "@server/core/authentication/authentica
 import { surfaceLifecyclePose, surfacePresenceTransition } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { Button, Input, Panel, useAppearance } from "@phreshos/react-ui"
+import { Button, Input, Panel, resolveSpacing, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
 import { useState, type SyntheticEvent } from "react"
 import { ApplicationContext } from "../../contexts"
@@ -12,7 +12,7 @@ import SystemHeader from "../../components/system-header"
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
-    const transaction = useAppearance().transaction
+    const { transaction, spacing } = useAppearance()
     const application = ApplicationContext.useValue()
     const [password, setPassword] = useState("")
     const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength
@@ -54,78 +54,79 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                 <Panel.Header><SystemHeader name={application.displayName} version={application.version} /></Panel.Header>
 
-                <Panel.Content material="extended" className="grid gap-5 p-5">
+                {/* The padding and the gaps inside are Appearance spacing levels by use. */}
+                <Panel.Content material="extended" style={{ display: "grid", padding: resolveSpacing("large", spacing), gap: resolveSpacing("xlarge", spacing) }}>
 
-                <div className="grid gap-1">
+                    <div className="grid" style={{ gap: resolveSpacing("small", spacing) }}>
 
-                    <h1 className="text-xl font-semibold">{title}</h1>
+                        <h1 className="text-xl font-semibold">{title}</h1>
 
-                    <p className="text-sm leading-5 opacity-60">{description}</p>
+                        <p className="text-sm leading-5 opacity-60">{description}</p>
 
-                </div>
+                    </div>
 
-                <div className="grid gap-4">
+                    <div className="grid" style={{ gap: resolveSpacing("large", spacing) }}>
 
-                    {/* A submitted failure belongs to the exact credential values that produced it. */}
-                    <Input
-                        aria-label="Username"
-                        placeholder="Username"
+                        {/* A submitted failure belongs to the exact credential values that produced it. */}
+                        <Input
+                            aria-label="Username"
+                            placeholder="Username"
+                            size="large"
+                            name="username"
+                            type="text"
+                            autoComplete="username"
+                            minLength={requirements?.username.minimumLength}
+                            maxLength={requirements?.username.maximumLength}
+                            required
+                            disabled={pending}
+                            invalid={error?.target === "username" || error?.target === "credentials"}
+                            errorMessage={error?.target === "username" ? error.message : undefined}
+                            onChange={() => onEdit?.()}
+                            autoFocus
+                        />
+
+                        <Input
+                            aria-label="Password"
+                            placeholder="Password"
+                            size="large"
+                            name="password"
+                            type="password"
+                            autoComplete={passwordAutocomplete}
+                            minLength={requirements?.password.minimumLength}
+                            maxLength={requirements?.password.maximumLength}
+                            required
+                            disabled={pending}
+                            invalid={error?.target === "password" || error?.target === "credentials"}
+                            errorMessage={error?.target === "password" ? error.message : undefined}
+                            onChange={value => {
+
+                                // This controls registration readiness only; Authentication
+                                // remains the authority for accepting the submitted value.
+                                setPassword(value)
+                                onEdit?.()
+                            }}
+                            description={requirements ? `Use at least ${requirements.password.minimumLength} characters.` : undefined}
+                        />
+
+                    </div>
+
+                    {(error?.target === "credentials" || error?.target === "form") && <Alert className="text-sm">{error.message}</Alert>}
+
+                    <Button
+
+                        type="submit"
+
+                        disabled={!passwordReady}
+
+                        pending={pending}
+
                         size="large"
-                        name="username"
-                        type="text"
-                        autoComplete="username"
-                        minLength={requirements?.username.minimumLength}
-                        maxLength={requirements?.username.maximumLength}
-                        required
-                        disabled={pending}
-                        invalid={error?.target === "username" || error?.target === "credentials"}
-                        errorMessage={error?.target === "username" ? error.message : undefined}
-                        onChange={() => onEdit?.()}
-                        autoFocus
-                    />
 
-                    <Input
-                        aria-label="Password"
-                        placeholder="Password"
-                        size="large"
-                        name="password"
-                        type="password"
-                        autoComplete={passwordAutocomplete}
-                        minLength={requirements?.password.minimumLength}
-                        maxLength={requirements?.password.maximumLength}
-                        required
-                        disabled={pending}
-                        invalid={error?.target === "password" || error?.target === "credentials"}
-                        errorMessage={error?.target === "password" ? error.message : undefined}
-                        onChange={value => {
+                        color="primary:base"
 
-                            // This controls registration readiness only; Authentication
-                            // remains the authority for accepting the submitted value.
-                            setPassword(value)
-                            onEdit?.()
-                        }}
-                        description={requirements ? `Use at least ${requirements.password.minimumLength} characters.` : undefined}
-                    />
+                        style={{ width: "100%" }}
 
-                </div>
-
-                {(error?.target === "credentials" || error?.target === "form") && <Alert className="text-sm">{error.message}</Alert>}
-
-                <Button
-
-                    type="submit"
-
-                    disabled={!passwordReady}
-
-                    pending={pending}
-
-                    size="large"
-
-                    color="primary:base"
-
-                    style={{ width: "100%" }}
-
-                >{pending ? `${submitLabel}…` : submitLabel}</Button>
+                    >{pending ? `${submitLabel}…` : submitLabel}</Button>
 
                 </Panel.Content>
 

@@ -61,7 +61,7 @@ function PermissionRequestView({ request, description }: Readonly<{ request: Per
     const presentation = permissionPresentation[request.name]
     const program = request.from.process.program
 
-    return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5 p-4">
+    return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5">
         <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-sky-600/25 bg-sky-500/15 text-sm font-medium">?</span>
         <div className="grid gap-1">
             <h3 className="text-base font-medium">{program.name} needs {presentation.title}</h3>

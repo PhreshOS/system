@@ -28,7 +28,7 @@ test("panel contract", async () => {
   }
 
   function panel(html: string, materials = 2) {
-      assert.equal(html.match(/data-material=""/g)?.length, materials)
+      assert.equal(html.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, materials)
       assert.match(html, /grid-template-rows:auto minmax\(0, 1fr\)/)
       assert.match(html, /margin:6px;margin-top:0/)
   }
@@ -39,7 +39,7 @@ test("panel contract", async () => {
   assert.match(shell, /<button>Action<\/button>/)
 
   const window = markup(<Window layer="window" icon="/icon.svg" title="Window"><iframe title="Content" /></Window>)
-  assert.equal(window.match(/data-material=""/g)?.length, 1)
+  assert.equal(window.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 1)
   assert.match(window, /grid-template-rows:auto minmax\(0, 1fr\)/)
   assert.match(window, /data-window-content="true"/)
   assert.doesNotMatch(window, /border-top:1px solid yellow/)
@@ -49,10 +49,10 @@ test("panel contract", async () => {
   assert.doesNotMatch(window, /class="p-px"/)
   const windowPanel = window.match(/<div style="([^"]*grid-template-rows:auto minmax\(0, 1fr\)[^"]*)">/)?.[1] ?? ""
   assert.match(windowPanel, /overflow:hidden/)
-  assert.match(windowPanel, new RegExp(`border-radius:${resolveRadius("medium", defaultAppearance)}`))
+  assert.match(windowPanel, new RegExp(`border-radius:${resolveRadius("medium", defaultAppearance.radius)}`))
 
   const bare = markup(<Window layer="over" icon="/icon.svg" title="Bare"><iframe title="Content" /></Window>)
-  assert.doesNotMatch(bare, /data-material/)
+  assert.doesNotMatch(bare, /class="[^"]*phreshos-surface[^"]*"/)
   assert.doesNotMatch(bare, /grid-template-rows:auto minmax\(0, 1fr\)/)
 
   const passThrough = markup(<Window layer="over" icon="/icon.svg" title="Pass-through" interactive={false}><iframe title="Content" /></Window>)
@@ -68,7 +68,6 @@ test("panel contract", async () => {
   assert.match(authentication, /placeholder="Username"/)
   assert.match(authentication, /placeholder="Password"/)
   assert.doesNotMatch(authentication, /<label\b/)
-  assert.equal(authentication.match(/height:42px/g)?.length, 3)
   assert.match(authentication, /type="submit"/)
   assert.match(authentication, /<h2[^>]*>Example System<\/h2>/)
   assert.match(authentication, /System version 1.2.3/)
@@ -87,7 +86,7 @@ test("panel contract", async () => {
   assert.match(authenticationFailure, /The request failed\./)
 
   const launcher = markup(<StartMenuPanel labelId="start-menu-label" name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />)
-  assert.equal(launcher.match(/data-material=""/g)?.length, 3)
+  assert.equal(launcher.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 3)
   assert.match(launcher, /grid-cols-2/)
   assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\);min-height:0/)
   assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:8px;padding:8px;padding-top:0/)

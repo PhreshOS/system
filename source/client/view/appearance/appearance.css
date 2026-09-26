@@ -3,7 +3,10 @@
 
 @import "@fontsource/roboto";
 
-html[data-phreshos-theme-capture] * {
+/* Pseudo-elements carry Surface paint, so they settle instantly too. */
+html[data-phreshos-theme-capture] *,
+html[data-phreshos-theme-capture] *::before,
+html[data-phreshos-theme-capture] *::after {
 
     transition-delay: 0ms !important;
 
