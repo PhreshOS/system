@@ -628,7 +628,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
             // lower layers; content inside the iframe cannot cross that boundary.
             className={`absolute ${minimized || closing || !interactive ? "pointer-events-none" : "pointer-events-auto"} ${className ?? ""}`}
 
-            style={{ ...style, left: 0, top: 0, ...geometryMotion.style }}
+            // Each window keeps its own compositor layer. Moving, raising, or
+            // minimizing one window then only recomposites it, instead of
+            // repainting the windows it shares a layer with.
+            style={{ ...style, left: 0, top: 0, willChange: "transform", ...geometryMotion.style }}
 
             {...props}
 
@@ -673,6 +676,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             >
                 <WindowSurface
                     surface={surfaceDefinition}
+                    active={active}
                     animation={surfaceAnimation ?? null}
                     onComplete={revision => onPresentationAnimationComplete?.("surface", revision)}
                 />

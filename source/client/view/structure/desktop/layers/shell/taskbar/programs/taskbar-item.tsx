@@ -1,4 +1,4 @@
-import { Button, type ButtonProps } from "@phreshos/react-ui"
+import { Button, type ButtonActionProps } from "@phreshos/react-ui"
 import { type TaskbarPosition } from "@phreshos/core"
 import { forwardRef, type ReactNode } from "react"
 
@@ -38,7 +38,7 @@ export function taskbarIndicatorClassName(position: TaskbarPosition) {
     return "inset-y-3 right-0 w-0.5"
 }
 
-export interface TaskbarItemProps extends Omit<ButtonProps, "children"> {
+export interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
 
     active?: boolean
 

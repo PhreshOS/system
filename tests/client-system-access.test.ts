@@ -55,6 +55,8 @@ test("client system access contract", async () => {
   assert(!access.ownsProgram(outsideProgram))
   assert(access.ownsProcess(sibling))
   assert(!access.ownsProcess(outside))
+  assert.equal(await access.canProcess(sibling), true)
+  assert.equal(await access.canProcess(outside), false)
   assert.equal(await access.program(ownProgram as never), ownProgram)
   await assert.rejects(access.service(ownService), /Execution is not permitted/)
   await assert.rejects(access.service(siblingService), /Execution is not permitted/)
@@ -93,6 +95,7 @@ test("client system access contract", async () => {
 
   assert.equal(await access.program(outsideProgram as never), outsideProgram)
   assert.equal(await access.process(outside), outside)
+  assert.equal(await access.canProcess(outside), true)
   await assert.rejects(access.service(outsideService), /Execution is not permitted/)
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 

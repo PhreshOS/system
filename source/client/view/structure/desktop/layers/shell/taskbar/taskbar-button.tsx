@@ -1,4 +1,4 @@
-import { Button, type ButtonProps } from "@phreshos/react-ui"
+import { Button, type ButtonActionProps } from "@phreshos/react-ui"
 import { type ReactNode } from "react"
 
 /** One visual contract for the Taskbar's fixed system controls. */
@@ -13,7 +13,7 @@ export default function TaskbarButton({ icon, label, showLabel = true, ...props 
     </Button>
 }
 
-interface TaskbarButtonProps extends Omit<ButtonProps, "children"> {
+interface TaskbarButtonProps extends Omit<ButtonActionProps, "children"> {
 
     icon: ReactNode
 

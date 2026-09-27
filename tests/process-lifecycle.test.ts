@@ -92,7 +92,17 @@ test("process lifecycle contract", async () => {
       )
 
       process.server = {} as ServerProcessBoundary
+      const memoryChanges: unknown[][] = []
+      manager.$outbound.subscribe("/client-memory-change", (...values) => { memoryChanges.push(values) })
+      manager.clientMemory(process.identity, "set", "tab", "colors")
+      assert.equal((manager.clientMemory(process.identity, "snapshot", "tab") as { value: unknown }).value, "colors")
+      assert.equal(memoryChanges.length, 1)
+      assert.equal(memoryChanges[0]?.[0], process.identity)
+      assert.equal(memoryChanges[0]?.[1], "tab")
       await manager.stopClient(process.identity)
+      assert.equal((manager.clientMemory(process.identity, "snapshot", "tab") as { value: unknown }).value, undefined)
+      assert.deepEqual(manager.clientMemory(process.identity, "entries"), [])
+      assert.throws(() => manager.clientMemory(process.identity, "set", "tab", "colors"), /not running/)
 
       assert.equal(process.client, null)
       assert.ok(process.clientEndpoint)
@@ -102,6 +112,8 @@ test("process lifecycle contract", async () => {
       assert.throws(() => process.clientEndpoint!.window.toJSON(), /not running/)
 
       await manager.startClient(process.identity)
+
+      assert.equal((manager.clientMemory(process.identity, "snapshot", "tab") as { value: unknown }).value, undefined)
 
       assert.deepEqual(process.clientEndpoint.window.position, { x: 0, y: 0 })
       assert.equal(process.clientEndpoint.window.header, true)

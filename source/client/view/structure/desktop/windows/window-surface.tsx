@@ -9,7 +9,7 @@ import { resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance } from "@phreshos/react-ui"
 
 /** Paints the optional Desktop-owned backing surface for a supported presentation. */
-export default function WindowSurface({ surface, animation, onComplete }: WindowSurfaceProps) {
+export default function WindowSurface({ surface, active = true, animation, onComplete }: WindowSurfaceProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -58,7 +58,7 @@ export default function WindowSurface({ surface, animation, onComplete }: Window
         <Surface
             aria-hidden="true"
             color={surfaceColor(retained.current)}
-            material={surfaceMaterial(retained.current)}
+            material={surfaceMaterial(retained.current, active)}
             radius={windowSurfaceRadius(retained.current, appearance)}
             style={{ position: "absolute", inset: 0 }}
         />
@@ -68,6 +68,9 @@ export default function WindowSurface({ surface, animation, onComplete }: Window
 interface WindowSurfaceProps {
 
     surface: WindowSurfaceDefinition
+
+    /** Whether this is the front window. Only the front window is frosted. */
+    active?: boolean
 
     animation: PresentationAnimation | null
 
@@ -85,13 +88,16 @@ function surfaceColor(surface: VisibleWindowSurface): Color | undefined {
         : surface.color
 }
 
-function surfaceMaterial(surface: VisibleWindowSurface): "none" | "full" | MaterialOptions {
+function surfaceMaterial(surface: VisibleWindowSurface, active: boolean): "none" | "basic" | "full" | MaterialOptions {
 
-    if (surface === true || surface.material === undefined) return "full"
+    const material = surface === true || surface.material === undefined ? "full" : surface.material
 
-    if (surface.material === false) return "none"
+    if (material === false) return "none"
 
-    return surface.material
+    // Frost blurs everything behind a window again whenever anything behind it
+    // changes, so its cost grows with every open window. Only the front window
+    // keeps it; the others become the same paint, opaque, as on macOS.
+    return active ? material : "basic"
 }
 
 const appearanceColors = ["background", "foreground", "default", "primary", "secondary", "success", "warning", "danger", "info"] as const satisfies readonly AppearanceColor[]

@@ -96,6 +96,7 @@ export const StartMenuButton = memo(function StartMenuButton({ showLabel = true 
         label={application.displayName}
         showLabel={showLabel}
         color="default:base"
+        material="extended"
         aria-controls={control.id}
         aria-expanded={control.open}
         aria-haspopup="dialog"

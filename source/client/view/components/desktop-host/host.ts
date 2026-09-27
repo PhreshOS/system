@@ -170,6 +170,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
     return async function answer(word: unknown, ...args: unknown[]) {
 
+        if (word === "client-memory") {
+
+            const target = await permittedProcess(args[0])
+
+            return [await processManager.clientMemory(target.identity, String(args[1]), args[2], args[3], args[4])]
+        }
+
         // When it started is a fact about this process, which a pane may
         // already ask everything else about — it was missing on this side
         // only because it was added on the other.

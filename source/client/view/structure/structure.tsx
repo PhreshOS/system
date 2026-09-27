@@ -38,18 +38,38 @@ function DesktopReadiness({ appearance }: { appearance: ReturnType<typeof useApp
 
     const { pending } = useReadiness<DesktopReadinessRequirement>()
 
+    const covering = pending.length > 0
+
+    const duration = appearance.transaction.duration
+
+    // Once faded out, the cover leaves the tree. Kept at zero opacity, it
+    // stayed a full-screen layer over the Desktop that repainted with every
+    // frame of any animation, and its spinner never stopped.
+    const [faded, setFaded] = useState(!covering)
+
+    if (covering && faded) setFaded(false)
+
+    if (!covering && !faded && duration === 0) setFaded(true)
+
+    if (faded) return null
+
     return <Loading
 
-        aria-hidden={pending.length === 0}
+        aria-hidden={!covering}
 
-        className={pending.length ? "opacity-100" : "pointer-events-none opacity-0"}
+        className={covering ? "opacity-100" : "pointer-events-none opacity-0"}
 
         style={{
             // New pending work must cover the next representation
             // immediately; only completed readiness fades away.
-            transitionDuration: pending.length ? "0ms" : String(appearance.transaction.duration) + "ms",
+            transitionDuration: covering ? "0ms" : String(duration) + "ms",
             transitionTimingFunction: cssEasing(appearance.transaction.easing),
             transitionProperty: "opacity"
+        }}
+
+        onTransitionEnd={event => {
+
+            if (!covering && event.target === event.currentTarget && event.propertyName === "opacity") setFaded(true)
         }}
 
     >{pending[0]?.message ?? "Loading…"}</Loading>

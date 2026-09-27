@@ -40,6 +40,7 @@ import SystemAccess from "./system-access"
 import { WebSocket } from "ws"
 import { permissionCatalog } from "@server/core/permissions"
 import { defaultPermissionRequestTimeout } from "@server/core/permission-manager"
+import type { MemorySnapshot } from "./client-memory"
 
 type SerializedClientLayer = DesktopReplacementLayer | "shell"
 
@@ -202,6 +203,34 @@ export default class ProcessManager extends TheLink {
     public observeHost(domain: "program" | "process" | "window" | "connection" | "session" | "service" | "permission", event: string, subject: string | null, subscriber: (event: string, ...values: unknown[]) => void) {
 
         return this.hostTraffic.observe(domain, event, subject, (_delivery, word, ...values) => subscriber(word, ...values))
+    }
+
+    /** All roads operate on the same current Client run, never on a browser document. */
+    public clientMemory(identity: string, operation: string, key?: unknown, value?: unknown, expected?: unknown) {
+        const process = this.find(identity)
+        if (!process.clientEndpoint) throw new Error("This Program declared no Client Endpoint")
+        const memory = process.client?.memory
+        if (!memory && operation === "entries") return []
+        if (!memory && operation === "snapshot" && typeof key === "string") return { run: null, revision: 0, value: undefined }
+        if (!memory) throw new Error("This Client Endpoint is not running")
+        if (operation === "entries") return memory.entries()
+        if (typeof key !== "string") throw new Error("A Client memory key must be text")
+        if (operation === "snapshot") return memory.snapshot(key)
+        if (operation === "set") return memory.set(key, value)
+        if (operation === "delete") return memory.delete(key)
+        if (operation === "compareAndSet") {
+            const revision = expected as Partial<MemorySnapshot> | null
+            if (!revision || typeof revision.run !== "string" || !Number.isSafeInteger(revision.revision) || (revision.revision as number) < 0) {
+                throw new Error("A Client memory update requires a run and revision")
+            }
+            return memory.compareAndSet(key, { run: revision.run, revision: revision.revision as number }, value)
+        }
+        throw new Error(`The Client memory does not know the operation "${operation}"`)
+    }
+
+    @Subscribe("/client-memory")
+    protected clientMemoryForConnection(identity: unknown, operation: unknown, key?: unknown, value?: unknown, expected?: unknown) {
+        return this.clientMemory(String(identity), String(operation), key, value, expected)
     }
 
     /** Observe destinationless events from one exact live Endpoint. */
@@ -627,7 +656,17 @@ export default class ProcessManager extends TheLink {
             stop = this.observeServiceFromOutside(observation.address, observation.kind, event, followed)
         }
 
-        else throw new Error("A System observation scope is endpoint, traffic, or service")
+        else if (observation.scope === "clientMemory") {
+
+            if (typeof observation.key !== "string") throw new Error("A Client memory key must be text")
+            const process = this.find(String(observation.process))
+            stop = process.client
+                ? process.client.memory.subscribe(observation.key, snapshot => followed(observation.key as string, snapshot))
+                : () => undefined
+            if (!process.client) followed(observation.key, { run: null, revision: 0, value: undefined })
+        }
+
+        else throw new Error("Unknown System observation scope")
 
         observations.set(subscription, stop)
     }
@@ -942,7 +981,7 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "log" | "programLog", subject: string | null) {
+    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "log" | "programLog" | "clientMemory", subject: string | null) {
 
         const access = new SystemAccess(this, process)
 
@@ -1035,6 +1074,13 @@ export default class ProcessManager extends TheLink {
         )) throw new Error("Another Program already occupies the shell layer")
 
         process.startClient(service)
+
+        process.client?.memory.changes(({ key, snapshot }) => {
+            // A browser document may disappear while the Client run remains.
+            // Publish from the run so every current representation sees one order.
+            this.hostTraffic.emitSubject("clientMemory", key, process.reference, processReference(process), snapshot).catch(() => undefined)
+            this.$outbound.publish("/client-memory-change", process.identity, key, snapshot).catch(() => undefined)
+        })
     }
 
     public async register(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, runtime: ServerRuntimeFactory<Program> | null, client: boolean, shape: Shape | null, parent: Process | null, registration?: ProcessRegistration) {
@@ -2720,6 +2766,11 @@ export default class ProcessManager extends TheLink {
             const whose = heldProgram(rest[0])
 
             return [await this.system.programStore(whose, operation, key, value, ttl)]
+        }
+
+        if (word === "client-memory") {
+            const target = heldProcess(rest[0])
+            return [this.clientMemory(target.identity, String(rest[1]), rest[2], rest[3], rest[4])]
         }
 
         throw new Error(`The host does not know the word "${String(word)}"`)

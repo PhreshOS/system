@@ -1,3 +1,5 @@
+import ClientMemoryState from "./client-memory"
+
 /**
  * The current execution context of a Process's Client Endpoint.
  *
@@ -5,6 +7,8 @@
  * boundary. The Client Endpoint-owned Window survives when this context stops.
  */
 export default class ClientState {
+
+    public readonly memory = new ClientMemoryState()
 
     public readonly service: boolean
 

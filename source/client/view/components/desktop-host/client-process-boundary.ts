@@ -899,7 +899,16 @@ export default class ClientProcessBoundary extends TheLink {
             return
         }
 
-        const stop = this.traffic.observe(this.pane, route, kind, event, (delivery, ...values) => {
+        const stop = route === "host-client-memory" && kind === "publish"
+            ? this.authManager.processManager.$inbound.subscribe("/client-memory-change", (identity: string, key: string, snapshot: unknown) => {
+                if (event !== null && event !== key) return
+                const target = this.authManager.processManager.processes.get(identity)
+                if (!target?.client) return
+                void this.systemAccess.canProcess(target).then(allowed => {
+                    if (allowed) this.deliver(route, key, identity, snapshot).catch(() => undefined)
+                })
+            })
+            : this.traffic.observe(this.pane, route, kind, event, (delivery, ...values) => {
 
             if (this.trafficDeliveries.has(delivery)) return
 

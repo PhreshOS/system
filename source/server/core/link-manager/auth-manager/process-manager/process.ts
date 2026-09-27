@@ -176,6 +176,8 @@ export default class Process {
 
         if (!this.client) return false
 
+        this.client.memory.close()
+
         this.client = null
 
         // Stopping ends this incarnation rather than retaining values for the
