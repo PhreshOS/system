@@ -101,11 +101,9 @@ export default class ProcessManager extends TheLink {
         return await this.$outbound.publishFirst("/service/available", address) as boolean
     }
 
-    public async listServices(name?: string) {
+    public async listServices(options: { name?: string } = {}) {
 
-        const route = name === undefined ? "/service/list" : "/service/search"
-
-        return await this.$outbound.publishFirst(route, ...name === undefined ? [] : [name]) as ServiceAddress[]
+        return await this.$outbound.publishFirst("/service/list", options) as ServiceAddress[]
     }
 
     public async waitServiceReady(address: ServiceAddress, timeout: number | undefined) {

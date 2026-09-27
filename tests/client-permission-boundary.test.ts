@@ -43,8 +43,10 @@ test("Program and Process discovery exposes only the accessible scope", async ()
 
     let permissions: Permissions = {}
     const owner = program("owner")
+    Object.defineProperty(owner, "installed", { value: true })
     Object.defineProperty(owner, "permissions", { get: () => permissions })
     const outside = program("outside")
+    Object.defineProperty(outside, "installed", { value: false })
     outside.permissions = { network: ["https://example.com"] }
     const current = process("current", owner)
     const hidden = process("hidden", outside)
@@ -68,6 +70,9 @@ test("Program and Process discovery exposes only the accessible scope", async ()
         expect.objectContaining({ identity: owner.identity }),
         expect.objectContaining({ identity: outside.identity })
     ]])
+    await expect(answer("host-program-list", { installed: true })).resolves.toEqual([[expect.objectContaining({ identity: owner.identity })]])
+    await expect(answer("host-program-list", { installed: false })).resolves.toEqual([[expect.objectContaining({ identity: outside.identity })]])
+    await expect(answer("host-program-list", true)).rejects.toThrow(/object/)
     await expect(answer("host-process-list")).resolves.toEqual([[
         expect.objectContaining({ identity: current.identity }),
         expect.objectContaining({ identity: hidden.identity })
@@ -252,7 +257,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
     const mainServer = { program: "notes", process: "main", endpoint: "server" } as const
     const mainClient = { program: "editor", process: "main", endpoint: "client" } as const
     const background = { program: "notes", process: "background", endpoint: "server" } as const
-    const listServices = vi.fn(async (name?: string) => [mainServer, mainClient, background].filter(service => name === undefined || service.process === name))
+    const listServices = vi.fn(async (options: { name?: string } = {}) => [mainServer, mainClient, background].filter(service => options.name === undefined || service.process === options.name))
     const auth = {
         programManager: { programs: new Map([["owner", { identity: "owner", get permissions() { return permissions } }]]) },
         processManager: {
@@ -264,13 +269,14 @@ test("Service discovery filters ready addresses only by Service-name authority",
     const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", moveCoordinates(), {} as never)
 
     await expect(answer("host-service-list")).resolves.toEqual([[]])
-    await expect(answer("host-service-search", "main")).resolves.toEqual([[]])
+    await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[]])
 
     permissions = { services: ["main"] }
 
     await expect(answer("host-service-list")).resolves.toEqual([[mainServer, mainClient]])
-    await expect(answer("host-service-search", "main")).resolves.toEqual([[mainServer, mainClient]])
-    await expect(answer("host-service-search", "background")).resolves.toEqual([[]])
+    await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[mainServer, mainClient]])
+    await expect(answer("host-service-list", { name: "background" })).resolves.toEqual([[]])
+    await expect(answer("host-service-list", "main")).rejects.toThrow(/object/)
 
     permissions = { services: [] }
 

@@ -143,6 +143,30 @@ test("pinning emits Program and global events only when the boolean changes", as
     ])
 })
 
+test("Program store changes originate once at System and retain their key revisions", async context => {
+    const { manager, definition, announceSubject } = fixture(context)
+    announceSubject.mockResolvedValue(undefined)
+    const program = await manager.create(definition())
+    const delivered: Array<[string, string, { revision: number, value: unknown }]> = []
+    const stop = manager.$outbound.subscribe("/store-change", (reference, key, snapshot) => {
+        delivered.push([reference, key, snapshot])
+    })
+    context.onTestFinished(stop)
+
+    const initial = await manager.store(program, "snapshot", "tab") as { run: string, revision: number, value: unknown }
+    expect(initial.value).toBeUndefined()
+    expect((await manager.store(program, "compareAndSet", "tab", "colors", initial) as { changed: boolean }).changed).toBe(true)
+    expect((await manager.store(program, "compareAndSet", "tab", "old", initial) as { changed: boolean }).changed).toBe(false)
+    await manager.store(program, "delete", "tab")
+
+    expect(delivered.map(([, key, snapshot]) => [key, snapshot.revision, snapshot.value])).toEqual([
+        ["tab", 1, "colors"], ["tab", 2, undefined]
+    ])
+    expect(announceSubject.mock.calls.map(([, event, subject]) => [event, subject])).toEqual([
+        ["storeChange", program.reference], ["storeChange", program.reference]
+    ])
+})
+
 test("boot reconstruction reads startup and permissions from state", async context => {
     const { manager, definition, client } = fixture(context)
     const directory = manager.fileManager.join("example")

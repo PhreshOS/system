@@ -197,6 +197,12 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         post(entry.identity, "program-host", "permissions", entry.reference, record)
     }, [post]))
 
+    programs.useSubscribe("/store-change", useCallback((reference: unknown, key: unknown, snapshot: unknown) => {
+        if (typeof reference !== "string" || typeof key !== "string") return
+        const entry = [...authManager.programManager.programs.values()].find(program => program.reference === reference)
+        if (entry) post(entry.identity, "program-host", "storeChange", reference, key, snapshot)
+    }, [authManager, post]))
+
     programs.useSubscribe("/log", useCallback((reference: unknown, record: unknown) => {
 
         if (typeof reference !== "string") return

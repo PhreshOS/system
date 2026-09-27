@@ -5,7 +5,7 @@ import { TheLink } from "@the-link/core"
 import SqliteDatabase from "@libs/sqlite-database"
 import FileManager from "@libs/file-manager"
 import FileArea from "@libs/file-area"
-import openStore from "@server/core/open-store"
+import ProgramStoreState, { type StoreSnapshot } from "./program-store"
 import AuthManager from "../auth-manager"
 import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
@@ -16,7 +16,6 @@ import { type default as Process, type ProcessLaunch, type Stream } from "../pro
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type ProgramRecord } from "./entry"
-import Keyv from "keyv"
 import { isIconSize, ProgramIcons } from "./icon"
 import { permissionCatalog } from "@server/core/permissions"
 import ProgramStateStorage from "./state"
@@ -77,7 +76,7 @@ export default class ProgramManager extends TheLink {
 
     // What each program remembers about itself, opened on first use and
     // kept by the identity of the program that asked.
-    private readonly opened = new Map<string, Keyv>()
+    private readonly opened = new Map<string, ProgramStoreState>()
 
     // What each program's halves have said. Opened like the store above
     // and dropped in the same place, because it is the same kind of
@@ -547,7 +546,11 @@ export default class ProgramManager extends TheLink {
 
         if (already) return already
 
-        const store = openStore(program.storagePath)
+        const store = new ProgramStoreState(program.storagePath, (key, snapshot) => {
+            // The System is the only publisher; endpoint adapters must consume, never echo, this fact.
+            this.authManager.processManager.announceSubject("program", "storeChange", program.reference, key, snapshot).catch(() => undefined)
+            this.$outbound.publish("/store-change", program.reference, key, snapshot).catch(() => undefined)
+        })
 
         this.opened.set(program.identity, store)
 
@@ -709,18 +712,24 @@ export default class ProgramManager extends TheLink {
         return pinned
     }
 
-    // A store's five controls, in one place. Reached from a process
+    // A store's controls, in one place. Reached from a process
     // over its own channel and from a session over the link, and both
     // must mean the same thing. The exact handle always names a Program;
     // application persistence has no generic route through this manager.
     @Subscribe("/store")
-    public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: number) {
+    public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: unknown) {
 
         const store = this.storeOf(this.held(subject))
 
         if (operation === "get") return await store.get(key) as unknown
 
-        if (operation === "set") return await store.set(key, value, ttl)
+        if (operation === "set") return await store.set(key, value, ttl as number | undefined)
+
+        if (operation === "getOrSet") return await store.getOrSet(key, value)
+
+        if (operation === "snapshot") return await store.snapshot(key)
+
+        if (operation === "compareAndSet") return await store.compareAndSet(key, value, ttl as StoreSnapshot)
 
         if (operation === "delete") return await store.delete(key as string | string[])
 

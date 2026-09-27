@@ -12,6 +12,7 @@ test("host traffic contract", async () => {
   const ownSession: unknown[][] = []
   const systemLogs: unknown[][] = []
   const programLogs: unknown[][] = []
+  const storeChanges: unknown[][] = []
 
   traffic.observe("program", "uninstall", null, (_delivery, event, ...values) => hostProgram.push([event, ...values]))
   traffic.observe("program", "uninstall", "program-reference", (_delivery, event, ...values) => ownProgram.push([event, ...values]))
@@ -21,6 +22,7 @@ test("host traffic contract", async () => {
   traffic.observe("session", "connectionAttach", "session-identity", (_delivery, event, ...values) => ownSession.push([event, ...values]))
   traffic.observe("log", "log", null, (_delivery, event, ...values) => systemLogs.push([event, ...values]))
   traffic.observe("programLog", "log", "program-reference", (_delivery, event, ...values) => programLogs.push([event, ...values]))
+  traffic.observe("program", "storeChange", "program-reference", (_delivery, event, ...values) => storeChanges.push([event, ...values]))
 
   const program = { identity: "counter", reference: "program-reference" }
   const process = { identity: "worker", reference: "process-reference" }
@@ -43,9 +45,11 @@ test("host traffic contract", async () => {
   await traffic.emitSubject("session", "connectionAttach", "session-identity", { identity: "connection-identity" })
   await traffic.emitHost("log", "log", "system", { kind: "started" })
   await traffic.emitSubject("programLog", "log", "program-reference", { kind: "stdout" })
+  await traffic.emitSubject("program", "storeChange", "program-reference", "tab", { revision: 1, value: "colors" })
 
   assert.deepEqual(hostConnection, [["create", "connection-identity", { identity: "connection-identity" }]])
   assert.deepEqual(ownSession, [["connectionAttach", "session-identity", { identity: "connection-identity" }]])
   assert.deepEqual(systemLogs, [["log", "system", { kind: "started" }]])
   assert.deepEqual(programLogs, [["log", "program-reference", { kind: "stdout" }]])
+  assert.deepEqual(storeChanges, [["storeChange", "program-reference", "tab", { revision: 1, value: "colors" }]])
 }, 120_000)

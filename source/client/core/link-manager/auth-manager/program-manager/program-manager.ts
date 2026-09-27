@@ -63,7 +63,7 @@ export default class ProgramManager extends TheLink {
     // pane's store words with this, so a client half means the same
     // thing by them as a server half does — one implementation, two
     // roads to it.
-    public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: number) {
+    public async store(subject: unknown, operation: string, key: string, value?: unknown, ttl?: unknown) {
 
         return await this.$outbound.publishFirst("/store", subject, operation, key, value, ttl)
     }

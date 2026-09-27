@@ -21,6 +21,8 @@ import {
     parsePermissionName,
     parseProgramInstallOptions,
     parseProgramUninstallOptions,
+    parseSystemProgramListOptions,
+    parseSystemServiceListOptions,
     type ClientLaunch,
     type Launch,
     type Permission,
@@ -1603,14 +1605,9 @@ export default class ProcessManager extends TheLink {
     }
 
     @Subscribe("/service/list")
-    protected async listServices() { return this.services.list() }
+    protected async listServices(options: unknown = {}) {
 
-    @Subscribe("/service/search")
-    protected async searchServices(name: unknown) {
-
-        if (typeof name !== "string" || !name.trim()) throw new Error("A Service name is required")
-
-        return this.services.list(name)
+        return this.services.list(parseSystemServiceListOptions(options).name)
     }
 
     @Subscribe("/service/wait-ready")
@@ -1874,7 +1871,7 @@ export default class ProcessManager extends TheLink {
             return value
         }
 
-        if (word === "host-program-list") return [this.system.listPrograms(rest[0] === true).filter(program => access.canProgram(program))]
+        if (word === "host-program-list") return [this.system.listPrograms(parseSystemProgramListOptions(rest[0])).filter(program => access.canProgram(program))]
 
         if (typeof word === "string" && word.startsWith("host-authentication-")) {
 
@@ -2272,15 +2269,11 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.system.stopEndpoint(process, "server")]
 
-        if (word === "host-service-list") return [this.services.list().filter(address => this.grants(process.identity, "services", [address.process]))]
+        if (word === "host-service-list") {
 
-        if (word === "host-service-search") {
+            const { name } = parseSystemServiceListOptions(rest[0])
 
-            const name = rest[0]
-
-            if (typeof name !== "string" || !name.trim()) throw new Error("A Service name is required")
-
-            return [this.grants(process.identity, "services", [name]) ? this.services.list(name) : []]
+            return [this.services.list(name).filter(address => this.grants(process.identity, "services", [address.process]))]
         }
 
         if (word === "service-available") return [this.services.available(heldService(rest[0]))]
@@ -2761,7 +2754,7 @@ export default class ProcessManager extends TheLink {
         // expose only the values the application actually owns.
         if (word === "store") {
 
-            const [operation, key, value, ttl] = rest.slice(1) as [string, string, unknown, number | undefined]
+            const [operation, key, value, ttl] = rest.slice(1) as [string, string, unknown, unknown]
 
             const whose = heldProgram(rest[0])
 

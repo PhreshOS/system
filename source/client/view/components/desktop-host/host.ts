@@ -17,6 +17,8 @@ import {
     parsePermission,
     parsePermissionName,
     parsePermissions,
+    parseSystemProgramListOptions,
+    parseSystemServiceListOptions,
     type PermissionRequestInput,
     type ProgramIconSize
 } from "@phreshos/core"
@@ -191,7 +193,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "host-program-list") {
 
-            const programs = [...programManager.programs.values()].filter(program => args[0] !== true || program.installed)
+            const { installed } = parseSystemProgramListOptions(args[0])
+            const programs = [...programManager.programs.values()].filter(program => installed === undefined || program.installed === installed)
             const visible = []
 
             for (const program of programs) if (await access.canProgram(program)) visible.push(program)
@@ -397,13 +400,11 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
             return [await processManager.endpointIsService(pane, address(target), endpoint)]
         }
 
-        if (word === "host-service-list" || word === "host-service-search") {
+        if (word === "host-service-list") {
 
-            const name = word === "host-service-search" ? args[0] : undefined
+            const options = parseSystemServiceListOptions(args[0])
 
-            if (name !== undefined && (typeof name !== "string" || !name.trim())) throw new Error("A Service name is required")
-
-            const services = await processManager.listServices(name)
+            const services = await processManager.listServices(options)
             const visible = []
 
             for (const service of services) if (await access.canService(service)) visible.push(service)
@@ -1017,7 +1018,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
 
         if (word === "store") {
 
-            const [subject, operation, key, value, ttl] = args as [unknown, string, string, unknown, number | undefined]
+            const [subject, operation, key, value, ttl] = args as [unknown, string, string, unknown, unknown]
 
             return [await programManager.store(address(await permittedProgram(subject)), operation, key, value, ttl)]
         }

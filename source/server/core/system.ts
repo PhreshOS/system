@@ -9,6 +9,7 @@ import type {
     Launch,
     ProgramInstallOptions,
     ProgramUninstallOptions,
+    SystemProgramListOptions,
     PermissionInput,
     PermissionName,
     Position,
@@ -42,9 +43,9 @@ export default class System {
         return shell(command, options)
     }
 
-    public listPrograms(onlyInstalled = false) {
+    public listPrograms(options: SystemProgramListOptions = {}) {
 
-        return [...this.programManager.programs.values()].filter(entry => !onlyInstalled || entry.installed)
+        return [...this.programManager.programs.values()].filter(entry => options.installed === undefined || entry.installed === options.installed)
     }
 
     public findProgram(identity: string) {
@@ -536,7 +537,7 @@ export default class System {
         return this.application.home.watch(joins, recursive, signal)
     }
 
-    public programStore(program: Program, operation: string, key: string, value?: unknown, ttl?: number) {
+    public programStore(program: Program, operation: string, key: string, value?: unknown, ttl?: unknown) {
 
         return this.programManager.store(program, operation, key, value, ttl)
     }
