@@ -199,7 +199,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         {/* Loading and closing are mutually exclusive states of the same
             progress layer. Neither paints a backdrop or Surface. */}
-        {progress && <div className="pointer-events-none absolute inset-0 z-10 grid rounded-[inherit]">
+        {progress && <div className="pointer-events-none absolute inset-0 z-10 grid">
 
             <Spinner className="m-auto size-6">
 
