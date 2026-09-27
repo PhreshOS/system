@@ -5,6 +5,7 @@ import { existsSync } from "node:fs"
 import { Hono } from "hono"
 import doors from "../doors"
 import { developmentResponse, developmentSocket, developmentTarget } from "./development"
+import { frameTheme, themedFrameDocument } from "./frame-document"
 
 /**
  * The browser representation of one Program domain.
@@ -65,20 +66,24 @@ export default function (application: Application) {
 
         const target = developmentTarget(found, context.req.url)
 
-        if (target) return await developmentResponse(context, target)
+        const theme = frameTheme(context.req.raw)
+
+        if (target) return await themedFrameDocument(await developmentResponse(context, target), theme)
 
         const root = found.clientPath
 
         // A retained Program may outlive files removed by uninstall().
         if (!root || !existsSync(root)) return context.text("The program has no assets", 404)
 
-        return await serveStatic({
+        const response = await serveStatic({
 
             root,
 
             rewriteRequestPath: path => path.slice(`${doors.program}/${assetId}/assets`.length)
 
         })(context, async () => undefined)
+
+        return response ? await themedFrameDocument(response, theme) : response
     })
 
     program.get("/:assetId{[0-9a-f-]{36}}/icons/:file", async context => {

@@ -2,7 +2,7 @@ import Process from "@client/core/link-manager/auth-manager/process-manager/proc
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { blockedProgramDocument, type ProgramAccess } from "./program-access"
 import { type Theme } from "@phreshos/core"
-import { type ReactEventHandler, useCallback } from "react"
+import { type ReactEventHandler, useCallback, useRef } from "react"
 
 export function programFrameSource(assetId: string, door: string) {
 
@@ -13,6 +13,14 @@ export function programFrameSource(assetId: string, door: string) {
 export default function ProgramFrame({ record, assetId, client, title, door, access, theme, className = "size-full border-0", onFrame, onLoad }: ProgramFrameProps) {
 
     const source = useCallback((element: HTMLIFrameElement | null) => onFrame(record.identity, element), [onFrame, record.identity])
+
+    // The document is served in the Desktop's theme at the moment the frame loads it. A later theme
+    // change must not change the address, which would reload the Program; the Program follows it itself.
+    const frameSource = programFrameSource(assetId, door)
+
+    const themed = useRef({ frameSource, source: `${frameSource}?theme=${theme}` })
+
+    if (themed.current.frameSource !== frameSource) themed.current = { frameSource, source: `${frameSource}?theme=${theme}` }
 
     if (access === "checking") return null
 
@@ -28,9 +36,7 @@ export default function ProgramFrame({ record, assetId, client, title, door, acc
 
     return <iframe
 
-        style={{ colorScheme: theme }}
-
-        src={programFrameSource(assetId, door)}
+        src={themed.current.source}
 
         title={title}
 

@@ -24,9 +24,10 @@ test("program frame contract", async () => {
 
   const trusted = renderToStaticMarkup(<ProgramFrame {...common} client={{ ...client, sandbox: false } as ClientState} theme="light" />)
 
-  assert.match(dark, /style="color-scheme:dark"/)
-  assert.match(light, /style="color-scheme:light"/)
+  // The frame asks for its document in the Desktop's theme; the frame element itself is not styled.
+  assert.match(dark, /src="\/program\/00000000-0000-4000-8000-000000000000\/assets\/\?theme=dark"/)
+  assert.match(light, /src="\/program\/00000000-0000-4000-8000-000000000000\/assets\/\?theme=light"/)
+  assert.doesNotMatch(dark, /color-scheme/)
   assert.match(dark, /sandbox="allow-scripts allow-forms"/)
   assert.doesNotMatch(trusted, /sandbox=/)
-  assert.match(trusted, /src="\/program\/00000000-0000-4000-8000-000000000000\/assets\/"/)
 }, 120_000)
