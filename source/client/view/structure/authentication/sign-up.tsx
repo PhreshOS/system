@@ -18,11 +18,11 @@ export default function SignUp({ state, onClosed }: SignUpProps) {
 
     return <CredentialsForm
 
-        title="Set up your system"
+        title="Fresh soil."
 
-        description="Create the credentials for this system's sole owner."
+        description="This System is new and has no owner yet. Create the owner account to make it yours."
 
-        submitLabel="Sign up"
+        submitLabel="Create owner account"
 
         passwordAutocomplete="new-password"
 

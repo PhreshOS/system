@@ -60,17 +60,18 @@ test("panel contract", async () => {
   assert.match(passThrough, /inert=""/)
 
   const authentication = markup(<CredentialsForm title="Sign in" description="Welcome" submitLabel="Continue" passwordAutocomplete="current-password" pending={false} onSubmit={() => {}} />)
-  panel(authentication, 5)
+  // A welcome card, not a Panel: one raised card holding two recessed fields and the button.
+  assert.equal(authentication.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 4)
+  assert.doesNotMatch(authentication, /grid-template-rows:auto minmax\(0, 1fr\)/)
   assert.equal(authentication.match(/<form\b/g)?.length, 1)
   assert.match(authentication, /<form[^>]*noValidate=""/)
   assert.match(authentication, /name="username"/)
   assert.match(authentication, /name="password"/)
-  assert.match(authentication, /placeholder="Username"/)
-  assert.match(authentication, /placeholder="Password"/)
-  assert.doesNotMatch(authentication, /<label\b/)
+  assert.match(authentication, /<label[^>]*>Username<\/label>/)
+  assert.match(authentication, /<label[^>]*>Password<\/label>/)
   assert.match(authentication, /type="submit"/)
-  assert.match(authentication, /<h2[^>]*>Example System<\/h2>/)
-  assert.match(authentication, /System version 1.2.3/)
+  assert.match(authentication, /<h1[^>]*>Sign in<\/h1>/)
+  assert.match(authentication, /Example System version 1.2.3/)
   assert.doesNotMatch(authentication, /backdrop-blur/)
 
   const authenticationError = markup(<CredentialsForm title="Sign up" description="Welcome" submitLabel="Continue" passwordAutocomplete="new-password" pending={false}

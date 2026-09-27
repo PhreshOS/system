@@ -2,19 +2,20 @@ import { type AuthenticationState } from "@server/core/authentication/authentica
 import { surfaceLifecyclePose, surfacePresenceTransition } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { Button, Input, Panel, resolveSpacing, useAppearance } from "@phreshos/react-ui"
+import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
-import { useState, type SyntheticEvent } from "react"
+import { useId, useState, type SyntheticEvent } from "react"
 import { ApplicationContext } from "../../contexts"
-import SystemHeader from "../../components/system-header"
+import logo from "@/assets/bundled/logo.png"
 
-/** The common username-and-password surface for sign-up and sign-in. */
+/** The common username-and-password welcome for sign-up and sign-in: the first thing a System shows. */
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
     const { transaction, spacing } = useAppearance()
     const application = ApplicationContext.useValue()
     const [password, setPassword] = useState("")
+    const titleId = useId()
     const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength
 
     function submit(event: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
@@ -28,9 +29,11 @@ export default function CredentialsForm({ title, description, submitLabel, passw
         onSubmit(String(data.get("username") ?? ""), String(data.get("password") ?? ""))
     }
 
-    return <div className="absolute inset-0 grid">
+    // A welcome, not a dialog: the System's mark and words lead, the fields follow, and the version
+    // closes the card quietly. The card rises; its fields are recessed into it.
+    return <div className="absolute inset-0 grid overflow-auto p-4">
 
-        <motion.form
+        <motion.div
 
             initial={reducedMotion ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
 
@@ -38,30 +41,41 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
             transition={surfacePresenceTransition(reducedMotion, transaction)}
 
-            className="pointer-events-auto relative m-auto w-[min(24rem,calc(100%-2rem))]"
-
-            aria-busy={pending}
-
-            // Authentication owns normalized credential validation. Native
-            // interception would prevent its field-specific result reaching this form.
-            noValidate
-
-            onSubmit={submit}
+            className="pointer-events-auto relative m-auto w-[min(25rem,100%)]"
 
         >
 
-            <Panel material="full">
+            <Surface material="full" radius="large" className="w-full" style={{ padding: resolveSpacing("xlarge", spacing) }}>
 
-                <Panel.Header><SystemHeader name={application.displayName} version={application.version} /></Panel.Header>
+                <form
 
-                {/* The padding and the gaps inside are Appearance spacing levels by use. */}
-                <Panel.Content material="extended" style={{ display: "grid", padding: resolveSpacing("large", spacing), gap: resolveSpacing("xlarge", spacing) }}>
+                    className="grid"
 
-                    <div className="grid" style={{ gap: resolveSpacing("small", spacing) }}>
+                    style={{ gap: resolveSpacing("xlarge", spacing) }}
 
-                        <h1 className="text-xl font-semibold">{title}</h1>
+                    aria-busy={pending}
 
-                        <p className="text-sm leading-5 opacity-60">{description}</p>
+                    aria-labelledby={titleId}
+
+                    // Authentication owns normalized credential validation. Native
+                    // interception would prevent its field-specific result reaching this form.
+                    noValidate
+
+                    onSubmit={submit}
+
+                >
+
+                    <div className="grid justify-items-center text-center" style={{ gap: resolveSpacing("medium", spacing) }}>
+
+                        <img src={logo} alt="" draggable={false} className="size-12 object-contain select-none" />
+
+                        <div className="grid" style={{ gap: resolveSpacing("small", spacing) }}>
+
+                            <Heading id={titleId} level={1} size="large">{title}</Heading>
+
+                            <Text tone="secondary">{description}</Text>
+
+                        </div>
 
                     </div>
 
@@ -69,8 +83,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                         {/* A submitted failure belongs to the exact credential values that produced it. */}
                         <Input
-                            aria-label="Username"
-                            placeholder="Username"
+                            label="Username"
                             size="large"
                             name="username"
                             type="text"
@@ -86,8 +99,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                         />
 
                         <Input
-                            aria-label="Password"
-                            placeholder="Password"
+                            label="Password"
                             size="large"
                             name="password"
                             type="password"
@@ -128,11 +140,17 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                     >{pending ? `${submitLabel}…` : submitLabel}</Button>
 
-                </Panel.Content>
+                    <Text size="small" tone="secondary" className="text-center select-none tabular-nums" aria-label={`${application.displayName} version ${application.version}`}>
 
-            </Panel>
+                        {application.displayName} {application.version}
 
-        </motion.form>
+                    </Text>
+
+                </form>
+
+            </Surface>
+
+        </motion.div>
 
     </div>
 }

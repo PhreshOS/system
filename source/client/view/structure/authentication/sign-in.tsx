@@ -13,9 +13,9 @@ export default function () {
 
     return <CredentialsForm
 
-        title="Sign in"
+        title="Welcome back."
 
-        description="Enter the credentials for this system's owner."
+        description="Sign in as the owner of this System."
 
         submitLabel="Sign in"
 
