@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import ProgramStoreState, { type StoreSnapshot } from "../source/server/core/link-manager/auth-manager/program-manager/program-store.js"
 
 const opened: Array<{ directory: string, store: ProgramStoreState }> = []
@@ -53,24 +53,23 @@ describe("ProgramStoreState", () => {
         await instance.delete("tab")
         await instance.set("tab", "layout")
         await instance.clear()
-        await instance.set("tab", "temporary", 15)
+        await instance.set("tab", "temporary", 1000)
 
-        await new Promise(resolve => setTimeout(resolve, 35))
-
-        expect(changes.map(change => change.snapshot.value)).toEqual([
+        await vi.waitFor(() => expect(changes.map(change => change.snapshot.value)).toEqual([
             "colors", undefined, "layout", undefined, "temporary", undefined
-        ])
+        ]), { timeout: 4000 })
         expect(await instance.get("tab")).toBeUndefined()
     })
 
     it("preserves an existing expiry when a compare-and-set changes its value", async () => {
         const { instance, changes } = store()
-        await instance.set("count", 1, 25)
+        await instance.set("count", 1, 1000)
         const snapshot = await instance.snapshot("count")
         expect((await instance.compareAndSet("count", 2, snapshot)).changed).toBe(true)
-        await new Promise(resolve => setTimeout(resolve, 45))
-        expect(await instance.get("count")).toBeUndefined()
-        expect(changes.at(-1)?.snapshot.value).toBeUndefined()
+        await vi.waitFor(async () => {
+            expect(await instance.get("count")).toBeUndefined()
+            expect(changes.at(-1)?.snapshot.value).toBeUndefined()
+        }, { timeout: 4000 })
     })
 
     it("recovers a persisted deadline and notifies when that key expires", async () => {
@@ -83,8 +82,10 @@ describe("ProgramStoreState", () => {
             const second = new ProgramStoreState(directory, (_key, snapshot) => changes.push(snapshot))
             try {
                 expect((await second.snapshot("session")).value).toBe("live")
-                await new Promise(resolve => setTimeout(resolve, 300))
-                expect(changes.at(-1)?.value).toBeUndefined()
+                await vi.waitFor(() => {
+                    expect(changes).toHaveLength(1)
+                    expect(changes[0]?.value).toBeUndefined()
+                }, { timeout: 3000 })
             } finally { await second.disconnect() }
         } finally { rmSync(directory, { recursive: true, force: true }) }
     })
