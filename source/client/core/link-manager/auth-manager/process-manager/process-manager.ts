@@ -231,12 +231,6 @@ export default class ProcessManager extends TheLink {
         return await this.$outbound.publishFirst("/client-memory", identity, operation, key, value, expected)
     }
 
-    @Subscribe("/client-memory-change")
-    protected async clientMemoryChanged(identity: string, key: string, snapshot: unknown) {
-
-        await this.$inbound.publish("/client-memory-change", identity, key, snapshot)
-    }
-
     /** Announces a locally changed counterpart to desktop representations. */
     public async changed() {
 
