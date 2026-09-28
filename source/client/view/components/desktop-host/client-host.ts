@@ -314,11 +314,19 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
                 let message: unknown
 
-                try { message = messagepack.deserialize(bytes, attachments) }
+                try { message = messagepack.deserialize(bytes, { attachments, streams: boundary.relay }) }
 
                 catch { return }
 
                 if (!Array.isArray(message)) return
+
+                // Stream chunks belong to the boundary's relay, not to the endpoint's routes.
+                if (message[0] === "boundary" && message[1] === "relay") {
+
+                    boundary.relay.receive(message.slice(2))
+
+                    return
+                }
 
                 boundary.receive(message)
 

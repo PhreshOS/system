@@ -1,14 +1,13 @@
 import ProcessTree, { detachedProcessTree } from "@libs/process-tree"
 import type { ServerRuntime, ServerRuntimeEnding, Stream } from "../server-runtime"
 import { FrameReader, writeFrame } from "@the-link/ipc/framing"
-import messagepack from "@the-link/messagepack"
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { chmod, rm } from "node:fs/promises"
 import { createServer, type Server, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { delimiter, join } from "node:path"
-import RuntimeInbox from "./inbox"
+import RuntimeChannel from "./channel"
 
 type OutputListener = (stream: Stream, text: string) => void
 
@@ -19,7 +18,11 @@ export default class CommandServerRuntime implements ServerRuntime {
 
     public readonly finished: Promise<ServerRuntimeEnding>
 
-    private readonly inbox = new RuntimeInbox()
+    private readonly channel = new RuntimeChannel(bytes => {
+
+        if (!this.socket) this.pendingMessages.push(bytes)
+        else this.write(bytes)
+    })
     private readonly output = new Set<OutputListener>()
     private readonly pendingMessages: Uint8Array[] = []
     private readonly address = commandAddress()
@@ -61,13 +64,13 @@ export default class CommandServerRuntime implements ServerRuntime {
 
     public send(event: string, ...values: unknown[]) {
 
-        const message = messagepack.serialize([event, ...values])
+        const message = this.channel.encode([event, ...values])
 
         if (!this.socket) this.pendingMessages.push(message)
         else this.write(message)
     }
 
-    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.inbox.listen(listener) }
+    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.channel.listen(listener) }
 
     public onOutput(listener: OutputListener) { this.output.add(listener) }
 
@@ -121,7 +124,7 @@ export default class CommandServerRuntime implements ServerRuntime {
                         continue
                     }
 
-                    this.inbox.receive(frame)
+                    this.channel.receive(frame)
                 }
             } catch { candidate.destroy() }
         })
@@ -147,6 +150,8 @@ export default class CommandServerRuntime implements ServerRuntime {
     }
 
     private async closeTransport() {
+
+        this.channel.close()
 
         for (const socket of this.sockets) socket.destroy()
         this.sockets.clear()

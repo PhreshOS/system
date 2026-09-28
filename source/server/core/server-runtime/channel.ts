@@ -1,15 +1,35 @@
 import type { ServerRuntimeMessage } from "../server-runtime"
+import { StreamRelay } from "@the-link/core"
 import messagepack from "@the-link/messagepack"
 
 type Listener = (event: string, ...values: unknown[]) => void
 
 const maximumPendingMessages = 256
 
-/** Preserves ordered runtime messages until Core installs their sole listener. */
-export default class RuntimeInbox {
+/**
+ * The System's end of one Server runtime's messages. It encodes what the System
+ * sends and decodes what the runtime sends, carrying streams in either
+ * direction as references whose chunks follow as boundary relay messages, and
+ * preserves ordered messages until Core installs their sole listener.
+ */
+export default class RuntimeChannel {
 
     private listener: Listener | null = null
     private readonly pending: ServerRuntimeMessage[] = []
+    private readonly relay: StreamRelay
+
+    /**
+     * @param deliver Sends encoded bytes to the runtime
+     */
+    public constructor(deliver: (bytes: Uint8Array) => void) {
+
+        this.relay = new StreamRelay(message => deliver(messagepack.serialize(["boundary", "relay", ...message])))
+    }
+
+    public encode(message: ServerRuntimeMessage) {
+
+        return messagepack.serialize(message, { streams: this.relay })
+    }
 
     public receive(message: unknown) {
 
@@ -18,10 +38,13 @@ export default class RuntimeInbox {
         if (!bytes) return
 
         let decoded: unknown
-        try { decoded = messagepack.deserialize(bytes) }
+        try { decoded = messagepack.deserialize(bytes, { streams: this.relay }) }
         catch { return }
 
         if (!Array.isArray(decoded) || typeof decoded[0] !== "string") return
+
+        // Stream chunks belong to this channel, not to Core.
+        if (decoded[0] === "boundary" && decoded[1] === "relay") return this.relay.receive(decoded.slice(2))
 
         const envelope = decoded as ServerRuntimeMessage
 
@@ -36,6 +59,12 @@ export default class RuntimeInbox {
         this.listener = listener
 
         for (const message of this.pending.splice(0)) listener(...message)
+    }
+
+    /** Ends every stream crossing this channel. */
+    public close() {
+
+        this.relay.close(new Error("The Server runtime ended"))
     }
 }
 

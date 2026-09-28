@@ -1,7 +1,6 @@
 import type { ServerRuntime, ServerRuntimeEnding, Stream } from "../server-runtime"
-import messagepack from "@the-link/messagepack"
 import { Worker } from "node:worker_threads"
-import RuntimeInbox from "./inbox"
+import RuntimeChannel from "./channel"
 
 type OutputListener = (stream: Stream, text: string) => void
 
@@ -14,7 +13,7 @@ export default abstract class ThreadServerRuntime implements ServerRuntime {
 
     private readonly worker: Worker
 
-    private readonly inbox = new RuntimeInbox()
+    private readonly channel: RuntimeChannel
 
     private readonly output = new Set<OutputListener>()
 
@@ -26,17 +25,19 @@ export default abstract class ThreadServerRuntime implements ServerRuntime {
 
         this.worker = new Worker(bootstrap, { stdout: true, stderr: true, workerData })
 
-        this.finished = new Promise(resolve => { this.worker.once("exit", code => resolve({ code, signal: null })) })
+        this.channel = new RuntimeChannel(bytes => this.worker.postMessage(bytes))
 
-        this.worker.on("message", message => this.inbox.receive(message))
+        this.finished = new Promise(resolve => { this.worker.once("exit", code => { this.channel.close(); resolve({ code, signal: null }) }) })
+
+        this.worker.on("message", message => this.channel.receive(message))
         this.worker.stdout?.on("data", chunk => this.print("out", String(chunk)))
         this.worker.stderr?.on("data", chunk => this.print("err", String(chunk)))
         this.worker.on("error", error => this.print("err", `${error instanceof Error ? error.stack ?? error.message : String(error)}\n`))
     }
 
-    public send(event: string, ...values: unknown[]) { this.worker.postMessage(messagepack.serialize([event, ...values])) }
+    public send(event: string, ...values: unknown[]) { this.worker.postMessage(this.channel.encode([event, ...values])) }
 
-    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.inbox.listen(listener) }
+    public onMessage(listener: (event: string, ...values: unknown[]) => void) { this.channel.listen(listener) }
 
     public onOutput(listener: OutputListener) {
 

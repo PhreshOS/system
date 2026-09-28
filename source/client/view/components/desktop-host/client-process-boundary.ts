@@ -1,5 +1,5 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
-import { TheLink } from "@the-link/core"
+import { StreamRelay, TheLink } from "@the-link/core"
 import host, { TransferredAnswer, type DesktopViewportHost } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
@@ -63,6 +63,12 @@ export default class ClientProcessBoundary extends TheLink {
     // as later ones.
     private readonly pending = new Array<unknown[]>()
 
+    /**
+     * Streams crossing to and from the current document, as references whose chunks follow as
+     * boundary relay messages. Each document gets its own; its streams end with it.
+     */
+    public relay = this.newRelay()
+
     private owner: string | null = null
 
     private leased: string | null = null
@@ -100,6 +106,9 @@ export default class ClientProcessBoundary extends TheLink {
         // retained for the previous document, then replay the preserved
         // envelopes only after the new server-host lease exists.
         const pending = this.pending.splice(0)
+
+        this.relay.close(new Error("The Program's window was reloaded"))
+        this.relay = this.newRelay()
 
         this.presentation.begin(this.pane)
 
@@ -150,6 +159,8 @@ export default class ClientProcessBoundary extends TheLink {
         this.resetEndpoint()
 
         this.pending.length = 0
+
+        this.relay.close(new Error("The Program's window closed"))
 
         if (owner) await this.authManager.processManager.releaseFrame(this.pane, owner)
     }
@@ -379,9 +390,14 @@ export default class ClientProcessBoundary extends TheLink {
 
         const attachments = nativeAttachments(message, transfer)
 
-        const bytes = messagepack.serialize(message, attachments)
+        const bytes = messagepack.serialize(message, { attachments, streams: this.relay })
 
         target.postMessage([bytes, ...attachments], "*", [bytes.buffer, ...transfer])
+    }
+
+    private newRelay() {
+
+        return new StreamRelay(message => this.send(["boundary", "relay", ...message]))
     }
 
     public impossible(subscription: string, reason: string) {
