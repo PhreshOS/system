@@ -1,7 +1,7 @@
 {
   "name": "phreshos",
   "displayName": "PhreshOS",
-  "version": "0.1.105",
+  "version": "0.1.106",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -43,7 +43,7 @@
     "@the-link/http": "^0.2.0",
     "@the-link/ipc": "^0.3.0",
     "@the-link/messagepack": "^0.2.0",
-    "@the-link/react": "^0.2.0",
+    "@the-link/react": "^0.3.0",
     "cfonts": "^3.3.1",
     "hono": "^4.13.8",
     "keyv": "^5.6.0",
