@@ -214,8 +214,10 @@ export default memo(function ({ identity, record, assetId, client, title, header
         </div>}
 
         {/* First press focuses an inactive window before its program can
-            receive input. Bare layers have no system click-catcher. */}
-        {layer === "window" && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" />}
+            receive input. A drag entering it activates it the same way, so
+            the drop reaches the program. Bare layers have no system
+            click-catcher. */}
+        {layer === "window" && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" onDragEnter={activate} />}
 
     </Window>
 })
