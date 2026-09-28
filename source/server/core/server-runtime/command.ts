@@ -137,8 +137,9 @@ export default class CommandServerRuntime implements ServerRuntime {
         const socket = this.socket
         if (!socket) return
 
-        this.writes = this.writes.then(() => writeFrame(socket, message, maximumFrameSize))
-        this.writes.catch(() => undefined)
+        // A write that fails, such as a frame over the limit, is dropped on its own: the chain goes
+        // on, so every later message still reaches the Server.
+        this.writes = this.writes.then(() => writeFrame(socket, message, maximumFrameSize)).catch(() => undefined)
     }
 
     private print(stream: Stream, text: string) {
