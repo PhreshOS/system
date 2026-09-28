@@ -3,20 +3,22 @@ import { type TaskbarPosition } from "@phreshos/core"
 import { forwardRef, type ReactNode } from "react"
 
 /**
- * A pressable item with a raised state. What "raised" means is the caller's.
+ * A window on the Taskbar. The windows sit flat and translucent in the bar, so
+ * the active one, raised in the primary color, is the one that stands out.
  */
 export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarItem({ active = false, icon, position, children, className, ...props }, ref) {
 
     const horizontal = position === "top" || position === "bottom"
-
-    const indicator = taskbarIndicatorClassName(position)
 
     return <Button
 
         ref={ref}
         aria-pressed={active}
         size="small"
-        className={`relative overflow-hidden ${horizontal ? "max-w-40 scroll-mx-8" : "w-full scroll-my-8 px-0"} ${className ?? ""}`}
+        depth={active ? "raised" : "flat"}
+        color={active ? "primary:soft" : undefined}
+        material={active ? undefined : resting}
+        className={`${horizontal ? "max-w-40 scroll-mx-8" : "w-full scroll-my-8 px-0"} ${className ?? ""}`}
         {...props}
 
     >
@@ -25,20 +27,13 @@ export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarI
 
         <span className={horizontal ? "truncate" : "sr-only"}>{children}</span>
 
-        {active && <span aria-hidden="true" className={`absolute ${indicator} rounded-full bg-sky-500 shadow-taskbar-indicator`} />}
-
     </Button>
 })
 
-/** The active mark stays on the same screen edge as its Taskbar. */
-export function taskbarIndicatorClassName(position: TaskbarPosition) {
-    if (position === "top") return "inset-x-3 top-0 h-0.5"
-    if (position === "bottom") return "inset-x-3 bottom-0 h-0.5"
-    if (position === "left") return "inset-y-3 left-0 w-0.5"
-    return "inset-y-3 right-0 w-0.5"
-}
+/** The material of a window that is not active: mostly the bar shows through it. */
+const resting = { opacity: 0.35 }
 
-export interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
+interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
 
     active?: boolean
 

@@ -119,9 +119,9 @@ function ScrollButton({ label, controls, direction, orientation, disabled, onCli
         aria-controls={controls}
         disabled={disabled}
         onPress={onClick}
-        size="xsmall"
+        size="small"
+        iconOnly
         className="shrink-0"
-        style={{ inlineSize: 28, blockSize: 28, paddingInline: 0 }}
 
     >
 

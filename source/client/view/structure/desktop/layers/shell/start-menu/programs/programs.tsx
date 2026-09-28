@@ -5,8 +5,10 @@ import { ApplicationContext } from "@client/view/contexts"
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
-import { ScrollArea } from "@phreshos/react-ui"
 import { matchesProgram } from "../search"
+import Section from "../section"
+import { categorized, CategoryHeading } from "./categories"
+import { Fragment } from "react"
 
 interface ProgramsProps {
 
@@ -15,28 +17,20 @@ interface ProgramsProps {
     terms: readonly string[]
 }
 
-/** The installed-program section of the Start Menu. */
+/** The installed-program section of the Start Menu, grouped by category. */
 export default function Programs({ onChoose, terms }: ProgramsProps) {
 
     const application = ApplicationContext.useValue()
 
     const programs = usePrograms().filter(program => matchesProgram(program, terms))
 
-    if (!programs.length) return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    return <Section label="Programs" columns={3} count={programs.length} empty={terms.length ? "No matching Programs" : "No installed programs"}>
 
-        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · 0</h3>
+        {categorized(programs).map(({ category, members }) => <Fragment key={category}>
 
-        <p className="m-0 grid place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Programs" : "No installed programs"}</p>
+            <CategoryHeading category={category} />
 
-    </div>
-
-    return <div role="group" aria-label="Programs" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-
-        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Programs · {programs.length}</h3>
-
-        <ScrollArea className="h-full min-h-0">
-
-            <div className="grid content-start gap-1 pb-2">{programs.map(record => <ProgramItem
+            {members.map(record => <ProgramItem
 
                 key={record.identity}
 
@@ -46,11 +40,11 @@ export default function Programs({ onChoose, terms }: ProgramsProps) {
 
                 onChoose={onChoose}
 
-            />)}</div>
+            />)}
 
-        </ScrollArea>
+        </Fragment>)}
 
-    </div>
+    </Section>
 }
 
 function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program, onChoose: () => void }) {
@@ -66,15 +60,13 @@ function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program
 
         <LauncherItem
 
-            label={record.name}
-
             icon={icon}
 
             description={record.description}
 
-            disabled={launch.isPending}
+            pending={launch.isPending}
 
-            onClick={() => launch.safeExecute()}
+            onPress={() => void launch.safeExecute()}
 
         >
 

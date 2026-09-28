@@ -1,36 +1,39 @@
-import { ComponentProps, ReactNode } from "react"
+import { Button, Text, useAppearance, useScale, type ButtonActionProps } from "@phreshos/react-ui"
+import { type ReactNode } from "react"
 
-/** One action in the Programs half of the launcher. */
-export default function ({ icon, label, description, children, className, ...props }: LauncherItemProps) {
+/**
+ * One Program in the Start Menu's grid: a small card on the Programs well,
+ * flat in a light tint of the secondary color, like the catalog cards of the first-run Program,
+ * its icon above its name in small text, cut short when it is long. The
+ * description is its tooltip.
+ */
+export default function LauncherItem({ icon, description, children, ...props }: LauncherItemProps) {
 
-    return <button
+    const space = useScale(useAppearance().spacing)
+
+    // The cell carries the description as its tooltip; the card fills it.
+    return <div className="grid min-w-0" title={description ?? undefined}><Button
 
         {...props}
 
-        type="button"
+        depth="flat"
 
-        className={`grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl px-3 py-2 text-start outline-none active:scale-[0.98] ${className ?? ""}`}
+        color="secondary:subtle"
+
+        style={{ display: "grid", justifyItems: "center", alignContent: "start", rowGap: space.small, width: "100%", height: "auto", minWidth: 0, paddingBlock: space.medium, paddingInline: space.small }}
 
     >
 
-        <img src={icon} alt="" draggable={false} className="size-9 object-contain p-1" />
+        <img src={icon} alt="" draggable={false} style={{ width: space.xlarge, height: space.xlarge }} className="object-contain" />
 
-        <span className="min-w-0">
+        <Text size="small" className="w-full truncate text-center">{children}</Text>
 
-            <span className="block truncate text-sm font-medium">{children}</span>
-
-            {description && <span className="block max-w-[90%] truncate text-xs opacity-60">{description}</span>}
-
-        </span>
-
-    </button>
+    </Button></div>
 }
 
-export interface LauncherItemProps extends ComponentProps<"button"> {
+export interface LauncherItemProps extends Omit<ButtonActionProps, "children" | "color" | "style"> {
 
     icon: string
-
-    label: string
 
     description?: string | null
 

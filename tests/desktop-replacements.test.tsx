@@ -6,7 +6,6 @@ import Workspace from "@client/view/structure/desktop/desktop"
 import { windowSurfaceInsets } from "@client/view/structure/desktop/layers/desktop-layers"
 import Taskbar, { taskbarConfigurationChanged, taskbarOverlayTransform, taskbarRegionStyle, taskbarRetentionDistance, taskbarRevealRegionStyle, taskbarStyle, taskbarVisible } from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { startMenuStyle } from "@client/view/structure/desktop/layers/shell/start-menu/start-menu"
-import { taskbarIndicatorClassName } from "@client/view/structure/desktop/layers/shell/taskbar/programs/taskbar-item"
 import { windowMinimizePose } from "@client/view/structure/desktop/windows/window"
 import type { ReactNode } from "react"
 import { defaultAppearance } from "@phreshos/core"
@@ -152,10 +151,6 @@ test.each(["top", "right", "bottom", "left"] as const)("Taskbar occupies its con
 
     expect(menu).not.toHaveProperty("insetInlineStart")
     expect(menu).not.toHaveProperty("insetBlockStart")
-})
-
-test.each(["top", "right", "bottom", "left"] as const)("active Taskbar indicator stays on the configured %s edge", position => {
-    expect(taskbarIndicatorClassName(position)).toContain(`${position}-0`)
 })
 
 test.each([

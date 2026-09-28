@@ -1,47 +1,66 @@
-import { Button } from "@phreshos/react-ui"
+import { Badge, Button, Table, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { X } from "@phreshos/react-ui/icons"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import usePromise from "@libs/react-promise"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { ApplicationContext } from "@client/view/contexts"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
 
-/** The exit action requests authority; the live list owns removal. */
-export default function ProcessItem({ process, program }: Readonly<{ process: Process, program: Program | undefined }>) {
+/**
+ * One live Process as a table row: its Program and name, a mark for each
+ * running Endpoint, colored only while it is still starting, and a quiet action
+ * to end it. The live list owns removal.
+ */
+export default function ProcessRow({ process, program, server, client }: Readonly<{
+    process: Process
+    program: Program | undefined
+    server: "starting" | "ready" | null
+    client: boolean
+}>) {
 
     const application = ApplicationContext.useValue()
 
+    const space = useScale(useAppearance().spacing)
+
+    const danger = useColor("danger").base
+
     const ending = usePromise(() => process.exit())
 
-    const status = [
-        process.server ? process.server.ready ? "Server ready" : "Server starting" : null,
-        process.client ? "Client running" : null
-    ].filter(Boolean).join(" · ") || "No active endpoints"
+    const label = process.name ?? process.identity
 
-    return <li className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 border-b border-current/10 px-3 py-1.5 last:border-b-0">
+    const failure = ending.exception ? ending.exception.current instanceof Error ? ending.exception.current.message : "Could not end this Process." : null
 
-        {program ? <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} className="size-6 object-contain" /> : <span aria-hidden="true" />}
+    return <Table.Row id={process.identity} textValue={`${program?.name ?? process.program} ${label}`}>
 
-        <div className="min-w-0">
+        <Table.Cell>
+            <span className="flex min-w-0 items-center" style={{ gap: space.small, maxWidth: "100%" }}>
+                {program ? <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} style={{ width: space.medium, height: space.medium }} className="shrink-0 object-contain" /> : null}
+                <span className="min-w-0 truncate" title={`${program?.name ?? process.program} · ${process.identity}`}>
+                    {program?.name ?? process.program} <Text tone="secondary">· {label}</Text>
+                </span>
+                {/* A failure to end stays beside the Process it belongs to. */}
+                {failure && <span role="alert" className="min-w-0 truncate" title={failure} style={{ color: danger }}>{failure}</span>}
+            </span>
+        </Table.Cell>
 
-            <p className="m-0 truncate text-sm font-medium" title={`${program?.name ?? process.program} · ${process.identity}`}>
-                {program?.name ?? process.program} <span className="text-xs font-normal opacity-60">· {process.name ?? process.identity}</span>
-            </p>
+        <Table.Cell>
+            <span className="flex" style={{ gap: space.xsmall }}>
+                {/* Color marks only what needs attention: a running Endpoint is neutral, one still starting is not. */}
+                {server && <Badge size="xsmall" color={server === "starting" ? "warning" : undefined} dot={server === "starting"}>Server</Badge>}
+                {client && <Badge size="xsmall">Client</Badge>}
+            </span>
+        </Table.Cell>
 
-            <p className="m-0 truncate text-xs opacity-50" title={status}>{status}</p>
+        <Table.Cell>
+            <Button
+                size="xsmall"
+                iconOnly
+                color="transparent"
+                pending={ending.isPending}
+                aria-label={`End process ${label}`}
+                onPress={() => void ending.safeExecute()}
+            ><X style={{ color: danger }} /></Button>
+        </Table.Cell>
 
-        </div>
-
-        <Button
-            size="xsmall"
-            color="danger:base"
-            pending={ending.isPending}
-            aria-label={`End process ${process.name ?? process.identity}`}
-            onPress={() => void ending.safeExecute()}
-        >{ending.isPending ? "Ending…" : "End"}</Button>
-
-        {ending.exception && <p role="alert" className="col-span-3 m-0 text-xs">
-            {ending.exception.current instanceof Error ? ending.exception.current.message : "Could not end this Process."}
-        </p>}
-
-    </li>
+    </Table.Row>
 }

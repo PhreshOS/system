@@ -1,8 +1,14 @@
 import { type ReactNode } from "react"
-import { Surface } from "@phreshos/react-ui"
+import { Panel, Surface, useAppearance, useScale } from "@phreshos/react-ui"
 import SystemHeader from "@client/view/components/system-header"
 
-/** The built-in Start Menu content shown by the default Shell. */
+/**
+ * The built-in Start Menu content shown by the default Shell: a frosted Panel
+ * whose header is the same row as a Window's, holding three wells recessed into
+ * it, the Programs, the Processes, and the search field below them. Every space
+ * is the Appearance spacing, the same as the header's side padding, so the wells
+ * line up with the header's content.
+ */
 export default function StartMenuPanel({ labelId, name, version, left, right, footer }: Readonly<{
     labelId: string
     name: string
@@ -12,19 +18,19 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
     footer: ReactNode
 }>) {
 
-    const spacing = 8
+    const space = useScale(useAppearance().spacing)
 
-    return <Surface material="full" style={{ display: "grid", gridTemplateRows: "auto minmax(0, 1fr)", minHeight: 0, height: "100%", maxHeight: "inherit", overflow: "hidden" }}>
+    return <Panel style={{ height: "100%", maxHeight: "inherit" }}>
 
-        <div className="grid h-10 shrink-0 items-center px-3.5"><SystemHeader labelId={labelId} name={name} version={version} /></div>
+        <Panel.Header><SystemHeader labelId={labelId} name={name} version={version} /></Panel.Header>
 
-        <div className="grid min-h-0 min-w-0" style={{ gridTemplateRows: "minmax(0, 1fr) auto", gap: spacing, padding: spacing, paddingTop: 0 }}>
+        <div className="grid min-h-0 min-w-0" style={{ gridTemplateRows: "minmax(0, 1fr) auto", gap: space.medium, padding: space.medium, paddingTop: 0 }}>
 
-            <div className="grid min-h-0 min-w-0 grid-cols-2" style={{ gap: "inherit" }}>
+            <div className="grid min-h-0 min-w-0 grid-cols-2" style={{ gap: space.medium }}>
 
-                <Surface material="extended" className="min-h-0 min-w-0 overflow-hidden">{left}</Surface>
+                <Well>{left}</Well>
 
-                <Surface material="extended" className="min-h-0 min-w-0 overflow-hidden">{right}</Surface>
+                <Well>{right}</Well>
 
             </div>
 
@@ -32,5 +38,14 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
         </div>
 
-    </Surface>
+    </Panel>
 }
+
+/** A list recessed into the menu, painted as the search field is. */
+function Well({ children }: Readonly<{ children: ReactNode }>) {
+
+    return <Surface depth="recessed" color="background" material={wellMaterial} className="min-h-0 min-w-0 overflow-hidden">{children}</Surface>
+}
+
+/** The wells, the lists and the search field alike, take the Appearance material's opacity. */
+export const wellMaterial = "extended"

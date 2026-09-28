@@ -1,10 +1,11 @@
 import { AuthManagerContext } from "@client/view/contexts"
-import ProcessItem from "./process-item"
+import ProcessRow from "./process-item"
 import { matchesProcess } from "../search"
-import { ScrollArea } from "@phreshos/react-ui"
+import Section from "../section"
+import { Table, useAppearance, useScale } from "@phreshos/react-ui"
 import { useLayoutEffect, useState } from "react"
 
-/** All live Processes, including those without a Client window. */
+/** All live Processes, including those without a Client window, as a small table. */
 export default function Processes({ terms }: Readonly<{ terms: readonly string[] }>) {
 
     const manager = AuthManagerContext.useValue().processManager
@@ -21,29 +22,28 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
 
     const programsByIdentity = new Map(programs.map(program => [program.identity, program]))
 
+    const space = useScale(useAppearance().spacing)
+
     const matching = processes.filter(process => matchesProcess(process.name, programsByIdentity.get(process.program), terms))
 
-    if (!matching.length) return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+    return <Section label="Processes" count={matching.length} empty={terms.length ? "No matching Processes" : "No Processes"}>
 
-        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · 0</h3>
+        {/* A fixed layout keeps the table in its well: a long Process name is cut short instead of widening it. */}
+        <Table aria-label="Processes" size="small" style={{ minWidth: 0, tableLayout: "fixed" }}>
 
-        <p className="m-0 grid place-items-center px-3 py-8 text-center text-sm opacity-50">{terms.length ? "No matching Processes" : "No Processes"}</p>
+            <Table.Header>
+                <Table.Column id="process" rowHeader>Process</Table.Column>
+                <Table.Column id="endpoints" style={{ width: space.xlarge * 5 }}>Running</Table.Column>
+                <Table.Column id="end" aria-label="End" style={{ width: space.xlarge * 2 }}> </Table.Column>
+            </Table.Header>
 
-    </div>
+            <Table.Body>
+                {/* Endpoint state is passed as values: the Process handle is updated in place, so the row must see what changed. */}
+                {matching.map(process => <ProcessRow key={process.identity} process={process} program={programsByIdentity.get(process.program)}
+                    server={process.server ? process.server.ready ? "ready" : "starting" : null} client={process.client !== null} />)}
+            </Table.Body>
 
-    return <div role="group" aria-label="Processes" className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+        </Table>
 
-        <h3 className="px-3 py-2 text-xs font-medium opacity-60">Processes · {matching.length}</h3>
-
-        <ScrollArea className="h-full min-h-0">
-
-            <ul className="m-0 grid list-none content-start gap-1 p-2">
-
-                {matching.map(process => <ProcessItem key={process.identity} process={process} program={programsByIdentity.get(process.program)} />)}
-
-            </ul>
-
-        </ScrollArea>
-
-    </div>
+    </Section>
 }
