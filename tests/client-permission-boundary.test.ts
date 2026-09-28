@@ -25,7 +25,7 @@ test("Client Program creation requires all before reaching the creation boundary
         processManager: { processes: new Map([["caller", { identity: "caller", program: program.identity }]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
     const source = { identity: "created" }
     for (const operation of ["host-program-create", "host-program-force-create"]) {
         await expect(answer(operation, source)).rejects.toThrow("Execution is not permitted")
@@ -55,7 +55,7 @@ test("Program and Process discovery exposes only the accessible scope", async ()
         processManager: { processes: new Map([[current.identity, current], [hidden.identity, hidden]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
 
     await expect(answer("host-program-list")).resolves.toEqual([[expect.objectContaining({ identity: owner.identity })]])
     await expect(answer("host-process-list")).resolves.toEqual([[expect.objectContaining({ identity: current.identity })]])
@@ -96,7 +96,7 @@ test("Program permission reads require Program access while owner decisions requ
         processManager: { processes: new Map([[current.identity, current]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
     const target = { identity: outside.identity, reference: outside.reference }
 
     await expect(answer("program-permissions", target, "get", "network")).resolves.toEqual([["https://example.com"]])
@@ -124,7 +124,7 @@ test("Program log access follows the Program handle while System logs require lo
         logs: systemLogs,
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
     const own = { identity: owner.identity, reference: owner.reference }
     const other = { identity: outside.identity, reference: outside.reference }
 
@@ -149,7 +149,7 @@ test("a Client Context requests only for its own Endpoint Program", async () => 
         processManager: { processes: new Map([[current.identity, current]]) },
         requestPermission
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
     const timeout = 1_000
 
     await expect(answer("context-permission-request", "request", "network", ["https://example.com"], timeout))
@@ -169,7 +169,7 @@ test("the system-wide permission registry requires all", async () => {
         permissionManager: { list },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, () => { throw new Error("unused viewport") }, () => null, moveCoordinates(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, moveCoordinates(), {} as never)
 
     await expect(answer("host-permission-requests")).rejects.toThrow("Execution is not permitted")
     expect(list).not.toHaveBeenCalled()
@@ -225,7 +225,7 @@ test.each([
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", moveCoordinates(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => "frame", moveCoordinates(), {} as never)
     const key = { program: owningProgram, process: "main", endpoint: "server" } as const
     const operations = [
             ["service-available", key],
@@ -266,7 +266,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", () => { throw new Error("unused viewport") }, () => "frame", moveCoordinates(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => "frame", moveCoordinates(), {} as never)
 
     await expect(answer("host-service-list")).resolves.toEqual([[]])
     await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[]])
@@ -312,3 +312,24 @@ function process(identity: string, owner: ProgramSnapshot) {
         client: null
     }
 }
+
+test("Reading the Desktop view is open, and moving it requires desktopViewport", async () => {
+    let permissions: Permissions = {}
+    const auth = {
+        programManager: { programs: new Map([["viewer", { identity: "viewer", get permissions() { return permissions } }]]) },
+        processManager: { processes: new Map([["caller", { identity: "caller", program: "viewer" }]]) },
+        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
+    } as unknown as AuthManager
+    const state = { size: { width: 1200, height: 800 }, offset: { x: 0, y: 0 } }
+    const move = vi.fn()
+    const answer = host(auth, "caller", { state: () => state, move }, () => null, moveCoordinates(), {} as never)
+
+    expect(await answer("desktopViewport")).toEqual([state])
+    await expect(answer("moveDesktopViewport", { x: 1200, y: 0 })).rejects.toThrow("Execution is not permitted")
+    expect(move).not.toHaveBeenCalled()
+
+    permissions = { desktopViewport: [] }
+    expect(await answer("moveDesktopViewport", { x: 1200, y: 0 })).toEqual([])
+    expect(move).toHaveBeenCalledWith({ x: 1200, y: 0 })
+    await expect(answer("moveDesktopViewport", { x: "far", y: 0 })).rejects.toThrow("finite x and y")
+})

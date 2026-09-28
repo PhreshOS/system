@@ -29,9 +29,11 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
     return <Section label="Processes" count={matching.length} empty={terms.length ? "No matching Processes" : "No Processes"}>
 
         {/* A fixed layout keeps the table in its well: a long Process name is cut short instead of widening it. */}
-        <Table aria-label="Processes" size="small" style={{ minWidth: 0, tableLayout: "fixed" }}>
+        {/* Without a heading, the first row has nothing above it to be set apart from. */}
+        <Table aria-label="Processes" size="small" className="[&_tbody>tr:first-child>*]:!border-t-0" style={{ minWidth: 0, tableLayout: "fixed" }}>
 
-            <Table.Header>
+            {/* The columns stay for their widths and names, but the rows need no heading: each row says what it is. */}
+            <Table.Header style={{ visibility: "collapse" }}>
                 <Table.Column id="process" rowHeader>Process</Table.Column>
                 <Table.Column id="endpoints" style={{ width: space.xlarge * 5 }}>Running</Table.Column>
                 <Table.Column id="end" aria-label="End" style={{ width: space.xlarge * 2 }}> </Table.Column>

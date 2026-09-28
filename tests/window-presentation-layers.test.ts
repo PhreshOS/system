@@ -21,7 +21,7 @@ test("wallpaper is fixed and rejects both raw operations and move gestures", () 
   const { presentations } = fixture("wallpaper")
   expect(presentations.layer("own")).toBe("wallpaper")
   expect(presentations.projection("own")).toMatchObject({
-    position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, surface: false, interactive: true
+    position: { x: "-1/2", y: "-1/2" }, size: { width: "1/1", height: "1/1" }, surface: false, interactive: true
   })
   expect(() => presentations.move("own", { x: 1, y: 2 })).toThrow(/does not support raw/)
   expect(() => presentations.setInteractive("own", false)).toThrow(/does not support raw/)

@@ -30,7 +30,7 @@ vi.mock("@the-link/react", () => ({
     ReactTunnel: { useFactory: () => ({ useSubscribe() {} }) },
     useProperty: (property: { value: unknown }) => property.value
 }))
-vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({}) }))
+vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({ windowSurfaceSize: { width: 0, height: 0 }, viewport: { offset: { x: 0, y: 0 }, view: { x: 0, y: 0 }, surface: { width: 0, height: 0 }, moveTo: () => undefined, place: () => undefined, home: () => undefined } }) }))
 vi.mock("@client/view/components/program-access", () => ({ default: () => null }))
 vi.mock("@libs/readiness", () => ({ useRequirement: () => () => {} }))
 vi.mock("@client/view/structure/desktop/layers/shell/default-shell", () => ({
@@ -186,7 +186,7 @@ test("Desktop replaces its default wallpaper with the running Client and restore
     expect(fixture.fallback).not.toHaveBeenCalled()
     expect(fixture.pane.mock.lastCall?.[0]).toMatchObject({
         layer: "wallpaper", surface: false, minimized: false, maximized: true, entering: false,
-        position: { x: 0, y: 0 }, size: { width: "100%", height: "100%" }, depth: 0
+        position: { x: "-1/2", y: "-1/2" }, size: { width: "1/1", height: "1/1" }, depth: 0
     })
 
     record.client = null

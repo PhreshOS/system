@@ -1,5 +1,4 @@
-import { type Layer } from "@phreshos/core"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
 import DesktopLayers from "./layers/desktop-layers"
@@ -18,6 +17,11 @@ import { usePreferences, useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
+import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement"
+import { boundedGeometry, planeGeometry, resolveWindowGeometry, shiftPosition, shownSize, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
+import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
+import { type Layer, type Position, type Size } from "@phreshos/core"
 
 export default function Workspace() {
 
@@ -67,7 +71,37 @@ export default function Workspace() {
     // lets the desktop announce the surface that actually contains it.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.presentation)
+    const { windowSurfaceRef, windowSurfaceSize, viewport, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.presentation)
+
+    // Standard Windows are shown moved by this Desktop's offset, and what is done to them is recorded
+    // moved back. Nothing else knows it: a Window works only in what it shows.
+    const { offset } = viewport
+
+    const back = { x: offset.x, y: offset.y }
+
+    // A Window rerenders only when what it shows changes: each position keeps one shown form per offset.
+    const shownPositions = useMemo(() => new WeakMap<Position, Position>(), [offset.x, offset.y])
+
+    function shownPosition(position: Position) {
+
+        const cached = shownPositions.get(position)
+
+        if (cached) return cached
+
+        const shown = shiftPosition(position, { x: -offset.x, y: -offset.y })
+
+        shownPositions.set(position, shown)
+
+        return shown
+    }
+
+    const move = useCallback((record: Process, x: number, y: number) => windows.move(record, x + back.x, y + back.y), [windows.move, back.x, back.y])
+
+    const resize = useCallback((record: Process, width: number, height: number, position: { x: number, y: number } | null) => windows.resize(record, width, height, position && { x: position.x + back.x, y: position.y + back.y }), [windows.resize, back.x, back.y])
+
+    const snap = useCallback((record: Process, position: Position, size: Size) => windows.snap(record, shiftPosition(position, back), size), [windows.snap, back.x, back.y])
+
+    const commitSharedResize = useCallback((geometries: ReadonlyMap<string, WindowRegion>) => windows.sharedResize.commit(new Map([...geometries].map(([identity, region]) => [identity, { ...region, x: region.x + back.x, y: region.y + back.y }]))), [windows.sharedResize.commit, back.x, back.y])
 
     const fileWallpaperLoaded = useCallback(() => {
 
@@ -109,7 +143,11 @@ export default function Workspace() {
 
     function renderWindows(layer: Layer) {
 
-        return windows.panesByLayer[layer].map(({ identity, record, client, presentation, closing, entering, stopping }) => <ProcessWindow
+        return windows.panesByLayer[layer].map(({ identity, record, client, presentation, closing, entering, stopping }) => {
+
+            const bounded = boundedGeometry(presentation.position, shownSize(presentation.size), windowSurfaceSize)
+
+            return <ProcessWindow
 
             key={identity}
 
@@ -131,9 +169,9 @@ export default function Workspace() {
 
             icon={icon(record)}
 
-            position={presentation.position}
+            position={presentation.layer === "window" ? shownPosition(bounded.position) : presentation.position}
 
-            size={presentation.size}
+            size={presentation.layer === "window" ? bounded.size : presentation.size}
 
             taskbarPosition={appearance.taskbar.position}
 
@@ -195,16 +233,81 @@ export default function Workspace() {
 
             onUnavailable={focus.unavailable}
 
-            onMove={windows.move}
+            onMove={move}
 
-            onResize={windows.resize}
+            onResize={resize}
 
-            onSnap={windows.snap}
+            onSnap={snap}
 
-        />)
+        />
+        })
     }
 
     const taskbarOrientation = appearance.taskbar.position === "top" || appearance.taskbar.position === "bottom" ? "horizontal" : "vertical"
+
+    // Each standard Window where it is on the plane, for the map of views.
+    const mappedWindows: MappedWindow[] = windowSurfaceSize.width && windowSurfaceSize.height
+        ? windows.panesByLayer.window.filter(pane => !pane.presentation.minimized).map(({ identity, record, presentation }) => {
+
+            const shown = boundedGeometry(presentation.position, shownSize(presentation.size), windowSurfaceSize)
+
+            const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, windowSurfaceSize), windowSurfaceSize)
+
+            return {
+                identity,
+                title: presentation.title,
+                icon: icon(record),
+                region,
+                front: fronts.window?.identity === record.identity,
+                show: () => show(record),
+                close: () => focus.close(record),
+                moveTo: center => void windows.move(record, Math.round(center.x - region.width / 2), Math.round(center.y - region.height / 2))
+            }
+        })
+        : []
+
+    // A Window launched from this Desktop opens centered in what it shows, each one stepped a little from
+    // the Windows already in view, so none lands exactly on another.
+    const place = useCallback(function (size: Size | null): Position {
+
+        const shown = resolveWindowGeometry({ x: 0, y: 0 }, shownSize(size ?? { width: 0, height: 0 }), windowSurfaceSize)
+
+        const inView = mappedWindows.filter(({ region }) =>
+            Math.abs(region.x + region.width / 2 - offset.x) < windowSurfaceSize.width / 2 &&
+            Math.abs(region.y + region.height / 2 - offset.y) < windowSurfaceSize.height / 2).length
+
+        const step = inView % 8 * appearance.spacing * 2
+
+        return { x: Math.round(offset.x - shown.width / 2 + step), y: Math.round(offset.y - shown.height / 2 + step) }
+
+    }, [mappedWindows, offset.x, offset.y, windowSurfaceSize, appearance.spacing])
+
+    /** Centers the view on a Window at this position and size, as the Desktop shows it. */
+    const reveal = useCallback(function (position: Position, size: Size | null) {
+
+        if (!windowSurfaceSize.width || !windowSurfaceSize.height) return
+
+        const shown = boundedGeometry(position, shownSize(size ?? { width: 0, height: 0 }), windowSurfaceSize)
+
+        const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, windowSurfaceSize), windowSurfaceSize)
+
+        viewport.place({ x: region.x + region.width / 2, y: region.y + region.height / 2 })
+
+    }, [windowSurfaceSize, viewport.place])
+
+    const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
+
+    // Pressing a Window in the Taskbar brings the view to it, so it is in the middle, whether it was
+    // minimized or only out of view. A maximized Window fills every view, so the view stays.
+    const show = useCallback(function (record: Process) {
+
+        const window = windows.presentation.projection(record.identity)
+
+        if (window.layer === "window" && !window.maximized) reveal(window.position, window.size)
+
+        windows.show(record)
+
+    }, [windows.presentation, windows.show, reveal])
 
     const taskbarItems = <OverflowRow
         orientation={taskbarOrientation}
@@ -215,8 +318,8 @@ export default function Workspace() {
     >
 
         {/* What a press means is composed here because it is a person's
-            expectation, not a system operation: the front window hides;
-            another window is shown and brought forward. */}
+            expectation, not a system operation: the view goes to the Window,
+            which is shown and brought forward. */}
         {windows.listed.map(record => {
 
             const window = windows.presentation.projection(record.identity)
@@ -243,7 +346,7 @@ export default function Workspace() {
 
                 onMinimize={focus.minimize}
 
-                onShow={windows.show}
+                onShow={show}
 
                 onFill={windows.fill}
 
@@ -260,7 +363,9 @@ export default function Workspace() {
 
     const shell = hasShellClient
         ? renderWindows("shell")
-        : <DefaultShell spacing={appearance.spacing} taskbar={appearance.taskbar}>{taskbarItems}</DefaultShell>
+        : <LaunchPlacementContext.Provider value={launchPlacement}>
+            <DefaultShell spacing={appearance.spacing} taskbar={appearance.taskbar} viewport={viewport} mappedWindows={mappedWindows}>{taskbarItems}</DefaultShell>
+        </LaunchPlacementContext.Provider>
 
     return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate h-full min-h-0 w-full overflow-hidden outline-none" style={{ color: foreground }}>
 
@@ -274,7 +379,7 @@ export default function Workspace() {
 
             windows={renderWindows("window")}
 
-            sharedResizeBoundaries={<SharedResizeBoundaries {...windows.sharedResize} />}
+            sharedResizeBoundaries={<SharedResizeBoundaries {...windows.sharedResize} commit={commitSharedResize} />}
 
             overWindows={renderWindows("over")}
 

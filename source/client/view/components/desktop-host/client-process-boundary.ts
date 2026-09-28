@@ -1,10 +1,10 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { TheLink } from "@the-link/core"
-import host, { TransferredAnswer } from "./host"
+import host, { TransferredAnswer, type DesktopViewportHost } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceAddress, parseProgramInstallOptions, type DesktopViewportSnapshot, type ServiceAddress, type ShellOptions, type WindowMovePoint } from "@phreshos/core"
+import { isServiceAddress, parseProgramInstallOptions, type ServiceAddress, type ShellOptions, type WindowMovePoint } from "@phreshos/core"
 import { type PresentationMoveCoordinates, type PresentationMovePoint, type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
@@ -19,7 +19,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly authManager: AuthManager
 
-    private readonly viewport: () => DesktopViewportSnapshot
+    private readonly viewport: DesktopViewportHost
 
     private readonly traffic: ClientTraffic
 
@@ -67,7 +67,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: () => DesktopViewportSnapshot, traffic: ClientTraffic, presentation: WindowPresentationHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, traffic: ClientTraffic, presentation: WindowPresentationHost) {
 
         super()
 

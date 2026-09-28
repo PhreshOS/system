@@ -1535,9 +1535,11 @@ export default class ProgramManager extends TheLink {
 
         if (asked.maximize !== undefined && typeof asked.maximize !== "boolean") throw new Error("A launch client's maximize state must be true or false")
 
-        const shift = this.authManager.processManager.processes.size % 8 * 32
-
         const layer = asked.layer ?? client.layer ?? "window"
+
+        // Unset geometry stays zero. The System only records Window values; how a Window is shown, and
+        // where a new one appears, is decided by the Desktop, or by whoever launches it and asks.
+        const size = asked.size ?? client.size ?? { width: 0, height: 0 }
 
         const defaults = windowLayerDefaults(layer)
 
@@ -1547,9 +1549,9 @@ export default class ProgramManager extends TheLink {
 
             header: asked.header ?? client.header ?? defaults.header,
 
-            position: asked.position ?? client.position ?? { x: 120 + shift, y: 80 + shift },
+            position: asked.position ?? client.position ?? { x: 0, y: 0 },
 
-            size: asked.size ?? client.size ?? { width: 520, height: 340 },
+            size,
 
             layer,
 

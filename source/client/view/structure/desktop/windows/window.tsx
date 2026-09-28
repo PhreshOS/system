@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, planeGeometry, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginWindowMoveGesture, type Position, type Size, type TaskbarPosition, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -87,7 +87,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // Hidden windows retain their last presentation while lower-priority state changes.
     const presented = useRef({ position, size })
     if (!minimized) presented.current = maximized
-        ? { position: { x: "0%", y: "0%" }, size: { width: "100%", height: "100%" } }
+        ? { position: { x: "-1/2", y: "-1/2" }, size: { width: "1/1", height: "1/1" } }
         : { position, size }
 
     const geometryMotion = useWindowGeometryMotion({
@@ -389,7 +389,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             return {
 
-                position: { x: east ? "1/2" : "0/1", y: south ? "1/2" : "0/1" },
+                position: { x: east ? "0/1" : "-1/2", y: south ? "0/1" : "-1/2" },
 
                 size: { width: west || east ? "1/2" : "1/1", height: north || south ? "1/2" : "1/1" }
             }
@@ -440,7 +440,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 start.pointerY = motion.y
 
-                request(() => onMove?.(origin.x, origin.y))
+                const floating = planeGeometry(origin, bounds!)
+
+                request(() => onMove?.(floating.x, floating.y))
 
                 if (restoringMaximized) geometryMotion.restoreGesture(current)
 
@@ -520,13 +522,16 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 setSettlingGeometry(current)
 
-                if (edge === null) request(() => onMove?.(current.x, current.y))
+                // The Desktop paints from the surface's corner; the System records from its center.
+                const placed = planeGeometry(current, bounds!)
+
+                if (edge === null) request(() => onMove?.(placed.x, placed.y))
 
                 // Only the west and north edges move the origin. A drag
                 // on any other reports no position, because none was
                 // chosen — and a position nobody chose would replace a
                 // share with the pixels it happened to resolve to.
-                else request(() => onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: current.x, y: current.y }))
+                else request(() => onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: placed.x, y: placed.y }))
 
                 settle()
 

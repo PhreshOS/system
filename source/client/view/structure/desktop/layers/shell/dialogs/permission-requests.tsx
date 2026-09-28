@@ -88,6 +88,7 @@ const permissionPresentation = {
     logs: { title: "System logs", description: "Read and follow records produced by the System." },
     appearance: { title: "Appearance", description: "Change the System Appearance." },
     desktopPreferences: { title: "Desktop preferences", description: "Change this Desktop's preferences." },
+    desktopViewport: { title: "Desktop view", description: "Move where this Desktop looks on the plane of Windows." },
     desktopConnection: { title: "Desktop connection", description: "Access the browser Connection carrying this Desktop and its Session." },
     authentication: { title: "Authentication", description: "Access and manage owner authentication, browser Connections, and Sessions." }
 } satisfies Record<PermissionName, Readonly<{ title: string, description: string }>>

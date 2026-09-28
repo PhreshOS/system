@@ -1,0 +1,434 @@
+import { Button, ContextMenu, Menu, Panel, Surface, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { LocateFixed, Map as MapIcon, X } from "@phreshos/react-ui/icons"
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
+import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { type AppearanceTaskbar } from "@phreshos/core"
+import { useReducedMotion } from "@libs/react-motion"
+import { motion } from "motion/react"
+import { cssEasing } from "@client/view/appearance/motion"
+import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { shellSurfaceClassName } from "../../shell-surface"
+import { wellMaterial } from "../../start-menu/start-menu-panel"
+import { type ViewportControl as Viewport } from "../../../../viewport-offset"
+
+/** A standard Window as the map shows it: where it is on the plane. */
+export interface MappedWindow {
+
+    identity: string
+
+    title: string
+
+    icon: string
+
+    /** Its top-left corner and size on the plane, whose zero is the center. */
+    region: WindowRegion
+
+    /** Whether it is the front Window. */
+    front: boolean
+
+    /** Brings the view to the Window and the Window to the front. */
+    show(): void
+
+    /** Closes the Window, which exits its Process. */
+    close(): void
+
+    /** Moves the Window so its center is at this point of the plane. */
+    moveTo(center: { x: number, y: number }): void
+}
+
+/**
+ * One Taskbar button for where this Desktop looks on the plane of standard
+ * Windows. It names the current view when it is not the center, and opens a
+ * map of the plane: a grid of whole views, a frame for the view itself
+ * above them, and the Windows above both. Choosing a view moves there; dragging the frame
+ * moves the view anywhere.
+ *
+ * The map opens and closes as the Start Menu does: a native popover, which the
+ * browser closes when something else on the Desktop is pressed, and which closes
+ * itself when focus crosses into a Program frame; either way the press goes on
+ * to what it was meant for.
+ */
+export default function ViewportControl({ viewport, windows, taskbar, spacing, onOpenChange }: Readonly<{
+    viewport: Viewport
+    windows: readonly MappedWindow[]
+    taskbar: AppearanceTaskbar
+    spacing: number
+    onOpenChange: (open: boolean) => void
+}>) {
+
+    const id = useId()
+
+    const trigger = useRef<HTMLButtonElement>(null)
+
+    const surface = useRef<HTMLDivElement>(null)
+
+    const [open, setOpen] = useState(false)
+
+    // Where the map opens, measured from the button when it opens.
+    const [anchor, setAnchor] = useState<CSSProperties>({})
+
+    const openAtPressStart = useRef(false)
+
+    const reducedMotion = useReducedMotion()
+
+    const transaction = useAppearance().transaction
+
+    const vertical = taskbar.position === "left" || taskbar.position === "right"
+
+    const centered = viewport.offset.x === 0 && viewport.offset.y === 0
+
+    const place = `${viewport.view.x}, ${viewport.view.y}`
+
+    const close = useCallback(function () {
+
+        if (surface.current?.matches(":popover-open")) surface.current.hidePopover()
+
+    }, [])
+
+    useEffect(function () {
+
+        // Program frames are separate documents, so focus crossing into one is what closes the map there.
+        function closeForProgramFrame() {
+
+            if (document.activeElement instanceof HTMLIFrameElement && !surface.current?.contains(document.activeElement)) close()
+        }
+
+        window.addEventListener("blur", closeForProgramFrame)
+
+        return () => window.removeEventListener("blur", closeForProgramFrame)
+
+    }, [close])
+
+    function toggle() {
+
+        const element = surface.current
+
+        if (!element || !trigger.current) return
+
+        // A press on the button while the map is open already closed it.
+        if (openAtPressStart.current) return close()
+
+        setAnchor(anchorStyle(trigger.current, taskbar, spacing))
+
+        element.showPopover()
+    }
+
+    return <>
+
+        <Button ref={trigger} size="small" iconOnly={centered || vertical} color={centered ? undefined : "primary:soft"}
+            aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
+            onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
+            onPress={toggle}>
+            <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
+        </Button>
+
+        <motion.div
+            ref={surface}
+            id={id}
+            role="dialog"
+            popover="auto"
+            aria-labelledby={`${id}-label`}
+            tabIndex={-1}
+            className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
+            style={{
+                ...anchor,
+                transitionBehavior: "allow-discrete",
+                transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
+                transitionTimingFunction: cssEasing(transaction.easing),
+                transitionProperty: "display, overlay"
+            }}
+            initial={false}
+            animate={open ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
+            transition={surfacePresenceTransition(reducedMotion, transaction)}
+            onBeforeToggle={event => { setOpen(event.newState === "open"); onOpenChange(event.newState === "open") }}
+            onToggle={event => { if (event.newState === "open") event.currentTarget.focus() }}
+        >
+
+            {/* Always drawn, like the Start Menu, so it leaves as it came. */}
+            <Panel><ViewMap labelId={`${id}-label`} viewport={viewport} windows={windows} centered={centered} menus={surface.current} /></Panel>
+
+        </motion.div>
+
+    </>
+}
+
+/**
+ * Like the Start Menu, the map opens two spacings beyond the Taskbar's edge, starting where the button
+ * starts. Taskbar positions name physical screen edges, so every inset stays physical.
+ */
+function anchorStyle(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: number): CSSProperties {
+
+    // The Desktop's scale preference enlarges what it shows; fixed insets are counted before it.
+    const rectangle = button.getBoundingClientRect()
+
+    const scale = button.offsetWidth ? rectangle.width / button.offsetWidth : 1
+
+    const inset = taskbar.size + spacing * 2
+
+    const style = { position: "fixed", top: "auto", right: "auto", bottom: "auto", left: "auto", margin: 0 } satisfies CSSProperties
+
+    if (taskbar.position === "bottom") return { ...style, left: rectangle.left / scale, bottom: inset }
+
+    if (taskbar.position === "top") return { ...style, left: rectangle.left / scale, top: inset }
+
+    if (taskbar.position === "left") return { ...style, left: inset, top: rectangle.top / scale }
+
+    return { ...style, right: inset, top: rectangle.top / scale }
+}
+
+/** `menus` is the map's own surface: menus open inside it, since the map is above everything else on the page. */
+function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ labelId: string, viewport: Viewport, windows: readonly MappedWindow[], centered: boolean, menus: HTMLElement | null }>) {
+
+    const space = useScale(useAppearance().spacing)
+
+    // The lines between views, as faint as React UI's separators.
+    const line = `color-mix(in oklab, ${useColor("foreground").base} 10%, transparent)`
+
+    const { surface } = viewport
+
+    // One view on the map: its width from the spacing, its height in the view's own proportion, both whole pixels so the lines between views stay even.
+    const cell = { width: Math.round(space.xlarge * 3.25), height: Math.round(space.xlarge * 3.25 * surface.height / surface.width) }
+
+    const columns = range.maxX - range.minX + 1
+
+    const rows = range.maxY - range.minY + 1
+
+    /** Where a point of the plane falls on the map. */
+    const mapX = (planeX: number) => (planeX / surface.width + 0.5 - range.minX) * cell.width
+
+    const mapY = (planeY: number) => (planeY / surface.height + 0.5 - range.minY) * cell.height
+
+    const drag = useRef<{ pointer: { x: number, y: number }, offset: { x: number, y: number }, scale: number } | null>(null)
+
+    // The Window whose title shows, by pointer or focus.
+    const [named, setNamed] = useState<MappedWindow | null>(null)
+
+    function grab(event: ReactPointerEvent<HTMLDivElement>) {
+
+        event.currentTarget.setPointerCapture(event.pointerId)
+
+        drag.current = { pointer: { x: event.clientX, y: event.clientY }, offset: viewport.offset, scale: shownScale(event.currentTarget) }
+    }
+
+    function follow(event: ReactPointerEvent<HTMLDivElement>) {
+
+        const started = drag.current
+
+        if (!started) return
+
+        // The frame stays on the map: its center goes no further than the outer views' centers.
+        viewport.place({
+            x: clamp(started.offset.x + (event.clientX - started.pointer.x) / started.scale / cell.width * surface.width, range.minX * surface.width, range.maxX * surface.width),
+            y: clamp(started.offset.y + (event.clientY - started.pointer.y) / started.scale / cell.height * surface.height, range.minY * surface.height, range.maxY * surface.height)
+        })
+    }
+
+    // The panel is as wide as the map; its words wrap under it.
+    return <div className="grid" style={{ gap: space.medium, padding: space.large, width: columns * cell.width, boxSizing: "content-box" }}>
+
+        <Text id={labelId} size="medium" style={{ fontWeight: 500 }}>Map</Text>
+
+        <div className="relative">
+
+        {/* The plane, a well recessed into the Panel like the Start Menu's; views and Windows sit on it, and the frame above them. */}
+        <Surface depth="recessed" color="background" material={wellMaterial} className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
+
+            {/* One clear cell per view, so the well shows as it does in the Start Menu. */}
+            <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${columns}, ${cell.width}px)`, gridTemplateRows: `repeat(${rows}, ${cell.height}px)` }}>
+
+                {Array.from({ length: rows }, (_, row) => Array.from({ length: columns }, (_, column) => {
+
+                    const view = { x: range.minX + column, y: range.minY + row }
+
+                    const inside = windows.filter(window => viewOf(window.region, surface).x === view.x && viewOf(window.region, surface).y === view.y)
+
+                    return <Button key={`${view.x},${view.y}`} size="small" depth="flat" color="transparent" radius={0}
+                        aria-label={`View ${view.x}, ${view.y}${inside.length ? `, ${inside.map(window => window.title).join(", ")}` : ""}`}
+                        style={{ width: "100%", height: "100%", paddingInline: 0 }}
+                        onPress={() => viewport.moveTo(view)} />
+                }))}
+
+            </div>
+
+            {/* The lines between views: one at the end of each view, and one pixel short of the map, so the last is left out. */}
+            <div aria-hidden="true" className="pointer-events-none absolute left-0 top-0" style={{
+                width: columns * cell.width - 1,
+                height: rows * cell.height - 1,
+                backgroundImage: `linear-gradient(to right, transparent calc(100% - 1px), ${line} calc(100% - 1px)), linear-gradient(to bottom, transparent calc(100% - 1px), ${line} calc(100% - 1px))`,
+                backgroundSize: `${cell.width}px 100%, 100% ${cell.height}px`
+            }} />
+
+            {/* The view itself, over the views and dragged anywhere on the map. */}
+            <Surface aria-hidden="true" color="primary" material={{ opacity: 0.3, backdrop: 0 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
+                style={{ position: "absolute", left: mapX(viewport.offset.x) - cell.width / 2, top: mapY(viewport.offset.y) - cell.height / 2, width: cell.width, height: cell.height }}
+                onPointerDown={grab} onPointerMove={follow} onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }} />
+
+            {/* The Windows above everything, since they are dragged too. */}
+            {windows.map(window => <MapWindow key={window.identity} window={window} viewport={viewport} menus={menus} onName={setNamed} mapX={mapX} mapY={mapY} cell={cell} />)}
+
+        </Surface>
+
+        {/* A Window's title above its card; outside the plane, so its edges do not cut it. */}
+        {named && <Surface aria-hidden="true" color="foreground" radius="small" className="pointer-events-none absolute whitespace-nowrap"
+            style={{ position: "absolute", left: mapX(named.region.x + named.region.width / 2), top: mapY(named.region.y + named.region.height / 2) - space.medium, transform: "translate(-50%, -100%)", paddingBlock: space.xsmall, paddingInline: space.small }}>
+            <Text size="xsmall">{named.title}</Text>
+        </Surface>}
+
+        </div>
+
+        <div className="flex items-center justify-between" style={{ gap: space.medium }}>
+
+            <Text size="xsmall" tone="secondary">Choose a view or a Window, drag the frame, or drag a Window to move it.</Text>
+
+            <Button size="small" disabled={centered} onPress={viewport.home}>Center</Button>
+
+        </div>
+
+    </div>
+}
+
+/**
+ * A Window on the map: a small card around its icon where the Window's center is, in a light tint
+ * of the secondary color like the Start Menu's cards, and in the primary color when it is the front
+ * Window. Its title shows on hover and focus. Pressing it, or Go to in its menu, brings the view to the Window and the Window to the front; Close in its menu closes the Window; dragging it moves the
+ * Window anywhere on the map.
+ */
+function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readonly<{
+    window: MappedWindow
+    viewport: Viewport
+    menus: HTMLElement | null
+    onName: (window: MappedWindow | null) => void
+    mapX: (planeX: number) => number
+    mapY: (planeY: number) => number
+    cell: { width: number, height: number }
+}>) {
+
+    const space = useScale(useAppearance().spacing)
+
+    const { surface } = viewport
+
+    const center = { x: window.region.x + window.region.width / 2, y: window.region.y + window.region.height / 2 }
+
+    // Where the card is while it is dragged, until the Window arrives there.
+    const [dragged, setDragged] = useState<{ x: number, y: number } | null>(null)
+
+    // A drag that has just ended is not also a press.
+    const moved = useRef(false)
+
+    useEffect(() => setDragged(null), [window.region.x, window.region.y])
+
+    const shown = dragged ?? center
+
+    const icon = space.medium + space.xsmall
+
+    const card = icon + space.xsmall * 2
+
+    // The card is a Button, which keeps its pointer events to itself, and the pointer soon leaves so small
+    // a card; so the drag listens before the Button does, and then follows the pointer across the page.
+    function down(event: ReactPointerEvent<HTMLDivElement>) {
+
+        if (event.button !== 0) return
+
+        const pointer = { x: event.clientX, y: event.clientY }
+
+        const start = center
+
+        const scale = shownScale(event.currentTarget)
+
+        let last: { x: number, y: number } | null = null
+
+        moved.current = false
+
+        function move(event: PointerEvent) {
+
+            const delta = { x: (event.clientX - pointer.x) / scale, y: (event.clientY - pointer.y) / scale }
+
+            // It becomes a drag once the pointer leaves where it went down; until then it may be a press.
+            if (!moved.current && Math.hypot(delta.x, delta.y) < space.xsmall) return
+
+            if (!moved.current) onName(null)
+
+            moved.current = true
+
+            // The center stays inside the map's outer views; the Desktop keeps the whole Window on the plane.
+            last = {
+                x: clamp(start.x + delta.x / cell.width * surface.width, (range.minX - 0.5) * surface.width + 1, (range.maxX + 0.5) * surface.width - 1),
+                y: clamp(start.y + delta.y / cell.height * surface.height, (range.minY - 0.5) * surface.height + 1, (range.maxY + 0.5) * surface.height - 1)
+            }
+
+            setDragged(last)
+        }
+
+        function end(event: PointerEvent) {
+
+            removeEventListener("pointermove", move)
+            removeEventListener("pointerup", end)
+            removeEventListener("pointercancel", end)
+
+            if (event.type === "pointerup" && last) window.moveTo(last)
+
+            else setDragged(null)
+        }
+
+        addEventListener("pointermove", move)
+        addEventListener("pointerup", end)
+        addEventListener("pointercancel", end)
+    }
+
+    return <div className="absolute touch-none" onPointerDownCapture={down}
+        style={{ left: mapX(shown.x) - card / 2, top: mapY(shown.y) - card / 2, width: card, height: card }}>
+
+        <ContextMenu>
+
+            <ContextMenu.Trigger>
+
+                <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"} aria-label={window.title}
+                    onPress={() => { if (!moved.current) window.show() }}
+                    onHoverStart={() => onName(window)} onHoverEnd={() => onName(null)} onFocus={() => onName(window)} onBlur={() => onName(null)}
+                    style={{ width: card, height: card, paddingInline: 0 }}>
+                    <img src={window.icon} alt="" draggable={false} className="object-contain" style={{ width: icon, height: icon }} />
+                </Button>
+
+            </ContextMenu.Trigger>
+
+            <ContextMenu.Content portalContainer={menus ?? undefined}>
+
+                <Menu aria-label={`${window.title} window actions`} size="small" onAction={action => {
+                    if (action === "show") window.show()
+                    else if (action === "close") window.close()
+                }}>
+
+                    <Menu.Item id="show" textValue="Go to"><LocateFixed aria-hidden />Go to</Menu.Item>
+
+                    <Menu.Separator />
+
+                    <Menu.Item id="close" color="danger" textValue="Close"><X aria-hidden />Close</Menu.Item>
+
+                </Menu>
+
+            </ContextMenu.Content>
+
+        </ContextMenu>
+
+    </div>
+}
+
+/** How much larger than its own pixels an element is shown: the Desktop's scale preference, which pointer distances include. */
+function shownScale(element: HTMLElement) {
+
+    return element.offsetWidth ? element.getBoundingClientRect().width / element.offsetWidth : 1
+}
+
+/** The whole view a region's center is in. */
+function viewOf(region: WindowRegion, surface: { width: number, height: number }) {
+
+    return { x: Math.round((region.x + region.width / 2) / surface.width), y: Math.round((region.y + region.height / 2) / surface.height) }
+}
+
+/** The whole plane: the views its reach covers on each side of the center. */
+const range = { minX: -planeReach, maxX: planeReach, minY: -planeReach, maxY: planeReach }
+
+function clamp(value: number, minimum: number, maximum: number) {
+
+    return Math.min(maximum, Math.max(minimum, value))
+}

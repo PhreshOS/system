@@ -1,6 +1,6 @@
 import { type PointerEvent as ReactPointerEvent, useState } from "react"
 import { resizeSharedBoundary, sharedResizeBoundaries, type SharedResizeBoundary, type SharedResizeWindow } from "@client/view/components/window-manager/shared-resize"
-import { type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { planeGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 
 const thickness = 4
@@ -82,7 +82,10 @@ export default function SharedResizeBoundaries({ windows, begin, present, commit
 
                     present(result.geometries)
 
-                    commit(result.geometries)
+                    // The System records each position from the center of the surface these boundaries divide.
+                    const surface = handle.closest<HTMLElement>("[data-window-surface]")
+                    const size = { width: surface?.clientWidth ?? 0, height: surface?.clientHeight ?? 0 }
+                    commit(new Map([...result.geometries].map(([identity, region]) => [identity, planeGeometry(region, size)])))
 
                     finish(identities)
                 }

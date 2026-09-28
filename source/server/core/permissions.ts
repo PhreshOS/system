@@ -299,6 +299,9 @@ export const permissionCatalog = new PermissionCatalog({
     desktopPreferences: {
         default: []
     },
+    desktopViewport: {
+        default: []
+    },
     desktopConnection: {
         default: []
     },

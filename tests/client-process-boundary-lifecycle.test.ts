@@ -43,7 +43,7 @@ test("a Client question expectation survives initial iframe ownership", async ()
         "process",
         element,
         authManager,
-        () => ({ size: { width: 800, height: 600 } }),
+        { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as ClientTraffic,
         { begin() {} } as unknown as WindowPresentationHost
     )
@@ -81,7 +81,7 @@ test("a later Client request cannot overtake its Service subscription registrati
         "process",
         { contentWindow: null } as unknown as HTMLIFrameElement,
         authManager,
-        () => ({ size: { width: 800, height: 600 } }),
+        { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as ClientTraffic,
         { begin() {} } as unknown as WindowPresentationHost
     )
@@ -125,7 +125,7 @@ test("a registered Service event is delivered without a second permission round-
         "process",
         element,
         authManager,
-        () => ({ size: { width: 800, height: 600 } }),
+        { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         traffic,
         { begin() {} } as unknown as WindowPresentationHost
     )

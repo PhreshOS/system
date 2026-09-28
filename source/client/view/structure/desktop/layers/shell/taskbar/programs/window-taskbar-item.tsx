@@ -1,6 +1,7 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type TaskbarPosition } from "@phreshos/core"
 import { ContextMenu, Menu } from "@phreshos/react-ui"
+import { ArrowDownLeft, ArrowUpRight, Maximize2, Minimize2, X } from "@phreshos/react-ui/icons"
 import { useDesktopScaleContainer } from "../../../../desktop-scale"
 import TaskbarItem from "./taskbar-item"
 import { memo, useCallback } from "react"
@@ -10,13 +11,7 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
     const scaleContainer = useDesktopScaleContainer()
 
-    const press = useCallback(function () {
-
-        if (active) onMinimize(record, true)
-
-        else onShow(record)
-
-    }, [active, onMinimize, onShow, record])
+    const press = useCallback(() => onShow(record), [onShow, record])
 
     const source = useCallback((element: HTMLButtonElement | null) => onElement(record, element), [onElement, record])
     const changeVisibility = useCallback(() => {
@@ -49,13 +44,14 @@ export default memo(function ({ record, title, icon, position, active, minimized
                 else if (action === "close") close()
             }}>
 
-                <Menu.Item id="visibility">{minimized ? "Show" : "Minimize"}</Menu.Item>
+                {/* The icons are the Window's own title bar controls. */}
+                <Menu.Item id="visibility" textValue={minimized ? "Show" : "Minimize"}>{minimized ? <><ArrowUpRight aria-hidden />Show</> : <><ArrowDownLeft aria-hidden />Minimize</>}</Menu.Item>
 
-                <Menu.Item id="fill">{maximized ? "Restore" : "Maximize"}</Menu.Item>
+                <Menu.Item id="fill" textValue={maximized ? "Restore" : "Maximize"}>{maximized ? <><Minimize2 aria-hidden />Restore</> : <><Maximize2 aria-hidden />Maximize</>}</Menu.Item>
 
                 <Menu.Separator />
 
-                <Menu.Item id="close" color="danger">Close</Menu.Item>
+                <Menu.Item id="close" color="danger" textValue="Close"><X aria-hidden />Close</Menu.Item>
 
             </Menu>
 

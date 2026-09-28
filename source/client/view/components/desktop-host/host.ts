@@ -1,5 +1,6 @@
 import {
-    type DesktopViewportSnapshot,
+    type DesktopOffset,
+    type DesktopViewportState,
     type Launch,
     type WindowState
 } from "@phreshos/core"
@@ -42,7 +43,15 @@ export class TransferredAnswer {
 }
 
 /** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
-export default function host(authManager: AuthManager, pane: string, viewport: () => DesktopViewportSnapshot, frameOwner: () => string | null, moveCoordinates: PresentationMoveCoordinates, presentation: WindowPresentationHost) {
+/** This Desktop's viewport as a Client reaches it: read both values, or move the view. */
+export interface DesktopViewportHost {
+
+    state(): DesktopViewportState
+
+    move(offset: DesktopOffset): void
+}
+
+export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, moveCoordinates: PresentationMoveCoordinates, presentation: WindowPresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -1227,7 +1236,16 @@ export default function host(authManager: AuthManager, pane: string, viewport: (
         // One desktop can frame many Client layers, but its complete area is
         // one host fact. It is this desktop's answer rather than a machine
         // fact, and the gutter remains private desktop layout state.
-        if (word === "desktopViewport") return [viewport()]
+        if (word === "desktopViewport") return [viewport.state()]
+
+        if (word === "moveDesktopViewport") {
+
+            await access.require("desktopViewport", [])
+
+            viewport.move(parseDesktopOffset(args[0]))
+
+            return []
+        }
 
         // Completed uploads are public values. Creating one has its own
         // permission; exposing the native directory requires complete access.
@@ -1494,4 +1512,14 @@ function controlled(body: ReadableStream<Uint8Array>, controller: AbortControlle
             await reader.cancel(reason)
         }
     })
+}
+
+/** A Desktop offset from a Client: finite pixels on each axis. */
+function parseDesktopOffset(value: unknown): DesktopOffset {
+
+    const offset = value as { x?: unknown, y?: unknown } | null
+
+    if (typeof offset !== "object" || offset === null || !Number.isFinite(offset.x) || !Number.isFinite(offset.y)) throw new Error("A Desktop offset needs finite x and y")
+
+    return { x: offset.x as number, y: offset.y as number }
 }

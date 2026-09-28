@@ -35,6 +35,9 @@ test("permissions contract", async () => {
       desktopPreferences: {
           default: []
       },
+      desktopViewport: {
+          default: []
+      },
       desktopConnection: {
           default: []
       },
@@ -143,6 +146,7 @@ test("permissions contract", async () => {
       uploads: catalog.definition("uploads"),
       appearance: catalog.definition("appearance"),
       desktopPreferences: catalog.definition("desktopPreferences"),
+      desktopViewport: catalog.definition("desktopViewport"),
       desktopConnection: catalog.definition("desktopConnection"),
       authentication: catalog.definition("authentication")
   } as never), /invalid default/)

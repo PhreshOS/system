@@ -119,7 +119,7 @@ test("a Client boundary initializes each new document exactly once", async () =>
     "requester",
     { contentWindow: null } as unknown as HTMLIFrameElement,
     { processManager: { async ownFrame() {}, async releaseFrame() {} } } as never,
-    () => ({ size: { width: 1, height: 1 } }),
+    { state: () => ({ size: { width: 1, height: 1 }, offset: { x: 0, y: 0 } }), move: () => undefined },
     {} as never,
     { begin(identity: string) { lifecycle.push(identity) }, cancelMoveGestures() {} } as never
   )

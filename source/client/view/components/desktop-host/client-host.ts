@@ -1,9 +1,11 @@
 import { ReactTunnel } from "@the-link/react"
-import { type DesktopSize, type DesktopViewportSnapshot } from "@phreshos/core"
+import { type DesktopSize } from "@phreshos/core"
 import useAnnouncements from "./announcements"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
-import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react"
+import { type DesktopViewportHost } from "./host"
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import useViewportOffset from "@client/view/structure/desktop/viewport-offset"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
@@ -27,17 +29,48 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
 
-    const latestDesktopViewport = useRef<DesktopViewportSnapshot>({ size: { width: 0, height: 0 } })
+    const latestDesktopSize = useRef<DesktopSize>({ width: 0, height: 0 })
 
-    const desktopViewport = useCallback(function (): DesktopViewportSnapshot {
+    // Where this Desktop looks on the plane of standard Windows. It is this connection's alone.
+    const viewport = useViewportOffset(windowSurfaceSize)
 
-        const element = desktop.current
+    const offset = useRef(viewport.offset)
 
-        return element
-            ? { size: measureElement(element) }
-            : latestDesktopViewport.current
+    offset.current = viewport.offset
 
-    }, [desktop])
+    const place = useRef(viewport.place)
+
+    place.current = viewport.place
+
+    // What a Client reaches of this viewport: both values, and moving the view once it is permitted.
+    const desktopViewport = useMemo<DesktopViewportHost>(() => ({
+
+        state() {
+
+            const element = desktop.current
+
+            return { size: element ? measureElement(element) : latestDesktopSize.current, offset: offset.current }
+        },
+
+        move: offset => place.current(offset)
+
+    }), [desktop])
+
+    // Every Client following this Desktop hears that its view moved.
+    const announcedOffset = useRef(viewport.offset)
+
+    useEffect(function () {
+
+        if (announcedOffset.current === viewport.offset) return
+
+        announcedOffset.current = viewport.offset
+
+        for (const identity of sources.keys()) {
+
+            traffic.emit(identity, "host-desktop-viewport", "move", viewport.offset).catch(() => undefined)
+        }
+
+    }, [viewport.offset, sources, traffic])
 
     useLayoutEffect(function () {
 
@@ -50,13 +83,11 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         function announceDesktop(size: DesktopSize) {
 
-            const previous = latestDesktopViewport.current.size
+            const previous = latestDesktopSize.current
 
             if (previous.width === size.width && previous.height === size.height) return
 
-            const snapshot = { size }
-
-            latestDesktopViewport.current = snapshot
+            latestDesktopSize.current = size
 
             // Announcements leave directly from the full desktop measurement.
             // Traffic carries them only to boundaries with a live interest.
@@ -64,7 +95,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
             for (const identity of sources.keys()) {
 
-                traffic.emit(identity, "host-desktop-viewport", "resize", snapshot).catch(() => undefined)
+                traffic.emit(identity, "host-desktop-viewport", "resize", size).catch(() => undefined)
             }
         }
 
@@ -75,7 +106,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         const initialDesktop = measureElement(desktop.current)
 
-        latestDesktopViewport.current = { size: initialDesktop }
+        latestDesktopSize.current = initialDesktop
 
         const initialWindowSurface = measureElement(windowSurfaceRef.current)
 
@@ -301,7 +332,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }, [authManager, sources])
 
-    return { windowSurfaceRef, windowSurfaceSize, frame, frameLoaded }
+    return { windowSurfaceRef, windowSurfaceSize, viewport, frame, frameLoaded }
 }
 
 export type ClientHost = ReturnType<typeof useClientHost>

@@ -8,7 +8,7 @@ import { cssEasing } from "@client/view/appearance/motion"
  * The Desktop's Taskbar is a Shell entity; React UI's Toolbar supplies the
  * control-group semantics and orientation-aware keyboard navigation.
  */
-export default function Taskbar({ leading, trailing, taskbar, spacing, keepVisible = false, className, style, children, onPointerEnter, "aria-label": label = "Taskbar", ...props }: TaskbarProps) {
+export default function Taskbar({ leading, navigation, trailing, taskbar, spacing, keepVisible = false, className, style, children, onPointerEnter, "aria-label": label = "Taskbar", ...props }: TaskbarProps) {
 
     const horizontal = taskbar.position === "top" || taskbar.position === "bottom"
     const orientation = horizontal ? "horizontal" : "vertical"
@@ -82,6 +82,12 @@ export default function Taskbar({ leading, trailing, taskbar, spacing, keepVisib
 
             <Toolbar.Separator className="shadow-taskbar-separator" />
 
+            {/* Where this Desktop looks, between what starts Programs and the Windows they open. */}
+            {navigation && <>
+                <Toolbar.Group style={{ flexShrink: 0 }}>{navigation}</Toolbar.Group>
+                <Toolbar.Separator className="shadow-taskbar-separator" />
+            </>}
+
             <Toolbar.Group style={{ flex: "1 1 0", alignSelf: "stretch", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
 
                 {children}
@@ -102,6 +108,9 @@ interface TaskbarProps extends Omit<SurfaceProps<typeof Toolbar>, "as" | "childr
     children: ReactNode
 
     leading: ReactNode
+
+    /** Where this Desktop looks on the plane of standard Windows, between the leading items and the Windows. */
+    navigation?: ReactNode
 
     trailing: ReactNode
 

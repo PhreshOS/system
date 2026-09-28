@@ -62,7 +62,7 @@ function fixture() {
         authentication, connection, session,
         grantsPermission: async <Name extends PermissionName>(_pane: string, name: Name, values: readonly PermissionValue<Name>[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, process.identity, () => ({ size: { width: 100, height: 100 } }), () => "frame", moveCoordinates(), {} as never)
+    const answer = host(auth, process.identity, { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, () => "frame", moveCoordinates(), {} as never)
     return {
         auth, program, process, answer, createProcess, findOrCreateProcess, startup, startEndpoint, command, connection,
         permissions(value: Permissions) { permissions = value }
@@ -154,7 +154,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
 test.each(restrictedLayers)("Client run streams authorize %s before creating an iterator", async layer => {
     const f = fixture()
     const boundary = new ClientProcessBoundary(f.process.identity, { contentWindow: null } as HTMLIFrameElement, f.auth,
-        () => ({ size: { width: 100, height: 100 } }), {} as never, { begin: vi.fn(), cancelMoveGestures: vi.fn() } as never)
+        { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, {} as never, { begin: vi.fn(), cancelMoveGestures: vi.fn() } as never)
     const deliver = vi.spyOn(boundary, "deliver").mockResolvedValue()
     await boundary.own("frame")
     const program = { identity: f.program.identity, reference: f.program.reference }
