@@ -166,6 +166,19 @@ export function shiftPosition(position: Position, views: ViewportOffset): Positi
     return { x: shiftValue(position.x, views.x), y: shiftValue(position.y, views.y) }
 }
 
+/** The whole view a Window's center is in, counted from the plane's center. */
+export function viewOfGeometry(position: Position, size: Size, surface: WindowSurfaceSize): ViewportOffset {
+
+    if (!surface.width || !surface.height) return { x: 0, y: 0 }
+
+    const region = resolveWindowGeometry(position, size, surface)
+
+    return {
+        x: Math.round((region.x + region.width / 2 - surface.width / 2) / surface.width),
+        y: Math.round((region.y + region.height / 2 - surface.height / 2) / surface.height)
+    }
+}
+
 /** A point of the plane in pixels, recorded as the view it is in plus pixels within that view, so it keeps to its view on every Desktop. */
 export function recordedPosition(point: { x: number, y: number }, surface: WindowSurfaceSize): Position {
 

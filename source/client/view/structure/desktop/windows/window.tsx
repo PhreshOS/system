@@ -66,7 +66,9 @@ export function windowMinimizePose(position: TaskbarPosition) {
     }
 }
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, interactive = true, entering = false, position = { x: 0, y: 0 }, size = presentedWindowSize, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+const wholeView: Position = Object.freeze({ x: "-1/2", y: "-1/2" })
+
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = presentedWindowSize, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -87,7 +89,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // Hidden windows retain their last presentation while lower-priority state changes.
     const presented = useRef({ position, size })
     if (!minimized) presented.current = maximized
-        ? { position: { x: "-1/2", y: "-1/2" }, size: { width: "1/1", height: "1/1" } }
+        ? { position: maximizedPosition, size: { width: "1/1", height: "1/1" } }
         : { position, size }
 
     const geometryMotion = useWindowGeometryMotion({
@@ -782,6 +784,9 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     minimized?: boolean
 
     maximized?: boolean
+
+    /** Where a maximized Window's view starts, as shown: the whole view it is in, which is not always the one on screen. */
+    maximizedPosition?: Position
 
     /** Whether this presentation participates in focus and hit testing. */
     interactive?: boolean

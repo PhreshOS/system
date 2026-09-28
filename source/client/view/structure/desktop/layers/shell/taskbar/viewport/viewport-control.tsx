@@ -1,5 +1,6 @@
-import { Button, ContextMenu, Menu, Panel, Surface, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
-import { LocateFixed, Map as MapIcon, X } from "@phreshos/react-ui/icons"
+import { Button, ContextMenu, Panel, Surface, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
+import WindowMenu from "../../window-menu"
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
@@ -26,8 +27,21 @@ export interface MappedWindow {
     /** Whether it is the front Window. */
     front: boolean
 
+    minimized: boolean
+
+    maximized: boolean
+
     /** Brings the view to the Window and the Window to the front. */
     show(): void
+
+    /** Moves the Window into the view on screen and brings it to the front. */
+    bringHere(): void
+
+    /** Shows the Window where it is, or minimizes it. */
+    toggleMinimized(): void
+
+    /** Maximizes the Window in its view, or restores it. */
+    fill(): void
 
     /** Closes the Window, which exits its Process. */
     close(): void
@@ -181,6 +195,8 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
 
     const space = useScale(useAppearance().spacing)
 
+    const primary = useColor("primary").base
+
     // The lines between views, as faint as React UI's separators.
     const line = `color-mix(in oklab, ${useColor("foreground").base} 10%, transparent)`
 
@@ -203,6 +219,20 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
     // The Window whose title shows, by pointer or focus.
     const [named, setNamed] = useState<MappedWindow | null>(null)
 
+    // The whole view a released frame would settle on, shown while it is dragged.
+    const [settle, setSettle] = useState<{ x: number, y: number } | null>(null)
+
+    // Where that mark last stood, so it can fade out in place.
+    const lastSettle = useRef(settle)
+
+    if (settle) lastSettle.current = settle
+
+    const shownSettle = settle ?? lastSettle.current
+
+    const reducedMotion = useReducedMotion()
+
+    const transaction = useAppearance().transaction
+
     function grab(event: ReactPointerEvent<HTMLDivElement>) {
 
         event.currentTarget.setPointerCapture(event.pointerId)
@@ -217,16 +247,30 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
         if (!started) return
 
         // The frame stays on the map: its center goes no further than the outer views' centers.
-        viewport.place({
+        const point = {
             x: clamp(started.offset.x + (event.clientX - started.pointer.x) / started.scale / cell.width * surface.width, range.minX * surface.width, range.maxX * surface.width),
             y: clamp(started.offset.y + (event.clientY - started.pointer.y) / started.scale / cell.height * surface.height, range.minY * surface.height, range.maxY * surface.height)
-        })
+        }
+
+        // The frame follows the pointer freely; a nearby whole view is only marked until release.
+        viewport.place(point)
+
+        setSettle(nearView(point, surface))
+    }
+
+    function release() {
+
+        if (drag.current && settle) viewport.moveTo(settle)
+
+        drag.current = null
+
+        setSettle(null)
     }
 
     // The panel is as wide as the map; its words wrap under it.
     return <div className="grid" style={{ gap: space.medium, padding: space.large, width: columns * cell.width, boxSizing: "content-box" }}>
 
-        <Text id={labelId} size="medium" style={{ fontWeight: 500 }}>Map</Text>
+        <Text id={labelId} size="medium" className="flex items-center" style={{ fontWeight: 500, gap: space.small }}><MapIcon aria-hidden />Map</Text>
 
         <div className="relative">
 
@@ -258,10 +302,21 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
                 backgroundSize: `${cell.width}px 100%, 100% ${cell.height}px`
             }} />
 
+            {/* Where the frame will settle when released: the whole view it is near, lightly tinted.
+                It fades in and out, and keeps its last place while it fades away. */}
+            {shownSettle && <motion.div aria-hidden="true" className="pointer-events-none absolute"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: settle ? 1 : 0 }}
+                transition={surfacePresenceTransition(reducedMotion, transaction)}
+                style={{
+                    left: mapX(shownSettle.x * surface.width) - cell.width / 2, top: mapY(shownSettle.y * surface.height) - cell.height / 2, width: cell.width, height: cell.height,
+                    background: `color-mix(in oklab, ${primary} 18%, transparent)`
+                }} />}
+
             {/* The view itself, over the views and dragged anywhere on the map. */}
             <Surface aria-hidden="true" color="primary" material={{ opacity: 0.3, backdrop: 0 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
                 style={{ position: "absolute", left: mapX(viewport.offset.x) - cell.width / 2, top: mapY(viewport.offset.y) - cell.height / 2, width: cell.width, height: cell.height }}
-                onPointerDown={grab} onPointerMove={follow} onPointerUp={() => { drag.current = null }} onPointerCancel={() => { drag.current = null }} />
+                onPointerDown={grab} onPointerMove={follow} onPointerUp={release} onPointerCancel={() => { drag.current = null; setSettle(null) }} />
 
             {/* The Windows above everything, since they are dragged too. */}
             {windows.map(window => <MapWindow key={window.identity} window={window} viewport={viewport} menus={menus} onName={setNamed} mapX={mapX} mapY={mapY} cell={cell} />)}
@@ -271,7 +326,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
         {/* A Window's title above its card; outside the plane, so its edges do not cut it. */}
         {named && <Surface aria-hidden="true" color="foreground" radius="small" className="pointer-events-none absolute whitespace-nowrap"
             style={{ position: "absolute", left: mapX(named.region.x + named.region.width / 2), top: mapY(named.region.y + named.region.height / 2) - space.medium, transform: "translate(-50%, -100%)", paddingBlock: space.xsmall, paddingInline: space.small }}>
-            <Text size="xsmall">{named.title}</Text>
+            <Text size="xsmall">{named.title}{windowState(named) && ` · ${windowState(named)}`}</Text>
         </Surface>}
 
         </div>
@@ -290,7 +345,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
 /**
  * A Window on the map: a small card around its icon where the Window's center is, in a light tint
  * of the secondary color like the Start Menu's cards, and in the primary color when it is the front
- * Window. Its title shows on hover and focus. Pressing it, or Go to in its menu, brings the view to the Window and the Window to the front; Close in its menu closes the Window; dragging it moves the
+ * Window. Its title shows on hover and focus. Pressing it brings the view to the Window and the Window to the front; its menu is the Window's menu, as in the Taskbar; dragging it moves the
  * Window anywhere on the map.
  */
 function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readonly<{
@@ -322,6 +377,9 @@ function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readon
     const icon = space.medium + space.xsmall
 
     const card = icon + space.xsmall * 2
+
+    // The maximize mark on a card's corner.
+    const mark = Math.round(card / 2)
 
     // The card is a Button, which keeps its pointer events to itself, and the pointer soon leaves so small
     // a card; so the drag listens before the Button does, and then follows the pointer across the page.
@@ -382,10 +440,12 @@ function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readon
 
             <ContextMenu.Trigger>
 
-                <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"} aria-label={window.title}
+                {/* The front Window is apricot; a minimized one fades; a maximized one carries the title bar's maximize mark. */}
+                <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"}
+                    aria-label={windowState(window) ? `${window.title}, ${windowState(window)}` : window.title}
                     onPress={() => { if (!moved.current) window.show() }}
                     onHoverStart={() => onName(window)} onHoverEnd={() => onName(null)} onFocus={() => onName(window)} onBlur={() => onName(null)}
-                    style={{ width: card, height: card, paddingInline: 0 }}>
+                    style={{ width: card, height: card, paddingInline: 0, opacity: window.minimized ? 0.45 : 1 }}>
                     <img src={window.icon} alt="" draggable={false} className="object-contain" style={{ width: icon, height: icon }} />
                 </Button>
 
@@ -393,24 +453,25 @@ function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readon
 
             <ContextMenu.Content portalContainer={menus ?? undefined}>
 
-                <Menu aria-label={`${window.title} window actions`} size="small" onAction={action => {
-                    if (action === "show") window.show()
-                    else if (action === "close") window.close()
-                }}>
-
-                    <Menu.Item id="show" textValue="Go to"><LocateFixed aria-hidden />Go to</Menu.Item>
-
-                    <Menu.Separator />
-
-                    <Menu.Item id="close" color="danger" textValue="Close"><X aria-hidden />Close</Menu.Item>
-
-                </Menu>
+                <WindowMenu title={window.title} minimized={window.minimized} maximized={window.maximized}
+                    onGoTo={window.show} onBringHere={window.bringHere} onToggleMinimized={window.toggleMinimized} onFill={window.fill} onClose={window.close} />
 
             </ContextMenu.Content>
 
         </ContextMenu>
 
+        {window.maximized && <Surface aria-hidden="true" color={window.front ? "primary" : "secondary"} radius="full" className="pointer-events-none grid place-items-center"
+            style={{ position: "absolute", top: -mark / 3, right: -mark / 3, width: mark, height: mark, opacity: window.minimized ? 0.45 : 1 }}>
+            <Maximize2 style={{ width: mark * 0.6, height: mark * 0.6 }} strokeWidth={2.5} />
+        </Surface>}
+
     </div>
+}
+
+/** What sets a Window apart on the map, in words. */
+function windowState(window: MappedWindow) {
+
+    return [window.minimized && "Minimized", window.maximized && "Maximized"].filter(Boolean).join(", ")
 }
 
 /** How much larger than its own pixels an element is shown: the Desktop's scale preference, which pointer distances include. */
@@ -418,6 +479,19 @@ function shownScale(element: HTMLElement) {
 
     return element.offsetWidth ? element.getBoundingClientRect().width / element.offsetWidth : 1
 }
+
+/** The whole view a dragged frame is near enough to settle on when released, if any. */
+function nearView(center: { x: number, y: number }, surface: { width: number, height: number }) {
+
+    const view = { x: Math.round(center.x / surface.width), y: Math.round(center.y / surface.height) }
+
+    const near = Math.abs(center.x - view.x * surface.width) < surface.width * snapReach && Math.abs(center.y - view.y * surface.height) < surface.height * snapReach
+
+    return near ? view : null
+}
+
+/** How near a whole view the frame settles on it, as a share of the view. */
+const snapReach = 0.2
 
 /** The whole view a region's center is in. */
 function viewOf(region: WindowRegion, surface: { width: number, height: number }) {

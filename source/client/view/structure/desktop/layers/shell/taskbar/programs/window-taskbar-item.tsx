@@ -1,13 +1,13 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type TaskbarPosition } from "@phreshos/core"
-import { ContextMenu, Menu } from "@phreshos/react-ui"
-import { ArrowDownLeft, ArrowUpRight, LocateFixed, Maximize2, Minimize2, X } from "@phreshos/react-ui/icons"
+import { ContextMenu } from "@phreshos/react-ui"
+import WindowMenu from "../../window-menu"
 import { useDesktopScaleContainer } from "../../../../desktop-scale"
 import TaskbarItem from "./taskbar-item"
 import { memo, useCallback } from "react"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
-export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onGoTo, onFill, onClose }: WindowTaskbarItemProps) {
+export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onGoTo, onBringHere, onFill, onClose }: WindowTaskbarItemProps) {
 
     const scaleContainer = useDesktopScaleContainer()
 
@@ -28,6 +28,8 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
     }, [minimized, onMinimize, onShow, record])
     const fill = useCallback(() => onFill(record), [onFill, record])
+    const goTo = useCallback(() => onGoTo(record), [onGoTo, record])
+    const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
 
     return <ContextMenu>
@@ -44,28 +46,8 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
         <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
-            <Menu aria-label={`${title} window actions`} size="small" onAction={action => {
-                if (action === "goTo") onGoTo(record)
-                else if (action === "visibility") changeVisibility()
-                else if (action === "fill") fill()
-                else if (action === "close") close()
-            }}>
-
-                {/* Where the Window is on the plane is the Map's concern; from here it is one choice away. */}
-                <Menu.Item id="goTo" textValue="Go to"><LocateFixed aria-hidden />Go to</Menu.Item>
-
-                <Menu.Separator />
-
-                {/* The icons are the Window's own title bar controls. */}
-                <Menu.Item id="visibility" textValue={minimized ? "Show" : "Minimize"}>{minimized ? <><ArrowUpRight aria-hidden />Show</> : <><ArrowDownLeft aria-hidden />Minimize</>}</Menu.Item>
-
-                <Menu.Item id="fill" textValue={maximized ? "Restore" : "Maximize"}>{maximized ? <><Minimize2 aria-hidden />Restore</> : <><Maximize2 aria-hidden />Maximize</>}</Menu.Item>
-
-                <Menu.Separator />
-
-                <Menu.Item id="close" color="danger" textValue="Close"><X aria-hidden />Close</Menu.Item>
-
-            </Menu>
+            <WindowMenu title={title} minimized={minimized} maximized={maximized}
+                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onFill={fill} onClose={close} />
 
         </ContextMenu.Content>
 
@@ -96,6 +78,9 @@ interface WindowTaskbarItemProps {
 
     /** Brings the view to the Window and the Window to the front. */
     onGoTo: (record: Process) => void
+
+    /** Moves the Window into the view on screen and brings it to the front. */
+    onBringHere: (record: Process) => void
 
     onFill: (record: Process) => void
 

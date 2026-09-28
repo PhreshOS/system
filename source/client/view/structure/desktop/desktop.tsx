@@ -18,7 +18,7 @@ import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
 import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement"
-import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, shownSize, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, shownSize, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type Layer, type Position, type Size } from "@phreshos/core"
@@ -95,6 +95,22 @@ export default function Workspace() {
         const shown = shiftPosition(position, { x: -views.x, y: -views.y })
 
         shownPositions.set(position, shown)
+
+        return shown
+    }
+
+    // A maximized Window fills the whole view its geometry is in: shown where that view is from this one.
+    const maximizedPositions = useMemo(() => new Map<string, Position>(), [views.x, views.y])
+
+    function maximizedPosition(position: Position, size: Size) {
+
+        const view = viewOfGeometry(position, size, windowSurfaceSize)
+
+        const key = `${view.x},${view.y}`
+
+        let shown = maximizedPositions.get(key)
+
+        if (!shown) maximizedPositions.set(key, shown = shiftPosition({ x: "-1/2", y: "-1/2" }, { x: view.x - views.x, y: view.y - views.y }))
 
         return shown
     }
@@ -213,6 +229,8 @@ export default function Workspace() {
 
             maximized={presentation.maximized}
 
+            maximizedPosition={presentation.layer === "window" ? maximizedPosition(bounded.position, bounded.size) : undefined}
+
             interactive={presentation.interactive}
 
             closing={closing}
@@ -257,9 +275,9 @@ export default function Workspace() {
 
     const taskbarOrientation = appearance.taskbar.position === "top" || appearance.taskbar.position === "bottom" ? "horizontal" : "vertical"
 
-    // Each standard Window where it is on the plane, for the map of views.
+    // Each standard Window where it is on the plane, minimized or not, for the map of views.
     const mappedWindows: MappedWindow[] = windowSurfaceSize.width && windowSurfaceSize.height
-        ? windows.panesByLayer.window.filter(pane => !pane.presentation.minimized).map(({ identity, record, presentation }) => {
+        ? windows.panesByLayer.window.filter(pane => !pane.closing).map(({ identity, record, presentation }) => {
 
             const shown = boundedGeometry(presentation.position, shownSize(presentation.size), windowSurfaceSize)
 
@@ -271,7 +289,12 @@ export default function Workspace() {
                 icon: icon(record),
                 region,
                 front: fronts.window?.identity === record.identity,
+                minimized: presentation.minimized,
+                maximized: presentation.maximized,
                 show: () => show(record),
+                bringHere: () => bringHere(record),
+                toggleMinimized: () => toggleMinimized(record),
+                fill: () => void windows.fill(record),
                 close: () => focus.close(record),
                 moveTo: center => {
 
@@ -315,16 +338,52 @@ export default function Workspace() {
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
     // Going to a Window brings the view to it, so it is in the middle, whether it was minimized or only
-    // out of view, and brings it to the front. A maximized Window fills every view, so the view stays.
+    // out of view, and brings it to the front. A maximized Window fills its view, so the view goes there.
     const show = useCallback(function (record: Process) {
 
         const window = windows.presentation.projection(record.identity)
 
-        if (window.layer === "window" && !window.maximized) reveal(window.position, window.size)
+        if (window.layer === "window") {
+
+            const shown = boundedGeometry(window.position, shownSize(window.size), windowSurfaceSize)
+
+            if (window.maximized) viewport.moveTo(viewOfGeometry(shown.position, shown.size, windowSurfaceSize))
+
+            else reveal(window.position, window.size)
+        }
 
         windows.show(record)
 
-    }, [windows.presentation, windows.show, reveal])
+    }, [windows.presentation, windows.show, reveal, viewport.moveTo, windowSurfaceSize])
+
+    // Bringing a Window here moves it by whole views into the view on screen, so it keeps its place
+    // within a view: a Window on the left half arrives on the left half, a maximized one fills this view.
+    const bringHere = useCallback(function (record: Process) {
+
+        const window = windows.presentation.projection(record.identity)
+
+        if (window.layer !== "window") return
+
+        const shown = boundedGeometry(window.position, shownSize(window.size), windowSurfaceSize)
+
+        const from = viewOfGeometry(shown.position, shown.size, windowSurfaceSize)
+
+        const brought = shiftPosition(shown.position, { x: viewport.view.x - from.x, y: viewport.view.y - from.y })
+
+        void windows.move(record, brought.x, brought.y)
+
+        windows.show(record)
+
+    }, [windows.presentation, windows.move, windows.show, viewport.view.x, viewport.view.y, windowSurfaceSize])
+
+    // Showing and hiding in place, as the Taskbar does.
+    const toggleMinimized = useCallback(function (record: Process) {
+
+        if (windows.presentation.projection(record.identity).minimized) windows.show(record)
+
+        else focus.minimize(record, true)
+
+    }, [windows.presentation, windows.show, focus.minimize])
 
     const taskbarItems = <OverflowRow
         orientation={taskbarOrientation}
@@ -366,6 +425,8 @@ export default function Workspace() {
                 onShow={windows.show}
 
                 onGoTo={show}
+
+                onBringHere={bringHere}
 
                 onFill={windows.fill}
 

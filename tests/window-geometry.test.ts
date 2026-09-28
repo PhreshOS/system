@@ -3,7 +3,7 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
 import { defaultAppearance } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import { test } from "vitest"
@@ -36,6 +36,10 @@ test("the view moves a position by whole shares of the surface, so it keeps to i
     const recorded = shiftPosition(planeGeometry(shown, surface), { x: 2, y: 0 })
     assert.deepEqual(resolveWindowGeometry(recorded, { width: 600, height: 400 }, surface), resolveWindowGeometry(stored, { width: 600, height: 400 }, surface))
   }
+
+  // A Window belongs to the view its center is in.
+  assert.deepEqual(viewOfGeometry({ x: "50%", y: "-1/2" }, { width: "1/2", height: "1/1" }, { width: 1200, height: 800 }), { x: 1, y: 0 })
+  assert.deepEqual(viewOfGeometry({ x: -300, y: "100% - 200" }, { width: 600, height: 400 }, { width: 1200, height: 800 }), { x: 0, y: 1 })
 
   // A point of the plane is recorded as its view and the pixels within it.
   assert.deepEqual(recordedPosition({ x: 2500, y: -100 }, { width: 1200, height: 800 }), { x: "200% + 100", y: -100 })
