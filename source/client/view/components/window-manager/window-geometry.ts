@@ -20,8 +20,8 @@ export interface WindowSurfaceSize {
 
 export const minimumWindowSize = Object.freeze({ width: 260, height: 160 })
 
-/** The size the Desktop shows a standard Window at, in each dimension the System records as zero. */
-export const presentedWindowSize = Object.freeze({ width: 520, height: 340 })
+/** The size the Desktop shows a standard Window at, in each dimension the System records as zero: a share of the view, so it suits every screen. */
+export const presentedWindowSize: Size = Object.freeze({ width: "50%", height: "50%" })
 
 const shownSizes = new WeakMap<Size, Size>()
 
@@ -146,7 +146,7 @@ export function boundedGeometry(position: Position, size: Size, surface: WindowS
     return bounded
 }
 
-/** How far this Desktop's view is moved across the plane. Positions it shows are the plane's minus it. */
+/** How far this Desktop's view is moved across the plane, in pixels or in whole views as the context says. */
 export interface ViewportOffset {
 
     x: number
@@ -154,25 +154,40 @@ export interface ViewportOffset {
     y: number
 }
 
-/** Moves a position by pixels, keeping any share of the surface it names: `"-1/2"` moved by 100 is `"-50% + 100"`. */
-export function shiftPosition(position: Position, by: ViewportOffset): Position {
+/**
+ * Moves a position by views: one view is one share of the surface, so `-1/2` moved by one view is `50%`,
+ * and `120` moved by one view is `100% + 120`. Views stay shares, so each Desktop resolves them against
+ * its own size and a Window stays in its view on every screen.
+ */
+export function shiftPosition(position: Position, views: ViewportOffset): Position {
 
-    if (by.x === 0 && by.y === 0) return position
+    if (views.x === 0 && views.y === 0) return position
 
-    return { x: shiftValue(position.x, by.x), y: shiftValue(position.y, by.y) }
+    return { x: shiftValue(position.x, views.x), y: shiftValue(position.y, views.y) }
 }
 
-function shiftValue(value: Value, by: number): Value {
+/** A point of the plane in pixels, recorded as the view it is in plus pixels within that view, so it keeps to its view on every Desktop. */
+export function recordedPosition(point: { x: number, y: number }, surface: WindowSurfaceSize): Position {
 
-    if (by === 0) return value
+    const views = { x: surface.width ? Math.round(point.x / surface.width) : 0, y: surface.height ? Math.round(point.y / surface.height) : 0 }
+
+    return shiftPosition({ x: Math.round(point.x - views.x * surface.width), y: Math.round(point.y - views.y * surface.height) }, views)
+}
+
+function shiftValue(value: Value, views: number): Value {
+
+    if (views === 0) return value
 
     const { relative: share, pixels } = relative(value)
 
-    const moved = pixels + by
+    // Rounded, so repeated moves do not gather floating-point noise.
+    const percent = Math.round((share + views) * 100 * 10000) / 10000
 
-    if (share === 0) return moved
+    if (percent === 0) return pixels
 
-    return `${share * 100}% ${moved < 0 ? "-" : "+"} ${Math.abs(moved)}`
+    if (pixels === 0) return `${percent}%`
+
+    return `${percent}% ${pixels < 0 ? "-" : "+"} ${Math.abs(pixels)}`
 }
 
 /** The inverse at the other end: a painted region's position on the plane, whose zero is the surface's center. */
@@ -194,12 +209,29 @@ export function constrainWindowGeometry(region: WindowRegion, surface: WindowSur
     }
 }
 
+/** Space kept on each side of the Desktop when painting what touches it. */
+export interface PaintMargins {
+
+    top: number
+
+    right: number
+
+    bottom: number
+
+    left: number
+}
+
+export const noPaintMargins: PaintMargins = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
+
 /**
- * The window's box is its geometry; an ordinary painted surface is inset only
- * on edges that do not touch that box's containing surface. Snap previews use
- * this same function, so preview and final paint cannot disagree.
+ * The window's box is its geometry; what is painted of it is drawn inside. An
+ * edge between two Windows is drawn `inset` inside, so neighbors keep a gap
+ * between them; an edge on the Desktop's own edge is drawn that side's margin
+ * inside, clear of the screen's edge and the Taskbar. Gaps and margins are
+ * paint, never geometry. Snap previews use this same function, so preview and
+ * final paint cannot disagree.
  */
-export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, current?: WindowRegion) {
+export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, margins: PaintMargins, current?: WindowRegion) {
 
     const x = current?.x ?? surface.width / 2 + pixels(position.x, surface.width)
 
@@ -211,13 +243,13 @@ export function windowPaintInsets(position: Position, size: Size, surface: Windo
 
     return {
 
-        top: startsAtBoundary(position.y, y, surface.height) ? 0 : inset,
+        top: startsAtBoundary(position.y, y, surface.height) ? margins.top : inset,
 
-        right: endsAtBoundary(position.x, size.width, x, width, surface.width) ? 0 : inset,
+        right: endsAtBoundary(position.x, size.width, x, width, surface.width) ? margins.right : inset,
 
-        bottom: endsAtBoundary(position.y, size.height, y, height, surface.height) ? 0 : inset,
+        bottom: endsAtBoundary(position.y, size.height, y, height, surface.height) ? margins.bottom : inset,
 
-        left: startsAtBoundary(position.x, x, surface.width) ? 0 : inset
+        left: startsAtBoundary(position.x, x, surface.width) ? margins.left : inset
     }
 }
 

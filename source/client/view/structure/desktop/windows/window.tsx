@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, planeGeometry, resolveWindowGeometry, windowPaintInsets, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, presentedWindowSize, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginWindowMoveGesture, type Position, type Size, type TaskbarPosition, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -66,7 +66,7 @@ export function windowMinimizePose(position: TaskbarPosition) {
     }
 }
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 520, height: 340 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, interactive = true, entering = false, position = { x: 0, y: 0 }, size = presentedWindowSize, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -582,7 +582,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // Pointer input may end before its authoritative mutation settles. Paint
     // follows the same locally owned geometry throughout that interval so an
     // old boundary contact cannot flash back for one frame.
-    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, gesture?.current ?? settlingGeometry ?? undefined)
+    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, paintMargins, gesture?.current ?? settlingGeometry ?? undefined)
 
     return <>
 
@@ -609,6 +609,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
             minimumSize={presentationMinimum}
             paintSurfaceSize={paintSurfaceSize}
             paintInset={paintInset}
+
+            paintMargins={paintMargins}
             reducedMotion={reducedMotion}
             zIndex={style?.zIndex}
         />}
@@ -808,6 +810,9 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize
+
+    /** Space kept from each edge of the Desktop when painting an edge that touches it. */
+    paintMargins?: PaintMargins
 
     /** Appearance spacing shared by the layer boundary and tiled gaps. */
     spacing?: number

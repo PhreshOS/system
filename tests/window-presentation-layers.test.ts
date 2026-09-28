@@ -62,3 +62,28 @@ test("standard Window presentation is exclusively Desktop-controlled", () => {
   expect(() => presentations.setInteractive("own", false)).toThrow(/does not support raw/)
   expect(() => presentations.raise("own")).toThrow(/does not support raw/)
 })
+
+test("a standard Window shows a change at once and follows the System once its request settles", async () => {
+  const { client, presentations } = fixture("window")
+  let accept!: () => void
+  let reject!: () => void
+
+  // Shown at once while the System has not answered.
+  presentations.anticipate("own", { minimized: false, front: true }, new Promise<void>(resolve => { accept = resolve }))
+  expect(presentations.projection("own")).toMatchObject({ minimized: false })
+  expect(presentations.projection("own").depth).toBeGreaterThan(5)
+
+  // Accepted: the System's record now says the same, and it is what is shown.
+  client.window.minimized = false
+  client.window.depth = 6
+  accept()
+  await new Promise(resolve => setTimeout(resolve))
+  expect(presentations.projection("own")).toMatchObject({ minimized: false, depth: 6 })
+
+  // Rejected: the System kept what it had, and the Window returns to it.
+  presentations.anticipate("own", { maximized: true }, new Promise<void>((_, fail) => { reject = () => fail(new Error("refused")) }))
+  expect(presentations.projection("own")).toMatchObject({ maximized: true })
+  reject()
+  await new Promise(resolve => setTimeout(resolve))
+  expect(presentations.projection("own")).toMatchObject({ maximized: false })
+})

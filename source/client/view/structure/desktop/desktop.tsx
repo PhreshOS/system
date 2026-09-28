@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
-import DesktopLayers from "./layers/desktop-layers"
+import DesktopLayers, { desktopMargins } from "./layers/desktop-layers"
 import useDesktopFocus from "./desktop-focus"
 import programIcon from "./programs/program-icon"
 import ProgramAccessProbe, { type ProgramAccess } from "../../components/program-access"
@@ -18,7 +18,7 @@ import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
 import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement"
-import { boundedGeometry, planeGeometry, resolveWindowGeometry, shiftPosition, shownSize, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, shownSize, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type Layer, type Position, type Size } from "@phreshos/core"
@@ -75,12 +75,16 @@ export default function Workspace() {
 
     // Standard Windows are shown moved by this Desktop's offset, and what is done to them is recorded
     // moved back. Nothing else knows it: a Window works only in what it shows.
-    const { offset } = viewport
+    const { offset, views } = viewport
 
-    const back = { x: offset.x, y: offset.y }
+    // Recorded in views, so a Window stays in its view on a Desktop of any size.
+    const back = { x: views.x, y: views.y }
+
+    // Standard Windows measure in the whole Desktop; the space they keep from its edges is painted.
+    const margins = useMemo(() => desktopMargins(appearance.spacing, appearance.taskbar), [appearance.spacing, appearance.taskbar])
 
     // A Window rerenders only when what it shows changes: each position keeps one shown form per offset.
-    const shownPositions = useMemo(() => new WeakMap<Position, Position>(), [offset.x, offset.y])
+    const shownPositions = useMemo(() => new WeakMap<Position, Position>(), [views.x, views.y])
 
     function shownPosition(position: Position) {
 
@@ -88,20 +92,26 @@ export default function Workspace() {
 
         if (cached) return cached
 
-        const shown = shiftPosition(position, { x: -offset.x, y: -offset.y })
+        const shown = shiftPosition(position, { x: -views.x, y: -views.y })
 
         shownPositions.set(position, shown)
 
         return shown
     }
 
-    const move = useCallback((record: Process, x: number, y: number) => windows.move(record, x + back.x, y + back.y), [windows.move, back.x, back.y])
+    const move = useCallback(function (record: Process, x: number, y: number) {
 
-    const resize = useCallback((record: Process, width: number, height: number, position: { x: number, y: number } | null) => windows.resize(record, width, height, position && { x: position.x + back.x, y: position.y + back.y }), [windows.resize, back.x, back.y])
+        const recorded = shiftPosition({ x, y }, back)
+
+        return windows.move(record, recorded.x, recorded.y)
+
+    }, [windows.move, back.x, back.y])
+
+    const resize = useCallback((record: Process, width: number, height: number, position: { x: number, y: number } | null) => windows.resize(record, width, height, position && shiftPosition(position, back)), [windows.resize, back.x, back.y])
 
     const snap = useCallback((record: Process, position: Position, size: Size) => windows.snap(record, shiftPosition(position, back), size), [windows.snap, back.x, back.y])
 
-    const commitSharedResize = useCallback((geometries: ReadonlyMap<string, WindowRegion>) => windows.sharedResize.commit(new Map([...geometries].map(([identity, region]) => [identity, { ...region, x: region.x + back.x, y: region.y + back.y }]))), [windows.sharedResize.commit, back.x, back.y])
+    const commitSharedResize = useCallback((geometries: ReadonlyMap<string, WindowRegion>) => windows.sharedResize.commit(new Map([...geometries].map(([identity, region]) => [identity, { ...region, ...shiftPosition(region, back) }]))), [windows.sharedResize.commit, back.x, back.y])
 
     const fileWallpaperLoaded = useCallback(() => {
 
@@ -191,6 +201,8 @@ export default function Workspace() {
             // touch their surface. Positioning is identical in every layer.
             paintSurfaceSize={layer === "window" ? windowSurfaceSize : undefined}
 
+            paintMargins={layer === "window" ? margins : undefined}
+
             spacing={appearance.spacing}
 
             depth={presentation.depth}
@@ -261,7 +273,12 @@ export default function Workspace() {
                 front: fronts.window?.identity === record.identity,
                 show: () => show(record),
                 close: () => focus.close(record),
-                moveTo: center => void windows.move(record, Math.round(center.x - region.width / 2), Math.round(center.y - region.height / 2))
+                moveTo: center => {
+
+                    const recorded = recordedPosition({ x: center.x - region.width / 2, y: center.y - region.height / 2 }, windowSurfaceSize)
+
+                    void windows.move(record, recorded.x, recorded.y)
+                }
             }
         })
         : []
@@ -278,7 +295,7 @@ export default function Workspace() {
 
         const step = inView % 8 * appearance.spacing * 2
 
-        return { x: Math.round(offset.x - shown.width / 2 + step), y: Math.round(offset.y - shown.height / 2 + step) }
+        return recordedPosition({ x: offset.x - shown.width / 2 + step, y: offset.y - shown.height / 2 + step }, windowSurfaceSize)
 
     }, [mappedWindows, offset.x, offset.y, windowSurfaceSize, appearance.spacing])
 
@@ -297,8 +314,8 @@ export default function Workspace() {
 
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
-    // Pressing a Window in the Taskbar brings the view to it, so it is in the middle, whether it was
-    // minimized or only out of view. A maximized Window fills every view, so the view stays.
+    // Going to a Window brings the view to it, so it is in the middle, whether it was minimized or only
+    // out of view, and brings it to the front. A maximized Window fills every view, so the view stays.
     const show = useCallback(function (record: Process) {
 
         const window = windows.presentation.projection(record.identity)
@@ -318,8 +335,8 @@ export default function Workspace() {
     >
 
         {/* What a press means is composed here because it is a person's
-            expectation, not a system operation: the view goes to the Window,
-            which is shown and brought forward. */}
+            expectation, not a system operation: the front window hides;
+            another window is shown and brought forward, wherever it is. */}
         {windows.listed.map(record => {
 
             const window = windows.presentation.projection(record.identity)
@@ -346,7 +363,9 @@ export default function Workspace() {
 
                 onMinimize={focus.minimize}
 
-                onShow={show}
+                onShow={windows.show}
+
+                onGoTo={show}
 
                 onFill={windows.fill}
 
@@ -386,8 +405,6 @@ export default function Workspace() {
             windowSurfaceRef={windowSurfaceRef}
 
             spacing={appearance.spacing}
-
-            taskbar={appearance.taskbar}
 
             shell={<>
                 {shell}

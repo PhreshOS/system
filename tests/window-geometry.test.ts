@@ -3,7 +3,7 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, planeGeometry, resolveWindowGeometry, shiftPosition, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
 import { defaultAppearance } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import { test } from "vitest"
@@ -22,19 +22,23 @@ test("a position is the top-left corner on a plane whose zero is the surface's c
   assert.deepEqual(resolveWindowGeometry(planeGeometry(region, surface), region, surface), region)
 })
 
-test("an offset moves a position by pixels and keeps the share of the surface it names", () => {
-  assert.deepEqual(shiftPosition({ x: 120, y: -40 }, { x: 1000, y: 0 }), { x: 1120, y: -40 })
-  assert.deepEqual(shiftPosition({ x: "-1/2", y: "0/1" }, { x: 1416, y: -820 }), { x: "-50% + 1416", y: -820 })
-  assert.deepEqual(shiftPosition({ x: "-50% + 1416", y: 10 }, { x: -1416, y: 0 }), { x: "-50% + 0", y: 10 })
+test("the view moves a position by whole shares of the surface, so it keeps to its view at any size", () => {
+  assert.deepEqual(shiftPosition({ x: 120, y: -40 }, { x: 1, y: 0 }), { x: "100% + 120", y: -40 })
+  assert.deepEqual(shiftPosition({ x: "-1/2", y: "0/1" }, { x: 1, y: -1 }), { x: "50%", y: "-100%" })
+  assert.deepEqual(shiftPosition({ x: "50%", y: 10 }, { x: -1, y: 0 }), { x: "-50%", y: 10 })
+  assert.deepEqual(shiftPosition({ x: "100% - 30", y: 10 }, { x: -1, y: 0 }), { x: -30, y: 10 })
 
-  // What a Desktop shows with its offset returns to the plane unchanged.
-  const surface = { width: 1200, height: 800 }
-  const stored = { x: "-1/2 + 2400", y: 100 }
-  const offset = { x: 2400, y: 0 }
-  const shown = resolveWindowGeometry(shiftPosition(stored, { x: -offset.x, y: -offset.y }), { width: 600, height: 400 }, surface)
-  assert.deepEqual(shown, { x: 0, y: 500, width: 600, height: 400 })
-  const recorded = planeGeometry(shown, surface)
-  assert.deepEqual({ x: recorded.x + offset.x, y: recorded.y + offset.y }, { x: 1800, y: 100 })
+  // What a Desktop shows two views to the right returns to the plane unchanged, whatever its size.
+  for (const surface of [{ width: 1200, height: 800 }, { width: 1440, height: 900 }]) {
+    const stored = { x: "150%", y: 100 }
+    const shown = resolveWindowGeometry(shiftPosition(stored, { x: -2, y: 0 }), { width: 600, height: 400 }, surface)
+    assert.deepEqual(shown, { x: 0, y: surface.height / 2 + 100, width: 600, height: 400 })
+    const recorded = shiftPosition(planeGeometry(shown, surface), { x: 2, y: 0 })
+    assert.deepEqual(resolveWindowGeometry(recorded, { width: 600, height: 400 }, surface), resolveWindowGeometry(stored, { width: 600, height: 400 }, surface))
+  }
+
+  // A point of the plane is recorded as its view and the pixels within it.
+  assert.deepEqual(recordedPosition({ x: 2500, y: -100 }, { width: 1200, height: 800 }), { x: "200% + 100", y: -100 })
 })
 
 test("a standard presentation enforces its minimum after resolving authoritative geometry", () => {
@@ -50,14 +54,15 @@ test("a standard presentation enforces its minimum after resolving authoritative
   })
 })
 
-test("tiled standard windows share the Appearance gap inside the equally inset surface", () => {
+test("tiled standard windows share the Appearance gap, and keep the Desktop's margins at its edges", () => {
   const surface = { width: 1000, height: 600 }
   const half = defaultAppearance.spacing / 2
-  const left = windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: "1/2", height: "1/1" }, surface, half)
-  const right = windowPaintInsets({ x: 0, y: "-1/2" }, { width: "1/2", height: "1/1" }, surface, half)
+  const margins = { top: 12, right: 12, bottom: 68, left: 12 }
+  const left = windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: "1/2", height: "1/1" }, surface, half, margins)
+  const right = windowPaintInsets({ x: 0, y: "-1/2" }, { width: "1/2", height: "1/1" }, surface, half, margins)
 
-  assert.deepEqual(left, { top: 0, right: half, bottom: 0, left: 0 })
-  assert.deepEqual(right, { top: 0, right: 0, bottom: 0, left: half })
+  assert.deepEqual(left, { top: 12, right: half, bottom: 68, left: 12 })
+  assert.deepEqual(right, { top: 12, right: 12, bottom: 68, left: half })
   assert.equal(left.right + right.left, defaultAppearance.spacing)
 })
 
@@ -65,12 +70,12 @@ test("settling paint follows released geometry instead of its former boundary co
   const surface = { width: 1000, height: 600 }
   const half = defaultAppearance.spacing / 2
   const released = { x: 120, y: 90, width: 500, height: 300 }
-  const former = windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: 500, height: 300 }, surface, half)
+  const former = windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: 500, height: 300 }, surface, half, noPaintMargins)
 
   assert.deepEqual(former, { top: 0, right: half, bottom: half, left: 0 })
 
   assert.deepEqual(
-      windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: 500, height: 300 }, surface, half, released),
+      windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: 500, height: 300 }, surface, half, noPaintMargins, released),
       { top: half, right: half, bottom: half, left: half }
   )
 })

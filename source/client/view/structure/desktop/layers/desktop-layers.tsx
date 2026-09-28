@@ -1,11 +1,12 @@
 import { type CSSProperties, type ReactNode, type Ref } from "react"
 import { type AppearanceTaskbar } from "@phreshos/core"
+import { type PaintMargins } from "@client/view/components/window-manager/window-geometry"
 
 /**
  * Five coextensive Desktop layers ordered from back to front. No layer owns
  * layout space for another; each receives the complete Desktop bounds.
  */
-export default function DesktopLayers({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, shell, windowSurfaceRef, spacing, taskbar }: DesktopLayersProps) {
+export default function DesktopLayers({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, shell, windowSurfaceRef, spacing }: DesktopLayersProps) {
 
     return <div
         data-desktop-layers=""
@@ -27,10 +28,9 @@ export default function DesktopLayers({ wallpaper, underWindows, windows, shared
 
         <div data-desktop-layer="window" className="pointer-events-none absolute inset-0 z-2 overflow-hidden">
 
-            {/* This surface defines standard-window geometry, not a paint
-                boundary. Windows may leave it and are clipped only by the
-                complete Desktop layer. */}
-            <div ref={windowSurfaceRef} data-window-surface="" className="absolute" style={windowSurfaceInsets(spacing, taskbar)}>
+            {/* Standard Windows measure in the whole Desktop, like every other
+                layer; the margins around it are painted, not measured. */}
+            <div ref={windowSurfaceRef} data-window-surface="" className="absolute inset-0">
 
                 {windows}
 
@@ -71,13 +71,14 @@ interface DesktopLayersProps {
 
     spacing: number
 
-    taskbar: AppearanceTaskbar
-
     shell: ReactNode
 }
 
-/** Reserves the Taskbar edge unless it overlays the standard Window surface. */
-export function windowSurfaceInsets(spacing: number, taskbar: AppearanceTaskbar): CSSProperties {
+/**
+ * The space a standard Window keeps from each edge of the Desktop when it touches it: one spacing,
+ * and on the Taskbar's side the Taskbar too, unless it overlays the Desktop.
+ */
+export function desktopMargins(spacing: number, taskbar: AppearanceTaskbar): PaintMargins {
     const inset = {
         top: spacing,
         right: spacing,

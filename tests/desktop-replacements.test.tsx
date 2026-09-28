@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { UIProvider } from "@phreshos/react-ui"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import Workspace from "@client/view/structure/desktop/desktop"
-import { windowSurfaceInsets } from "@client/view/structure/desktop/layers/desktop-layers"
+import { desktopMargins } from "@client/view/structure/desktop/layers/desktop-layers"
 import Taskbar, { taskbarConfigurationChanged, taskbarOverlayTransform, taskbarRegionStyle, taskbarRetentionDistance, taskbarRevealRegionStyle, taskbarStyle, taskbarVisible } from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { startMenuStyle } from "@client/view/structure/desktop/layers/shell/start-menu/start-menu"
 import { windowMinimizePose } from "@client/view/structure/desktop/windows/window"
@@ -30,7 +30,7 @@ vi.mock("@the-link/react", () => ({
     ReactTunnel: { useFactory: () => ({ useSubscribe() {} }) },
     useProperty: (property: { value: unknown }) => property.value
 }))
-vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({ windowSurfaceSize: { width: 0, height: 0 }, viewport: { offset: { x: 0, y: 0 }, view: { x: 0, y: 0 }, surface: { width: 0, height: 0 }, moveTo: () => undefined, place: () => undefined, home: () => undefined } }) }))
+vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({ windowSurfaceSize: { width: 0, height: 0 }, viewport: { views: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, view: { x: 0, y: 0 }, surface: { width: 0, height: 0 }, moveTo: () => undefined, place: () => undefined, home: () => undefined } }) }))
 vi.mock("@client/view/components/program-access", () => ({ default: () => null }))
 vi.mock("@libs/readiness", () => ({ useRequirement: () => () => {} }))
 vi.mock("@client/view/structure/desktop/layers/shell/default-shell", () => ({
@@ -60,16 +60,14 @@ test("Desktop composes five full-bound stacked layers without a layout track", (
     expect(windowLayer).toContain("absolute inset-0")
     const windowSurface = markup.match(/<div[^>]*data-window-surface=""[^>]*>/)?.[0]
     expect(windowSurface).not.toContain("overflow-hidden")
-    expect(windowSurface).toContain(`top:${defaultAppearance.spacing}px`)
-    expect(windowSurface).toContain(`right:${defaultAppearance.spacing}px`)
-    expect(windowSurface).toContain(`bottom:${defaultAppearance.spacing * 2 + defaultAppearance.taskbar.size}px`)
-    expect(windowSurface).toContain(`left:${defaultAppearance.spacing}px`)
+    // Standard Windows measure in the whole Desktop; their margins are painted.
+    expect(windowSurface).toContain("absolute inset-0")
 })
 
-test.each(["top", "right", "bottom", "left"] as const)("standard window surface reserves the %s Taskbar edge", position => {
+test.each(["top", "right", "bottom", "left"] as const)("standard windows keep clear of the %s Taskbar edge when painting", position => {
     const spacing = 12
     const size = 44
-    const insets = windowSurfaceInsets(spacing, { position, size, overlay: false })
+    const insets = desktopMargins(spacing, { position, size, overlay: false })
 
     expect(insets).toEqual({
         top: position === "top" ? 68 : 12,
@@ -79,8 +77,8 @@ test.each(["top", "right", "bottom", "left"] as const)("standard window surface 
     })
 })
 
-test.each(["top", "right", "bottom", "left"] as const)("an overlay Taskbar does not reserve the %s standard-window edge", position => {
-    expect(windowSurfaceInsets(12, { position, size: 44, overlay: true })).toEqual({
+test.each(["top", "right", "bottom", "left"] as const)("an overlay Taskbar leaves the %s standard-window margin at one spacing", position => {
+    expect(desktopMargins(12, { position, size: 44, overlay: true })).toEqual({
         top: 12,
         right: 12,
         bottom: 12,

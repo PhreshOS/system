@@ -1,6 +1,6 @@
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import { type Layer, type Position, type Size, type Value } from "@phreshos/core"
+import { type Layer, type Position, type Size, type Value, type WindowGeometry } from "@phreshos/core"
 import { useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import WindowPresentations, { type PresentedWindow } from "./window-presentations"
@@ -245,9 +245,14 @@ export default function useWindows(authManager: AuthManager) {
 
         if (window.depth === highest) return
 
-        commit(window.raise())
+        // Shown in front at once; the System's ranking follows when it answers.
+        const request = window.raise()
 
-    }, [commit, summit])
+        presentation.anticipate(process.identity, { front: true }, request)
+
+        commit(request)
+
+    }, [commit, summit, presentation])
 
     const minimize = useCallback(function (process: Process, minimized: boolean) {
 
@@ -255,9 +260,13 @@ export default function useWindows(authManager: AuthManager) {
 
         if (!window || window.layer !== "window") return
 
-        commit(window.minimize(minimized))
+        const request = window.minimize(minimized)
 
-    }, [commit])
+        presentation.anticipate(process.identity, { minimized }, request)
+
+        commit(request)
+
+    }, [commit, presentation])
 
     const show = useCallback(function (process: Process) {
 
@@ -314,7 +323,9 @@ export default function useWindows(authManager: AuthManager) {
         const window = process.client?.window
         if (!window || window.layer !== "window") return Promise.resolve(false)
         const maximized = !presentation.projection(process.identity).maximized
-        return settle(window.maximize(maximized))
+        const request = window.maximize(maximized)
+        presentation.anticipate(process.identity, { maximized }, request)
+        return settle(request)
     }, [presentation, settle])
 
     // Every window on the desktop, in one list and one order.
@@ -399,7 +410,7 @@ export default function useWindows(authManager: AuthManager) {
 
     }, [presentation])
 
-    const commitSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowRegion>) {
+    const commitSharedResize = useCallback(function (geometries: ReadonlyMap<string, WindowGeometry>) {
 
         for (const [identity, region] of geometries) {
 

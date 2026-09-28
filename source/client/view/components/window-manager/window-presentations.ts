@@ -38,6 +38,17 @@ export interface PresentedWindow {
     minimizeAnimation: PresentationAnimation | null
 }
 
+/**
+ * A change this Desktop shows before the System confirms it: what a person did
+ * here appears at once, and the System's truth replaces it when the request
+ * settles, whether it was accepted or not.
+ */
+export interface AnticipatedWindow {
+    minimized?: boolean
+    maximized?: boolean
+    front?: boolean
+}
+
 /** Owns only the local representations of one Desktop. */
 export default class WindowPresentations implements WindowPresentationHost {
     public windows: ReadonlyMap<string, PresentedWindow>
@@ -47,6 +58,8 @@ export default class WindowPresentations implements WindowPresentationHost {
     private readonly representations = new Map<string, PresentationGeometryRepresentation>()
     private readonly moveGestureControllers = new Map<string, PresentationMoveGestureController>()
     private readonly moveGestures = new Map<string, ActiveMoveGesture>()
+    private readonly anticipated = new Map<string, { change: AnticipatedWindow, pending: number }>()
+    private fronts = 0
     private revision = 0
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
 
@@ -72,7 +85,7 @@ export default class WindowPresentations implements WindowPresentationHost {
             this.live.set(process, identity)
             const existing = next.get(identity)
             if (!existing) next.set(identity, initialPresentationState(client))
-            else if (existing.layer === "window") next.set(identity, followStandardWindow(existing, client, ++this.revision))
+            else if (existing.layer === "window") next.set(identity, followStandardWindow(existing, client, ++this.revision, this.anticipated.get(identity)?.change))
         }
 
         this.publish(next)
@@ -84,6 +97,33 @@ export default class WindowPresentations implements WindowPresentationHost {
         next.delete(identity)
         this.release(identity, "The Window presentation was removed")
         this.publish(next)
+    }
+
+    /**
+     * Shows a standard Window's change at once, while its request goes to the System. The change holds
+     * until that request settles; then the Window follows the System again, which has either recorded
+     * the same change or kept what it had.
+     */
+    public anticipate(process: string, change: AnticipatedWindow, request: Promise<unknown>) {
+        const identity = this.live.get(process)
+        const state = identity ? this.windows.get(identity) : null
+        const client = this.client(process)
+        if (!identity || !state || !client || state.layer !== "window") return
+        // Changes made together hold together, until the last of their requests settles.
+        const previous = this.anticipated.get(identity)
+        const anticipated = { change: { ...previous?.change, ...change }, pending: (previous?.pending ?? 0) + 1 }
+        // A Window brought forward stays above every Window the System has ranked until it answers.
+        if (change.front) this.fronts++
+        this.anticipated.set(identity, anticipated)
+        this.replace(identity, followStandardWindow(state, client, ++this.revision, anticipated.change, this.fronts))
+        request.catch(() => undefined).finally(() => {
+            const held = this.anticipated.get(identity)
+            if (!held || --held.pending > 0) return
+            this.anticipated.delete(identity)
+            const current = this.windows.get(identity)
+            const live = this.client(process)
+            if (current && live && current.layer === "window") this.replace(identity, followStandardWindow(current, live, ++this.revision))
+        })
     }
 
     public layer(process: string) { return this.existing(process).state.layer }
@@ -403,8 +443,20 @@ function initialPresentationState(client: ClientState): PresentedWindow {
     }
 }
 
-function followStandardWindow(current: PresentedWindow, client: ClientState, revision: number): PresentedWindow {
-    const window = client.window
+/** Anticipated fronts rank above every depth the System assigns. */
+const anticipatedFront = 1_000_000_000
+
+function followStandardWindow(current: PresentedWindow, client: ClientState, revision: number, anticipated?: AnticipatedWindow, fronts = 0): PresentedWindow {
+    const recorded = client.window
+    const window = {
+        position: recorded.position,
+        size: recorded.size,
+        title: recorded.title,
+        header: recorded.header,
+        minimized: anticipated?.minimized ?? recorded.minimized,
+        maximized: anticipated?.maximized ?? recorded.maximized,
+        depth: anticipated?.front ? Math.max(current.depth, anticipatedFront + fronts) : recorded.depth
+    }
     const geometryChanged = JSON.stringify([current.position, current.size]) !== JSON.stringify([window.position, window.size])
     const maximizedChanged = current.maximized !== window.maximized
     const minimizedChanged = current.minimized !== window.minimized
