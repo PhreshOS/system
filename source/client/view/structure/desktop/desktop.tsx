@@ -18,7 +18,7 @@ import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
 import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement"
-import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, shownSize, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type Layer, type Position, type Size } from "@phreshos/core"
@@ -155,23 +155,27 @@ export default function Workspace() {
 
     function icon(record: { program: string }) {
 
-        return programIcon(application.doors.program, program(record.program).assetId)
+        return programIcon(application.doors.program, assetOf(record.program))
     }
 
-    function program(identity: string) {
+    // A Program can leave while one of its Windows is still leaving, as when `phresh start` ends and its
+    // attached Program is forgotten at once. The leaving Window keeps what it showed.
+    const knownAssets = useRef(new Map<string, string>())
+
+    function assetOf(identity: string) {
 
         const found = authManager.programManager.programs.get(identity)
 
-        if (!found) throw new Error(`The Program "${identity}" does not exist`)
+        if (found) knownAssets.current.set(identity, found.assetId)
 
-        return found
+        return found?.assetId ?? knownAssets.current.get(identity) ?? ""
     }
 
     function renderWindows(layer: Layer) {
 
         return windows.panesByLayer[layer].map(({ identity, record, client, presentation, closing, entering, stopping }) => {
 
-            const bounded = boundedGeometry(presentation.position, shownSize(presentation.size), windowSurfaceSize)
+            const bounded = boundedGeometry(presentation.position, presentation.size, windowSurfaceSize)
 
             return <ProcessWindow
 
@@ -181,7 +185,7 @@ export default function Workspace() {
 
             record={record}
 
-            assetId={program(record.program).assetId}
+            assetId={assetOf(record.program)}
 
             client={client}
 
@@ -279,7 +283,7 @@ export default function Workspace() {
     const mappedWindows: MappedWindow[] = windowSurfaceSize.width && windowSurfaceSize.height
         ? windows.panesByLayer.window.filter(pane => !pane.closing).map(({ identity, record, presentation }) => {
 
-            const shown = boundedGeometry(presentation.position, shownSize(presentation.size), windowSurfaceSize)
+            const shown = boundedGeometry(presentation.position, presentation.size, windowSurfaceSize)
 
             const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, windowSurfaceSize), windowSurfaceSize)
 
@@ -306,11 +310,22 @@ export default function Workspace() {
         })
         : []
 
+    // A Window launched from this Desktop without a size of its own gets a square: three fifths of the
+    // view's shorter side. Shares of the view would stretch it with the screen's own proportions.
+    function launchSize(): Size {
+
+        const side = Math.round(Math.min(windowSurfaceSize.width, windowSurfaceSize.height) * 0.6)
+
+        return { width: side, height: side }
+    }
+
     // A Window launched from this Desktop opens centered in what it shows, each one stepped a little from
     // the Windows already in view, so none lands exactly on another.
-    const place = useCallback(function (size: Size | null): Position {
+    const place = useCallback(function (declared: Size | null) {
 
-        const shown = resolveWindowGeometry({ x: 0, y: 0 }, shownSize(size ?? { width: 0, height: 0 }), windowSurfaceSize)
+        const size = declared ?? launchSize()
+
+        const shown = resolveWindowGeometry({ x: 0, y: 0 }, size, windowSurfaceSize)
 
         const inView = mappedWindows.filter(({ region }) =>
             Math.abs(region.x + region.width / 2 - offset.x) < windowSurfaceSize.width / 2 &&
@@ -318,43 +333,40 @@ export default function Workspace() {
 
         const step = inView % 8 * appearance.spacing * 2
 
-        return recordedPosition({ x: offset.x - shown.width / 2 + step, y: offset.y - shown.height / 2 + step }, windowSurfaceSize)
+        const position = recordedPosition({ x: offset.x - shown.width / 2 + step, y: offset.y - shown.height / 2 + step }, windowSurfaceSize)
+
+        return declared ? { position } : { position, size }
 
     }, [mappedWindows, offset.x, offset.y, windowSurfaceSize, appearance.spacing])
 
-    /** Centers the view on a Window at this position and size, as the Desktop shows it. */
+    /**
+     * Moves the view to the whole view a Window at this position and size is in. It never centers on the
+     * Window itself: a view resting between two would put a maximized Window, which fills its own view,
+     * off the screen's edges. Moving within or between views stays the person's choice.
+     */
     const reveal = useCallback(function (position: Position, size: Size | null) {
 
         if (!windowSurfaceSize.width || !windowSurfaceSize.height) return
 
-        const shown = boundedGeometry(position, shownSize(size ?? { width: 0, height: 0 }), windowSurfaceSize)
+        const shown = boundedGeometry(position, size ?? { width: 0, height: 0 }, windowSurfaceSize)
 
-        const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, windowSurfaceSize), windowSurfaceSize)
+        viewport.moveTo(viewOfGeometry(shown.position, shown.size, windowSurfaceSize))
 
-        viewport.place({ x: region.x + region.width / 2, y: region.y + region.height / 2 })
-
-    }, [windowSurfaceSize, viewport.place])
+    }, [windowSurfaceSize, viewport.moveTo])
 
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
-    // Going to a Window brings the view to it, so it is in the middle, whether it was minimized or only
-    // out of view, and brings it to the front. A maximized Window fills its view, so the view goes there.
+    // Going to a Window brings the view to the view it is in, whether it was minimized or only out of
+    // view, and brings it to the front.
     const show = useCallback(function (record: Process) {
 
         const window = windows.presentation.projection(record.identity)
 
-        if (window.layer === "window") {
-
-            const shown = boundedGeometry(window.position, shownSize(window.size), windowSurfaceSize)
-
-            if (window.maximized) viewport.moveTo(viewOfGeometry(shown.position, shown.size, windowSurfaceSize))
-
-            else reveal(window.position, window.size)
-        }
+        if (window.layer === "window") reveal(window.position, window.size)
 
         windows.show(record)
 
-    }, [windows.presentation, windows.show, reveal, viewport.moveTo, windowSurfaceSize])
+    }, [windows.presentation, windows.show, reveal])
 
     // Bringing a Window here moves it by whole views into the view on screen, so it keeps its place
     // within a view: a Window on the left half arrives on the left half, a maximized one fills this view.
@@ -364,7 +376,7 @@ export default function Workspace() {
 
         if (window.layer !== "window") return
 
-        const shown = boundedGeometry(window.position, shownSize(window.size), windowSurfaceSize)
+        const shown = boundedGeometry(window.position, window.size, windowSurfaceSize)
 
         const from = viewOfGeometry(shown.position, shown.size, windowSurfaceSize)
 

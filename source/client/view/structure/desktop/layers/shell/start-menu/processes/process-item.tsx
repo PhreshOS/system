@@ -59,7 +59,7 @@ export default function ProcessRow({ process, program, server, client }: Readonl
                 pending={ending.isPending}
                 aria-label={`End process ${label}`}
                 onPress={() => void ending.safeExecute()}
-            ><X style={{ color: danger }} /></Button>
+            >{/* Quiet until it is needed: the danger color, softened. */}<X style={{ color: `color-mix(in oklab, ${danger} 55%, transparent)` }} /></Button>
         </Table.Cell>
 
     </Table.Row>

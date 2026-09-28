@@ -1,7 +1,7 @@
 import { Button, ContextMenu, Panel, Surface, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
 import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
-import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
@@ -78,8 +78,13 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
     const [open, setOpen] = useState(false)
 
-    // Where the map opens, measured from the button when it opens.
+    // Where the map opens, measured from the button when it opens, and the room it has there.
     const [anchor, setAnchor] = useState<CSSProperties>({})
+
+    const [room, setRoom] = useState<Room | null>(null)
+
+    // How far the map moves inward so it stays on the screen, once it is drawn.
+    const [inward, setInward] = useState(0)
 
     const openAtPressStart = useRef(false)
 
@@ -124,8 +129,34 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
         setAnchor(anchorStyle(trigger.current, taskbar, spacing))
 
+        setRoom(roomBeside(trigger.current, taskbar, spacing))
+
+        setInward(0)
+
         element.showPopover()
     }
+
+    // It starts where its button starts; where it would pass the screen's far edge, it moves back just
+    // enough to stay one spacing inside, as far as the Start Menu's corner at most.
+    useLayoutEffect(function () {
+
+        const element = surface.current
+
+        if (!open || !element || !trigger.current) return
+
+        // Layout measures, which the entrance's brief growth does not change; the Desktop's scale comes from the button.
+        const scale = trigger.current.offsetWidth ? trigger.current.getBoundingClientRect().width / trigger.current.offsetWidth : 1
+
+        const screen = { width: window.innerWidth / scale, height: window.innerHeight / scale }
+
+        const beyond = vertical ? element.offsetTop + element.offsetHeight - (screen.height - spacing) : element.offsetLeft + element.offsetWidth - (screen.width - spacing)
+
+        const start = (vertical ? element.offsetTop : element.offsetLeft) - spacing
+
+        // The map settles its own size after it is first drawn, so this looks again after every drawing.
+        if (beyond > 0.5 && start > 0.5) setInward(current => current + Math.min(beyond, start))
+
+    })
 
     return <>
 
@@ -146,6 +177,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
             className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
             style={{
                 ...anchor,
+                ...(vertical ? { top: Number(anchor.top ?? 0) - inward } : { left: Number(anchor.left ?? 0) - inward }),
                 transitionBehavior: "allow-discrete",
                 transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
                 transitionTimingFunction: cssEasing(transaction.easing),
@@ -159,11 +191,36 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
         >
 
             {/* Always drawn, like the Start Menu, so it leaves as it came. */}
-            <Panel><ViewMap labelId={`${id}-label`} viewport={viewport} windows={windows} centered={centered} menus={surface.current} /></Panel>
+            <Panel><ViewMap labelId={`${id}-label`} viewport={viewport} windows={windows} centered={centered} menus={surface.current} room={room} /></Panel>
 
         </motion.div>
 
     </>
+}
+
+/** The space a panel has on the screen, in the Desktop's own pixels. */
+interface Room {
+    width: number
+    height: number
+}
+
+/**
+ * The room beside the Taskbar for the map: the whole screen, less one spacing at its edges and the
+ * Taskbar with its spacings on the Taskbar's side, as the Start Menu has.
+ */
+function roomBeside(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: number): Room {
+
+    const rectangle = button.getBoundingClientRect()
+
+    const scale = button.offsetWidth ? rectangle.width / button.offsetWidth : 1
+
+    const screen = { width: window.innerWidth / scale, height: window.innerHeight / scale }
+
+    const taskbarSide = taskbar.size + spacing * 3
+
+    return taskbar.position === "top" || taskbar.position === "bottom"
+        ? { width: screen.width - spacing * 2, height: screen.height - taskbarSide }
+        : { width: screen.width - taskbarSide, height: screen.height - spacing * 2 }
 }
 
 /**
@@ -191,7 +248,7 @@ function anchorStyle(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: n
 }
 
 /** `menus` is the map's own surface: menus open inside it, since the map is above everything else on the page. */
-function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ labelId: string, viewport: Viewport, windows: readonly MappedWindow[], centered: boolean, menus: HTMLElement | null }>) {
+function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly<{ labelId: string, viewport: Viewport, windows: readonly MappedWindow[], centered: boolean, menus: HTMLElement | null, room: Room | null }>) {
 
     const space = useScale(useAppearance().spacing)
 
@@ -202,12 +259,36 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
 
     const { surface } = viewport
 
-    // One view on the map: its width from the spacing, its height in the view's own proportion, both whole pixels so the lines between views stay even.
-    const cell = { width: Math.round(space.xlarge * 3.25), height: Math.round(space.xlarge * 3.25 * surface.height / surface.width) }
-
     const columns = range.maxX - range.minX + 1
 
     const rows = range.maxY - range.minY + 1
+
+    // The panel's own words and spaces around the plane, measured once it is drawn.
+    const title = useRef<HTMLElement>(null)
+
+    const footer = useRef<HTMLDivElement>(null)
+
+    const [chrome, setChrome] = useState({ width: space.large * 2, height: space.large * 2 + space.medium * 2 + space.xlarge * 3 })
+
+    useLayoutEffect(function () {
+
+        const words = (title.current?.offsetHeight ?? 0) + (footer.current?.offsetHeight ?? 0)
+
+        if (words) setChrome(current => {
+            const height = space.large * 2 + space.medium * 2 + words
+            return current.height === height ? current : { ...current, height }
+        })
+    })
+
+    // One view on the map: its width from the spacing, its height in the view's own proportion, smaller
+    // when the room beside the Taskbar is smaller, and both whole pixels so the lines between views stay even.
+    const ratio = surface.height / surface.width
+
+    const preferred = space.xlarge * 3.25
+
+    const width = room ? Math.min(preferred, (room.width - chrome.width) / columns, (room.height - chrome.height) / rows / ratio) : preferred
+
+    const cell = room ? { width: Math.max(1, Math.floor(width)), height: Math.max(1, Math.floor(width * ratio)) } : { width: Math.round(width), height: Math.round(width * ratio) }
 
     /** Where a point of the plane falls on the map. */
     const mapX = (planeX: number) => (planeX / surface.width + 0.5 - range.minX) * cell.width
@@ -270,7 +351,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
     // The panel is as wide as the map; its words wrap under it.
     return <div className="grid" style={{ gap: space.medium, padding: space.large, width: columns * cell.width, boxSizing: "content-box" }}>
 
-        <Text id={labelId} size="medium" className="flex items-center" style={{ fontWeight: 500, gap: space.small }}><MapIcon aria-hidden />Map</Text>
+        <Text ref={title} id={labelId} size="medium" className="flex items-center" style={{ fontWeight: 500, gap: space.small }}><MapIcon aria-hidden />Map</Text>
 
         <div className="relative">
 
@@ -331,7 +412,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
 
         </div>
 
-        <div className="flex items-center justify-between" style={{ gap: space.medium }}>
+        <div ref={footer} className="flex items-center justify-between" style={{ gap: space.medium }}>
 
             <Text size="xsmall" tone="secondary">Choose a view or a Window, drag the frame, or drag a Window to move it.</Text>
 
@@ -345,7 +426,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus }: Readonly<{ lab
 /**
  * A Window on the map: a small card around its icon where the Window's center is, in a light tint
  * of the secondary color like the Start Menu's cards, and in the primary color when it is the front
- * Window. Its title shows on hover and focus. Pressing it brings the view to the Window and the Window to the front; its menu is the Window's menu, as in the Taskbar; dragging it moves the
+ * Window. Its title shows on hover and focus. Pressing it brings the view to the view the Window is in, and the Window to the front; its menu is the Window's menu, as in the Taskbar; dragging it moves the
  * Window anywhere on the map.
  */
 function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readonly<{

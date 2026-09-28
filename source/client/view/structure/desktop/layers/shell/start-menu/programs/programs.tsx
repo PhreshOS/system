@@ -57,7 +57,8 @@ function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program
 
     placement.current = currentPlacement
 
-    // A Program that declares where its Window goes keeps it; otherwise the Window opens where this Desktop looks.
+    // A Program that declares where its Window goes keeps it; otherwise the Window opens where this Desktop
+    // looks, with a square size of this Desktop's choosing when the Program declares none.
     const launch = usePromise(async function () {
 
         onChoose()
@@ -66,10 +67,12 @@ function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program
 
         const size = record.client?.size ?? null
 
-        // A Window that opens where its Program declares is brought into view.
-        if (declared) placement.current.reveal(declared, size)
+        const placed = placement.current.place(size)
 
-        await record.createProcess(declared ? {} : { client: { position: placement.current.place(size) } })
+        // A Window that opens where its Program declares is brought into view.
+        if (declared) placement.current.reveal(declared, placed.size ?? size)
+
+        await record.createProcess({ client: declared ? (placed.size ? { size: placed.size } : {}) : placed })
     })
 
     return <>

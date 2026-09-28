@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseLaunch, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type ProgramCommandChunk, type ProgramDefinition } from "@phreshos/core"
+import { parseLaunch, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
@@ -28,7 +28,6 @@ import {
     type PermissionValue,
     type Permissions
 } from "@phreshos/core"
-import { windowLayerDefaults } from "@shared/window-layers"
 
 const maximumProcessesPerProgram = 20
 
@@ -1537,19 +1536,17 @@ export default class ProgramManager extends TheLink {
 
         const layer = asked.layer ?? client.layer ?? "window"
 
-        // Unset geometry stays zero. The System only records Window values; how a Window is shown, and
-        // where a new one appears, is decided by the Desktop, or by whoever launches it and asks.
-        const size = asked.size ?? client.size ?? { width: 0, height: 0 }
-
-        const defaults = windowLayerDefaults(layer)
+        // What neither the launch nor the Program says, the System fills the same way in every layer,
+        // knowing nothing of any screen: a square of fixed pixels, centered on the plane's zero.
+        const size = asked.size ?? client.size ?? defaultWindowSize
 
         return {
 
             title: asked.title ?? client.title ?? program.title,
 
-            header: asked.header ?? client.header ?? defaults.header,
+            header: asked.header ?? client.header ?? true,
 
-            position: asked.position ?? client.position ?? { x: 0, y: 0 },
+            position: asked.position ?? client.position ?? centered(size),
 
             size,
 
@@ -1571,6 +1568,34 @@ export default class ProgramManager extends TheLink {
 }
 
 export type ProgramManagerSnapshot = ReturnType<ProgramManager["toJSON"]>
+
+/** The size of a Window whose launch and Program name none. */
+const defaultWindowSize = Object.freeze({ width: 500, height: 500 })
+
+/** The position that puts a Window of this size with its center on the plane's zero. */
+function centered(size: Size): Position {
+
+    return { x: half(size.width), y: half(size.height) }
+}
+
+/** Minus half of a value, pixels and share alike: `500` gives `-250`, `"1/2"` gives `"-25%"`. */
+function half(value: Value): Value {
+
+    const parsed = parseRelativeValue(value)
+
+    if (!parsed) return 0
+
+    // Adding zero turns a halved zero's sign away: -0 is still no distance.
+    const share = -parsed.relative / 2 + 0
+
+    const pixels = -parsed.pixels / 2 + 0
+
+    if (share === 0) return pixels
+
+    if (pixels === 0) return `${share * 100}%`
+
+    return `${share * 100}% ${pixels < 0 ? "-" : "+"} ${Math.abs(pixels)}`
+}
 
 // What a launcher may say at the start. Named rather than ordered,
 // because an order is invisible where it is written — and text, because

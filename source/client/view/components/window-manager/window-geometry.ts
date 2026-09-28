@@ -20,41 +20,6 @@ export interface WindowSurfaceSize {
 
 export const minimumWindowSize = Object.freeze({ width: 260, height: 160 })
 
-/** The size the Desktop shows a standard Window at, in each dimension the System records as zero: a share of the view, so it suits every screen. */
-export const presentedWindowSize: Size = Object.freeze({ width: "50%", height: "50%" })
-
-const shownSizes = new WeakMap<Size, Size>()
-
-/**
- * A zero dimension is no size at all: the System records zero when nobody chose one. The Desktop shows its
- * own size there instead, and records nothing until the Window is resized.
- */
-export function shownSize(size: Size): Size {
-
-    const width = isZero(size.width) ? presentedWindowSize.width : size.width
-
-    const height = isZero(size.height) ? presentedWindowSize.height : size.height
-
-    if (width === size.width && height === size.height) return size
-
-    const cached = shownSizes.get(size)
-
-    if (cached) return cached
-
-    const shown = { width, height }
-
-    shownSizes.set(size, shown)
-
-    return shown
-}
-
-function isZero(value: Value) {
-
-    const { relative: share, pixels } = relative(value)
-
-    return share === 0 && pixels === 0
-}
-
 /**
  * Every window type uses this same calculation inside the CSS containing
  * block supplied by its layer. Every expression is one relative coefficient

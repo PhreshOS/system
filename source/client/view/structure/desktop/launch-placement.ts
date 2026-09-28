@@ -7,14 +7,17 @@ import { type Position, type Size } from "@phreshos/core"
  */
 export interface LaunchPlacement {
 
-    /** Where a new Window should appear, given the size its Program declares, or `null` without one. */
-    place(size: Size | null): Position
+    /**
+     * Where a new Window should appear, given the size its Program declares; without one, the size it
+     * should have as well.
+     */
+    place(size: Size | null): Readonly<{ position: Position, size?: Size }>
 
-    /** Moves the view so a Window at this position and size is at its center. */
+    /** Moves the view to the whole view a Window at this position and size is in. */
     reveal(position: Position, size: Size | null): void
 }
 
-export const LaunchPlacementContext = createContext<LaunchPlacement>({ place: () => ({ x: 0, y: 0 }), reveal: () => undefined })
+export const LaunchPlacementContext = createContext<LaunchPlacement>({ place: () => ({ position: { x: 0, y: 0 } }), reveal: () => undefined })
 
 export function useLaunchPlacement() {
 

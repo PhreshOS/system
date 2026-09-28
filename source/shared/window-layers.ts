@@ -1,9 +1,5 @@
 import type { WindowLayer } from "@phreshos/core"
 
-export function windowLayerDefaults(layer: WindowLayer) {
-    return Object.freeze({ header: layer === "window" })
-}
-
 export function isRawWindowPresentationLayer(layer: WindowLayer) {
     return layer === "under" || layer === "over" || layer === "shell"
 }

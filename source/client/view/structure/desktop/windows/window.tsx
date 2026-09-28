@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, presentedWindowSize, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginWindowMoveGesture, type Position, type Size, type TaskbarPosition, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -68,7 +68,7 @@ export function windowMinimizePose(position: TaskbarPosition) {
 
 const wholeView: Position = Object.freeze({ x: "-1/2", y: "-1/2" })
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = presentedWindowSize, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 0, height: 0 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()

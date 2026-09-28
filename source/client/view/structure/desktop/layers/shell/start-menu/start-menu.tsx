@@ -14,6 +14,7 @@ import TaskbarButton from "../taskbar/taskbar-button"
 import { useAppearance } from "@phreshos/react-ui"
 import { cssEasing } from "@client/view/appearance/motion"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { usePortrait } from "../../../orientation"
 
 const StartMenuContext = createContext<StartMenuControl | null>(null)
 
@@ -119,6 +120,8 @@ export default memo(function StartMenu() {
 
     const [query, setQuery] = useState("")
 
+    const portrait = usePortrait()
+
     const terms = searchTerms(query)
 
     return <motion.div
@@ -130,7 +133,7 @@ export default memo(function StartMenu() {
         tabIndex={-1}
         className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
         style={{
-            ...startMenuStyle(control.taskbar, control.spacing),
+            ...startMenuStyle(control.taskbar, control.spacing, portrait),
             transitionBehavior: "allow-discrete",
             transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
             transitionTimingFunction: cssEasing(transaction.easing),
@@ -157,6 +160,7 @@ export default memo(function StartMenu() {
             left={<Programs onChoose={control.close} terms={terms} />}
             right={<Processes terms={terms} />}
             footer={<SearchBar query={query} onChange={setQuery} />}
+            stacked={portrait}
         />
 
     </motion.div>
@@ -164,9 +168,13 @@ export default memo(function StartMenu() {
 
 /**
  * The menu occupies the leading corner beside the Taskbar: one spacing from
- * its perpendicular screen edge and two spacings beyond the Taskbar edge.
+ * its perpendicular screen edge and two spacings beyond the Taskbar edge. It
+ * takes the screen's shape: wide on a wide screen, and the same size turned on
+ * a tall one, each within the room the screen has.
  */
-export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number): CSSProperties {
+export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number, portrait = false): CSSProperties {
+    const [long, short] = ["44rem", "32rem"]
+    const [across, down] = portrait ? [short, long] : [long, short]
     const horizontal = taskbar.position === "top" || taskbar.position === "bottom"
     const taskbarInset = taskbar.size + spacing * 2
     const style = {
@@ -179,11 +187,11 @@ export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number): CSS
         bottom: "auto",
         left: "auto",
         width: horizontal
-            ? `min(44rem, calc(100vw - ${spacing * 2}px))`
-            : `min(44rem, calc(100vw - ${taskbarInset + spacing}px))`,
+            ? `min(${across}, calc(100vw - ${spacing * 2}px))`
+            : `min(${across}, calc(100vw - ${taskbarInset + spacing}px))`,
         height: horizontal
-            ? `min(32rem, calc(100vh - ${taskbarInset + spacing}px))`
-            : `min(32rem, calc(100vh - ${spacing * 2}px))`
+            ? `min(${down}, calc(100vh - ${taskbarInset + spacing}px))`
+            : `min(${down}, calc(100vh - ${spacing * 2}px))`
     } satisfies CSSProperties
 
     if (taskbar.position === "bottom") return { ...style, left: spacing, bottom: taskbarInset }

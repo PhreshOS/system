@@ -9,13 +9,15 @@ import SystemHeader from "@client/view/components/system-header"
  * is the Appearance spacing, the same as the header's side padding, so the wells
  * line up with the header's content.
  */
-export default function StartMenuPanel({ labelId, name, version, left, right, footer }: Readonly<{
+export default function StartMenuPanel({ labelId, name, version, left, right, footer, stacked = false }: Readonly<{
     labelId: string
     name: string
     version: string
     left: ReactNode
     right: ReactNode
     footer: ReactNode
+    /** On a tall menu, the Programs sit above the Processes instead of beside them. */
+    stacked?: boolean
 }>) {
 
     const space = useScale(useAppearance().spacing)
@@ -26,7 +28,7 @@ export default function StartMenuPanel({ labelId, name, version, left, right, fo
 
         <div className="grid min-h-0 min-w-0" style={{ gridTemplateRows: "minmax(0, 1fr) auto", gap: space.medium, padding: space.medium, paddingTop: 0 }}>
 
-            <div className="grid min-h-0 min-w-0 grid-cols-2" style={{ gap: space.medium }}>
+            <div className={`grid min-h-0 min-w-0 ${stacked ? "grid-rows-2" : "grid-cols-2"}`} style={{ gap: space.medium }}>
 
                 <Well>{left}</Well>
 

@@ -29,8 +29,8 @@ export default function Processes({ terms }: Readonly<{ terms: readonly string[]
     return <Section label="Processes" count={matching.length} empty={terms.length ? "No matching Processes" : "No Processes"}>
 
         {/* A fixed layout keeps the table in its well: a long Process name is cut short instead of widening it. */}
-        {/* Without a heading, the first row has nothing above it to be set apart from. */}
-        <Table aria-label="Processes" size="small" className="[&_tbody>tr:first-child>*]:!border-t-0" style={{ minWidth: 0, tableLayout: "fixed" }}>
+        {/* Without a heading, the first row has nothing above it to be set apart from; the lines between rows stay faint. */}
+        <Table aria-label="Processes" size="small" className="[&_tbody>tr:first-child>*]:!border-t-0 [&_tbody>tr>*]:![border-top-color:color-mix(in_oklab,currentColor_6%,transparent)]" style={{ minWidth: 0, tableLayout: "fixed" }}>
 
             {/* The columns stay for their widths and names, but the rows need no heading: each row says what it is. */}
             <Table.Header style={{ visibility: "collapse" }}>
