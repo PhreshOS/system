@@ -7,7 +7,7 @@ import { ApplicationContext } from "@client/view/contexts"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
 
 /**
- * One live Process as a table row: its Program and name, a mark for each
+ * One live Process as a table row: its name, its Program, a mark for each
  * running Endpoint, colored only while it is still starting, and a quiet action
  * to end it. The live list owns removal.
  */
@@ -35,13 +35,13 @@ export default function ProcessRow({ process, program, server, client }: Readonl
         <Table.Cell>
             <span className="flex min-w-0 items-center" style={{ gap: space.small, maxWidth: "100%" }}>
                 {program ? <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} style={{ width: space.medium, height: space.medium }} className="shrink-0 object-contain" /> : null}
-                <span className="min-w-0 truncate" title={`${program?.name ?? process.program} · ${process.identity}`}>
-                    {program?.name ?? process.program} <Text tone="secondary">· {label}</Text>
-                </span>
+                <span className="min-w-0 truncate" title={process.identity}>{label}</span>
                 {/* A failure to end stays beside the Process it belongs to. */}
                 {failure && <span role="alert" className="min-w-0 truncate" title={failure} style={{ color: danger }}>{failure}</span>}
             </span>
         </Table.Cell>
+
+        <Table.Cell><Text tone="secondary" className="block truncate">{program?.name ?? process.program}</Text></Table.Cell>
 
         <Table.Cell>
             <span className="flex" style={{ gap: space.xsmall }}>

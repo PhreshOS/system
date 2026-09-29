@@ -1,11 +1,7 @@
 import PhreshOSIcon from "@client/view/components/phreshos-icon"
 import { createContext, memo, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type PropsWithChildren, type RefObject } from "react"
-import Programs from "./programs/programs"
-import Processes from "./processes/processes"
 import StartMenuPanel from "./start-menu-panel"
 import { ApplicationContext } from "@client/view/contexts"
-import SearchBar from "./search-bar"
-import { searchTerms } from "./search"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
@@ -118,11 +114,7 @@ export default memo(function StartMenu() {
 
     const transaction = useAppearance().transaction
 
-    const [query, setQuery] = useState("")
-
     const portrait = usePortrait()
-
-    const terms = searchTerms(query)
 
     return <motion.div
         ref={control.surface}
@@ -147,7 +139,8 @@ export default memo(function StartMenu() {
 
             if (event.newState !== "open") return
 
-            const focusTarget = event.currentTarget.querySelector<HTMLElement>("button:not(:disabled),a[href]") ?? event.currentTarget
+            // The search comes first: a Program is usually one it names.
+            const focusTarget = event.currentTarget.querySelector<HTMLElement>("input[type=search],button:not(:disabled),a[href]") ?? event.currentTarget
 
             focusTarget.focus()
         }}
@@ -157,10 +150,7 @@ export default memo(function StartMenu() {
             labelId={`${control.id}-label`}
             name={application.displayName}
             version={application.version}
-            left={<Programs onChoose={control.close} terms={terms} />}
-            right={<Processes terms={terms} />}
-            footer={<SearchBar query={query} onChange={setQuery} />}
-            stacked={portrait}
+            onChoose={control.close}
         />
 
     </motion.div>

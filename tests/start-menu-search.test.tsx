@@ -1,9 +1,6 @@
 import assert from "node:assert/strict"
-import { renderToStaticMarkup } from "react-dom/server"
-import { UIProvider } from "@phreshos/react-ui"
-import { defaultAppearance } from "@phreshos/core"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
-import SearchBar from "@client/view/structure/desktop/layers/shell/start-menu/search-bar"
+import { categories, categoryOf } from "@client/view/structure/desktop/layers/shell/start-menu/programs/categories"
 import { matchesProcess, matchesProgram, searchTerms } from "@client/view/structure/desktop/layers/shell/start-menu/search"
 import { test } from "vitest"
 
@@ -38,13 +35,12 @@ test("start menu search contract", async () => {
   assert(!matchesProcess(null, undefined, searchTerms("notes")))
   assert(!matchesProcess("daily draft", program, searchTerms("missing")))
 
-  const footer = renderToStaticMarkup(<UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}><SearchBar query="notes" onChange={() => {}} /></UIProvider>)
-
-  assert.match(footer, /<div class="react-aria-TextField"/)
-  assert.match(footer, /<input\b/)
-  assert.match(footer, /value="notes"/)
-  assert.match(footer, /aria-label="Search Programs and Processes"/)
-  assert.equal(footer.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 1)
-  assert.doesNotMatch(footer, /<(?:main|section|article|aside|nav|header|footer)\b/)
-  assert.doesNotMatch(footer, /Signed in as/)
+  // Each category holds its Programs once, in the order the categories first appear; none is "Other".
+  const tool = new Program({ identity: "tool", categories: ["Development", "Productivity"], client: { location: "." } }).record()
+  assert.equal(categoryOf(empty), "Other")
+  assert.deepEqual(categories([program, tool, empty, program]), [
+      { category: "Productivity", count: 2 },
+      { category: "Development", count: 1 },
+      { category: "Other", count: 1 }
+  ])
 }, 120_000)

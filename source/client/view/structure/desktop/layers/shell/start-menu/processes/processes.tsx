@@ -1,51 +1,35 @@
-import { AuthManagerContext } from "@client/view/contexts"
+import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
+import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import ProcessRow from "./process-item"
-import { matchesProcess } from "../search"
-import Section from "../section"
 import { Table, useAppearance, useScale } from "@phreshos/react-ui"
-import { useLayoutEffect, useState } from "react"
+import Empty from "../empty"
 
-/** All live Processes, including those without a Client window, as a small table. */
-export default function Processes({ terms }: Readonly<{ terms: readonly string[] }>) {
-
-    const manager = AuthManagerContext.useValue().processManager
-
-    const [processes, setProcesses] = useState(() => [...manager.processes.values()])
-
-    const programManager = manager.authManager.programManager
-
-    const [programs, setPrograms] = useState(() => [...programManager.programs.values()])
-
-    useLayoutEffect(() => manager.subscribeProcesses(setProcesses), [manager])
-
-    useLayoutEffect(() => programManager.subscribePrograms(setPrograms), [programManager])
-
-    const programsByIdentity = new Map(programs.map(program => [program.identity, program]))
+/** Live Processes, including those without a Client window, as a table. */
+export default function Processes({ processes, programs, empty }: Readonly<{
+    processes: readonly Process[]
+    programs: ReadonlyMap<string, Program>
+    empty: string
+}>) {
 
     const space = useScale(useAppearance().spacing)
 
-    const matching = processes.filter(process => matchesProcess(process.name, programsByIdentity.get(process.program), terms))
+    if (!processes.length) return <Empty>{empty}</Empty>
 
-    return <Section label="Processes" count={matching.length} empty={terms.length ? "No matching Processes" : "No Processes"}>
+    // A fixed layout keeps the table within the content: a long Process name is cut short instead of widening it.
+    return <Table aria-label="Processes" size="small" style={{ minWidth: 0, tableLayout: "fixed" }}>
 
-        {/* A fixed layout keeps the table in its well: a long Process name is cut short instead of widening it. */}
-        {/* Without a heading, the first row has nothing above it to be set apart from; the lines between rows stay faint. */}
-        <Table aria-label="Processes" size="small" className="[&_tbody>tr:first-child>*]:!border-t-0 [&_tbody>tr>*]:![border-top-color:color-mix(in_oklab,currentColor_6%,transparent)]" style={{ minWidth: 0, tableLayout: "fixed" }}>
+        <Table.Header>
+            <Table.Column id="process" rowHeader>Process</Table.Column>
+            <Table.Column id="program" style={{ width: space.xlarge * 6 }}>Program</Table.Column>
+            <Table.Column id="endpoints" style={{ width: space.xlarge * 5 }}>Endpoints</Table.Column>
+            <Table.Column id="end" aria-label="End" style={{ width: space.xlarge * 2 }}> </Table.Column>
+        </Table.Header>
 
-            {/* The columns stay for their widths and names, but the rows need no heading: each row says what it is. */}
-            <Table.Header style={{ visibility: "collapse" }}>
-                <Table.Column id="process" rowHeader>Process</Table.Column>
-                <Table.Column id="endpoints" style={{ width: space.xlarge * 5 }}>Running</Table.Column>
-                <Table.Column id="end" aria-label="End" style={{ width: space.xlarge * 2 }}> </Table.Column>
-            </Table.Header>
+        <Table.Body>
+            {/* Endpoint state is passed as values: the Process handle is updated in place, so the row must see what changed. */}
+            {processes.map(process => <ProcessRow key={process.identity} process={process} program={programs.get(process.program)}
+                server={process.server ? process.server.ready ? "ready" : "starting" : null} client={process.client !== null} />)}
+        </Table.Body>
 
-            <Table.Body>
-                {/* Endpoint state is passed as values: the Process handle is updated in place, so the row must see what changed. */}
-                {matching.map(process => <ProcessRow key={process.identity} process={process} program={programsByIdentity.get(process.program)}
-                    server={process.server ? process.server.ready ? "ready" : "starting" : null} client={process.client !== null} />)}
-            </Table.Body>
-
-        </Table>
-
-    </Section>
+    </Table>
 }

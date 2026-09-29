@@ -1,99 +1,102 @@
-import LauncherItem from "./launcher-item"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
-import usePrograms from "@client/view/structure/desktop/programs/programs"
 import { ApplicationContext } from "@client/view/contexts"
-import Program from "@client/core/link-manager/auth-manager/program-manager/program"
-import usePromise from "@libs/react-promise"
-import Alert from "@client/view/components/alert"
-import { matchesProgram } from "../search"
+import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { useLaunchPlacement } from "@client/view/structure/desktop/launch-placement"
-import Section from "../section"
-import { categorized, CategoryHeading } from "./categories"
-import { Fragment, useRef } from "react"
+import { Badge, GridList, Table, Text, useAppearance, useScale } from "@phreshos/react-ui"
+import { useRef } from "react"
+import Empty from "../empty"
 
-interface ProgramsProps {
+export type ProgramsLayout = "grid" | "list"
 
-    onChoose: () => void
-
-    terms: readonly string[]
-}
-
-/** The installed-program section of the Start Menu, grouped by category. */
-export default function Programs({ onChoose, terms }: ProgramsProps) {
+/** The Programs the Start Menu shows, as icons or as a table, each opened by a press. */
+export default function Programs({ programs, layout, running, empty, onLaunch }: Readonly<{
+    programs: readonly Program[]
+    layout: ProgramsLayout
+    /** How many live Processes each Program has, by its identity. */
+    running: ReadonlyMap<string, number>
+    empty: string
+    onLaunch: (program: Program) => void
+}>) {
 
     const application = ApplicationContext.useValue()
 
-    const programs = usePrograms().filter(program => matchesProgram(program, terms))
+    const space = useScale(useAppearance().spacing)
 
-    return <Section label="Programs" columns={3} count={programs.length} empty={terms.length ? "No matching Programs" : "No installed programs"}>
+    if (!programs.length) return <Empty>{empty}</Empty>
 
-        {categorized(programs).map(({ category, members }) => <Fragment key={category}>
+    const byIdentity = new Map(programs.map(program => [program.identity, program]))
 
-            <CategoryHeading category={category} />
+    const launch = (identity: string) => { const program = byIdentity.get(identity); if (program) onLaunch(program) }
 
-            {members.map(record => <ProgramItem
+    const icon = (program: Program) => programIcon(application.doors.program, program.assetId)
 
-                key={record.identity}
+    if (layout === "grid") return <GridList aria-label="Programs" selectionMode="none" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
 
-                icon={programIcon(application.doors.program, record.assetId)}
+        {programs.map(program => <GridList.Item key={program.identity} id={program.identity} textValue={program.name}>
 
-                record={record}
+            {/* The description is the tooltip. */}
+            <span className="grid min-w-0 justify-items-center text-center" title={program.description ?? undefined} style={{ gap: space.small, paddingBlock: space.small }}>
 
-                onChoose={onChoose}
+                <img src={icon(program)} alt="" draggable={false} className="object-contain" style={{ width: space.xlarge * 1.25, height: space.xlarge * 1.25 }} />
 
-            />)}
+                <Text size="small" className="w-full truncate">{program.name}</Text>
 
-        </Fragment>)}
+            </span>
 
-    </Section>
+        </GridList.Item>)}
+
+    </GridList>
+
+    return <Table aria-label="Programs" size="small" onAction={launch} style={{ minWidth: 0, tableLayout: "fixed" }}>
+
+        <Table.Header>
+            <Table.Column id="name" rowHeader>Name</Table.Column>
+            <Table.Column id="version" style={{ width: space.xlarge * 3 }}>Version</Table.Column>
+            <Table.Column id="category" style={{ width: space.xlarge * 4.5 }}>Category</Table.Column>
+            <Table.Column id="state" style={{ width: space.xlarge * 3.5 }}>State</Table.Column>
+        </Table.Header>
+
+        <Table.Body>
+            {programs.map(program => <Table.Row key={program.identity} id={program.identity} textValue={program.name}>
+                <Table.Cell>
+                    <span className="flex min-w-0 items-center" title={program.description ?? undefined} style={{ gap: space.small }}>
+                        <img src={icon(program)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.medium * 1.5, height: space.medium * 1.5 }} />
+                        <span className="min-w-0 truncate">{program.name}</span>
+                    </span>
+                </Table.Cell>
+                <Table.Cell><Text tone="secondary" className="tabular-nums">{program.version}</Text></Table.Cell>
+                <Table.Cell><Text tone="secondary">{program.categories[0] ?? "Other"}</Text></Table.Cell>
+                <Table.Cell>{running.get(program.identity) ? <Badge size="xsmall" color="success" dot>{running.get(program.identity)} running</Badge> : null}</Table.Cell>
+            </Table.Row>)}
+        </Table.Body>
+
+    </Table>
 }
 
-function ProgramItem({ icon, record, onChoose }: { icon: string, record: Program, onChoose: () => void }) {
+/**
+ * Opens a Program. A Program that declares where its Window goes keeps it; otherwise the Window opens
+ * where this Desktop looks, with a square size of this Desktop's choosing when the Program declares none.
+ */
+export function useLaunch() {
 
-    // Read when the launch happens, not when this item first rendered: the view may have moved since.
+    // Read when the launch happens, not when the menu first rendered: the view may have moved since.
     const currentPlacement = useLaunchPlacement()
 
     const placement = useRef(currentPlacement)
 
     placement.current = currentPlacement
 
-    // A Program that declares where its Window goes keeps it; otherwise the Window opens where this Desktop
-    // looks, with a square size of this Desktop's choosing when the Program declares none.
-    const launch = usePromise(async function () {
+    return async function (program: Program) {
 
-        onChoose()
+        const declared = program.client?.position ?? null
 
-        const declared = record.client?.position ?? null
-
-        const size = record.client?.size ?? null
+        const size = program.client?.size ?? null
 
         const placed = placement.current.place(size)
 
         // A Window that opens where its Program declares is brought into view.
         if (declared) placement.current.reveal(declared, placed.size ?? size)
 
-        await record.createProcess({ client: declared ? (placed.size ? { size: placed.size } : {}) : placed })
-    })
-
-    return <>
-
-        <LauncherItem
-
-            icon={icon}
-
-            description={record.description}
-
-            pending={launch.isPending}
-
-            onPress={() => void launch.safeExecute()}
-
-        >
-
-            {record.name}
-
-        </LauncherItem>
-
-        {launch.exception && <Alert className="text-sm">{String(launch.exception.current)}</Alert>}
-
-    </>
+        await program.createProcess({ client: declared ? (placed.size ? { size: placed.size } : {}) : placed })
+    }
 }

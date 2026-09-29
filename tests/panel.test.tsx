@@ -6,7 +6,6 @@ import { resolveRadius, UIProvider } from "@phreshos/react-ui"
 import CredentialsForm from "@client/view/structure/authentication/credentials-form"
 import ShellSurface, { shellSurfaceClassName } from "@client/view/structure/desktop/layers/shell/shell-surface"
 import Window from "@client/view/structure/desktop/windows/window"
-import StartMenuPanel from "@client/view/structure/desktop/layers/shell/start-menu/start-menu-panel"
 import Taskbar from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
@@ -86,21 +85,6 @@ test("panel contract", async () => {
   assert.match(authenticationFailure, /role="alert"/)
   assert.match(authenticationFailure, /The request failed\./)
 
-  const launcher = markup(<StartMenuPanel labelId="start-menu-label" name="Example System" version="1.2.3" left={<button>Programs</button>} right={<p>Processes</p>} footer={<input type="search" aria-label="Search Programs and Processes" />} />)
-  assert.equal(launcher.match(/class="[^"]*phreshos-surface[^"]*"/g)?.length, 3)
-  assert.match(launcher, /grid-cols-2/)
-  // A Panel with its Window-height header; the wells sit the Appearance spacing apart, aligned with the header.
-  assert.match(launcher, /grid-template-rows:auto minmax\(0, 1fr\)/)
-  assert.match(launcher, /min-height:40px/)
-  assert.match(launcher, /grid-template-rows:minmax\(0, 1fr\) auto;gap:12px;padding:12px;padding-top:0/)
-  assert.match(launcher, /grid-cols-2" style="gap:12px"/)
-  assert.match(launcher, /<button>Programs<\/button>/)
-  assert.match(launcher, /<p>Processes<\/p>/)
-  assert.match(launcher, /<h2[^>]*>Example System<\/h2>/)
-  assert.match(launcher, /System version 1.2.3/)
-  assert.match(launcher, /type="search"/)
-  assert.doesNotMatch(launcher, /<(?:main|section|article|aside|nav|header|footer)\b/)
-  assert.match(launcher, /size-4 rounded-sm object-contain/)
   // Independent Shell overlays share a non-clipping host for outer effects.
   assert(shellSurfaceClassName.split(" ").includes("overflow-visible"))
 

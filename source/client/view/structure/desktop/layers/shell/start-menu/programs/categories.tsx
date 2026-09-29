@@ -1,24 +1,20 @@
 import { Bot, Code, Globe, Layers, Settings2, SquareKanban, type LucideIcon } from "@phreshos/react-ui/icons"
-import { Text, useAppearance, useScale } from "@phreshos/react-ui"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 
-/**
- * Groups Programs by their first category, so each appears once, in the order
- * the categories first appear. A Program without a category is under "Other",
- * as in the first-run Program's catalog.
- */
-export function categorized(programs: readonly Program[]) {
+/** The category a Program is listed under: its first, or "Other" without one, as in the first-run Program's catalog. */
+export function categoryOf(program: Pick<Program, "categories">) {
 
-    const grouped = new Map<string, Program[]>()
+    return program.categories[0] ?? "Other"
+}
 
-    for (const program of programs) {
+/** Each category with how many Programs it holds, in the order the categories first appear. */
+export function categories(programs: readonly Pick<Program, "categories">[]) {
 
-        const category = program.categories[0] ?? "Other"
+    const counted = new Map<string, number>()
 
-        grouped.set(category, [...grouped.get(category) ?? [], program])
-    }
+    for (const program of programs) counted.set(categoryOf(program), (counted.get(categoryOf(program)) ?? 0) + 1)
 
-    return [...grouped].map(([category, members]) => ({ category, members }))
+    return [...counted].map(([category, count]) => ({ category, count }))
 }
 
 /** An icon for each category a Program may declare; any other category takes a general one. */
@@ -30,16 +26,7 @@ const categoryIcons: Readonly<Record<string, LucideIcon>> = {
     AI: Bot
 }
 
-/** A category's heading across the whole grid: its icon and its name. */
-export function CategoryHeading({ category }: Readonly<{ category: string }>) {
+export function categoryIcon(category: string): LucideIcon {
 
-    const space = useScale(useAppearance().spacing)
-
-    const Icon = categoryIcons[category] ?? Layers
-
-    return <Text tone="secondary" size="small" className="flex items-center" style={{ gridColumn: "1 / -1", gap: space.small, paddingTop: space.small, fontWeight: 500 }}>
-
-        <Icon aria-hidden />{category}
-
-    </Text>
+    return categoryIcons[category] ?? Layers
 }
