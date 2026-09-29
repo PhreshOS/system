@@ -1351,12 +1351,9 @@ export default class ProgramManager extends TheLink {
 
             const existing = [...this.authManager.processManager.processes.values()].find(process => process.program === program && process.name === launch.name)
 
-            if (existing && !launch.replace) {
-
-                if (!isDeepStrictEqual(existing.launch, resolved.intent)) throw new Error(`The process "${launch.name}" already exists with a different launch`)
-
-                return existing.identity
-            }
+            // Finding is the request; the launch belongs to creating, the fallback, so a Process found
+            // by its name is returned however it was launched. A launch that must win replaces it.
+            if (existing && !launch.replace) return existing.identity
 
             const creator = typeof parent === "string" ? this.authManager.processManager.processes.get(parent) : parent
 

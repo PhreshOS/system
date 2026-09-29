@@ -2,8 +2,8 @@ import { expect, test } from "vitest"
 import { failed } from "@libs/request-outcome"
 
 test("a refusal the System wrote reaches the one who asked, even when nothing else may", () => {
-    expect(failed(new Error(`The process "settings" already exists with a different launch`), false))
-        .toEqual({ success: false, error: "The process \"settings\" already exists with a different launch" })
+    expect(failed(new Error("This program declared no client half"), false))
+        .toEqual({ success: false, error: "This program declared no client half" })
 })
 
 test("what fails beneath the System stays hidden unless disclosure is allowed", () => {

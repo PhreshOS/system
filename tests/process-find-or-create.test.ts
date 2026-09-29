@@ -80,15 +80,14 @@ test("process find or create contract", async () => {
   assert.equal(first, second)
   assert.equal(starts, 1)
 
-  await assert.rejects(
-    manager.findOrCreateProcess(program, {
-      name: "shared",
-      server: false,
-      client: true,
-      options: { alpha: "1", beta: "2" }
-    }),
-    /different launch/
-  )
+  // Found by its name, the Process is returned however it was launched: the launch is for creating it.
+  assert.equal(await manager.findOrCreateProcess(program, {
+    name: "shared",
+    server: false,
+    client: true,
+    options: { alpha: "1", beta: "2" }
+  }), first)
+  assert.equal(starts, 1)
 
   const omitted = fixture.resolveLaunch(program, { name: "defaults" }).intent
   assert.deepEqual(fixture.resolveLaunch(program, {}).options, {})
