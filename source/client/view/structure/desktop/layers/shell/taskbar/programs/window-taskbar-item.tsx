@@ -3,6 +3,7 @@ import { type TaskbarPosition } from "@phreshos/core"
 import { ContextMenu } from "@phreshos/react-ui"
 import WindowMenu from "../../window-menu"
 import { useDesktopScaleContainer } from "../../../../desktop-scale"
+import TaskbarTooltip from "../taskbar-tooltip"
 import TaskbarItem from "./taskbar-item"
 import useDragHold from "../../../../drag-hold"
 import { memo, useCallback } from "react"
@@ -38,7 +39,8 @@ export default memo(function ({ record, title, icon, position, active, minimized
     const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
 
-    return <ContextMenu>
+    // The title shows on hover and focus, since a Taskbar standing on its side has room for the icon alone.
+    return <TaskbarTooltip label={title}><ContextMenu>
 
         <ContextMenu.Trigger>
 
@@ -57,7 +59,7 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
         </ContextMenu.Content>
 
-    </ContextMenu>
+    </ContextMenu></TaskbarTooltip>
 })
 
 interface WindowTaskbarItemProps {

@@ -1,6 +1,7 @@
-import { Button, ContextMenu, Panel, Surface, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { Button, ContextMenu, Panel, Surface, Text, Tooltip, useAppearance, useColor, useScale } from "@phreshos/react-ui"
 import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
+import TaskbarTooltip from "../taskbar-tooltip"
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
@@ -160,12 +161,15 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
     return <>
 
-        <Button ref={trigger} size="small" iconOnly={centered || vertical} color={centered ? undefined : "primary:soft"}
-            aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
-            onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
-            onPress={toggle}>
-            <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
-        </Button>
+        {/* Showing its icon alone, it names itself on hover and focus. */}
+        <TaskbarTooltip label={centered ? "Map" : `Map, near ${place}`} iconOnly={centered || vertical}>
+            <Button ref={trigger} size="small" iconOnly={centered || vertical} color={centered ? undefined : "primary:soft"}
+                aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
+                onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
+                onPress={toggle}>
+                <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
+            </Button>
+        </TaskbarTooltip>
 
         <motion.div
             ref={surface}
@@ -298,7 +302,6 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
     const drag = useRef<{ pointer: { x: number, y: number }, offset: { x: number, y: number }, scale: number } | null>(null)
 
     // The Window whose title shows, by pointer or focus.
-    const [named, setNamed] = useState<MappedWindow | null>(null)
 
     // The whole view a released frame would settle on, shown while it is dragged.
     const [settle, setSettle] = useState<{ x: number, y: number } | null>(null)
@@ -400,15 +403,9 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
                 onPointerDown={grab} onPointerMove={follow} onPointerUp={release} onPointerCancel={() => { drag.current = null; setSettle(null) }} />
 
             {/* The Windows above everything, since they are dragged too. */}
-            {windows.map(window => <MapWindow key={window.identity} window={window} viewport={viewport} menus={menus} onName={setNamed} mapX={mapX} mapY={mapY} cell={cell} />)}
+            {windows.map(window => <MapWindow key={window.identity} window={window} viewport={viewport} menus={menus} mapX={mapX} mapY={mapY} cell={cell} />)}
 
         </Surface>
-
-        {/* A Window's title above its card; outside the plane, so its edges do not cut it. */}
-        {named && <Surface aria-hidden="true" color="foreground" radius="small" className="pointer-events-none absolute whitespace-nowrap"
-            style={{ position: "absolute", left: mapX(named.region.x + named.region.width / 2), top: mapY(named.region.y + named.region.height / 2) - space.medium, transform: "translate(-50%, -100%)", paddingBlock: space.xsmall, paddingInline: space.small }}>
-            <Text size="xsmall">{named.title}{windowState(named) && ` · ${windowState(named)}`}</Text>
-        </Surface>}
 
         </div>
 
@@ -426,14 +423,13 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
 /**
  * A Window on the map: a small card around its icon where the Window's center is, in a light tint
  * of the secondary color like the Start Menu's cards, and in the primary color when it is the front
- * Window. Its title shows on hover and focus. Pressing it brings the view to the view the Window is in, and the Window to the front; its menu is the Window's menu, as in the Taskbar; dragging it moves the
+ * Window. Its title shows in a Tooltip on hover and focus. Pressing it brings the view to the view the Window is in, and the Window to the front; its menu is the Window's menu, as in the Taskbar; dragging it moves the
  * Window anywhere on the map.
  */
-function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readonly<{
+function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
     window: MappedWindow
     viewport: Viewport
     menus: HTMLElement | null
-    onName: (window: MappedWindow | null) => void
     mapX: (planeX: number) => number
     mapY: (planeY: number) => number
     cell: { width: number, height: number }
@@ -485,8 +481,6 @@ function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readon
             // It becomes a drag once the pointer leaves where it went down; until then it may be a press.
             if (!moved.current && Math.hypot(delta.x, delta.y) < space.xsmall) return
 
-            if (!moved.current) onName(null)
-
             moved.current = true
 
             // The center stays inside the map's outer views; the Desktop keeps the whole Window on the plane.
@@ -517,29 +511,35 @@ function MapWindow({ window, viewport, menus, onName, mapX, mapY, cell }: Readon
     return <div className="absolute touch-none" onPointerDownCapture={down}
         style={{ left: mapX(shown.x) - card / 2, top: mapY(shown.y) - card / 2, width: card, height: card }}>
 
-        <ContextMenu>
+        {/* Its title shows on hover and focus, above the card; a press, and so a drag, closes it. */}
+        <Tooltip>
 
-            <ContextMenu.Trigger>
+            <ContextMenu>
 
-                {/* The front Window is apricot; a minimized one fades; a maximized one carries the title bar's maximize mark. */}
-                <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"}
-                    aria-label={windowState(window) ? `${window.title}, ${windowState(window)}` : window.title}
-                    onPress={() => { if (!moved.current) window.show() }}
-                    onHoverStart={() => onName(window)} onHoverEnd={() => onName(null)} onFocus={() => onName(window)} onBlur={() => onName(null)}
-                    style={{ width: card, height: card, paddingInline: 0, opacity: window.minimized ? 0.45 : 1 }}>
-                    <img src={window.icon} alt="" draggable={false} className="object-contain" style={{ width: icon, height: icon }} />
-                </Button>
+                <ContextMenu.Trigger>
 
-            </ContextMenu.Trigger>
+                    {/* The front Window is apricot; a minimized one fades; a maximized one carries the title bar's maximize mark. */}
+                    <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"}
+                        aria-label={windowState(window) ? `${window.title}, ${windowState(window)}` : window.title}
+                        onPress={() => { if (!moved.current) window.show() }}
+                        style={{ width: card, height: card, paddingInline: 0, opacity: window.minimized ? 0.45 : 1 }}>
+                        <img src={window.icon} alt="" draggable={false} className="object-contain" style={{ width: icon, height: icon }} />
+                    </Button>
 
-            <ContextMenu.Content portalContainer={menus ?? undefined}>
+                </ContextMenu.Trigger>
 
-                <WindowMenu title={window.title} minimized={window.minimized} maximized={window.maximized}
-                    onGoTo={window.show} onBringHere={window.bringHere} onToggleMinimized={window.toggleMinimized} onFill={window.fill} onClose={window.close} />
+                <ContextMenu.Content portalContainer={menus ?? undefined}>
 
-            </ContextMenu.Content>
+                    <WindowMenu title={window.title} minimized={window.minimized} maximized={window.maximized}
+                        onGoTo={window.show} onBringHere={window.bringHere} onToggleMinimized={window.toggleMinimized} onFill={window.fill} onClose={window.close} />
 
-        </ContextMenu>
+                </ContextMenu.Content>
+
+            </ContextMenu>
+
+            <Tooltip.Content placement="top" portalContainer={menus ?? undefined}>{window.title}{windowState(window) && ` · ${windowState(window)}`}</Tooltip.Content>
+
+        </Tooltip>
 
         {window.maximized && <Surface aria-hidden="true" color={window.front ? "primary" : "secondary"} radius="full" className="pointer-events-none grid place-items-center"
             style={{ position: "absolute", top: -mark / 3, right: -mark / 3, width: mark, height: mark, opacity: window.minimized ? 0.45 : 1 }}>
