@@ -13,7 +13,7 @@ interface WindowGeometryMotionOptions {
     animation?: PresentationAnimation | null
     transaction?: PresentationTransaction | null
     immediate: boolean
-    /** Moves visibly only between two places the person can see; otherwise it is simply there. */
+    /** Moves visibly only when the person can see where it starts or where it ends; otherwise it is simply there. */
     seenOnly?: boolean
     minimumSize?: WindowSurfaceSize
     onComplete?: (revision: number) => void
@@ -118,8 +118,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         return values.current.minimumSize ? constrainWindowGeometry(region, surface, values.current.minimumSize) : region
     }
 
-    /** Whether the person can see where the box is now and where it is going: both touch the screen. */
-    function seenThroughout(region: WindowRegion) {
+    /** Whether the person can see where the box is now or where it is going: either touches the screen. */
+    function seenAtAnEnd(region: WindowRegion) {
 
         const parent = frame.current?.parentElement
 
@@ -128,7 +128,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         const surface = logicalSize(parent)
         const seen = (shown: WindowRegion) => shown.x < surface.width && shown.x + shown.width > 0 && shown.y < surface.height && shown.y + shown.height > 0
 
-        return seen(read()) && seen(region)
+        return seen(read()) || seen(region)
     }
 
     useLayoutEffect(function () {
@@ -155,9 +155,9 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
                 ? null
                 : resolveWindowTransaction(transaction, appearanceTransaction)
 
-        // A motion shows where something went; from or to a place the person does not see, there
-        // is nothing to show, and a path across the screen would only distract.
-        if (!selected || (values.current.seenOnly && !seenThroughout(region))) {
+        // A motion shows where something went or where it came from; between two places the person
+        // does not see, there is nothing to show, and a path across the screen would only distract.
+        if (!selected || (values.current.seenOnly && !seenAtAnEnd(region))) {
             set(region)
             if (revision !== undefined) onComplete?.(revision)
             return
