@@ -4,6 +4,7 @@ import { ContextMenu } from "@phreshos/react-ui"
 import WindowMenu from "../../window-menu"
 import { useDesktopScaleContainer } from "../../../../desktop-scale"
 import TaskbarItem from "./taskbar-item"
+import useDragHold from "../../../../drag-hold"
 import { memo, useCallback } from "react"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
@@ -19,7 +20,11 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
     }, [active, onMinimize, onShow, record])
 
-    const source = useCallback((element: HTMLButtonElement | null) => onElement(record, element), [onElement, record])
+    // A drag held over the entry shows its window in front, even a minimized one, so the drop can
+    // go there; unlike a press, it never minimizes the window.
+    const show = useCallback(() => onShow(record), [onShow, record])
+    const holdShows = useDragHold(show)
+    const source = useCallback((element: HTMLButtonElement | null) => { onElement(record, element); holdShows(element) }, [onElement, record, holdShows])
     const changeVisibility = useCallback(() => {
 
         if (minimized) onShow(record)

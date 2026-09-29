@@ -6,6 +6,7 @@ import { type PresentationGeometryRepresentation } from "@client/view/components
 import { type Position, type Size, type TaskbarPosition, type Theme, type WindowPresentationSurface, type WindowLayer } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
+import useDragHold from "../drag-hold"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
 import { type ProgramAccess } from "@client/view/components/program-access"
 import { memo, type SyntheticEvent, useCallback, useEffect, useState } from "react"
@@ -27,6 +28,8 @@ export function processWindowProgress(layer: WindowLayer, loading: boolean, stop
 export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, paintMargins, spacing, depth, active, minimized, maximized, maximizedPosition, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
+
+    const holdActivates = useDragHold(activate)
 
     const minimize = useCallback(() => onMinimize(record, true), [onMinimize, record])
 
@@ -214,10 +217,10 @@ export default memo(function ({ identity, record, assetId, client, title, header
         </div>}
 
         {/* First press focuses an inactive window before its program can
-            receive input. A drag entering it activates it the same way, so
+            receive input. A drag held over it activates it the same way, so
             the drop reaches the program. Bare layers have no system
             click-catcher. */}
-        {layer === "window" && !active && <div data-window-click-catcher className="absolute inset-0 bg-transparent" onDragEnter={activate} />}
+        {layer === "window" && !active && <div ref={holdActivates} data-window-click-catcher className="absolute inset-0 bg-transparent" />}
 
     </Window>
 })
