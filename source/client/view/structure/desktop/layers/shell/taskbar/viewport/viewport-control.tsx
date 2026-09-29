@@ -10,7 +10,7 @@ import { motion } from "motion/react"
 import { cssEasing } from "@client/view/appearance/motion"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { shellSurfaceClassName } from "../../shell-surface"
-import { wellMaterial } from "../../start-menu/start-menu-panel"
+import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import { type ViewportControl as Viewport } from "../../../../viewport-offset"
 
 /** A standard Window as the map shows it: where it is on the plane. */
@@ -163,7 +163,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
         {/* Showing its icon alone, it names itself on hover and focus. */}
         <TaskbarTooltip label={centered ? "Map" : `Map, near ${place}`} iconOnly={centered || vertical}>
-            <Button ref={trigger} size="small" iconOnly={centered || vertical} color={centered ? undefined : "primary:soft"}
+            <Button ref={trigger} size="small" iconOnly={centered && !vertical} className={vertical ? "px-0" : undefined} color={centered ? undefined : "primary:soft"}
                 aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
                 onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
                 onPress={toggle}>
@@ -195,7 +195,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
         >
 
             {/* Always drawn, like the Start Menu, so it leaves as it came. */}
-            <Panel><ViewMap labelId={`${id}-label`} viewport={viewport} windows={windows} centered={centered} menus={surface.current} room={room} /></Panel>
+            <Panel shadow={floatingShadow}><ViewMap labelId={`${id}-label`} viewport={viewport} windows={windows} centered={centered} menus={surface.current} room={room} /></Panel>
 
         </motion.div>
 
@@ -359,7 +359,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
         <div className="relative">
 
         {/* The plane, a well recessed into the Panel like the Start Menu's; views and Windows sit on it, and the frame above them. */}
-        <Surface depth="recessed" color="background" material={wellMaterial} className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
+        <Surface depth="recessed" color="background" material="extended" className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
 
             {/* One clear cell per view, so the well shows as it does in the Start Menu. */}
             <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${columns}, ${cell.width}px)`, gridTemplateRows: `repeat(${rows}, ${cell.height}px)` }}>

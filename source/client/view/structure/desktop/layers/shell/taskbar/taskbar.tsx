@@ -12,6 +12,16 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
 
     const horizontal = taskbar.position === "top" || taskbar.position === "bottom"
     const orientation = horizontal ? "horizontal" : "vertical"
+    // Every section stands the same distance from the separators beside it, and across a vertical Taskbar its buttons share one width.
+    const room = spacing / 4
+    const section = (before: boolean, after: boolean): CSSProperties => ({
+        flexShrink: 0,
+        minWidth: 0,
+        alignItems: horizontal ? "center" : "stretch",
+        alignSelf: horizontal ? "center" : "stretch",
+        [horizontal ? "paddingInlineStart" : "paddingBlockStart"]: before ? room : 0,
+        [horizontal ? "paddingInlineEnd" : "paddingBlockEnd"]: after ? room : 0
+    })
     const transaction = useAppearance().transaction
     const reducedMotion = useReducedMotion()
     const [revealed, setRevealed] = useState(false)
@@ -78,17 +88,18 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
 
         >
 
-            <Toolbar.Group style={{ flexShrink: 0 }}>{leading}</Toolbar.Group>
+            <Toolbar.Group style={section(false, true)}>{leading}</Toolbar.Group>
 
             <Toolbar.Separator className="shadow-taskbar-separator" />
 
             {/* Where this Desktop looks, between what starts Programs and the Windows they open. */}
             {navigation && <>
-                <Toolbar.Group style={{ flexShrink: 0 }}>{navigation}</Toolbar.Group>
+                <Toolbar.Group style={section(true, true)}>{navigation}</Toolbar.Group>
                 <Toolbar.Separator className="shadow-taskbar-separator" />
             </>}
 
-            <Toolbar.Group style={{ flex: "1 1 0", alignSelf: "stretch", minWidth: 0, minHeight: 0, overflow: "hidden" }}>
+            {/* Clipped only along the Taskbar, and a little past its ends, so the items' shadows and focus show whole. */}
+            <Toolbar.Group style={{ ...section(true, true), flex: "1 1 0", alignSelf: "stretch", minHeight: 0, overflowClipMargin: room, ...(horizontal ? { overflowX: "clip" } : { overflowY: "clip" }) }}>
 
                 {children}
 
@@ -96,7 +107,7 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
 
             <Toolbar.Separator className="shadow-taskbar-separator" />
 
-            <Toolbar.Group style={{ flexShrink: 0 }}>{trailing}</Toolbar.Group>
+            <Toolbar.Group style={section(true, false)}>{trailing}</Toolbar.Group>
 
         </Surface>
 
@@ -109,7 +120,7 @@ interface TaskbarProps extends Omit<SurfaceProps<typeof Toolbar>, "as" | "childr
 
     leading: ReactNode
 
-    /** Where this Desktop looks on the plane of standard Windows, between the leading items and the Windows. */
+    /** Where this Desktop looks on the plane of standard Windows, a section of its own before the Windows. */
     navigation?: ReactNode
 
     trailing: ReactNode
