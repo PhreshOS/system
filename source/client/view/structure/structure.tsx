@@ -10,7 +10,7 @@ import usePromise from "@libs/react-promise"
 import { useDesktopPreferences } from "../appearance/desktop-preferences"
 import { useRememberSystemAppearance } from "../appearance/appearance"
 import Authentication from "./authentication/authentication"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useState } from "react"
 import Readiness, { useReadiness, useReady } from "@libs/readiness"
 import { type DesktopPreferencesUpdate } from "@phreshos/core"
 import { cssEasing } from "../appearance/motion"
@@ -136,7 +136,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady(connectionRequirement)
 
-    const { preferences, update } = useDesktopPreferences()
+    const { preferences, update, setShow } = useDesktopPreferences()
 
     const inbound = ReactTunnel.useFactory(linkManager.$inbound)
 
@@ -151,6 +151,12 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
     useEffect(function () {
         void linkManager.updateDesktopPreferences(preferences)
     }, [linkManager, preferences])
+
+    // A new Theme reaches the Programs within the Desktop's own change, so they change with it.
+    useLayoutEffect(function () {
+        setShow(next => linkManager.updateDesktopPreferences(next))
+        return () => setShow(null)
+    }, [linkManager, setShow])
 
     return <LinkManagerContext.Provider value={linkManager}>
 
