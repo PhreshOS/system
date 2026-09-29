@@ -97,6 +97,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
         size: presented.current.size,
         animation: geometryAnimation,
         immediate: reducedMotion,
+        // The Desktop moves its own Windows visibly only where the person sees both ends; a raw
+        // drawing moves the way its Program asked.
+        seenOnly: standard,
         minimumSize: presentationMinimum,
         onComplete: revision => onPresentationAnimationComplete?.("geometry", revision)
     })

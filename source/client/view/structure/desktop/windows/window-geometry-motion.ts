@@ -13,6 +13,8 @@ interface WindowGeometryMotionOptions {
     animation?: PresentationAnimation | null
     transaction?: PresentationTransaction | null
     immediate: boolean
+    /** Moves visibly only between two places the person can see; otherwise it is simply there. */
+    seenOnly?: boolean
     minimumSize?: WindowSurfaceSize
     onComplete?: (revision: number) => void
 }
@@ -24,7 +26,7 @@ interface WindowGeometryMotionOptions {
  * visible pixels, including during a pointer gesture, so releasing a drag
  * cannot hand the transform to another renderer before snapping begins.
  */
-export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, minimumSize, onComplete }: WindowGeometryMotionOptions) {
+export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, seenOnly = false, minimumSize, onComplete }: WindowGeometryMotionOptions) {
 
     const appearanceTransaction = useAppearance().transaction
     const frame = useRef<HTMLDivElement>(null)
@@ -43,9 +45,9 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const gestureRevision = useRef(0)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const values = useRef({ position, size, animation, transaction, immediate, minimumSize, onComplete })
+    const values = useRef({ position, size, animation, transaction, immediate, seenOnly, minimumSize, onComplete })
 
-    values.current = { position, size, animation, transaction, immediate, minimumSize, onComplete }
+    values.current = { position, size, animation, transaction, immediate, seenOnly, minimumSize, onComplete }
 
     function read(): WindowRegion {
 
@@ -116,6 +118,19 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         return values.current.minimumSize ? constrainWindowGeometry(region, surface, values.current.minimumSize) : region
     }
 
+    /** Whether the person can see where the box is now and where it is going: both touch the screen. */
+    function seenThroughout(region: WindowRegion) {
+
+        const parent = frame.current?.parentElement
+
+        if (!parent) return false
+
+        const surface = logicalSize(parent)
+        const seen = (shown: WindowRegion) => shown.x < surface.width && shown.x + shown.width > 0 && shown.y < surface.height && shown.y + shown.height > 0
+
+        return seen(read()) && seen(region)
+    }
+
     useLayoutEffect(function () {
 
         const region = resolve()
@@ -140,7 +155,9 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
                 ? null
                 : resolveWindowTransaction(transaction, appearanceTransaction)
 
-        if (!selected) {
+        // A motion shows where something went; from or to a place the person does not see, there
+        // is nothing to show, and a path across the screen would only distract.
+        if (!selected || (values.current.seenOnly && !seenThroughout(region))) {
             set(region)
             if (revision !== undefined) onComplete?.(revision)
             return
