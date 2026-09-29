@@ -695,6 +695,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 <WindowSurface
                     surface={surfaceDefinition}
                     active={active}
+                    floating
                     animation={surfaceAnimation ?? null}
                     onComplete={revision => onPresentationAnimationComplete?.("surface", revision)}
                 />

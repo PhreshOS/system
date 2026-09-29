@@ -6,10 +6,11 @@ import { type PresentationAnimation } from "@client/view/components/desktop-host
 import { type AppearanceColor, type PresentationSurface as WindowSurfaceDefinition } from "@phreshos/core"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
+import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import { useAppearance } from "@phreshos/react-ui"
 
 /** Paints the optional Desktop-owned backing surface for a supported presentation. */
-export default function WindowSurface({ surface, active = true, animation, onComplete }: WindowSurfaceProps) {
+export default function WindowSurface({ surface, active = true, floating = false, animation, onComplete }: WindowSurfaceProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -60,6 +61,7 @@ export default function WindowSurface({ surface, active = true, animation, onCom
             color={surfaceColor(retained.current)}
             material={surfaceMaterial(retained.current, active)}
             radius={windowSurfaceRadius(retained.current, appearance)}
+            shadow={floating ? floatingShadow : true}
             style={{ position: "absolute", inset: 0 }}
         />
     </motion.div>
@@ -71,6 +73,9 @@ interface WindowSurfaceProps {
 
     /** Whether this is the front window. Only the front window is frosted. */
     active?: boolean
+
+    /** Whether the window floats above the Desktop, as a standard window does, with a deeper shadow. */
+    floating?: boolean
 
     animation: PresentationAnimation | null
 
