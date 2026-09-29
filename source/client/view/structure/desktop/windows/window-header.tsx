@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { BeginWindowMoveGesture } from "@phreshos/core"
+import type { BeginPresentationMoveGesture } from "@phreshos/core"
 import { Window } from "@phreshos/react-ui"
 
 /** Connects Desktop Window behavior to React UI's shared header. */
@@ -23,7 +23,7 @@ interface WindowHeaderProps {
     active: boolean
     whole: boolean
     stopping: boolean
-    beginMoveGesture: BeginWindowMoveGesture
+    beginMoveGesture: BeginPresentationMoveGesture
     onMinimize?: () => void
     onMaximize?: () => void
     onClose?: () => void

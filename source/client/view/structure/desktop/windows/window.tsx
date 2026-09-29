@@ -3,11 +3,11 @@ import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type BeginWindowMoveGesture, type Position, type Size, type TaskbarPosition, type WindowPresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
+import { type BeginPresentationMoveGesture, type Position, type Size, type TaskbarPosition, type PresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
-import { type PresentationAnimation, type PresentationMoveGestureController, type PresentationMovePoint } from "@client/view/components/desktop-host/window-presentation"
-import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
+import { type PresentationAnimation, type DesktopMoveGestureController, type DesktopMovePoint } from "@client/view/components/desktop-host/presentation"
+import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
 import { motion } from "motion/react"
 import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance, Window as UIWindow } from "@phreshos/react-ui"
@@ -107,7 +107,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const [settlingGeometry, setSettlingGeometry] = useState<WindowRegion | null>(null)
     const [externalMoveActive, setExternalMoveActive] = useState(false)
     const externalMove = useRef<ExternalMove | null>(null)
-    const beginPointerGesture = useRef<(point: PresentationMovePoint) => ActivePointerGesture | null>(() => null)
+    const beginPointerGesture = useRef<(point: DesktopMovePoint) => ActivePointerGesture | null>(() => null)
     beginPointerGesture.current = point => {
         let active: ActivePointerGesture | null = null
         grab(point, null, gesture => { active = gesture })
@@ -120,6 +120,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         const representation: PresentationGeometryRepresentation = {
             read: geometryMotion.read,
+            watch: geometryMotion.watch,
             present: geometryMotion.present,
             begin: () => geometryMotion.beginGesture()?.region ?? null,
             finish: geometryMotion.finishGesture,
@@ -132,7 +133,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     }, [onPresentationRepresentation])
 
-    const moveGestureController = useRef<PresentationMoveGestureController | null>(null)
+    const moveGestureController = useRef<DesktopMoveGestureController | null>(null)
     if (!moveGestureController.current) {
         moveGestureController.current = {
             begin(origin, point) {
@@ -152,11 +153,11 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
     }
 
-    const beginWindowMoveGesture = useCallback<BeginWindowMoveGesture>(start => {
+    const beginWindowMoveGesture = useCallback<BeginPresentationMoveGesture>(start => {
         return moveGestureController.current!.begin(start.origin, start.point)
     }, [])
 
-    function finishExternalMove(point: PresentationMovePoint | null) {
+    function finishExternalMove(point: DesktopMovePoint | null) {
         const active = externalMove.current
         if (!active) return
         externalMove.current = null
@@ -287,13 +288,13 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
     }
 
-    function grab(event: ReactPointerEvent<HTMLElement> | PresentationMovePoint, edge: WindowEdge | null, receive?: (gesture: ActivePointerGesture) => void) {
+    function grab(event: ReactPointerEvent<HTMLElement> | DesktopMovePoint, edge: WindowEdge | null, receive?: (gesture: ActivePointerGesture) => void) {
 
         if (maximized && edge !== null) return
 
         const external = receive !== undefined
         const pointer = external
-            ? event as PresentationMovePoint
+            ? event as DesktopMovePoint
             : { x: (event as ReactPointerEvent<HTMLElement>).clientX, y: (event as ReactPointerEvent<HTMLElement>).clientY }
 
         // A cancelled pointerdown suppresses double-click synthesis, and
@@ -374,7 +375,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
         // Zones are where the pointer is — within 16px of an edge — and
         // they name shares of the surface, which each client resolves in
         // its own space.
-        function snapTerm(motion: PresentationMovePoint): Snap | null {
+        function snapTerm(motion: DesktopMovePoint): Snap | null {
 
             const pointerX = physicalToDesktopPixels(motion.x - bounds!.left, desktopScale)
 
@@ -398,7 +399,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             }
         }
 
-        function move(motion: PresentationMovePoint) {
+        function move(motion: DesktopMovePoint) {
 
             const physicalX = motion.x - start.pointerX
 
@@ -494,7 +495,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             renderGesture()
         }
 
-        function release(motion: PresentationMovePoint, committed: boolean) {
+        function release(motion: DesktopMovePoint, committed: boolean) {
 
             if (renderFrame) cancelAnimationFrame(renderFrame)
 
@@ -816,7 +817,7 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     onPresentationRepresentation?: (representation: PresentationGeometryRepresentation | null) => void
 
-    onPresentationMoveGesture?: (controller: PresentationMoveGestureController | null) => void
+    onPresentationMoveGesture?: (controller: DesktopMoveGestureController | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
     paintSurfaceSize?: WindowSurfaceSize
@@ -845,8 +846,8 @@ interface Gesture {
 }
 
 interface ActivePointerGesture {
-    update(point: PresentationMovePoint): void
-    end(point: PresentationMovePoint): void
+    update(point: DesktopMovePoint): void
+    end(point: DesktopMovePoint): void
     cancel(): void
 }
 

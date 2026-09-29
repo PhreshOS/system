@@ -3,7 +3,7 @@ import Process from "@client/core/link-manager/auth-manager/process-manager/proc
 import { type Layer, type Position, type Size, type Value, type WindowGeometry } from "@phreshos/core"
 import { useCallback, useLayoutEffect, useRef, useState } from "react"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import WindowPresentations, { type PresentedWindow } from "./window-presentations"
+import Presentations, { type PresentedWindow } from "./presentations"
 import { isDesktopReplacementLayer } from "@shared/window-layers"
 import { type SharedResizeWindow } from "./shared-resize"
 import { type WindowRegion } from "./window-geometry"
@@ -53,9 +53,9 @@ export default function useWindows(authManager: AuthManager) {
 
     const initialClients = initialIncarnations.current
 
-    const presentationController = useRef<WindowPresentations | null>(null)
+    const presentationController = useRef<Presentations | null>(null)
 
-    if (!presentationController.current) presentationController.current = new WindowPresentations(initialClients, process => peer.processes.get(process)?.client ?? null)
+    if (!presentationController.current) presentationController.current = new Presentations(initialClients, process => peer.processes.get(process)?.client ?? null)
 
     const presentation = presentationController.current
 

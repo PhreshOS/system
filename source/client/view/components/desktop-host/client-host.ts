@@ -7,7 +7,7 @@ import { type DesktopViewportHost } from "./host"
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import useViewportOffset from "@client/view/structure/desktop/viewport-offset"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
-import { type WindowPresentationHost } from "./window-presentation"
+import { type PresentationHost } from "./presentation"
 import messagepack from "@the-link/messagepack"
 
 /**
@@ -15,7 +15,7 @@ import messagepack from "@the-link/messagepack"
  * It owns frame messages and the measured desktop containing those frames;
  * neither fact participates in rendering.
  */
-export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, presentation: WindowPresentationHost) {
+export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, presentation: PresentationHost) {
 
     const windowSurfaceRef = useRef<HTMLDivElement>(null)
 

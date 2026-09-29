@@ -4,23 +4,23 @@ import type {
     Size,
     WindowGeometry,
     WindowLayer,
-    WindowPresentationGeometry,
-    WindowPresentationPosition,
-    WindowPresentationSize,
-    WindowPresentationSurface
+    PresentationGeometry,
+    PresentationPosition,
+    PresentationSize,
+    PresentationSurface
 } from "@phreshos/core"
 import type {
     PresentationAnimation,
-    PresentationMoveGestureController,
-    PresentationMovePoint,
+    DesktopMoveGestureController,
+    DesktopMovePoint,
     PresentationTransactionRequest,
-    WindowPresentationDrawing,
-    WindowPresentationHost
-} from "../desktop-host/window-presentation"
+    PresentationState,
+    PresentationHost
+} from "../desktop-host/presentation"
 import { resolveWindowGeometry, type WindowRegion } from "./window-geometry"
-import { requireRawWindowPresentation, requireWindowMoveGesture } from "@shared/window-layers"
+import { requireRawPresentation, requirePresentationMoveGesture } from "@shared/window-layers"
 
-export interface WindowPresentationEntry {
+export interface PresentationEntry {
     identity: string
     client: ClientState
 }
@@ -29,7 +29,7 @@ export interface WindowPresentationEntry {
 export interface PresentedWindow {
     title: string
     header: boolean
-    surface: WindowPresentationSurface
+    surface: PresentationSurface
     position: Position
     size: Size
     minimized: boolean
@@ -54,28 +54,29 @@ export interface AnticipatedWindow {
 }
 
 /** Owns only the local representations of one Desktop. */
-export default class WindowPresentations implements WindowPresentationHost {
+export default class Presentations implements PresentationHost {
     public windows: ReadonlyMap<string, PresentedWindow>
 
     private readonly live = new Map<string, string>()
     private readonly waiting = new Map<string, WaitingAnimation>()
     private readonly representations = new Map<string, PresentationGeometryRepresentation>()
-    private readonly moveGestureControllers = new Map<string, PresentationMoveGestureController>()
+    private readonly moveGestureControllers = new Map<string, DesktopMoveGestureController>()
     private readonly moveGestures = new Map<string, ActiveMoveGesture>()
     private readonly anticipated = new Map<string, { change: AnticipatedWindow, pending: number }>()
     private readonly observers = new Set<() => void>()
+    private readonly watching = new Map<string, () => void>()
     private fronts = 0
     private revision = 0
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
 
-    public constructor(initial: ReadonlyMap<string, WindowPresentationEntry>, private readonly client: (process: string) => ClientState | null) {
+    public constructor(initial: ReadonlyMap<string, PresentationEntry>, private readonly client: (process: string) => ClientState | null) {
         this.windows = new Map()
         this.reconcile(initial)
     }
 
     public listen(changed: (windows: ReadonlyMap<string, PresentedWindow>) => void) { this.changed = changed }
 
-    public reconcile(current: ReadonlyMap<string, WindowPresentationEntry>) {
+    public reconcile(current: ReadonlyMap<string, PresentationEntry>) {
         const previousLive = new Map(this.live)
         this.live.clear()
         const next = new Map(this.windows)
@@ -83,7 +84,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         for (const [process, identity] of previousLive) {
             if (current.get(process)?.identity === identity) continue
             next.delete(identity)
-            this.release(identity, "The Window presentation was removed")
+            this.release(identity, "The presentation was removed")
         }
 
         for (const [process, { identity, client }] of current) {
@@ -100,7 +101,7 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (!this.windows.has(identity)) return
         const next = new Map(this.windows)
         next.delete(identity)
-        this.release(identity, "The Window presentation was removed")
+        this.release(identity, "The presentation was removed")
         this.publish(next)
     }
 
@@ -139,18 +140,12 @@ export default class WindowPresentations implements WindowPresentationHost {
         return () => { this.observers.delete(listener) }
     }
 
-    /** Whether a Client's drawing has arrived where it is going, with no motion still carrying it. */
-    public settled(process: string) {
-        const { state } = this.existing(process)
-        return !state.geometryAnimation && !state.surfaceAnimation && !state.minimizeAnimation
-    }
-
     /**
      * How a Client is actually drawn: its frame, in pixels, counted from the center of the Desktop.
      * The Window's box is read where the Desktop draws it, and the frame's place inside the box from
      * the layout, so a scale the box is entering with does not change what is read.
      */
-    public drawing(process: string, frame: HTMLIFrameElement): WindowPresentationDrawing {
+    public drawing(process: string, frame: HTMLIFrameElement): PresentationState {
         const { identity, state } = this.existing(process)
         const surface = frame.closest<HTMLElement>("[data-desktop-layers]")
         const width = surface?.offsetWidth ?? 0
@@ -170,12 +165,16 @@ export default class WindowPresentations implements WindowPresentationHost {
     public readonly represent = (process: string, representation: PresentationGeometryRepresentation | null) => {
         const identity = this.live.get(process)
         if (!identity) return
-        this.representations.delete(identity)
-        if (representation) this.representations.set(identity, representation)
+        this.unrepresent(identity)
+        if (representation) {
+            this.representations.set(identity, representation)
+            // A drawing moves with its box at every step, so its Client hears where it is as it goes.
+            this.watching.set(identity, representation.watch(() => this.notify()))
+        }
         this.publish(new Map(this.windows))
     }
 
-    public readonly registerMoveGesture = (process: string, controller: PresentationMoveGestureController | null) => {
+    public readonly registerMoveGesture = (process: string, controller: DesktopMoveGestureController | null) => {
         const identity = this.live.get(process)
         if (!identity) return
         if (this.moveGestureControllers.get(identity) === controller) return
@@ -184,9 +183,9 @@ export default class WindowPresentations implements WindowPresentationHost {
         else this.moveGestureControllers.delete(identity)
     }
 
-    public beginMoveGesture(process: string, gesture: string, origin: PresentationMovePoint, point: PresentationMovePoint) {
+    public beginMoveGesture(process: string, gesture: string, origin: DesktopMovePoint, point: DesktopMovePoint) {
         const { identity, state } = this.existing(process)
-        requireWindowMoveGesture(state.layer)
+        requirePresentationMoveGesture(state.layer)
         if ([...this.moveGestures.values()].some(active => active.identity === identity)) throw new Error("This Window already has an active move gesture")
         const controller = this.moveGestureControllers.get(identity)
         if (!controller) throw new Error("This Window cannot currently begin a move gesture")
@@ -249,22 +248,22 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (identity) this.representations.get(identity)?.cancel()
     }
 
-    public move(process: string, position: WindowPresentationPosition, transaction?: PresentationTransactionRequest) {
+    public move(process: string, position: PresentationPosition, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.raw(process)
         return this.changeGeometry(identity, { ...position, ...state.size }, transaction)
     }
 
-    public resize(process: string, size: WindowPresentationSize, transaction?: PresentationTransactionRequest) {
+    public resize(process: string, size: PresentationSize, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.raw(process)
         return this.changeGeometry(identity, { ...state.position, ...size }, transaction)
     }
 
-    public setGeometry(process: string, geometry: WindowPresentationGeometry, transaction?: PresentationTransactionRequest) {
+    public setGeometry(process: string, geometry: PresentationGeometry, transaction?: PresentationTransactionRequest) {
         const { identity } = this.raw(process)
         return this.changeGeometry(identity, geometry, transaction)
     }
 
-    public setSurface(process: string, surface: WindowPresentationSurface, transaction?: PresentationTransactionRequest) {
+    public setSurface(process: string, surface: PresentationSurface, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.raw(process)
         if (JSON.stringify(state.surface) === JSON.stringify(surface)) return Promise.resolve()
         this.cancel(identity, "surface")
@@ -323,20 +322,20 @@ export default class WindowPresentations implements WindowPresentationHost {
             return
         }
 
-        this.releaseTransient(identity, "The Window presentation was replaced")
+        this.releaseTransient(identity, "The presentation was replaced")
         this.replace(identity, initialPresentationState(client))
     }
 
     private raw(process: string) {
         const found = this.existing(process)
-        requireRawWindowPresentation(found.state.layer)
+        requireRawPresentation(found.state.layer)
         return found
     }
 
     private existing(process: string) {
         const identity = this.live.get(process)
         const state = identity ? this.windows.get(identity) : null
-        if (!identity || !state) throw new Error("This Client has no Window presentation")
+        if (!identity || !state) throw new Error("This Client has no presentation")
         return { identity, state }
     }
 
@@ -363,7 +362,7 @@ export default class WindowPresentations implements WindowPresentationHost {
 
     private changeGeometry(identity: string, value: WindowGeometry, transaction?: PresentationTransactionRequest) {
         const state = this.windows.get(identity)
-        if (!state) throw new Error("This Client has no Window presentation")
+        if (!state) throw new Error("This Client has no presentation")
         const position = { x: value.x, y: value.y }
         const size = { width: value.width, height: value.height }
         if (JSON.stringify([state.position, state.size]) === JSON.stringify([position, size])) return Promise.resolve()
@@ -381,10 +380,20 @@ export default class WindowPresentations implements WindowPresentationHost {
     private publish(next: ReadonlyMap<string, PresentedWindow>) {
         this.windows = next
         this.changed(next)
+        this.notify()
+    }
+
+    private notify() {
         for (const observer of this.observers) observer()
     }
 
-    private cancel(identity: string, kind: AnimationKind, reason = "The Window presentation transaction was interrupted") {
+    private unrepresent(identity: string) {
+        this.watching.get(identity)?.()
+        this.watching.delete(identity)
+        this.representations.delete(identity)
+    }
+
+    private cancel(identity: string, kind: AnimationKind, reason = "The presentation transaction was interrupted") {
         const key = animationKey(identity, kind)
         const waiting = this.waiting.get(key)
         if (!waiting) return
@@ -409,14 +418,14 @@ export default class WindowPresentations implements WindowPresentationHost {
         this.releaseTransient(identity, reason)
         // The geometry representation belongs to the mounted Desktop Window,
         // not to an iframe document that may be replaced inside it.
-        this.representations.delete(identity)
+        this.unrepresent(identity)
         this.moveGestureControllers.delete(identity)
     }
 }
 
 interface ActiveMoveGesture {
     identity: string
-    movement: ReturnType<PresentationMoveGestureController["begin"]>
+    movement: ReturnType<DesktopMoveGestureController["begin"]>
 }
 
 type AnimationKind = "geometry" | "surface" | "minimize"
@@ -520,6 +529,7 @@ function followStandardWindow(current: PresentedWindow, client: ClientState, rev
 
 export interface PresentationGeometryRepresentation {
     read: () => WindowRegion
+    watch: (listener: () => void) => () => void
     present: (geometry: WindowRegion) => void
     begin: () => WindowRegion | null
     finish: () => void

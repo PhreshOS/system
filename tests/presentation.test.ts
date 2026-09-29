@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
-import { presentationTransaction } from "@client/view/components/desktop-host/window-presentation"
-import WindowPresentations, { type WindowPresentationEntry } from "@client/view/components/window-manager/window-presentations"
+import { presentationTransaction } from "@client/view/components/desktop-host/presentation"
+import Presentations, { type PresentationEntry } from "@client/view/components/window-manager/presentations"
 import type { WindowLayer } from "@phreshos/core"
 import { test } from "vitest"
 
@@ -18,8 +18,8 @@ test("presentation transaction selection has no boolean compatibility values", (
 test("each Desktop owns an independent raw presentation initialized at zero", async () => {
   const overlay = client("over")
   const entries = entry("overlay", overlay)
-  const first = new WindowPresentations(entries, () => overlay as never)
-  const second = new WindowPresentations(entries, () => overlay as never)
+  const first = new Presentations(entries, () => overlay as never)
+  const second = new Presentations(entries, () => overlay as never)
 
   assert.deepEqual(first.projection("overlay").position, { x: 0, y: 0 })
   assert.deepEqual(first.projection("overlay").size, { width: 0, height: 0 })
@@ -44,7 +44,7 @@ test("each Desktop owns an independent raw presentation initialized at zero", as
 
 test("transactionAndWait resolves only after the matching local animation", async () => {
   const overlay = client("over")
-  const presentations = new WindowPresentations(entry("overlay", overlay), () => overlay as never)
+  const presentations = new Presentations(entry("overlay", overlay), () => overlay as never)
   const request = { transaction: { duration: 200, easing: "ease-out" } as const, wait: true }
 
   const moving = presentations.move("overlay", { x: 30, y: 40 }, request)
@@ -67,7 +67,7 @@ test("transactionAndWait resolves only after the matching local animation", asyn
 test("a standard Window follows authoritative state but accepts only move gestures", async () => {
   const ordinary = client("window")
   const entries = entry("ordinary", ordinary)
-  const presentations = new WindowPresentations(entries, () => ordinary as never)
+  const presentations = new Presentations(entries, () => ordinary as never)
 
   ordinary.window.position = { x: 80, y: 90 }
   ordinary.window.size = { width: 500, height: 350 }
@@ -132,11 +132,12 @@ test("a Client boundary initializes each new document exactly once", async () =>
 test("a new Client document preserves its mounted Desktop geometry representation", () => {
   const ordinary = client("window")
   const entries = entry("ordinary", ordinary)
-  const presentations = new WindowPresentations(entries, () => ordinary as never)
+  const presentations = new Presentations(entries, () => ordinary as never)
   const geometry = { x: 20, y: 30, width: 400, height: 300 }
 
   presentations.represent("ordinary", {
     read: () => geometry,
+    watch: () => () => undefined,
     present() {},
     begin: () => geometry,
     finish() {},
@@ -155,7 +156,7 @@ test("a new Client document preserves its mounted Desktop geometry representatio
 test("a standard Window presentation survives its iframe document load", () => {
   const ordinary = client("window")
   const entries = entry("ordinary", ordinary)
-  const presentations = new WindowPresentations(entries, () => ordinary as never)
+  const presentations = new Presentations(entries, () => ordinary as never)
 
   ordinary.window.position = { x: 80, y: 90 }
   ordinary.window.maximized = true
@@ -170,7 +171,7 @@ test("a standard Window presentation survives its iframe document load", () => {
 })
 
 function entry(process: string, selected: ReturnType<typeof client>) {
-  return new Map([[process, { identity: `${process}:0`, client: selected }]]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
+  return new Map([[process, { identity: `${process}:0`, client: selected }]]) as unknown as ReadonlyMap<string, PresentationEntry>
 }
 
 function client(layer: WindowLayer) {
@@ -187,3 +188,27 @@ function client(layer: WindowLayer) {
     }
   }
 }
+
+test("a drawing's box is heard at every step it moves, not only when it settles", () => {
+  const ordinary = client("window")
+  const presentations = new Presentations(entry("ordinary", ordinary), () => ordinary as never)
+  let step: () => void = () => undefined
+  let stopped = false
+  presentations.represent("ordinary", {
+    read: () => ({ x: 20, y: 30, width: 400, height: 300 }),
+    watch: listener => { step = listener; return () => { stopped = true } },
+    present() {},
+    begin: () => null,
+    finish() {},
+    cancel() {}
+  })
+  let heard = 0
+  presentations.observe(() => { heard++ })
+
+  step()
+  step()
+  assert.equal(heard, 2)
+
+  presentations.reconcile(new Map())
+  assert.equal(stopped, true)
+})

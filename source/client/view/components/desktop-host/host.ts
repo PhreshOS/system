@@ -31,8 +31,8 @@ import {
     presentationSize,
     presentationTransaction,
     type PresentationFrame,
-    type WindowPresentationHost
-} from "./window-presentation"
+    type PresentationHost
+} from "./presentation"
 import SystemAccess from "./system-access"
 import { allowsSynchronizedPermission } from "@shared/permission-state"
 
@@ -51,7 +51,7 @@ export interface DesktopViewportHost {
     move(offset: DesktopOffset): void
 }
 
-export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, frame: PresentationFrame, presentation: WindowPresentationHost) {
+export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, frame: PresentationFrame, presentation: PresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -163,7 +163,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         const found = holdProcess(value)
 
-        if (found !== process()) throw new Error("Window presentation operations belong to the current Client Context")
+        if (found !== process()) throw new Error("Presentation operations belong to the current Client Context")
 
         clientOf(found)
 
@@ -904,12 +904,12 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return [pane]
         }
 
-        if (word === "windowPresentation") {
+        if (word === "presentation") {
             const target = presentationProcess(args[0])
             return [presentation.drawing(target.identity, frame.element)]
         }
 
-        if (word === "windowPresentationMoveGestureBegin") {
+        if (word === "presentationMoveGestureBegin") {
             const target = presentationProcess(args[0])
             const gesture = gestureIdentity(args[1])
             const start = presentationMoveGestureStart(args[2])
@@ -922,14 +922,14 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "windowPresentationMoveGestureWait") {
+        if (word === "presentationMoveGestureWait") {
             const target = presentationProcess(args[0])
             const gesture = gestureIdentity(args[1])
             await presentation.waitMoveGesture(target.identity, gesture)
             return []
         }
 
-        if (word === "windowPresentationMoveGestureCancel") {
+        if (word === "presentationMoveGestureCancel") {
             const target = presentationProcess(args[0])
             const gesture = gestureIdentity(args[1])
             presentation.cancelMoveGesture(target.identity, gesture)
@@ -938,7 +938,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         const selectedTransaction = () => presentationTransaction(args[2])
 
-        if (word === "windowPresentationMove") {
+        if (word === "presentationMove") {
 
             const target = presentationProcess(args[0])
             await presentation.move(target.identity, presentationPosition(args[1]), selectedTransaction())
@@ -946,7 +946,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "windowPresentationResize") {
+        if (word === "presentationResize") {
 
             const target = presentationProcess(args[0])
             await presentation.resize(target.identity, presentationSize(args[1]), selectedTransaction())
@@ -954,7 +954,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "windowPresentationGeometry") {
+        if (word === "presentationGeometry") {
 
             const target = presentationProcess(args[0])
             await presentation.setGeometry(target.identity, presentationGeometry(args[1]), selectedTransaction())
@@ -962,20 +962,20 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "windowPresentationSurface") {
+        if (word === "presentationSurface") {
             const target = presentationProcess(args[0])
             await presentation.setSurface(target.identity, presentationSurface(args[1]), selectedTransaction())
             return []
         }
 
-        if (word === "windowPresentationInteractive") {
+        if (word === "presentationInteractive") {
             const target = presentationProcess(args[0])
-            if (typeof args[1] !== "boolean") throw new Error("Window presentation interaction must be true or false")
+            if (typeof args[1] !== "boolean") throw new Error("Presentation interaction must be true or false")
             presentation.setInteractive(target.identity, args[1])
             return []
         }
 
-        if (word === "windowPresentationRaise") {
+        if (word === "presentationRaise") {
 
             const target = presentationProcess(args[0])
             presentation.raise(target.identity)

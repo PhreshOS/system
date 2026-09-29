@@ -4,8 +4,8 @@ import host, { TransferredAnswer, type DesktopViewportHost } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
-import { isServiceAddress, parseProgramInstallOptions, type ServiceAddress, type ShellOptions, type WindowMovePoint } from "@phreshos/core"
-import { type PresentationFrame, type PresentationMovePoint, type WindowPresentationHost } from "./window-presentation"
+import { isServiceAddress, parseProgramInstallOptions, type ServiceAddress, type ShellOptions, type PresentationMovePoint } from "@phreshos/core"
+import { type PresentationFrame, type DesktopMovePoint, type PresentationHost } from "./presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 import SystemAccess from "./system-access"
@@ -23,7 +23,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly traffic: ClientTraffic
 
-    private readonly presentation: WindowPresentationHost
+    private readonly presentation: PresentationHost
 
     private readonly frame: PresentationFrame
 
@@ -77,7 +77,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, traffic: ClientTraffic, presentation: WindowPresentationHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, traffic: ClientTraffic, presentation: PresentationHost) {
 
         super()
 
@@ -1057,9 +1057,9 @@ export default class ClientProcessBoundary extends TheLink {
     }
 
     /**
-     * Tells the Client each change in how it is drawn: whatever this Desktop draws changes, or the
-     * frame or the Desktop changes size. A change is told once the drawing has arrived, not along
-     * the motion that carries it there.
+     * Tells the Client each change in how it is drawn, as it happens: whatever this Desktop draws
+     * changes, its box moves a step, or the frame or the Desktop changes size. Changes within one
+     * frame are told once, as they stand when it is drawn.
      */
     private followDrawing() {
 
@@ -1076,20 +1076,17 @@ export default class ClientProcessBoundary extends TheLink {
 
             if (scheduled) return
 
-            // The layout of the change is read after it is drawn.
             scheduled = requestAnimationFrame(() => {
 
                 scheduled = 0
 
                 const drawing = read()
 
-                if (!drawing || !this.presentation.settled(this.pane)) return
-
                 const before = told
 
                 told = drawing
 
-                if (!before) return
+                if (!drawing || !before) return
 
                 if (drawing.position.x !== before.position.x || drawing.position.y !== before.position.y) this.deliver("host-presentation", "move", drawing.position).catch(() => undefined)
 
@@ -1173,7 +1170,7 @@ export default class ClientProcessBoundary extends TheLink {
 
 }
 
-export function frameMovePoint(frame: HTMLIFrameElement, point: PresentationMovePoint): PresentationMovePoint {
+export function frameMovePoint(frame: HTMLIFrameElement, point: DesktopMovePoint): DesktopMovePoint {
     const bounds = frame.getBoundingClientRect()
     // Frame-local CSS pixels must enter the same physical viewport coordinate
     // space as pointer events captured directly by the Desktop.
@@ -1185,7 +1182,7 @@ export function frameMovePoint(frame: HTMLIFrameElement, point: PresentationMove
 export class ClientFrame implements PresentationFrame {
     public constructor(public readonly element: HTMLIFrameElement) {}
 
-    public point(point: WindowMovePoint) {
+    public point(point: PresentationMovePoint) {
         return frameMovePoint(this.element, point)
     }
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import type { WindowLayer } from "@phreshos/core"
-import WindowPresentations, { type WindowPresentationEntry } from "@client/view/components/window-manager/window-presentations"
+import Presentations, { type PresentationEntry } from "@client/view/components/window-manager/presentations"
 
 function fixture(layer: WindowLayer) {
   const client = { window: {
@@ -13,8 +13,8 @@ function fixture(layer: WindowLayer) {
     maximized: false,
     depth: 5
   } }
-  const entries = new Map([["own", { identity: "own:0", client }]]) as unknown as ReadonlyMap<string, WindowPresentationEntry>
-  return { client, entries, presentations: new WindowPresentations(entries, () => client as never) }
+  const entries = new Map([["own", { identity: "own:0", client }]]) as unknown as ReadonlyMap<string, PresentationEntry>
+  return { client, entries, presentations: new Presentations(entries, () => client as never) }
 }
 
 test("wallpaper is fixed and rejects both raw operations and move gestures", () => {

@@ -1,7 +1,7 @@
 import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type PresentationAnimation } from "@client/view/components/desktop-host/window-presentation"
+import { type PresentationAnimation } from "@client/view/components/desktop-host/presentation"
 import { resolveWindowTransaction } from "@client/view/appearance/motion"
-import { type AppearanceTransaction, type Position, type Size, type WindowPresentationTransaction } from "@phreshos/core"
+import { type AppearanceTransaction, type Position, type Size, type PresentationTransaction } from "@phreshos/core"
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
@@ -11,7 +11,7 @@ interface WindowGeometryMotionOptions {
     position: Position
     size: Size
     animation?: PresentationAnimation | null
-    transaction?: WindowPresentationTransaction | null
+    transaction?: PresentationTransaction | null
     immediate: boolean
     minimumSize?: WindowSurfaceSize
     onComplete?: (revision: number) => void
@@ -50,6 +50,18 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     function read(): WindowRegion {
 
         return { x: x.get(), y: y.get(), width: width.get(), height: height.get() }
+    }
+
+    /** Hears every step of the box's position: at rest, along a motion, and with the pointer. */
+    function watch(listener: () => void) {
+
+        const stopX = x.on("change", listener)
+        const stopY = y.on("change", listener)
+
+        return () => {
+            stopX()
+            stopY()
+        }
     }
 
     function stop() {
@@ -273,6 +285,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         frame,
         style: { x, y, width: layoutWidth, height: layoutHeight, scaleX, scaleY, transformOrigin } satisfies MotionStyle,
         read,
+        watch,
         present,
         beginGesture,
         updateGesture,

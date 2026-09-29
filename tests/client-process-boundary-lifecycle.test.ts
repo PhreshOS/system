@@ -3,7 +3,7 @@ import messagepack from "@the-link/messagepack"
 import ClientProcessBoundary, { ClientFrame, frameMovePoint } from "@client/view/components/desktop-host/client-process-boundary"
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type ClientTraffic from "@client/view/components/desktop-host/client-traffic"
-import type { WindowPresentationHost } from "@client/view/components/desktop-host/window-presentation"
+import type { PresentationHost } from "@client/view/components/desktop-host/presentation"
 import { test, vi } from "vitest"
 
 test("frame pointer positions map into the Desktop's physical viewport space", () => {
@@ -45,7 +45,7 @@ test("a Client question expectation survives initial iframe ownership", async ()
         authManager,
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as ClientTraffic,
-        { begin() {} } as unknown as WindowPresentationHost
+        { begin() {} } as unknown as PresentationHost
     )
     const question = "client:process:question"
 
@@ -83,7 +83,7 @@ test("a later Client request cannot overtake its Service subscription registrati
         authManager,
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as ClientTraffic,
-        { begin() {} } as unknown as WindowPresentationHost
+        { begin() {} } as unknown as PresentationHost
     )
     const address = { program: "flambo", process: "browser-server", endpoint: "server" } as const
 
@@ -127,7 +127,7 @@ test("a registered Service event is delivered without a second permission round-
         authManager,
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         traffic,
-        { begin() {} } as unknown as WindowPresentationHost
+        { begin() {} } as unknown as PresentationHost
     )
 
     await boundary.own("document")

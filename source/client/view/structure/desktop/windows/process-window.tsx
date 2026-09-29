@@ -1,9 +1,9 @@
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type PaintMargins, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
-import { type PresentationAnimation, type PresentationMoveGestureController } from "@client/view/components/desktop-host/window-presentation"
-import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/window-presentations"
-import { type Position, type Size, type TaskbarPosition, type Theme, type WindowPresentationSurface, type WindowLayer } from "@phreshos/core"
+import { type PresentationAnimation, type DesktopMoveGestureController } from "@client/view/components/desktop-host/presentation"
+import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
+import { type Position, type Size, type TaskbarPosition, type Theme, type PresentationSurface, type WindowLayer } from "@phreshos/core"
 import Spinner from "@client/view/components/spinner"
 import Window from "./window"
 import useDragHold from "../drag-hold"
@@ -49,7 +49,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const represent = useCallback((representation: PresentationGeometryRepresentation | null) => onPresentationRepresentation(record.identity, representation), [onPresentationRepresentation, record])
 
-    const moveGesture = useCallback((controller: PresentationMoveGestureController | null) => onPresentationMoveGesture(record.identity, controller), [onPresentationMoveGesture, record])
+    const moveGesture = useCallback((controller: DesktopMoveGestureController | null) => onPresentationMoveGesture(record.identity, controller), [onPresentationMoveGesture, record])
 
     const frameSource = programFrameSource(assetId, door)
 
@@ -240,7 +240,7 @@ interface ProcessWindowProps {
 
     header: boolean
 
-    surface: WindowPresentationSurface
+    surface: PresentationSurface
 
     layer: WindowLayer
 
@@ -263,7 +263,7 @@ interface ProcessWindowProps {
 
     onPresentationRepresentation: (identity: string, representation: PresentationGeometryRepresentation | null) => void
 
-    onPresentationMoveGesture: (identity: string, controller: PresentationMoveGestureController | null) => void
+    onPresentationMoveGesture: (identity: string, controller: DesktopMoveGestureController | null) => void
 
     paintSurfaceSize?: WindowSurfaceSize
 
