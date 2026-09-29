@@ -21,7 +21,7 @@ export default function ({ children }: PropsWithChildren) {
 function AppearanceRoot({ children }: PropsWithChildren) {
     const { preferences } = useDesktopPreferences()
     const [appearance, setAppearance] = useState(() => resolveStoredAppearance(localStorage.getItem(appearanceKey)))
-    const [scaleContainer, setScaleContainer] = useState<HTMLDivElement | null>(null)
+    const [overlays, setOverlays] = useState<HTMLDivElement | null>(null)
     const remember = useCallback(function (value: Appearance) {
         setAppearance(value)
         localStorage.setItem(appearanceKey, JSON.stringify(value))
@@ -34,19 +34,23 @@ function AppearanceRoot({ children }: PropsWithChildren) {
 
         <UIProvider appearance={appearance} preferences={preferences}>
 
-            <DesktopScaleProvider scale={preferences.scale} container={scaleContainer}>
+            <DesktopScaleProvider scale={preferences.scale} container={overlays}>
 
                 <div className="relative isolate h-dvh overflow-hidden" style={{ backgroundColor: background }}>
 
                     <ReducedMotion reduced={!preferences.animations}>
 
                         <div
-                            ref={setScaleContainer}
                             className="absolute top-0 left-0 isolate grid font-roboto"
                             style={{ width: "100%", height: "100%", zoom: preferences.scale }}
                         >
 
                             {children}
+
+                            {/* Desktop overlays open here: inside the scale, so they share it, and outside the
+                                layout, so opening one never takes room from the Desktop. It has no size and
+                                catches nothing; what opens in it floats from its corner. */}
+                            <div ref={setOverlays} className="absolute top-0 left-0 size-0 overflow-visible" />
 
                         </div>
 
