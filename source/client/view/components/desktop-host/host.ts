@@ -327,14 +327,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         if (word === "desktopPreferences") return [authManager.linkManager.desktopPreferences.value]
 
-        // This pane shows the preferences it was last told of.
-        if (word === "desktop-preferences-shown") {
-
-            authManager.linkManager.desktopPreferences.shown(pane)
-
-            return []
-        }
-
         if (word === "updateDesktopPreferences") {
 
             await access.require("desktopPreferences", [])

@@ -36,7 +36,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
     const pending = useRef<PendingCommit | null>(null)
     const revision = useRef(0)
     const transaction = useRef<AppearanceTransaction>(defaultAppearance.transaction)
-    const show = useRef<Show | null>(null)
 
     const update = useCallback(function (change: DesktopPreferencesUpdate) {
         if (change.theme !== undefined) {
@@ -60,10 +59,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
         transaction.current = value
     }, [])
 
-    const setShow = useCallback(function (value: Show | null) {
-        show.current = value
-    }, [])
-
     useEffect(() => {
         if (samePreferences(current.current, desired)) return
 
@@ -85,9 +80,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
                 pending.current = { preferences: desired, resolve }
                 setPreferences(desired)
             })
-
-            // Programs show the new Theme in their own frames; the new view is taken once they do.
-            if (revision.current === change) await show.current?.(desired)
         })
     }, [desired])
 
@@ -113,7 +105,7 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
         pending.current = null
     }, [])
 
-    const owner = useMemo(() => ({ preferences, update, setTransaction, setShow }), [preferences, update, setTransaction, setShow])
+    const owner = useMemo(() => ({ preferences, update, setTransaction }), [preferences, update, setTransaction])
 
     return <DesktopPreferencesContext.Provider value={owner}>{children}</DesktopPreferencesContext.Provider>
 }
@@ -168,14 +160,10 @@ function useMediaPreference(query: string) {
     )
 }
 
-/** Tells the Programs of new preferences, settling once they show them. */
-type Show = (preferences: DesktopPreferences) => Promise<void>
-
 interface DesktopPreferencesOwner {
     readonly preferences: DesktopPreferences
     readonly update: (change: DesktopPreferencesUpdate) => void
     readonly setTransaction: (transaction: AppearanceTransaction) => void
-    readonly setShow: (show: Show | null) => void
 }
 
 interface PendingCommit {

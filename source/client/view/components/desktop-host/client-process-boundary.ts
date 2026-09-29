@@ -534,9 +534,6 @@ export default class ClientProcessBoundary extends TheLink {
 
                 if (!this.stopDesktopPreferences) this.stopDesktopPreferences = this.authManager.linkManager.desktopPreferences.tunnel.subscribe("change", (preferences: unknown) => {
 
-                    // The change counts as shown once this Program says it shows it too.
-                    this.authManager.linkManager.desktopPreferences.telling(this.pane)
-
                     this.deliver("host-desktop-preferences", "change", preferences).catch(() => undefined)
                 })
 
