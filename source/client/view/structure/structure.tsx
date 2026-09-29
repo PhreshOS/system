@@ -136,7 +136,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady(connectionRequirement)
 
-    const { announced, update } = useDesktopPreferences()
+    const { preferences, update } = useDesktopPreferences()
 
     const inbound = ReactTunnel.useFactory(linkManager.$inbound)
 
@@ -149,8 +149,8 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
     useRememberSystemAppearance(appearance)
 
     useEffect(function () {
-        void linkManager.updateDesktopPreferences(announced)
-    }, [linkManager, announced])
+        void linkManager.updateDesktopPreferences(preferences)
+    }, [linkManager, preferences])
 
     return <LinkManagerContext.Provider value={linkManager}>
 

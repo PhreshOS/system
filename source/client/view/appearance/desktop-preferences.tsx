@@ -32,8 +32,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
     const desiredScale = resolveStoredDesktopScale(storedScale.value)
     const desired = useMemo<DesktopPreferences>(() => ({ theme: desiredTheme, animations: desiredAnimations, scale: desiredScale }), [desiredAnimations, desiredScale, desiredTheme])
     const [preferences, setPreferences] = useState(desired)
-    // What the Programs are told: a new Theme once the Desktop starts crossing to it, so they cross with it.
-    const [announced, setAnnounced] = useState(desired)
     const current = useRef(preferences)
     const pending = useRef<PendingCommit | null>(null)
     const revision = useRef(0)
@@ -72,7 +70,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
 
         if (!themeChanged) {
             setPreferences(desired)
-            setAnnounced(desired)
             return
         }
 
@@ -83,8 +80,6 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
                 pending.current = { preferences: desired, resolve }
                 setPreferences(desired)
             })
-        }, () => {
-            if (revision.current === change) setAnnounced(desired)
         })
     }, [desired])
 
@@ -110,7 +105,7 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
         pending.current = null
     }, [])
 
-    const owner = useMemo(() => ({ preferences, announced, update, setTransaction }), [preferences, announced, update, setTransaction])
+    const owner = useMemo(() => ({ preferences, update, setTransaction }), [preferences, update, setTransaction])
 
     return <DesktopPreferencesContext.Provider value={owner}>{children}</DesktopPreferencesContext.Provider>
 }
@@ -167,8 +162,6 @@ function useMediaPreference(query: string) {
 
 interface DesktopPreferencesOwner {
     readonly preferences: DesktopPreferences
-    /** The preferences the Programs are told of, which follow a new Theme once the Desktop starts showing it. */
-    readonly announced: DesktopPreferences
     readonly update: (change: DesktopPreferencesUpdate) => void
     readonly setTransaction: (transaction: AppearanceTransaction) => void
 }
