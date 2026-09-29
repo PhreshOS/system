@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import messagepack from "@the-link/messagepack"
-import ClientProcessBoundary, { FrameMoveCoordinates, frameMovePoint } from "@client/view/components/desktop-host/client-process-boundary"
+import ClientProcessBoundary, { ClientFrame, frameMovePoint } from "@client/view/components/desktop-host/client-process-boundary"
 import type AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import type ClientTraffic from "@client/view/components/desktop-host/client-traffic"
 import type { WindowPresentationHost } from "@client/view/components/desktop-host/window-presentation"
@@ -16,10 +16,10 @@ test("frame pointer positions map into the Desktop's physical viewport space", (
 
     assert.deepEqual(frameMovePoint(frame, { x: 40, y: 20 }), { x: 160, y: 80 })
 
-    const coordinates = new FrameMoveCoordinates(frame)
-    assert.deepEqual(coordinates.point({ x: 40, y: 20 }), { x: 160, y: 80 })
+    const clientFrame = new ClientFrame(frame)
+    assert.deepEqual(clientFrame.point({ x: 40, y: 20 }), { x: 160, y: 80 })
     left = 240
-    assert.deepEqual(coordinates.point({ x: -50, y: 30 }), { x: 165, y: 95 })
+    assert.deepEqual(clientFrame.point({ x: -50, y: 30 }), { x: 165, y: 95 })
 })
 
 test("a Client question expectation survives initial iframe ownership", async () => {

@@ -5,7 +5,7 @@ import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { isServiceAddress, parseProgramInstallOptions, type ServiceAddress, type ShellOptions, type WindowMovePoint } from "@phreshos/core"
-import { type PresentationMoveCoordinates, type PresentationMovePoint, type WindowPresentationHost } from "./window-presentation"
+import { type PresentationFrame, type PresentationMovePoint, type WindowPresentationHost } from "./window-presentation"
 import messagepack from "@the-link/messagepack"
 import { sdkProcess, type SdkProcessSource } from "./sdk-records"
 import SystemAccess from "./system-access"
@@ -25,7 +25,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private readonly presentation: WindowPresentationHost
 
-    private readonly moveCoordinates: PresentationMoveCoordinates
+    private readonly frame: PresentationFrame
 
     private readonly systemAccess: SystemAccess
 
@@ -54,6 +54,10 @@ export default class ClientProcessBoundary extends TheLink {
     private readonly appearanceSubscriptions = new Set<string>()
 
     private stopAppearance: (() => void) | null = null
+
+    private readonly presentationSubscriptions = new Set<string>()
+
+    private stopPresentation: (() => void) | null = null
 
     private readonly trafficDeliveries = new WeakSet<object>()
 
@@ -89,7 +93,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.presentation = presentation
 
-        this.moveCoordinates = new FrameMoveCoordinates(element)
+        this.frame = new ClientFrame(element)
 
         this.systemAccess = new SystemAccess(authManager, pane)
 
@@ -308,7 +312,7 @@ export default class ClientProcessBoundary extends TheLink {
             this.pane,
             this.viewport,
             () => this.owner,
-            this.moveCoordinates,
+            this.frame,
             this.presentation
         )(word, ...args)
 
@@ -548,6 +552,13 @@ export default class ClientProcessBoundary extends TheLink {
                     this.deliver("host-appearance", "change", appearance).catch(() => undefined)
                 })
 
+            }
+
+            if (presentationSubscription(description)) {
+
+                this.presentationSubscriptions.add(subscription)
+
+                if (!this.stopPresentation) this.stopPresentation = this.followDrawing()
             }
 
             if (kind === "ask") this.releaseWaiting(route, event)
@@ -964,6 +975,13 @@ export default class ClientProcessBoundary extends TheLink {
             this.stopAppearance = null
         }
 
+        if (this.presentationSubscriptions.delete(subscription) && this.presentationSubscriptions.size === 0) {
+
+            this.stopPresentation?.()
+
+            this.stopPresentation = null
+        }
+
         const key = JSON.stringify([existing.kind, existing.route, existing.event])
 
         const traffic = this.trafficSubscriptions.get(key)
@@ -1038,6 +1056,73 @@ export default class ClientProcessBoundary extends TheLink {
         this.pending.splice(0, this.pending.length, ...remaining)
     }
 
+    /**
+     * Tells the Client each change in how it is drawn: whatever this Desktop draws changes, or the
+     * frame or the Desktop changes size. A change is told once the drawing has arrived, not along
+     * the motion that carries it there.
+     */
+    private followDrawing() {
+
+        const read = () => {
+            try { return this.presentation.drawing(this.pane, this.element) }
+            catch { return null }
+        }
+
+        let told = read()
+
+        let scheduled = 0
+
+        const check = () => {
+
+            if (scheduled) return
+
+            // The layout of the change is read after it is drawn.
+            scheduled = requestAnimationFrame(() => {
+
+                scheduled = 0
+
+                const drawing = read()
+
+                if (!drawing || !this.presentation.settled(this.pane)) return
+
+                const before = told
+
+                told = drawing
+
+                if (!before) return
+
+                if (drawing.position.x !== before.position.x || drawing.position.y !== before.position.y) this.deliver("host-presentation", "move", drawing.position).catch(() => undefined)
+
+                if (drawing.size.width !== before.size.width || drawing.size.height !== before.size.height) this.deliver("host-presentation", "resize", drawing.size).catch(() => undefined)
+
+                if (drawing.front !== before.front) this.deliver("host-presentation", "front", drawing.front).catch(() => undefined)
+
+                if (drawing.interactive !== before.interactive) this.deliver("host-presentation", "changeInteractive", drawing.interactive).catch(() => undefined)
+
+                if (JSON.stringify(drawing.surface) !== JSON.stringify(before.surface)) this.deliver("host-presentation", "changeSurface", drawing.surface).catch(() => undefined)
+            })
+        }
+
+        const stopObserving = this.presentation.observe(check)
+
+        const resizing = new ResizeObserver(check)
+
+        resizing.observe(this.element)
+
+        const desktop = this.element.closest("[data-desktop-layers]")
+
+        if (desktop) resizing.observe(desktop)
+
+        return () => {
+
+            stopObserving()
+
+            resizing.disconnect()
+
+            cancelAnimationFrame(scheduled)
+        }
+    }
+
     private resetEndpoint() {
 
         for (const stop of this.requests.values()) stop()
@@ -1067,6 +1152,12 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.stopAppearance = null
 
+        this.presentationSubscriptions.clear()
+
+        this.stopPresentation?.()
+
+        this.stopPresentation = null
+
         for (const { stop } of this.trafficSubscriptions.values()) stop()
 
         this.trafficSubscriptions.clear()
@@ -1091,11 +1182,11 @@ export function frameMovePoint(frame: HTMLIFrameElement, point: PresentationMove
     return { x: bounds.left + point.x * scaleX, y: bounds.top + point.y * scaleY }
 }
 
-export class FrameMoveCoordinates implements PresentationMoveCoordinates {
-    public constructor(private readonly frame: HTMLIFrameElement) {}
+export class ClientFrame implements PresentationFrame {
+    public constructor(public readonly element: HTMLIFrameElement) {}
 
     public point(point: WindowMovePoint) {
-        return frameMovePoint(this.frame, point)
+        return frameMovePoint(this.element, point)
     }
 }
 
@@ -1221,9 +1312,14 @@ function appearanceSubscription(subscription: EndpointSubscription) {
     return subscription.kind === "publish" && subscription.route === "host-appearance" && (subscription.event === null || subscription.event === "change")
 }
 
+function presentationSubscription(subscription: EndpointSubscription) {
+
+    return subscription.kind === "publish" && subscription.route === "host-presentation"
+}
+
 function desktopOwnedSubscription(subscription: EndpointSubscription) {
 
-    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription)
+    return desktopPreferencesSubscription(subscription) || appearanceSubscription(subscription) || presentationSubscription(subscription)
 }
 
 function directSubscription(subscription: EndpointSubscription) {

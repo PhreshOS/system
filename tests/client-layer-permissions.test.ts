@@ -6,8 +6,9 @@ import SystemAccess from "@client/view/components/desktop-host/system-access"
 import host from "@client/view/components/desktop-host/host"
 import { permissionCatalog } from "@server/core/permissions"
 
-function moveCoordinates() {
+function clientFrame() {
     return {
+        element: {},
         point: (point: { x: number, y: number }) => point
     } as never
 }
@@ -62,7 +63,7 @@ function fixture() {
         authentication, connection, session,
         grantsPermission: async <Name extends PermissionName>(_pane: string, name: Name, values: readonly PermissionValue<Name>[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, process.identity, { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, () => "frame", moveCoordinates(), {} as never)
+    const answer = host(auth, process.identity, { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, () => "frame", clientFrame(), {} as never)
     return {
         auth, program, process, answer, createProcess, findOrCreateProcess, startup, startEndpoint, command, connection,
         permissions(value: Permissions) { permissions = value }

@@ -117,11 +117,14 @@ export default function Workspace() {
 
     const move = useCallback(function (record: Process, x: number, y: number) {
 
+        // A raw drawing moved by hand stays this Desktop's drawing; only a standard Window's place is the System's.
+        if (windows.presentation.projection(record.identity).layer !== "window") return windows.presentation.move(record.identity, { x, y }).then(() => true)
+
         const recorded = shiftPosition({ x, y }, back)
 
         return windows.move(record, recorded.x, recorded.y)
 
-    }, [windows.move, back.x, back.y])
+    }, [windows.move, windows.presentation, back.x, back.y])
 
     const resize = useCallback((record: Process, width: number, height: number, position: { x: number, y: number } | null) => windows.resize(record, width, height, position && shiftPosition(position, back)), [windows.resize, back.x, back.y])
 

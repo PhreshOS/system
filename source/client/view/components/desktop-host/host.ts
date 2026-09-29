@@ -30,7 +30,7 @@ import {
     presentationPosition,
     presentationSize,
     presentationTransaction,
-    type PresentationMoveCoordinates,
+    type PresentationFrame,
     type WindowPresentationHost
 } from "./window-presentation"
 import SystemAccess from "./system-access"
@@ -51,7 +51,7 @@ export interface DesktopViewportHost {
     move(offset: DesktopOffset): void
 }
 
-export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, moveCoordinates: PresentationMoveCoordinates, presentation: WindowPresentationHost) {
+export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, frame: PresentationFrame, presentation: WindowPresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -904,9 +904,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return [pane]
         }
 
-        if (word === "windowPresentationLayer") {
+        if (word === "windowPresentation") {
             const target = presentationProcess(args[0])
-            return [presentation.layer(target.identity)]
+            return [presentation.drawing(target.identity, frame.element)]
         }
 
         if (word === "windowPresentationMoveGestureBegin") {
@@ -916,8 +916,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             await presentation.beginMoveGesture(
                 target.identity,
                 gesture,
-                moveCoordinates.point(start.origin),
-                moveCoordinates.point(start.point)
+                frame.point(start.origin),
+                frame.point(start.point)
             )
             return []
         }

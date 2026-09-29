@@ -19,19 +19,19 @@ function fixture(layer: WindowLayer) {
 
 test("wallpaper is fixed and rejects both raw operations and move gestures", () => {
   const { presentations } = fixture("wallpaper")
-  expect(presentations.layer("own")).toBe("wallpaper")
+  expect(presentations.projection("own").layer).toBe("wallpaper")
   expect(presentations.projection("own")).toMatchObject({
     position: { x: "-1/2", y: "-1/2" }, size: { width: "1/1", height: "1/1" }, surface: false, interactive: true
   })
   expect(() => presentations.move("own", { x: 1, y: 2 })).toThrow(/does not support raw/)
   expect(() => presentations.setInteractive("own", false)).toThrow(/does not support raw/)
   expect(() => presentations.raise("own")).toThrow(/does not support raw/)
-  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/standard Windows/)
+  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/nowhere to move/)
 })
 
 test.each(["under", "over", "shell"] as const)("%s is controlled only through raw presentation operations", async layer => {
   const { client, entries, presentations } = fixture(layer)
-  expect(presentations.layer("own")).toBe(layer)
+  expect(presentations.projection("own").layer).toBe(layer)
   expect(presentations.projection("own")).toMatchObject({
     position: { x: 0, y: 0 }, size: { width: 0, height: 0 }, surface: false, header: false, interactive: true
   })
@@ -51,12 +51,13 @@ test.each(["under", "over", "shell"] as const)("%s is controlled only through ra
 
   presentations.begin("own")
   expect(presentations.projection("own").interactive).toBe(true)
-  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/standard Windows/)
+  // A raw drawing may hand a move to the Desktop too, once its Window can take one.
+  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/cannot currently begin/)
 })
 
 test("standard Window presentation is exclusively Desktop-controlled", () => {
   const { presentations } = fixture("window")
-  expect(presentations.layer("own")).toBe("window")
+  expect(presentations.projection("own").layer).toBe("window")
   expect(() => presentations.resize("own", { width: 1, height: 2 })).toThrow(/does not support raw/)
   expect(() => presentations.setSurface("own", false)).toThrow(/does not support raw/)
   expect(() => presentations.setInteractive("own", false)).toThrow(/does not support raw/)

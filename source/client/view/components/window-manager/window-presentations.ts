@@ -4,6 +4,9 @@ import type {
     Size,
     WindowGeometry,
     WindowLayer,
+    WindowPresentationGeometry,
+    WindowPresentationPosition,
+    WindowPresentationSize,
     WindowPresentationSurface
 } from "@phreshos/core"
 import type {
@@ -11,9 +14,10 @@ import type {
     PresentationMoveGestureController,
     PresentationMovePoint,
     PresentationTransactionRequest,
+    WindowPresentationDrawing,
     WindowPresentationHost
 } from "../desktop-host/window-presentation"
-import type { WindowRegion } from "./window-geometry"
+import { resolveWindowGeometry, type WindowRegion } from "./window-geometry"
 import { requireRawWindowPresentation, requireWindowMoveGesture } from "@shared/window-layers"
 
 export interface WindowPresentationEntry {
@@ -59,6 +63,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     private readonly moveGestureControllers = new Map<string, PresentationMoveGestureController>()
     private readonly moveGestures = new Map<string, ActiveMoveGesture>()
     private readonly anticipated = new Map<string, { change: AnticipatedWindow, pending: number }>()
+    private readonly observers = new Set<() => void>()
     private fronts = 0
     private revision = 0
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
@@ -126,9 +131,41 @@ export default class WindowPresentations implements WindowPresentationHost {
         })
     }
 
-    public layer(process: string) { return this.existing(process).state.layer }
-
     public projection(process: string) { return this.existing(process).state }
+
+    /** Hears every change to what this Desktop draws, so a Client can learn how its own drawing changed. */
+    public observe(listener: () => void) {
+        this.observers.add(listener)
+        return () => { this.observers.delete(listener) }
+    }
+
+    /** Whether a Client's drawing has arrived where it is going, with no motion still carrying it. */
+    public settled(process: string) {
+        const { state } = this.existing(process)
+        return !state.geometryAnimation && !state.surfaceAnimation && !state.minimizeAnimation
+    }
+
+    /**
+     * How a Client is actually drawn: its frame, in pixels, counted from the center of the Desktop.
+     * The Window's box is read where the Desktop draws it, and the frame's place inside the box from
+     * the layout, so a scale the box is entering with does not change what is read.
+     */
+    public drawing(process: string, frame: HTMLIFrameElement): WindowPresentationDrawing {
+        const { identity, state } = this.existing(process)
+        const surface = frame.closest<HTMLElement>("[data-desktop-layers]")
+        const width = surface?.offsetWidth ?? 0
+        const height = surface?.offsetHeight ?? 0
+        const box = this.representations.get(identity)?.read() ?? resolveWindowGeometry(state.position, state.size, { width, height })
+        const inside = offsetWithin(frame, "[data-window-box]")
+        return {
+            layer: state.layer,
+            position: { x: box.x + inside.x - width / 2, y: box.y + inside.y - height / 2 },
+            size: { width: frame.offsetWidth, height: frame.offsetHeight },
+            front: frontmost(this.windows, state.layer) === identity,
+            interactive: state.interactive,
+            surface: state.surface
+        }
+    }
 
     public readonly represent = (process: string, representation: PresentationGeometryRepresentation | null) => {
         const identity = this.live.get(process)
@@ -212,17 +249,17 @@ export default class WindowPresentations implements WindowPresentationHost {
         if (identity) this.representations.get(identity)?.cancel()
     }
 
-    public move(process: string, position: Position, transaction?: PresentationTransactionRequest) {
+    public move(process: string, position: WindowPresentationPosition, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.raw(process)
         return this.changeGeometry(identity, { ...position, ...state.size }, transaction)
     }
 
-    public resize(process: string, size: Size, transaction?: PresentationTransactionRequest) {
+    public resize(process: string, size: WindowPresentationSize, transaction?: PresentationTransactionRequest) {
         const { identity, state } = this.raw(process)
         return this.changeGeometry(identity, { ...state.position, ...size }, transaction)
     }
 
-    public setGeometry(process: string, geometry: WindowGeometry, transaction?: PresentationTransactionRequest) {
+    public setGeometry(process: string, geometry: WindowPresentationGeometry, transaction?: PresentationTransactionRequest) {
         const { identity } = this.raw(process)
         return this.changeGeometry(identity, geometry, transaction)
     }
@@ -344,6 +381,7 @@ export default class WindowPresentations implements WindowPresentationHost {
     private publish(next: ReadonlyMap<string, PresentedWindow>) {
         this.windows = next
         this.changed(next)
+        for (const observer of this.observers) observer()
     }
 
     private cancel(identity: string, kind: AnimationKind, reason = "The Window presentation transaction was interrupted") {
@@ -486,6 +524,17 @@ export interface PresentationGeometryRepresentation {
     begin: () => WindowRegion | null
     finish: () => void
     cancel: () => void
+}
+
+/** Where an element sits inside the nearest ancestor matching a selector, by layout alone. */
+function offsetWithin(element: HTMLElement, boundary: string) {
+    let x = 0
+    let y = 0
+    for (let current: HTMLElement | null = element; current && !current.matches(boundary); current = current.offsetParent as HTMLElement | null) {
+        x += current.offsetLeft
+        y += current.offsetTop
+    }
+    return { x, y }
 }
 
 function frontmost(windows: ReadonlyMap<string, PresentedWindow>, layer: WindowLayer) {

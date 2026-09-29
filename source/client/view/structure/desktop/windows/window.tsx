@@ -170,7 +170,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
     }
 
     useLayoutEffect(function () {
-        if (!standard || !onPresentationMoveGesture) return
+        // Every drawing but the wallpaper can hand a move to the Desktop.
+        if (layer === "wallpaper" || !onPresentationMoveGesture) return
         // Program-owned chrome supplies pointer intent, while this controller
         // remains the single owner of geometry, snapping, and commit behavior.
         onPresentationMoveGesture(moveGestureController.current)
@@ -178,7 +179,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             moveGestureController.current?.cancel()
             onPresentationMoveGesture(null)
         }
-    }, [standard, onPresentationMoveGesture])
+    }, [layer, onPresentationMoveGesture])
 
     useEffect(function () {
         if (!externalMoveActive) return
@@ -458,7 +459,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 current = { ...origin, x: origin.x + dx, y: origin.y + dy }
 
-                zone = moved ? snapTerm(motion) : null
+                // Only the Desktop's own Windows snap; a raw drawing goes where it is taken.
+                zone = moved && standard ? snapTerm(motion) : null
 
                 if (zone) shown = zone
             }
@@ -507,7 +509,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 return
             }
 
-            const term = moved && edge === null && committed ? snapTerm(motion) : null
+            const term = moved && edge === null && committed && standard ? snapTerm(motion) : null
 
             // Pointer input has ended, but visible gesture ownership remains
             // until every authoritative mutation below has settled.
@@ -620,6 +622,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
         <motion.div
 
             ref={frameElement}
+
+            // The box the Client's drawing is read in.
+            data-window-box=""
 
             onPointerDown={onActivate}
 
