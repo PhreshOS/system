@@ -410,7 +410,7 @@ export default function Workspace() {
 
         {/* What a press means is composed here because it is a person's
             expectation, not a system operation: the front window hides;
-            another window is shown and brought forward, wherever it is. */}
+            pressing another takes you to its view and brings it forward. */}
         {windows.listed.map(record => {
 
             const window = windows.presentation.projection(record.identity)

@@ -12,18 +12,20 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
     const scaleContainer = useDesktopScaleContainer()
 
+    // A press takes you to the window, in whatever view it is, and brings it forward; pressing the
+    // window in front hides it.
     const press = useCallback(function () {
 
         if (active) onMinimize(record, true)
 
-        else onShow(record)
+        else onGoTo(record)
 
-    }, [active, onMinimize, onShow, record])
+    }, [active, onMinimize, onGoTo, record])
 
-    // A drag held over the entry shows its window in front, even a minimized one, so the drop can
+    // A drag held over the entry takes you to its window too, even a minimized one, so the drop can
     // go there; unlike a press, it never minimizes the window.
-    const show = useCallback(() => onShow(record), [onShow, record])
-    const holdShows = useDragHold(show)
+    const goTo = useCallback(() => onGoTo(record), [onGoTo, record])
+    const holdShows = useDragHold(goTo)
     const source = useCallback((element: HTMLButtonElement | null) => { onElement(record, element); holdShows(element) }, [onElement, record, holdShows])
     const changeVisibility = useCallback(() => {
 
@@ -33,7 +35,6 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
     }, [minimized, onMinimize, onShow, record])
     const fill = useCallback(() => onFill(record), [onFill, record])
-    const goTo = useCallback(() => onGoTo(record), [onGoTo, record])
     const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
 
