@@ -4,7 +4,7 @@ import { type PaintMargins, type WindowSurfaceSize } from "@client/view/componen
 import { type PresentationAnimation, type DesktopMoveGestureController } from "@client/view/components/desktop-host/presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
 import { type Position, type Size, type TaskbarPosition, type Theme, type PresentationSurface, type WindowLayer } from "@phreshos/core"
-import Spinner from "@client/view/components/spinner"
+import { Spinner } from "@phreshos/react-ui"
 import Window from "./window"
 import useDragHold from "../drag-hold"
 import ProgramFrame, { programFrameSource } from "@client/view/components/program-frame"
@@ -208,11 +208,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
             progress layer. Neither paints a backdrop or Surface. */}
         {progress && <div className="pointer-events-none absolute inset-0 z-10 grid">
 
-            <Spinner className="m-auto size-6">
-
-                <span className="sr-only">{progress}</span>
-
-            </Spinner>
+            <Spinner label={progress} className="m-auto" />
 
         </div>}
 

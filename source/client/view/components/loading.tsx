@@ -1,5 +1,4 @@
-import { Surface, type SurfaceProps } from "@phreshos/react-ui"
-import Spinner from "./spinner"
+import { Spinner, Surface, type SurfaceProps } from "@phreshos/react-ui"
 
 type LoadingProps = Omit<SurfaceProps, "material">
 
@@ -19,7 +18,7 @@ export default function ({ className, style, children, ...props }: LoadingProps)
 
         <div className="m-auto grid justify-items-center gap-3" role={described ? "status" : undefined}>
 
-            <Spinner aria-hidden={described ? true : undefined} className="size-6" />
+            {described ? <Spinner decorative /> : <Spinner label="Loading" />}
 
             {described && <span data-loading-message className="text-sm opacity-60">{children}</span>}
 
