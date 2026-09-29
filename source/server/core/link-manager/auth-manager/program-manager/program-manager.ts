@@ -1150,6 +1150,20 @@ export default class ProgramManager extends TheLink {
                     await this.announcePermissions(entry)
                 }
 
+                // A reinstall ended every Process of the Program, its startup one too. That one
+                // starts again as it would with the System, so what starts with the System keeps running.
+                if (!createdHere) {
+
+                    try {
+
+                        const startup = await this.startup(entry.program, "get")
+
+                        if (startup) await this.start(entry.program, startup, undefined, null, true)
+                    }
+
+                    catch (exception) { console.log(`programs: ${entry.identity} did not start — ${exception instanceof Error ? exception.message : "invalid startup settings"}`) }
+                }
+
                 if (requestedLaunch !== undefined) {
                     await this.start(entry.program, requestedLaunch, undefined, null, true)
                 }

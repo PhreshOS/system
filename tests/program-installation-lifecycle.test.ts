@@ -114,6 +114,20 @@ test("an omitted installation launch uses installLaunch and false disables it", 
     expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["welcome"])
 })
 
+test("a reinstall starts the Program's startup launch again, as the System does when it starts", async context => {
+    const { manager, definition } = fixture(context)
+    const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch, watching?: unknown, parent?: unknown, transitionOwnsIdentity?: boolean): Promise<string> }, "start").mockResolvedValue("process")
+
+    const first = await manager.install(definition())
+    await manager.startup(first.program, "enable", { name: "panel" })
+    await manager.install(definition())
+
+    // The first install had no startup launch; the reinstall ended the Processes and starts that one again.
+    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["panel"])
+    // Still inside the reinstall, which owns the Program's identity until it returns.
+    expect(start.mock.calls[0]?.[4]).toBe(true)
+})
+
 test("explicit launch errors propagate without rolling back the installed Program", async context => {
     const { manager, definition } = fixture(context)
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start")
