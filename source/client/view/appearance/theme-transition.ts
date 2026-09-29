@@ -22,12 +22,17 @@ type ActiveTransition = Readonly<{
 const active = new WeakMap<Document, ActiveTransition>()
 const revisions = new WeakMap<Document, number>()
 
-/** Applies one theme state change through the document's old and new rendered views. */
+/**
+ * Applies one theme state change through the document's old and new rendered views. `ready` runs
+ * when the views are ready to cross, or once the change is applied when nothing crosses: what
+ * should change together with the Desktop, such as the Programs in their frames, starts then.
+ */
 export function transitionTheme(
     document: Document,
     transaction: AppearanceTransaction,
     animated: boolean,
-    update: () => Promise<void>
+    update: () => Promise<void>,
+    ready: () => void = () => undefined
 ) {
     const target = document as ViewTransitionDocument
     const revision = (revisions.get(document) ?? 0) + 1
@@ -39,7 +44,7 @@ export function transitionTheme(
         previous?.transition.skipTransition()
         active.delete(document)
         clearTransition(document)
-        return update()
+        return update().then(ready)
     }
 
     const root = document.documentElement
@@ -61,10 +66,12 @@ export function transitionTheme(
         previous?.transition.skipTransition()
         active.delete(document)
         clearTransition(document)
-        return update()
+        return update().then(ready)
     }
 
     active.set(document, { revision, transition: view })
+
+    settle(view.ready, ready)
 
     // The new view is live, not a still image: any late commit would animate
     // inside it. Changes stay instant until the whole transition finishes.
