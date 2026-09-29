@@ -1,6 +1,5 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { Subscribe } from "@the-link/core/decorators"
-import { randomUUID } from "node:crypto"
 import { TheLink } from "@the-link/core"
 import SqliteDatabase from "@libs/sqlite-database"
 import FileManager from "@libs/file-manager"
@@ -28,6 +27,7 @@ import {
     type PermissionValue,
     type Permissions
 } from "@phreshos/core"
+import shortIdentity from "@libs/short-identity"
 
 const maximumProcessesPerProgram = 20
 
@@ -1457,9 +1457,9 @@ export default class ProgramManager extends TheLink {
             if (active >= maximumProcessesPerProgram) throw new Error(`This program has reached its limit of ${maximumProcessesPerProgram} active processes`)
         }
 
-        let identity = randomUUID()
+        let identity = shortIdentity()
 
-        while (this.authManager.processManager.processes.has(identity)) identity = randomUUID()
+        while (this.authManager.processManager.processes.has(identity)) identity = shortIdentity()
 
         // Kept in this Program's declared storage, whoever is or is not
         // watching and whether the Program is installed or attached. Each

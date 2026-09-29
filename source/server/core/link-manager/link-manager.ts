@@ -5,6 +5,7 @@ import Application from "../application"
 import type { Appearance, ConnectionSnapshot, SessionEndReason, SessionSnapshot } from "@phreshos/core"
 import { type AuthenticationState, type SignUpError } from "../authentication/authentication"
 import { AsyncLocalStorage } from "node:async_hooks"
+import shortIdentity from "@libs/short-identity"
 
 /** Owns live Link boundaries and their browser Connection and Session relationships. */
 export default class LinkManager extends TheLink {
@@ -503,7 +504,7 @@ export type SignUpResponse = { signedUp: true } | { error: SignUpError }
 /** One internal Link boundary. Only browser boundaries enter the public Connection registry. */
 export class LinkBoundary {
 
-    public readonly identity = crypto.randomUUID()
+    public readonly identity = shortIdentity()
 
     public session: string | null = null
 

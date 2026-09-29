@@ -1,5 +1,6 @@
 import Keyv from "keyv"
-import { createHash, randomBytes, randomUUID } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
+import shortIdentity from "@libs/short-identity"
 
 const storagePrefix = "authentication:sessions:"
 
@@ -54,7 +55,7 @@ export default class Sessions {
 
         const record: StoredSession = {
 
-            identity: randomUUID(),
+            identity: shortIdentity(),
 
             hash: hashToken(token),
 
