@@ -10,7 +10,7 @@ test("the System says what it is from its identity, and when it started", async 
     const home = await mkdtemp(join(tmpdir(), "phreshos-about-"))
     try {
         const before = Date.now()
-        const application = await Application.initialize(home, join(home, "icon.png"))
+        const application = await Application.initialize(home, { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") })
         const about = application.system.about()
 
         assert.deepEqual(about, { name, version, release, startedAt: about.startedAt })

@@ -7,7 +7,12 @@ import { planeReach, type WindowRegion } from "@client/view/components/window-ma
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { cssEasing } from "@client/view/appearance/motion"
+import { cssEasing, motionTransition } from "@client/view/appearance/motion"
+import motionAcross from "../../../../motion-across"
+import { EdgeHold, against, useViewTravel } from "../../../../edge-hold"
+import { createPortal } from "react-dom"
+import SnapPreview, { type SnapTarget } from "../../../../windows/snap-preview"
+import { desktopMargins } from "../../../desktop-layers"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { shellSurfaceClassName } from "../../shell-surface"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
@@ -119,7 +124,121 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
     }, [close])
 
+    // The map's button can be carried: dragged out, it leaves a ghost in the hand, and held against an
+    // edge of the screen, the ghost takes the view that way, as a held Window does. It is what the
+    // hand holds when there is no Window to carry, and it belongs to the Shell, so no Program under
+    // the edge can take the hand from it.
+    const travel = useViewTravel(viewport)
+
+    const travelNow = useRef(travel)
+
+    travelNow.current = travel
+
+    // The button as it is lifted: where the hand is, where on the button it holds it, and how large
+    // the button is drawn, so the ghost is the button itself; the button left behind is faint.
+    const [ghost, setGhost] = useState<{ x: number, y: number, grip: { x: number, y: number }, scale: number } | null>(null)
+
+    const lifted = useRef({ grip: { x: 0, y: 0 }, scale: 1 })
+
+    // A carry that ended over the button is not also a press.
+    const carried = useRef(false)
+
+    // Where the ghost is held against the Desktop's edges: the placement a Window would take there,
+    // shown as a Window's is, but only as a sign; nothing is placed when the hand lets go. It turns to
+    // danger where the plane goes no further.
+    const [edge, setEdge] = useState<{ zone: SnapTarget | null, shown: SnapTarget | null, blocked: boolean, surface: HTMLElement | null }>({ zone: null, shown: null, blocked: false, surface: null })
+
+    function carry(event: ReactPointerEvent<HTMLElement>) {
+
+        if (event.button !== 0) return
+
+        const start = { x: event.clientX, y: event.clientY }
+
+        const pointer = event.pointerId
+
+        const held = event.target as Element
+
+        const edges = new EdgeHold(direction => travelNow.current(direction), blocked => setEdge(current => ({ ...current, blocked })))
+
+        const windowSurface = document.querySelector<HTMLElement>("[data-window-surface]")
+
+        const button = trigger.current
+
+        if (button) {
+
+            const bounds = button.getBoundingClientRect()
+
+            lifted.current = { grip: { x: start.x - bounds.left, y: start.y - bounds.top }, scale: button.offsetWidth ? bounds.width / button.offsetWidth : 1 }
+        }
+
+        carried.current = false
+
+        function move(motion: PointerEvent) {
+
+            if (motion.pointerId !== pointer) return
+
+            if (!carried.current) {
+
+                if (Math.hypot(motion.clientX - start.x, motion.clientY - start.y) < 6) return
+
+                carried.current = true
+
+                // Held by the Shell from here on, even over a Program's frame.
+                try { held.setPointerCapture(pointer) } catch { /* The press already ended. */ }
+
+                close()
+            }
+
+            setGhost({ x: motion.clientX, y: motion.clientY, ...lifted.current })
+
+            // Measured as the Desktop measures a Window's drag: in its own pixels, at its scale.
+            const bounds = windowSurface?.getBoundingClientRect()
+
+            const scale = bounds && windowSurface?.clientWidth ? bounds.width / windowSurface.clientWidth : 1
+
+            const width = windowSurface?.clientWidth ?? window.innerWidth
+
+            const height = windowSurface?.clientHeight ?? window.innerHeight
+
+            const direction = against((motion.clientX - (bounds?.left ?? 0)) / scale, (motion.clientY - (bounds?.top ?? 0)) / scale, width, height)
+
+            edges.update(direction)
+
+            const zone = direction.x || direction.y ? placementAt(direction) : null
+
+            setEdge(current => ({ ...current, zone, shown: zone ?? current.shown, surface: windowSurface }))
+        }
+
+        function end(motion: PointerEvent) {
+
+            if (motion.pointerId !== pointer) return
+
+            edges.stop()
+
+            setGhost(null)
+
+            setEdge(current => ({ ...current, zone: null, blocked: false }))
+
+            removeEventListener("pointermove", move)
+
+            removeEventListener("pointerup", end)
+
+            removeEventListener("pointercancel", end)
+
+            // The press that may follow on this same release is still told it was a carry.
+            setTimeout(() => { carried.current = false })
+        }
+
+        addEventListener("pointermove", move)
+
+        addEventListener("pointerup", end)
+
+        addEventListener("pointercancel", end)
+    }
+
     function toggle() {
+
+        if (carried.current) return
 
         const element = surface.current
 
@@ -161,15 +280,37 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
     return <>
 
-        {/* Showing its icon alone, it names itself on hover and focus. */}
+        {/* Showing its icon alone, it names itself on hover and focus; pressed and dragged, it is carried. */}
+        <span style={{ display: "contents" }} onPointerDownCapture={carry}>
         <TaskbarTooltip label={centered ? "Map" : `Map, near ${place}`} iconOnly={centered || vertical}>
             <Button ref={trigger} size="small" iconOnly={centered && !vertical} className={vertical ? "px-0" : undefined} color={centered ? undefined : "primary:soft"}
+                style={ghost ? { opacity: 0.35 } : undefined}
                 aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
                 onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
                 onPress={toggle}>
                 <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
             </Button>
         </TaskbarTooltip>
+        </span>
+
+        {edge.shown && edge.surface && createPortal(<SnapPreview
+            shown={edge.shown}
+            visible={edge.zone !== null}
+            blocked={edge.blocked}
+            bare={false}
+            paintSurfaceSize={{ width: edge.surface.clientWidth, height: edge.surface.clientHeight }}
+            paintInset={spacing / 2}
+            paintMargins={desktopMargins(spacing, taskbar)}
+            reducedMotion={reducedMotion}
+            zIndex={2147483646}
+        />, edge.surface)}
+
+        {ghost && createPortal(<div aria-hidden="true" inert className="pointer-events-none fixed"
+            style={{ left: ghost.x - ghost.grip.x, top: ghost.y - ghost.grip.y, transform: `scale(${ghost.scale})`, transformOrigin: "0 0", zIndex: 2147483647 }}>
+            <Button size="small" iconOnly={centered && !vertical} className={vertical ? "px-0" : undefined} color={centered ? undefined : "primary:soft"}>
+                <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
+            </Button>
+        </div>, document.body)}
 
         <motion.div
             ref={surface}
@@ -317,11 +458,52 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
 
     const transaction = useAppearance().transaction
 
+    // The map is small and the view is large, so every pixel the hand moves is many on the
+    // screen. The frame therefore does not jump to the pointer: it follows it, smoothed each
+    // frame, which melts the hand's small jolts and keeps its intent.
+    const following = useRef<{ target: { x: number, y: number }, shown: { x: number, y: number }, frame: number, last: number } | null>(null)
+
+    const placeView = useRef(viewport.place)
+
+    placeView.current = viewport.place
+
+    function chase(time: number) {
+
+        const state = following.current
+
+        if (!state) return
+
+        const step = state.last ? Math.min(time - state.last, 64) : 16
+
+        state.last = time
+
+        const share = 1 - Math.exp(-step / 60)
+
+        state.shown = { x: state.shown.x + (state.target.x - state.shown.x) * share, y: state.shown.y + (state.target.y - state.shown.y) * share }
+
+        placeView.current(state.shown)
+
+        const near = Math.abs(state.target.x - state.shown.x) < 0.5 && Math.abs(state.target.y - state.shown.y) < 0.5
+
+        state.frame = near && !drag.current ? 0 : requestAnimationFrame(chase)
+    }
+
+    function stopFollowing() {
+
+        if (following.current?.frame) cancelAnimationFrame(following.current.frame)
+
+        following.current = null
+    }
+
     function grab(event: ReactPointerEvent<HTMLDivElement>) {
 
         event.currentTarget.setPointerCapture(event.pointerId)
 
         drag.current = { pointer: { x: event.clientX, y: event.clientY }, offset: viewport.offset, scale: shownScale(event.currentTarget) }
+
+        stopFollowing()
+
+        following.current = { target: viewport.offset, shown: viewport.offset, frame: 0, last: 0 }
     }
 
     function follow(event: ReactPointerEvent<HTMLDivElement>) {
@@ -336,13 +518,22 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
             y: clamp(started.offset.y + (event.clientY - started.pointer.y) / started.scale / cell.height * surface.height, range.minY * surface.height, range.maxY * surface.height)
         }
 
-        // The frame follows the pointer freely; a nearby whole view is only marked until release.
-        viewport.place(point)
+        // The frame follows the pointer, smoothed; a nearby whole view is only marked until release.
+        const state = following.current
+
+        if (state) {
+
+            state.target = point
+
+            if (!state.frame) state.frame = requestAnimationFrame(chase)
+        }
 
         setSettle(nearView(point, surface))
     }
 
     function release() {
+
+        stopFollowing()
 
         if (drag.current && settle) viewport.moveTo(settle)
 
@@ -397,10 +588,15 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
                     background: `color-mix(in oklab, ${primary} 18%, transparent)`
                 }} />}
 
-            {/* The view itself, over the views and dragged anywhere on the map. */}
-            <Surface aria-hidden="true" color="primary" material={{ opacity: 0.3, backdrop: 0 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
-                style={{ position: "absolute", left: mapX(viewport.offset.x) - cell.width / 2, top: mapY(viewport.offset.y) - cell.height / 2, width: cell.width, height: cell.height }}
-                onPointerDown={grab} onPointerMove={follow} onPointerUp={release} onPointerCancel={() => { drag.current = null; setSettle(null) }} />
+            {/* The view itself, over the views and dragged anywhere on the map. It travels with the
+                same motion as the view it stands for; under a dragging hand it follows at once. */}
+            <motion.div className="absolute left-0 top-0" style={{ width: cell.width, height: cell.height }} initial={false}
+                animate={{ x: mapX(viewport.offset.x) - cell.width / 2, y: mapY(viewport.offset.y) - cell.height / 2 }}
+                transition={viewport.transaction && !reducedMotion ? motionTransition(viewport.transaction) : { duration: 0 }}>
+                <Surface aria-hidden="true" color="primary" material={{ opacity: 0.3, backdrop: 0 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
+                    style={{ width: "100%", height: "100%" }}
+                    onPointerDown={grab} onPointerMove={follow} onPointerUp={release} onPointerCancel={() => { drag.current = null; setSettle(null) }} />
+            </motion.div>
 
             {/* The Windows above everything, since they are dragged too. */}
             {windows.map(window => <MapWindow key={window.identity} window={window} viewport={viewport} menus={menus} mapX={mapX} mapY={mapY} cell={cell} />)}
@@ -450,6 +646,14 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
     useEffect(() => setDragged(null), [window.region.x, window.region.y])
 
     const shown = dragged ?? center
+
+    // The card travels with the motion its Window takes, chosen from how far it goes; under a
+    // dragging hand it follows at once.
+    const reducedMotion = useReducedMotion()
+    const last = useRef(center)
+    const distance = Math.hypot(center.x - last.current.x, center.y - last.current.y)
+    useEffect(() => { last.current = center }, [center.x, center.y])
+    const cardMotion = dragged || reducedMotion ? { duration: 0 } : motionTransition(motionAcross(distance, "window"))
 
     const icon = space.medium + space.xsmall
 
@@ -508,8 +712,9 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
         addEventListener("pointercancel", end)
     }
 
-    return <div className="absolute touch-none" onPointerDownCapture={down}
-        style={{ left: mapX(shown.x) - card / 2, top: mapY(shown.y) - card / 2, width: card, height: card }}>
+    return <motion.div className="absolute left-0 top-0 touch-none" onPointerDownCapture={down}
+        style={{ width: card, height: card }} initial={false}
+        animate={{ x: mapX(shown.x) - card / 2, y: mapY(shown.y) - card / 2 }} transition={cardMotion}>
 
         {/* Its title shows on hover and focus, above the card; a press, and so a drag, closes it. */}
         <Tooltip>
@@ -546,7 +751,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
             <Maximize2 style={{ width: mark * 0.6, height: mark * 0.6 }} strokeWidth={2.5} />
         </Surface>}
 
-    </div>
+    </motion.div>
 }
 
 /** What sets a Window apart on the map, in words. */
@@ -586,4 +791,13 @@ const range = { minX: -planeReach, maxX: planeReach, minY: -planeReach, maxY: pl
 function clamp(value: number, minimum: number, maximum: number) {
 
     return Math.min(maximum, Math.max(minimum, value))
+}
+
+/** The placement a Window takes against edges of the Desktop: a half against a side, a quarter in a corner. */
+function placementAt(direction: Readonly<{ x: number, y: number }>): SnapTarget {
+
+    return {
+        position: { x: direction.x > 0 ? "0/1" : "-1/2", y: direction.y > 0 ? "0/1" : "-1/2" },
+        size: { width: direction.x ? "1/2" : "1/1", height: direction.y ? "1/2" : "1/1" }
+    }
 }

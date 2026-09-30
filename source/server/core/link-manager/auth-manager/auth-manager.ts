@@ -235,6 +235,12 @@ export default class AuthManager extends TheLink {
         return this.linkManager.application.system.about()
     }
 
+    @Subscribe("/icon")
+    protected icon(size: unknown) {
+
+        return this.linkManager.application.system.icon(size)
+    }
+
     /** A Client's request to open something, forwarded by the Desktop showing it. */
     @Subscribe("/opening/open")
     protected async openForClient(process: unknown, target: unknown) {

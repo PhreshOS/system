@@ -44,7 +44,8 @@ test("distribution contract", async () => {
       "package.json",
       "server/main.js",
       "client/index.html",
-      "assets/default-icon.png"
+      "assets/default-icon.png",
+      "assets/logo.png"
     ]) {
       assert(paths.has(required), `the distribution has no ${required}`)
     }

@@ -9,7 +9,7 @@ import {
     type PermissionName,
     type PermissionRequestInput,
     type ProgramCommandChunk,
-    type ProgramIconSize
+    type IconSize
 } from "@phreshos/core"
 import StreamRelay from "@client/core/link-manager/stream-relay"
 
@@ -160,7 +160,7 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Request one rendered icon from the authoritative server Program. */
-    public async icon(subject: unknown, size: ProgramIconSize) {
+    public async icon(subject: unknown, size: IconSize) {
 
         return await this.$outbound.publishFirst("/icon", subject, size) as number[]
     }

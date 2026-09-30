@@ -1,4 +1,4 @@
-import logo from "@/assets/bundled/logo.png"
+import logo from "@/assets/logo.png"
 
 /**
  * The System identity shared by System-owned panels. It is content only: the

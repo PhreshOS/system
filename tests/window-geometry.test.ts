@@ -84,6 +84,19 @@ test("settling paint follows released geometry instead of its former boundary co
   )
 })
 
+test("a tiled window keeps the margins of its own view while the Desktop looks between two", () => {
+  const surface = { width: 1000, height: 600 }
+  const half = defaultAppearance.spacing / 2
+  const margins = { top: 12, right: 12, bottom: 68, left: 12 }
+  // The Desktop looks three tenths of a view to the right: the Window's own view starts 300px left of the screen.
+  const shown = { x: -300, y: 0, width: 500, height: 600 }
+
+  assert.deepEqual(
+    windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: "1/2", height: "1/1" }, surface, half, margins, shown, { x: 300, y: 0 }),
+    { top: 12, right: half, bottom: 68, left: 12 }
+  )
+})
+
 test("window geometry contract", async () => {
   const initial = {
       position: { x: 10, y: 20 },

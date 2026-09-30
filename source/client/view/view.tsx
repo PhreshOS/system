@@ -3,7 +3,7 @@ import Application, { type Doors } from "@client/core/application"
 import { ApplicationContext } from "./contexts"
 import Structure from "./structure/structure"
 import client from "react-dom/client"
-import logo from "@/assets/bundled/logo.png"
+import logo from "@/assets/logo.png"
 import { name, version } from "@/source/identity"
 
 export default function (config: Config) {

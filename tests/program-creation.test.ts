@@ -19,7 +19,7 @@ function fixture(context: TestContext) {
     const announceHost = vi.fn()
     const announceSubject = vi.fn()
     const auth = Object.assign(new TheLink(), {
-        linkManager: { application: { storage: new FileManager(directory, "system"), defaultProgramIcon: "" } },
+        linkManager: { application: { storage: new FileManager(directory, "system"), icons: { system: "", defaultProgram: "" } } },
         processManager: { processes: new Map(), exitAll: vi.fn(), announceHost, announceSubject }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)

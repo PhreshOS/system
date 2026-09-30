@@ -1,4 +1,4 @@
-import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
@@ -8,11 +8,14 @@ import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
 import { type PresentationAnimation, type DesktopMoveGestureController, type DesktopMovePoint } from "@client/view/components/desktop-host/presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
-import { motion } from "motion/react"
+import { motion, useMotionValue, type MotionValue } from "motion/react"
+import { PlaneSlideContext, ViewCellShift } from "../plane-slide"
+import { EdgeHold, against } from "../edge-hold"
 import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
 import { useAppearance, Window as UIWindow } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
+import motionAcross from "../motion-across"
 import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 import { createPortal } from "react-dom"
@@ -68,7 +71,7 @@ export function windowMinimizePose(position: TaskbarPosition) {
 
 const wholeView: Position = Object.freeze({ x: "-1/2", y: "-1/2" })
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 0, height: 0 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, onEdgeHold, neighbours, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 0, height: 0 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -97,6 +100,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
         size: presented.current.size,
         animation: geometryAnimation,
         immediate: reducedMotion,
+        standard,
         // The Desktop moves its own Windows visibly only when the person sees one end or both; a
         // raw drawing moves the way its Program asked.
         seenOnly: standard,
@@ -105,6 +109,20 @@ export default function ({ title, header = true, surface, layer, icon, children,
     })
 
     const frameElement = geometryMotion.frame
+
+    // A drag reads the handlers as they are when it acts, not as they were when it began: the view
+    // can move under a held Window, and where the Window lands depends on where the view is then.
+    const latest = useRef({ onMove, onResize, onSnap, onEdgeHold, neighbours })
+
+    latest.current = { onMove, onResize, onSnap, onEdgeHold, neighbours }
+
+    // While a hand holds a standard Window, the plane may glide beneath it; the Window stays under
+    // the hand by taking that glide back.
+    const slide = useContext(PlaneSlideContext)
+    const cellShift = useContext(ViewCellShift)
+    const held = useMotionValue(0)
+    const shownX = useHeldAgainst(geometryMotion.style.x, held, slide?.x)
+    const shownY = useHeldAgainst(geometryMotion.style.y, held, slide?.y)
 
     const [gesture, setGesture] = useState<Gesture | null>(null)
     const [settlingGeometry, setSettlingGeometry] = useState<WindowRegion | null>(null)
@@ -249,11 +267,18 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     }, [minimizeAnimation?.revision, reducedMotion])
 
-    const entryTransaction = standard ? appearanceTransaction : null
+    // A standard Window's motions are the Desktop's own, chosen from its size: appearing and leaving
+    // happen in place, so they cover little of it; leaving for the Taskbar crosses more.
+    const shownBox = geometryMotion.read()
+    const reach = Math.hypot(shownBox.width, shownBox.height)
+    const presenceMotion = motionAcross(reach * 0.35, "window")
+    const entryTransaction = standard ? presenceMotion : null
     const opening = entering && !reducedMotion ? entryTransaction : null
     const [opened, setOpened] = useState(opening === null)
     const minimizeTransaction = minimizeAnimation
-        ? resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
+        ? standard && minimizeAnimation.transaction === undefined
+            ? motionAcross(reach * 0.75, "window")
+            : resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
         : null
     const initialPresence = standard
         ? opening ? windowSurfaceLifecyclePose.hidden : windowSurfaceLifecyclePose.visible
@@ -268,7 +293,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const presenceTransition = reducedMotion
         ? { duration: 0 }
         : closing && standard
-            ? motionTransition(appearanceTransaction)
+            ? motionTransition(presenceMotion)
             : minimizeTransaction
                 ? surfacePresenceTransition(false, minimizeTransaction)
                 : !opened && opening
@@ -289,6 +314,83 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             onPresentationAnimationComplete?.("minimize", revision)
         }
+    }
+
+    /**
+     * A double press on a standard Window's edge takes that edge as far as it can go that way: to
+     * the nearest Window facing it there, or to the edge of the view. A corner takes both its edges.
+     * The space kept between them is painted, so the edge goes all the way.
+     */
+    function extendEdge(edge: WindowEdge) {
+
+        if (!standard || maximized) return
+
+        const started = geometryMotion.beginGesture()
+
+        if (!started) return
+
+        const { bounds, revision, region: from } = started
+
+        const others = latest.current.neighbours?.() ?? []
+
+        const acrossY = (other: WindowRegion) => other.y < from.y + from.height && other.y + other.height > from.y
+
+        const acrossX = (other: WindowRegion) => other.x < from.x + from.width && other.x + other.width > from.x
+
+        let { x, y, width, height } = from
+
+        if (edge.includes("e")) {
+
+            const right = Math.min(bounds.width, ...others.filter(other => acrossY(other) && other.x >= from.x + from.width - 1).map(other => other.x))
+
+            if (right > from.x + from.width) width = right - x
+        }
+
+        if (edge.includes("w")) {
+
+            const left = Math.max(0, ...others.filter(other => acrossY(other) && other.x + other.width <= from.x + 1).map(other => other.x + other.width))
+
+            if (left < from.x) { width += from.x - left; x = left }
+        }
+
+        if (edge.includes("s")) {
+
+            const bottom = Math.min(bounds.height, ...others.filter(other => acrossX(other) && other.y >= from.y + from.height - 1).map(other => other.y))
+
+            if (bottom > from.y + from.height) height = bottom - y
+        }
+
+        if (edge.includes("n")) {
+
+            const top = Math.max(0, ...others.filter(other => acrossX(other) && other.y + other.height <= from.y + 1).map(other => other.y + other.height))
+
+            if (top < from.y) { height += from.y - top; y = top }
+        }
+
+        const target = { x, y, width, height }
+
+        if (x === from.x && y === from.y && width === from.width && height === from.height) {
+
+            geometryMotion.finishGesture(undefined, revision)
+
+            return
+        }
+
+        // Shown on its way at once, and held until the System has recorded it, like a release.
+        geometryMotion.targetGesture(revision, target)
+        setSettlingGeometry(target)
+
+        const placed = planeGeometry(target, bounds)
+        const commit = new WindowGestureCommit()
+
+        commit.request(() => latest.current.onResize?.(width, height, x === from.x && y === from.y ? null : { x: placed.x, y: placed.y }))
+
+        void commit.settle().then(committed => {
+
+            const current = committed ? geometryMotion.settleGesture(revision) : geometryMotion.cancelGesture(revision)
+
+            if (current) setSettlingGeometry(null)
+        })
     }
 
     function grab(event: ReactPointerEvent<HTMLElement> | DesktopMovePoint, edge: WindowEdge | null, receive?: (gesture: ActivePointerGesture) => void) {
@@ -339,6 +441,22 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         let renderFrame = 0
 
+        // A hand holding a standard Window against an edge of the screen takes the view that way; see
+        // EdgeHold. Where the plane goes no further, the preview of the placement turns to danger.
+        let blocked = false
+
+        const edges = new EdgeHold(direction => latest.current.onEdgeHold?.(direction), held => {
+
+            blocked = held
+
+            renderGesture()
+        })
+
+        function holdAgainst(motion: DesktopMovePoint) {
+
+            edges.update(against(physicalToDesktopPixels(motion.x - bounds!.left, desktopScale), physicalToDesktopPixels(motion.y - bounds!.top, desktopScale), bounds!.width, bounds!.height))
+        }
+
         const commit = new WindowGestureCommit()
 
         function request(operation: () => Promise<boolean> | undefined) {
@@ -371,7 +489,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 renderFrame = 0
 
-                setGesture({ origin, current, zone, shown })
+                setGesture({ origin, current, zone, shown, blocked })
             })
         }
 
@@ -449,12 +567,12 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 const floating = planeGeometry(origin, bounds!)
 
-                request(() => onMove?.(floating.x, floating.y))
+                request(() => latest.current.onMove?.(floating.x, floating.y))
 
                 if (restoringMaximized) geometryMotion.restoreGesture(current)
 
                 else geometryMotion.updateGesture(current)
-                setGesture({ origin, current, zone, shown })
+                setGesture({ origin, current, zone, shown, blocked })
 
                 return
             }
@@ -465,6 +583,13 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 // Only the Desktop's own Windows snap; a raw drawing goes where it is taken.
                 zone = moved && standard ? snapTerm(motion) : null
+
+                if (moved && standard) {
+
+                    held.set(1)
+
+                    holdAgainst(motion)
+                }
 
                 if (zone) shown = zone
             }
@@ -500,6 +625,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         function release(motion: DesktopMovePoint, committed: boolean) {
 
+            edges.stop()
+
+            held.set(0)
+
             if (renderFrame) cancelAnimationFrame(renderFrame)
 
             // A tiled press that never crossed the threshold changed
@@ -522,7 +651,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 const target = resolvePresentedGeometry(term.position, term.size, bounds)
                 geometryMotion.targetGesture(revision, target)
                 setSettlingGeometry(target)
-                request(() => onSnap?.(term.position, term.size))
+                request(() => latest.current.onSnap?.(term.position, term.size))
                 settle()
             }
 
@@ -533,13 +662,13 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 // The Desktop paints from the surface's corner; the System records from its center.
                 const placed = planeGeometry(current, bounds!)
 
-                if (edge === null) request(() => onMove?.(placed.x, placed.y))
+                if (edge === null) request(() => latest.current.onMove?.(placed.x, placed.y))
 
                 // Only the west and north edges move the origin. A drag
                 // on any other reports no position, because none was
                 // chosen — and a position nobody chose would replace a
                 // share with the pixels it happened to resolve to.
-                else request(() => onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: placed.x, y: placed.y }))
+                else request(() => latest.current.onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: placed.x, y: placed.y }))
 
                 settle()
 
@@ -578,7 +707,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             cancel() { release(pointer, false) }
         })
 
-        setGesture({ origin, current, zone, shown })
+        setGesture({ origin, current, zone, shown, blocked })
     }
 
     // ------------------------------------------------------------ render
@@ -590,7 +719,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // Pointer input may end before its authoritative mutation settles. Paint
     // follows the same locally owned geometry throughout that interval so an
     // old boundary contact cannot flash back for one frame.
-    const paintedInsets = windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, paintMargins, gesture?.current ?? settlingGeometry ?? undefined)
+    // Follows where the view looks from, but redraws only when this Window's own margins change.
+    const insetsNow = () => windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, paintMargins, gesture?.current ?? settlingGeometry ?? undefined, cellShift.get())
+    const insetsKey = useSyncExternalStore(cellShift.subscribe, () => JSON.stringify(insetsNow()), () => JSON.stringify(insetsNow()))
+    const paintedInsets = JSON.parse(insetsKey) as ReturnType<typeof windowPaintInsets>
 
     return <>
 
@@ -613,6 +745,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
         {gesture?.shown && <SnapPreview
             shown={gesture.shown}
             visible={gesture.zone !== null}
+            blocked={gesture.blocked === true}
             bare={!standard}
             minimumSize={presentationMinimum}
             paintSurfaceSize={paintSurfaceSize}
@@ -649,7 +782,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             // Each window keeps its own compositor layer. Moving, raising, or
             // minimizing one window then only recomposites it, instead of
             // repainting the windows it shares a layer with.
-            style={{ ...style, left: 0, top: 0, willChange: "transform", ...geometryMotion.style }}
+            style={{ ...style, left: 0, top: 0, willChange: "transform", ...geometryMotion.style, x: shownX, y: shownY }}
 
             {...props}
 
@@ -734,6 +867,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 onPointerDown={event => grab(event, handle.edge)}
 
+                onDoubleClick={() => extendEdge(handle.edge)}
+
                 className={`absolute touch-none ${handle.className}`}
 
             />)}
@@ -783,6 +918,16 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     onResize?: (width: number, height: number, position: { x: number, y: number } | null) => Promise<boolean>
 
     onSnap?: (position: Position, size: Size) => Promise<boolean>
+
+    /**
+     * Asks the view to go one whole view toward an edge the Window is held against, as
+     * { x, y } of -1, 0 or 1. It answers how long the view takes to get there, or null when the
+     * plane does not go on that way.
+     */
+    onEdgeHold?: (direction: Readonly<{ x: number, y: number }>) => number | null
+
+    /** Where the other open standard Windows stand in this view, for reaching toward them. */
+    neighbours?: () => readonly WindowRegion[]
 
     active?: boolean
 
@@ -846,6 +991,9 @@ interface Gesture {
 
     zone: Snap | null
 
+    /** Held against an edge where the plane goes no further. */
+    blocked?: boolean
+
     shown: Snap | null
 }
 
@@ -859,4 +1007,28 @@ interface ExternalMove {
     pointer: ActivePointerGesture
     markReady: () => void
     finish: () => void
+}
+
+/**
+ * Where a Window is shown: its own place, less the plane's glide while a hand holds it. It follows
+ * every change at once, not on the next frame, so a Window and the plane it lives on are always
+ * drawn from the same moment.
+ */
+function useHeldAgainst(place: MotionValue<number>, held: MotionValue<number>, glide: MotionValue<number> | undefined) {
+
+    const shown = useMotionValue(place.get())
+
+    useLayoutEffect(function () {
+
+        const update = () => shown.set(place.get() - held.get() * (glide ? glide.get() : 0))
+
+        update()
+
+        const stops = [place, held, ...glide ? [glide] : []].map(value => value.on("change", update))
+
+        return () => stops.forEach(stop => stop())
+
+    }, [place, held, glide])
+
+    return shown
 }

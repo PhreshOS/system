@@ -29,7 +29,7 @@ import {
     type PermissionName,
     type PermissionRequestInput,
     type PermissionValue,
-    type ProgramIconSize,
+    type IconSize,
     type ServerLaunch,
     type ServiceAddress,
     type WindowGeometry,
@@ -2178,6 +2178,8 @@ export default class ProcessManager extends TheLink {
 
         if (word === "about") return [this.system.about()]
 
+        if (word === "system-icon") return [await this.system.icon(rest[0])]
+
         if (word === "appearance") return [this.system.appearance]
 
         if (word === "update-appearance") {
@@ -2331,7 +2333,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "service-program-metadata") return [await this.serviceProgramMetadata(heldService(rest[0]))]
 
-        if (word === "service-program-icon") return [await this.serviceProgramIcon(heldService(rest[0]), rest[1] as ProgramIconSize | undefined)]
+        if (word === "service-program-icon") return [await this.serviceProgramIcon(heldService(rest[0]), rest[1] as IconSize | undefined)]
 
         if (word === "service-follow") {
 

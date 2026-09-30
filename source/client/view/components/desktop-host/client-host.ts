@@ -5,8 +5,9 @@ import useAnnouncements from "./announcements"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
 import { type DesktopViewportHost } from "./host"
-import { type RefObject, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
 import useViewportOffset from "@client/view/structure/desktop/viewport-offset"
+import { useReducedMotion } from "@libs/react-motion"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type PresentationHost } from "./presentation"
 import messagepack from "@the-link/messagepack"
@@ -57,10 +58,13 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }), [desktop])
 
-    // Every Client following this Desktop hears that its view moved.
+    // Every Client following this Desktop hears that its view moved, as it sets off, with the motion
+    // it takes; with animations off it is there at once. It is told before the move is drawn, so
+    // its own motion starts as close as it can to the Desktop's.
+    const reducedMotion = useReducedMotion()
     const announcedOffset = useRef(viewport.offset)
 
-    useEffect(function () {
+    useLayoutEffect(function () {
 
         if (announcedOffset.current === viewport.offset) return
 
@@ -68,10 +72,10 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         for (const identity of sources.keys()) {
 
-            traffic.emit(identity, "host-desktop-viewport", "move", viewport.offset).catch(() => undefined)
+            traffic.emit(identity, "host-desktop-viewport", "move", { offset: viewport.offset, transaction: reducedMotion ? null : viewport.transaction }).catch(() => undefined)
         }
 
-    }, [viewport.offset, sources, traffic])
+    }, [viewport.offset, viewport.transaction, reducedMotion, sources, traffic])
 
     useLayoutEffect(function () {
 

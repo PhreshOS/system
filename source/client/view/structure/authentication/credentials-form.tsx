@@ -5,7 +5,7 @@ import { motion } from "motion/react"
 import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
 import { useId, useState, type SyntheticEvent } from "react"
-import logo from "@/assets/bundled/logo.png"
+import logo from "@/assets/logo.png"
 import { name, version } from "@/source/identity"
 
 /** The common username-and-password welcome for sign-up and sign-in: the first thing a System shows. */

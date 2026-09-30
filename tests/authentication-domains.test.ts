@@ -9,7 +9,7 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
     const home = await mkdtemp(join(tmpdir(), "phreshos-authentication-"))
     const application = await Application.initialize(
         home,
-        join(home, "icon.png")
+        { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") }
     )
     const link = new TheLink()
     const connection = application.linkManager.addConnection(link)

@@ -98,7 +98,7 @@ export default class ProgramManager extends TheLink {
 
         this.authManager = authManager
 
-        this.icons = new ProgramIcons(authManager.linkManager.application.defaultProgramIcon)
+        this.icons = new ProgramIcons(authManager.linkManager.application.icons.defaultProgram)
 
         this.connectTo(this.authManager, "/program")
     }

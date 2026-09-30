@@ -5,7 +5,7 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Process from "./process"
-import { type ClientLaunch, type ProgramIconSize, type ServerLaunch } from "@phreshos/core"
+import { type ClientLaunch, type IconSize, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { type ServiceAddress, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
@@ -119,7 +119,7 @@ export default class ProcessManager extends TheLink {
         }
     }
 
-    public async serviceProgramIcon(address: ServiceAddress, iconSize: ProgramIconSize = "medium") {
+    public async serviceProgramIcon(address: ServiceAddress, iconSize: IconSize = "medium") {
 
         return await this.$outbound.publishFirst("/service/program-icon", address, iconSize) as number[]
     }

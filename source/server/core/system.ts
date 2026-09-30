@@ -1,5 +1,6 @@
 import type Application from "./application"
 import { name, release, version } from "@/source/identity"
+import { IconRenderer, isIconSize } from "./link-manager/auth-manager/program-manager/icon"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
@@ -41,6 +42,9 @@ export default class System {
 
     /** When this System started: its uptime is counted from here. */
     private readonly startedAt = new Date()
+
+    /** Renders the System's own icon at each standard size, once. */
+    private iconRenderer: IconRenderer | null = null
 
     public constructor(private readonly application: Application) {}
 
@@ -454,6 +458,16 @@ export default class System {
     public about(): SystemAbout {
 
         return Object.freeze({ name, version, release, startedAt: this.startedAt })
+    }
+
+    /** The System's own icon as PNG bytes at one standard size. Anyone may read it. */
+    public async icon(size: unknown = "medium") {
+
+        if (!isIconSize(size)) throw new Error("A System icon size is small, medium, or large")
+
+        this.iconRenderer ??= new IconRenderer(this.application.icons.system)
+
+        return [...await this.iconRenderer.render(size)]
     }
 
     public get appearance() {

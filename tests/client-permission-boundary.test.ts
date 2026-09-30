@@ -342,3 +342,13 @@ test("a Client reads what the System is from the System itself, when it started 
 
     await expect(answer("about")).resolves.toEqual([about])
 })
+
+test("a Client reads the System's icon from the System itself", async () => {
+    const bytes = [137, 80, 78, 71]
+    const icon = vi.fn(async () => bytes)
+    const auth = { icon } as unknown as AuthManager
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+
+    await expect(answer("system-icon", "large")).resolves.toEqual([bytes])
+    expect(icon).toHaveBeenCalledWith("large")
+})

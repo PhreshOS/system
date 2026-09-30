@@ -143,6 +143,12 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/about")
     }
 
+    /** The System's own icon as PNG bytes, at one standard size. */
+    public async icon(size: unknown) {
+
+        return await this.$outbound.publishFirst("/icon", size)
+    }
+
     public async open(process: string, target: unknown) {
 
         await this.$outbound.publishFirst("/opening/open", process, target)

@@ -1,3 +1,4 @@
+import { type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
 import { type PaintMargins, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
@@ -25,7 +26,7 @@ export function processWindowProgress(layer: WindowLayer, loading: boolean, stop
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, paintMargins, spacing, depth, active, minimized, maximized, maximizedPosition, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, paintMargins, spacing, depth, active, minimized, maximized, maximizedPosition, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap, onEdgeHold, onNeighbours }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -46,6 +47,8 @@ export default memo(function ({ identity, record, assetId, client, title, header
     const resize = useCallback((width: number, height: number, origin: { x: number, y: number } | null) => onResize(record, width, height, origin), [onResize, record])
 
     const snap = useCallback((position: Position, size: Size) => onSnap(record, position, size), [onSnap, record])
+
+    const neighbours = useCallback(() => onNeighbours?.(record.identity) ?? [], [onNeighbours, record])
 
     const represent = useCallback((representation: PresentationGeometryRepresentation | null) => onPresentationRepresentation(record.identity, representation), [onPresentationRepresentation, record])
 
@@ -175,6 +178,10 @@ export default memo(function ({ identity, record, assetId, client, title, header
         onResize={resize}
 
         onSnap={snap}
+
+        onEdgeHold={onEdgeHold}
+
+        neighbours={onNeighbours ? neighbours : undefined}
 
     >
 
@@ -314,6 +321,12 @@ interface ProcessWindowProps {
     onResize: (record: Process, width: number, height: number, position: { x: number, y: number } | null) => Promise<boolean>
 
     onSnap: (record: Process, position: Position, size: Size) => Promise<boolean>
+
+    /** A hand holding the Window against an edge asks the view to go that way; see Window. */
+    onEdgeHold?: (direction: Readonly<{ x: number, y: number }>) => number | null
+
+    /** Where the other open standard Windows stand in this view; see Window. */
+    onNeighbours?: (identity: string) => readonly WindowRegion[]
 }
 
 interface LoadingState {

@@ -5,6 +5,7 @@ import { type AppearanceTransaction, type Position, type Size, type Presentation
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
+import motionAcross, { travel } from "../motion-across"
 import { useAppearance } from "@phreshos/react-ui"
 
 interface WindowGeometryMotionOptions {
@@ -13,6 +14,11 @@ interface WindowGeometryMotionOptions {
     animation?: PresentationAnimation | null
     transaction?: PresentationTransaction | null
     immediate: boolean
+    /**
+     * A standard Window, which the Desktop moves itself: its motions are chosen from how far it
+     * goes, not taken from the Appearance timing. A raw drawing keeps the timing its Program asked.
+     */
+    standard?: boolean
     /** Moves visibly only when the person can see where it starts or where it ends; otherwise it is simply there. */
     seenOnly?: boolean
     minimumSize?: WindowSurfaceSize
@@ -26,7 +32,7 @@ interface WindowGeometryMotionOptions {
  * visible pixels, including during a pointer gesture, so releasing a drag
  * cannot hand the transform to another renderer before snapping begins.
  */
-export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, seenOnly = false, minimumSize, onComplete }: WindowGeometryMotionOptions) {
+export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, standard = false, seenOnly = false, minimumSize, onComplete }: WindowGeometryMotionOptions) {
 
     const appearanceTransaction = useAppearance().transaction
     const frame = useRef<HTMLDivElement>(null)
@@ -45,9 +51,9 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const gestureRevision = useRef(0)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const values = useRef({ position, size, animation, transaction, immediate, seenOnly, minimumSize, onComplete })
+    const values = useRef({ position, size, animation, transaction, immediate, standard, seenOnly, minimumSize, onComplete })
 
-    values.current = { position, size, animation, transaction, immediate, seenOnly, minimumSize, onComplete }
+    values.current = { position, size, animation, transaction, immediate, standard, seenOnly, minimumSize, onComplete }
 
     function read(): WindowRegion {
 
@@ -90,7 +96,20 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         set(region)
     }
 
-    function transition(region: WindowRegion, transaction: AppearanceTransaction = appearanceTransaction, complete?: () => void) {
+    /**
+     * The motion to a place when none was asked for: a standard Window's comes from how far it goes,
+     * and from whether it leaves the person's sight on the way.
+     */
+    function timingTo(region: WindowRegion) {
+
+        if (!values.current.standard) return appearanceTransaction
+
+        const from = read()
+
+        return motionAcross(travel(from, region), "window", seen(from) && !seen(region))
+    }
+
+    function transition(region: WindowRegion, transaction: AppearanceTransaction = timingTo(region), complete?: () => void) {
 
         if (immediate) {
 
@@ -118,15 +137,20 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         return values.current.minimumSize ? constrainWindowGeometry(region, surface, values.current.minimumSize) : region
     }
 
-    /** Whether the person can see where the box is now or where it is going: either touches the screen. */
-    function seenAtAnEnd(region: WindowRegion) {
+    /** Whether a box on the plane touches the screen. */
+    function seen(shown: WindowRegion) {
 
         const parent = frame.current?.parentElement
 
         if (!parent) return false
 
         const surface = logicalSize(parent)
-        const seen = (shown: WindowRegion) => shown.x < surface.width && shown.x + shown.width > 0 && shown.y < surface.height && shown.y + shown.height > 0
+
+        return shown.x < surface.width && shown.x + shown.width > 0 && shown.y < surface.height && shown.y + shown.height > 0
+    }
+
+    /** Whether the person can see where the box is now or where it is going. */
+    function seenAtAnEnd(region: WindowRegion) {
 
         return seen(read()) || seen(region)
     }
@@ -150,7 +174,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         }
 
         const selected = animation
-            ? resolveWindowTransaction(animation.transaction, appearanceTransaction)
+            ? animation.transaction === undefined ? timingTo(region) : resolveWindowTransaction(animation.transaction, appearanceTransaction)
             : transaction === undefined || transaction === null
                 ? null
                 : resolveWindowTransaction(transaction, appearanceTransaction)
@@ -199,7 +223,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
     }, [])
 
-    useLayoutEffect(() => stop, [])
+    useLayoutEffect(() => () => { stopChase(); stop() }, [])
 
     function beginGesture() {
 
@@ -210,6 +234,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         completeGestureRestore()
         gesturing.current = true
         const revision = ++gestureRevision.current
+        stopChase()
         stop()
 
         const physical = parent.getBoundingClientRect()
@@ -221,11 +246,65 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         }
     }
 
+    // A dragged box does not jump to each pointer event: it chases the pointer's place each frame,
+    // which melts the hand's small jolts and keeps its intent.
+    const chase = useRef<{ target: WindowRegion, frame: number, last: number } | null>(null)
+
+    function stopChase() {
+
+        if (chase.current?.frame) cancelAnimationFrame(chase.current.frame)
+
+        chase.current = null
+    }
+
+    function follow(time: number) {
+
+        const state = chase.current
+
+        if (!state) return
+
+        const step = state.last ? Math.min(time - state.last, 64) : 16
+
+        state.last = time
+
+        const share = values.current.immediate ? 1 : 1 - Math.exp(-step / 16)
+
+        const shown = read()
+
+        const next = {
+            x: shown.x + (state.target.x - shown.x) * share,
+            y: shown.y + (state.target.y - shown.y) * share,
+            width: shown.width + (state.target.width - shown.width) * share,
+            height: shown.height + (state.target.height - shown.height) * share
+        }
+
+        if (restoringGesture.current) animator.current!.setPosition(next)
+
+        else set(next)
+
+        const near = Math.abs(state.target.x - next.x) < 0.5 && Math.abs(state.target.y - next.y) < 0.5 && Math.abs(state.target.width - next.width) < 0.5 && Math.abs(state.target.height - next.height) < 0.5
+
+        if (near) {
+
+            if (restoringGesture.current) animator.current!.setPosition(state.target)
+
+            else set(state.target)
+
+            state.frame = 0
+
+            return
+        }
+
+        state.frame = requestAnimationFrame(follow)
+    }
+
     function updateGesture(region: WindowRegion) {
 
-        if (restoringGesture.current) animator.current!.setPosition(region)
+        if (!chase.current) chase.current = { target: region, frame: 0, last: 0 }
 
-        else set(region)
+        chase.current.target = region
+
+        if (!chase.current.frame) chase.current.frame = requestAnimationFrame(follow)
     }
 
     function restoreGesture(region: WindowRegion) {
@@ -238,7 +317,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
         restoringGesture.current = true
         transformOrigin.set(`${originX}px ${originY}px`)
-        animator.current!.transitionSize(region, appearanceTransaction, () => {
+        animator.current!.transitionSize(region, values.current.standard ? motionAcross(Math.hypot(region.width - shown.width, region.height - shown.height), "window") : appearanceTransaction, () => {
 
             completeGestureRestore()
         })
@@ -247,6 +326,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     function targetGesture(revision: number, region: WindowRegion) {
 
         if (gestureRevision.current !== revision) return false
+
+        stopChase()
 
         completeGestureRestore()
         transition(region)
@@ -257,6 +338,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     function settleGesture(revision: number) {
 
         if (gestureRevision.current !== revision) return false
+
+        stopChase()
 
         // The authoritative request has now settled. The visible values
         // already express its result, so ownership can change without
@@ -269,6 +352,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     function finishGesture(region?: WindowRegion, revision = gestureRevision.current) {
 
         if (gestureRevision.current !== revision) return false
+
+        stopChase()
 
         gesturing.current = false
 
@@ -284,6 +369,8 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     function cancelGesture(revision = gestureRevision.current) {
 
         if (gestureRevision.current !== revision) return false
+
+        stopChase()
 
         gesturing.current = false
         completeGestureRestore()

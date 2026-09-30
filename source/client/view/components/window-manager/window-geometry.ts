@@ -215,7 +215,13 @@ export const noPaintMargins: PaintMargins = Object.freeze({ top: 0, right: 0, bo
  * paint, never geometry. Snap previews use this same function, so preview and
  * final paint cannot disagree.
  */
-export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, margins: PaintMargins, current?: WindowRegion) {
+/**
+ * The space painted around a standard Window: the margins where it meets an edge of its view, the
+ * inset elsewhere. The edges are those of the view the Window lives in on the plane, which is
+ * `shift` pixels away from what is shown when the Desktop looks between two views; so a Window keeps
+ * its margins wherever the view looks from.
+ */
+export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, margins: PaintMargins, current?: WindowRegion, shift: Readonly<{ x: number, y: number }> = noShift) {
 
     const x = current?.x ?? surface.width / 2 + pixels(position.x, surface.width)
 
@@ -227,13 +233,13 @@ export function windowPaintInsets(position: Position, size: Size, surface: Windo
 
     return {
 
-        top: startsAtBoundary(position.y, y, surface.height) ? margins.top : inset,
+        top: startsAtBoundary(position.y, y + shift.y, surface.height) ? margins.top : inset,
 
-        right: endsAtBoundary(position.x, size.width, x, width, surface.width) ? margins.right : inset,
+        right: endsAtBoundary(position.x, size.width, x + shift.x, width, surface.width) ? margins.right : inset,
 
-        bottom: endsAtBoundary(position.y, size.height, y, height, surface.height) ? margins.bottom : inset,
+        bottom: endsAtBoundary(position.y, size.height, y + shift.y, height, surface.height) ? margins.bottom : inset,
 
-        left: startsAtBoundary(position.x, x, surface.width) ? margins.left : inset
+        left: startsAtBoundary(position.x, x + shift.x, surface.width) ? margins.left : inset
     }
 }
 
@@ -244,9 +250,19 @@ function pixels(value: Value, span: number) {
     return resolved.relative * span + resolved.pixels
 }
 
+const noShift = Object.freeze({ x: 0, y: 0 })
+
+/** Whether a point lies on a line of the grid of views, which repeats every span. */
+function onGrid(value: number, span: number) {
+
+    const within = ((value % span) + span) % span
+
+    return closeTo(within, 0) || closeTo(within, span)
+}
+
 function startsAtBoundary(value: Value, resolved: number, span: number) {
 
-    if (span) return closeTo(resolved, 0)
+    if (span) return onGrid(resolved, span)
 
     // Without a measured span, the surface's first edge is half of it before the center.
     return equal(value, -0.5, 0)
@@ -254,7 +270,7 @@ function startsAtBoundary(value: Value, resolved: number, span: number) {
 
 function endsAtBoundary(position: Value, size: Value, resolvedPosition: number, resolvedSize: number, span: number) {
 
-    if (span) return closeTo(resolvedPosition + resolvedSize, span)
+    if (span) return onGrid(resolvedPosition + resolvedSize, span)
 
     const first = relative(position)
 

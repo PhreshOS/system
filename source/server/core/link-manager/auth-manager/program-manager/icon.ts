@@ -1,7 +1,9 @@
 import { stat } from "node:fs/promises"
-import { type ProgramIconSize } from "@phreshos/core"
+import { type IconSize } from "@phreshos/core"
 import type Program from "./program"
 import sharp from "sharp"
+
+export type { IconSize }
 
 export const iconSizes = {
 
@@ -13,7 +15,6 @@ export const iconSizes = {
 
 } as const
 
-export type IconSize = ProgramIconSize
 
 export function isIconSize(value: unknown): value is IconSize {
 

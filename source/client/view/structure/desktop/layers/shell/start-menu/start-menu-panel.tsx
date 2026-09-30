@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react"
 import { AppLayout, Button, Drawer, Panel, SearchField, SegmentedControl, Text, Tree, useAppearance, useColor, useScale } from "@phreshos/react-ui"
 import { Activity, LayoutGrid, List, PanelLeft, Settings as SettingsIcon } from "@phreshos/react-ui/icons"
-import logo from "@/assets/bundled/logo.png"
+import logo from "@/assets/logo.png"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import usePrograms from "@client/view/structure/desktop/programs/programs"
 import Programs, { useLaunch, type ProgramsLayout } from "./programs/programs"

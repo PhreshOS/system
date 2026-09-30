@@ -18,6 +18,8 @@ import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
 import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement"
+import { CellShiftStore, PlaneSlide, PlaneSlideContext, ViewCellShift, usePlaneSlide } from "./plane-slide"
+import { useViewTravel } from "./edge-hold"
 import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
@@ -188,9 +190,51 @@ export default function Workspace() {
         return found?.assetId ?? knownAssets.current.get(identity) ?? ""
     }
 
-    function renderWindows(layer: Layer) {
+    /**
+     * Where every other open standard Window stands in this view, for a Window that reaches toward
+     * its neighbours. Read when asked, so it is always what is drawn now; the callback itself stays
+     * the same, so it does not redraw the Windows it is given to.
+     */
+    const neighboursNow = useRef<(identity: string) => readonly WindowRegion[]>(() => [])
 
-        return windows.panesByLayer[layer].map(({ identity, record, client, presentation, closing, entering, stopping }) => {
+    neighboursNow.current = identity => windows.panesByLayer.window
+        .filter(pane => pane.identity !== identity && !pane.closing && !pane.presentation.minimized)
+        .map(pane => {
+            const bounded = boundedGeometry(pane.presentation.position, pane.presentation.size, windowSurfaceSize)
+            return resolveWindowGeometry(shownPosition(bounded.position), bounded.size, windowSurfaceSize)
+        })
+
+    const neighboursOf = useCallback((identity: string) => neighboursNow.current(identity), [])
+
+    // What lives on the plane glides with the view; see usePlaneSlide.
+    const slide = usePlaneSlide(viewport.views, viewport.transaction, windowSurfaceSize)
+
+    // How far the shown view is from the grid of whole views: Windows paint their margins at the
+    // edges of their own view, wherever the Desktop looks from.
+    const [cellShift] = useState(() => new CellShiftStore())
+
+    cellShift.take({
+        x: (views.x - Math.round(views.x)) * windowSurfaceSize.width,
+        y: (views.y - Math.round(views.y)) * windowSurfaceSize.height
+    })
+
+    useLayoutEffect(() => cellShift.announce(), [cellShift, views.x, views.y, windowSurfaceSize.width, windowSurfaceSize.height])
+
+    // A Window held against an edge takes the view one whole view that way; see useViewTravel.
+    const edgeHold = useViewTravel(viewport)
+
+    /** A layer whose drawings may be fixed to the viewport or to the plane: only the second glide with the view. */
+    function renderAnchored(layer: "under" | "over") {
+
+        return <>
+            {renderWindows(layer, "viewport")}
+            <PlaneSlide slide={slide}>{renderWindows(layer, "plane")}</PlaneSlide>
+        </>
+    }
+
+    function renderWindows(layer: Layer, anchor?: PresentationAnchor) {
+
+        return windows.panesByLayer[layer].filter(({ presentation }) => anchor === undefined || presentation.anchor === anchor).map(({ identity, record, client, presentation, closing, entering, stopping }) => {
 
             const bounded = boundedGeometry(presentation.position, presentation.size, windowSurfaceSize)
 
@@ -289,6 +333,10 @@ export default function Workspace() {
             onResize={resize}
 
             onSnap={snap}
+
+            onEdgeHold={layer === "window" ? edgeHold : undefined}
+
+            onNeighbours={layer === "window" ? neighboursOf : undefined}
 
         />
         })
@@ -480,17 +528,19 @@ export default function Workspace() {
 
         <ProgramAccessProbe door={application.doors.program} setAccess={setProgramAccess} />
 
+        <PlaneSlideContext.Provider value={slide}>
+        <ViewCellShift.Provider value={cellShift}>
         <DesktopLayers
 
             wallpaper={wallpaper}
 
-            underWindows={renderWindows("under")}
+            underWindows={renderAnchored("under")}
 
-            windows={renderWindows("window")}
+            windows={<PlaneSlide slide={slide}>{renderWindows("window")}</PlaneSlide>}
 
-            sharedResizeBoundaries={<SharedResizeBoundaries {...windows.sharedResize} commit={commitSharedResize} />}
+            sharedResizeBoundaries={<PlaneSlide slide={slide}><SharedResizeBoundaries {...windows.sharedResize} commit={commitSharedResize} /></PlaneSlide>}
 
-            overWindows={renderWindows("over")}
+            overWindows={renderAnchored("over")}
 
             windowSurfaceRef={windowSurfaceRef}
 
@@ -502,6 +552,8 @@ export default function Workspace() {
             </>}
 
         />
+        </ViewCellShift.Provider>
+        </PlaneSlideContext.Provider>
 
         {wallpaperReady && <ReadyWallpaper />}
 

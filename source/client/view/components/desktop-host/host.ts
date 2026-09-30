@@ -22,7 +22,7 @@ import {
     parseSystemProgramListOptions,
     parseSystemServiceListOptions,
     type PermissionRequestInput,
-    type ProgramIconSize
+    type IconSize
 } from "@phreshos/core"
 import {
     presentationSurface,
@@ -447,7 +447,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
             const service = await permittedService(args[0])
 
-            return [await processManager.serviceProgramIcon(service, args[1] as ProgramIconSize | undefined)]
+            return [await processManager.serviceProgramIcon(service, args[1] as IconSize | undefined)]
         }
 
         if (word === "service-follow") {
@@ -739,6 +739,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         if (word === "about") return [await authManager.about()]
 
+        if (word === "system-icon") return [await authManager.icon(args[0])]
+
         if (word === "open") {
 
             await authManager.open(pane, args[0])
@@ -889,7 +891,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         if (word === "program-definition") return [await programManager.definition(address(await permittedProgram(args[0])))]
 
         // Icon bytes are requested only when a concrete Program handle asks.
-        if (word === "icon") return [await programManager.icon(address(await permittedProgram(args[0])), args[1] as ProgramIconSize)]
+        if (word === "icon") return [await programManager.icon(address(await permittedProgram(args[0])), args[1] as IconSize)]
 
         // Installation state and lifecycle operations of one held Program.
         if (word === "installed") {
