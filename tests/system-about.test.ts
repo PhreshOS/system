@@ -8,9 +8,9 @@ import { name, release, version } from "@/source/identity"
 
 test("the System says what it is from its identity, and when it started", async () => {
     const home = await mkdtemp(join(tmpdir(), "phreshos-about-"))
+    const before = Date.now()
+    const application = await Application.initialize(home, { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") })
     try {
-        const before = Date.now()
-        const application = await Application.initialize(home, { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") })
         const about = application.system.about()
 
         assert.deepEqual(about, { name, version, release, startedAt: about.startedAt })
@@ -19,5 +19,8 @@ test("the System says what it is from its identity, and when it started", async 
         assert(about.startedAt.getTime() >= before && about.startedAt.getTime() <= Date.now())
         assert.equal(application.system.about().startedAt.getTime(), about.startedAt.getTime())
     }
-    finally { await rm(home, { recursive: true, force: true }) }
+    finally {
+        await application.store.disconnect()
+        await rm(home, { recursive: true, force: true })
+    }
 }, 60_000)
