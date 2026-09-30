@@ -5,6 +5,7 @@ import {
     type PresentationMoveGestureStart,
     type PresentationMovePoint,
     type PresentationGeometry,
+    type PresentationAnchor,
     type PresentationPosition,
     type PresentationSize,
     type PresentationSurface,
@@ -45,6 +46,7 @@ export interface DesktopMoveGesture {
 /** How one Client is actually drawn on this Desktop, as its presentation reads it. */
 export type PresentationState = Readonly<{
     layer: WindowLayer
+    anchor: PresentationAnchor
     position: PresentationPosition
     size: PresentationSize
     front: boolean
@@ -66,6 +68,7 @@ export interface PresentationHost {
     setGeometry(identity: string, geometry: PresentationGeometry, transaction?: PresentationTransactionRequest): Promise<void>
     setSurface(identity: string, surface: PresentationSurface, transaction?: PresentationTransactionRequest): Promise<void>
     setInteractive(identity: string, interactive: boolean): void
+    setAnchor(identity: string, anchor: PresentationAnchor): void
     raise(identity: string): void
     complete(identity: string, kind: "geometry" | "surface", revision: number): void
 }

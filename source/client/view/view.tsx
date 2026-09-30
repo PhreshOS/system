@@ -4,10 +4,11 @@ import { ApplicationContext } from "./contexts"
 import Structure from "./structure/structure"
 import client from "react-dom/client"
 import logo from "@/assets/bundled/logo.png"
+import { name, version } from "@/source/identity"
 
 export default function (config: Config) {
 
-    config.document.title = `${config.displayName} v${config.version}`
+    config.document.title = `${name} v${version}`
 
     const link = config.document.createElement("link")
 
@@ -17,7 +18,7 @@ export default function (config: Config) {
 
     config.document.head.appendChild(link)
 
-    const application = new Application(config.name, config.displayName, config.version, config.doors)
+    const application = new Application(config.doors)
 
     const root = client.createRoot(config.document.body)
 
@@ -35,12 +36,6 @@ export default function (config: Config) {
 export interface Config {
 
     doors: Doors
-
-    name: string
-
-    displayName: string
-
-    version: string
 
     document: Document
 }

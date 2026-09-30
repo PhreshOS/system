@@ -4,11 +4,11 @@ import { UIProvider } from "@phreshos/react-ui"
 import { defaultAppearance } from "@phreshos/core"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
-import { WallpaperBackground } from "@client/view/structure/desktop/layers/wallpaper/wallpaper"
+import { WallpaperBackground, type WallpaperPlace } from "@client/view/structure/desktop/layers/wallpaper/wallpaper"
 import { test } from "vitest"
 
 test("wallpaper source contract", () => {
-    const application = new Application("phreshos", "PhreshOS", "1.0.0", {
+    const application = new Application({
         link: "/link",
         proxy: "/proxy",
         storage: "/storage",
@@ -16,13 +16,17 @@ test("wallpaper source contract", () => {
         program: "/program"
     })
 
-    function render(file: string) {
+    function render(file: string | null, place: WallpaperPlace = "desktop") {
         return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
             <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
-                <WallpaperBackground file={file} />
+                <WallpaperBackground place={place} file={file} />
             </UIProvider>
         </ApplicationContext.Provider>)
     }
+
+    // Without a chosen wallpaper, the sign-in screen shows the seed and the Desktop the release's own.
+    assert.match(render(null, "signIn"), /seed-dark/)
+    assert.match(render(null, "desktop"), /sprout-dark/)
 
     const image = render("00000000-0000-0000-0000-000000000000.png")
     assert.match(image, /<img/)

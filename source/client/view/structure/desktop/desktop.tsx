@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
 import DesktopLayers, { desktopMargins } from "./layers/desktop-layers"
@@ -21,7 +21,7 @@ import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement
 import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
-import { type Layer, type Position, type Size } from "@phreshos/core"
+import { type Layer, type Position, type PresentationAnchor, type Size } from "@phreshos/core"
 
 export default function Workspace() {
 
@@ -80,6 +80,15 @@ export default function Workspace() {
     // Recorded in views, so a Window stays in its view on a Desktop of any size.
     const back = { x: views.x, y: views.y }
 
+    // Drawings fixed to the plane are shown against where this Desktop looks, in pixels.
+    useLayoutEffect(() => windows.presentation.follow(offset), [windows.presentation, offset.x, offset.y])
+
+    /** Where a raw drawing is shown: fixed to the viewport as written, or fixed to the plane and moved by the viewport. */
+    function shownRaw(position: Position, anchor: PresentationAnchor): Position {
+        if (anchor === "viewport" || typeof position.x !== "number" || typeof position.y !== "number") return position
+        return { x: position.x - offset.x, y: position.y - offset.y }
+    }
+
     // Standard Windows measure in the whole Desktop; the space they keep from its edges is painted.
     const margins = useMemo(() => desktopMargins(appearance.spacing, appearance.taskbar), [appearance.spacing, appearance.taskbar])
 
@@ -118,13 +127,18 @@ export default function Workspace() {
     const move = useCallback(function (record: Process, x: number, y: number) {
 
         // A raw drawing moved by hand stays this Desktop's drawing; only a standard Window's place is the System's.
-        if (windows.presentation.projection(record.identity).layer !== "window") return windows.presentation.move(record.identity, { x, y }).then(() => true)
+        // One fixed to the plane is written where it is on the plane.
+        const drawn = windows.presentation.projection(record.identity)
+        if (drawn.layer !== "window") {
+            const from = drawn.anchor === "plane" ? offset : { x: 0, y: 0 }
+            return windows.presentation.move(record.identity, { x: x + from.x, y: y + from.y }).then(() => true)
+        }
 
         const recorded = shiftPosition({ x, y }, back)
 
         return windows.move(record, recorded.x, recorded.y)
 
-    }, [windows.move, windows.presentation, back.x, back.y])
+    }, [windows.move, windows.presentation, back.x, back.y, offset.x, offset.y])
 
     const resize = useCallback((record: Process, width: number, height: number, position: { x: number, y: number } | null) => windows.resize(record, width, height, position && shiftPosition(position, back)), [windows.resize, back.x, back.y])
 
@@ -202,7 +216,7 @@ export default function Workspace() {
 
             icon={icon(record)}
 
-            position={presentation.layer === "window" ? shownPosition(bounded.position) : presentation.position}
+            position={presentation.layer === "window" ? shownPosition(bounded.position) : shownRaw(presentation.position, presentation.anchor)}
 
             size={presentation.layer === "window" ? bounded.size : presentation.size}
 
@@ -454,7 +468,7 @@ export default function Workspace() {
 
     const wallpaper = hasWallpaperClient
         ? renderWindows("wallpaper")
-        : <WallpaperBackground file={desktopWallpaper} onReady={fileWallpaperLoaded} />
+        : <WallpaperBackground place="desktop" file={desktopWallpaper} onReady={fileWallpaperLoaded} />
 
     const shell = hasShellClient
         ? renderWindows("shell")

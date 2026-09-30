@@ -16,6 +16,7 @@ function record(permissions: ProgramRecord["permissions"]): ProgramRecord {
         description: null,
         categories: [],
         keywords: [],
+        opens: [],
         hasAgent: false,
         server: null,
         client: null,

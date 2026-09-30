@@ -983,13 +983,13 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "log" | "programLog" | "clientMemory", subject: string | null) {
+    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "opening" | "log" | "programLog" | "clientMemory", subject: string | null) {
 
         const access = new SystemAccess(this, process)
 
         if (domain === "connection" || domain === "session") return access.canAuthentication()
 
-        if (domain === "permission") return access.all()
+        if (domain === "permission" || domain === "opening") return access.all()
 
         if (domain === "log") return this.grants(process.identity, "logs", [])
 
@@ -1764,13 +1764,13 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Announces one fact only through an authoritative Host registry. */
-    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
+    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitHost(domain, event, subject, ...values)
     }
 
     /** Announces one fact only to observers of an exact Program or Process subject. */
-    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
+    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
 
         await this.hostTraffic.emitSubject(domain, event, subject, ...values)
     }
@@ -1994,6 +1994,53 @@ export default class ProcessManager extends TheLink {
             )]
         }
 
+        if (word === "open") {
+
+            await this.authManager.openingManager.open(rest[0], { process, endpoint: "server" })
+
+            return []
+        }
+
+        if (word === "opened") return [process.opened]
+
+        if (word === "host-opening-requests") {
+
+            access.requireAll()
+
+            return [this.authManager.openingManager.requests()]
+        }
+
+        if (typeof word === "string" && word.startsWith("opening-request-")) {
+
+            access.requireAll()
+
+            const operation = word.slice("opening-request-".length)
+
+            if (operation === "pending") return [this.authManager.openingManager.pending(String(rest[0]))]
+            if (operation === "choose") await this.authManager.openingManager.choose(rest[0], rest[1], rest[2])
+            else if (operation === "cancel") await this.authManager.openingManager.cancel(rest[0])
+            else throw new Error(`The System does not know the OpenRequest operation "${operation}"`)
+
+            return []
+        }
+
+        if (word === "host-opening-defaults") {
+
+            access.requireAll()
+
+            return [await this.authManager.openingManager.defaults()]
+        }
+
+        if (word === "host-opening-set-default" || word === "host-opening-clear-default") {
+
+            access.requireAll()
+
+            if (word === "host-opening-set-default") await this.authManager.openingManager.setDefault(rest[0], rest[1])
+            else await this.authManager.openingManager.clearDefault(rest[0])
+
+            return []
+        }
+
         if (word === "host-permission-requests") {
 
             access.requireAll()
@@ -2076,7 +2123,7 @@ export default class ProcessManager extends TheLink {
 
             const program = heldProgram(rest[0])
 
-            const value = rest[1] === "enable" ? access.launch(rest[2]) : rest[2]
+            const value = rest[1] === "set" ? access.launch(rest[2]) : rest[2]
 
             return [await this.system.programStartup(program, String(rest[1]), value)]
         }
@@ -2128,6 +2175,8 @@ export default class ProcessManager extends TheLink {
 
             return [this.system.requireProgram(created.identity)]
         }
+
+        if (word === "about") return [this.system.about()]
 
         if (word === "appearance") return [this.system.appearance]
 

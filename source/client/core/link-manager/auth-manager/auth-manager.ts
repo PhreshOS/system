@@ -6,6 +6,7 @@ import { TheLink } from "@the-link/core"
 import LinkManager from "../link-manager"
 import ShellManager from "./shell-manager"
 import PermissionManager from "./permission-manager"
+import OpeningManager from "./opening-manager"
 import StreamRelay from "@client/core/link-manager/stream-relay"
 import { type StorageChange } from "@phreshos/core"
 
@@ -22,6 +23,8 @@ export default class AuthManager extends TheLink {
     public readonly processManager: ProcessManager
 
     public readonly permissionManager: PermissionManager
+
+    public readonly openingManager: OpeningManager
 
     public readonly shellManager: ShellManager
 
@@ -44,6 +47,8 @@ export default class AuthManager extends TheLink {
         this.processManager = new ProcessManager(this, payload.processManager)
 
         this.permissionManager = new PermissionManager(this, payload.permissionManager)
+
+        this.openingManager = new OpeningManager(this, payload.openingManager)
 
         this.shellManager = new ShellManager(this)
     }
@@ -129,6 +134,18 @@ export default class AuthManager extends TheLink {
         if (timeout !== undefined) values.push(timeout)
 
         return await this.$outbound.publishFirst("/permission/request", ...values)
+    }
+
+    /** Opens one target for a Client, as that Client's Process. */
+    public async open(process: string, target: unknown) {
+
+        await this.$outbound.publishFirst("/opening/open", process, target)
+    }
+
+    /** What a Client's Process was started to open, or null. */
+    public async opened(process: string) {
+
+        return await this.$outbound.publishFirst("/opening/opened", process)
     }
 
     public disconnect() {

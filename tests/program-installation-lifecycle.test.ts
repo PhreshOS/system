@@ -119,7 +119,7 @@ test("a reinstall starts the Program's startup launch again, as the System does 
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch, watching?: unknown, parent?: unknown, transitionOwnsIdentity?: boolean): Promise<string> }, "start").mockResolvedValue("process")
 
     const first = await manager.install(definition())
-    await manager.startup(first.program, "enable", { name: "panel" })
+    await manager.startup(first.program, "set", { name: "panel" })
     await manager.install(definition())
 
     // The first install had no startup launch; the reinstall ended the Processes and starts that one again.

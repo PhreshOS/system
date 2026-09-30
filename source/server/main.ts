@@ -1,4 +1,4 @@
-import { displayName, name, version } from "@/package.json"
+import { name } from "@/package.json"
 import view from "./view/view"
 import { defaultHome, defaultHostname, defaultPorts, environmentHome, environmentHostname, environmentPorts, requestedHome, requestedPorts } from "./view/configuration"
 import { fileURLToPath } from "node:url"
@@ -11,12 +11,6 @@ const home = environmentHome(name, process.env)
     ?? defaultHome(development)
 
 await view({
-
-    name,
-
-    displayName,
-
-    version,
 
     mode: "production",
 

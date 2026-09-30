@@ -7,6 +7,7 @@ import LinkManager from "../link-manager"
 import { parsePermissionName, type PermissionRequestInput } from "@phreshos/core"
 import ShellManager from "./shell-manager"
 import PermissionManager from "../../permission-manager"
+import OpeningManager from "../../opening-manager"
 
 export default class AuthManager extends TheLink {
 
@@ -20,6 +21,8 @@ export default class AuthManager extends TheLink {
 
     public readonly permissionManager: PermissionManager
 
+    public readonly openingManager: OpeningManager
+
     public readonly shellManager: ShellManager
 
     public constructor(linkManager: LinkManager) {
@@ -29,6 +32,8 @@ export default class AuthManager extends TheLink {
         this.linkManager = linkManager
 
         this.permissionManager = new PermissionManager(this)
+
+        this.openingManager = new OpeningManager(this)
 
         this.programManager = new ProgramManager(this)
 
@@ -222,6 +227,40 @@ export default class AuthManager extends TheLink {
     protected async uploadStat(file: unknown) {
 
         return this.uploads.stat(String(file))
+    }
+
+    @Subscribe("/about")
+    protected about() {
+
+        return this.linkManager.application.system.about()
+    }
+
+    /** A Client's request to open something, forwarded by the Desktop showing it. */
+    @Subscribe("/opening/open")
+    protected async openForClient(process: unknown, target: unknown) {
+
+        if (typeof process !== "string") throw new Error("An open request is invalid")
+
+        const held = this.processManager.processes.get(process)
+
+        if (!held) throw new Error("The Process that asked has exited")
+
+        await this.openingManager.open(target, { process: held, endpoint: "client" })
+    }
+
+    @Subscribe("/opening/opened")
+    protected openedForClient(process: unknown) {
+
+        if (typeof process !== "string") throw new Error("An opened read is invalid")
+
+        return this.processManager.processes.get(process)?.opened ?? null
+    }
+
+    /** The owner opens something from outside, such as a Node script. */
+    @Subscribe("/open")
+    protected async openForOwner(target: unknown) {
+
+        await this.openingManager.open(target, null, this.linkManager.connection().signal)
     }
 
     @Subscribe("/appearance/update")
@@ -435,15 +474,14 @@ export default class AuthManager extends TheLink {
         await connection.link.$outbound.publish(`/auth${event}`, ...values)
     }
 
+    // Each boundary receives on its own: one that disconnects while an event is on its way receives
+    // nothing more, and neither stops the others nor fails the event.
     @Forward("outbound", undefined, "/auth")
     protected async broadcastToAuthorizedBoundaries(event: string, ...values: unknown[]) {
 
-        for (const connection of this.linkManager.boundaries.values()) {
-
-            if (!connection.external && !connection.session) continue
-
-            await connection.link.$outbound.publish(event, ...values)
-        }
+        await Promise.allSettled([...this.linkManager.boundaries.values()]
+            .filter(connection => connection.external || connection.session)
+            .map(connection => connection.link.$outbound.publish(event, ...values)))
     }
 
     public toJSON() {
@@ -456,7 +494,9 @@ export default class AuthManager extends TheLink {
 
             processManager: this.processManager,
 
-            permissionManager: this.permissionManager
+            permissionManager: this.permissionManager,
+
+            openingManager: this.openingManager
         }
     }
 }
@@ -512,4 +552,5 @@ export interface AuthManagerSnapshot {
     processManager: import("./process-manager/process-manager").ProcessManagerSnapshot
 
     permissionManager: import("../../permission-manager").PermissionManagerSnapshot
+    openingManager: import("../../opening-manager").OpeningManagerSnapshot
 }

@@ -5,15 +5,14 @@ import { motion } from "motion/react"
 import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
 import { useId, useState, type SyntheticEvent } from "react"
-import { ApplicationContext } from "../../contexts"
 import logo from "@/assets/bundled/logo.png"
+import { name, version } from "@/source/identity"
 
 /** The common username-and-password welcome for sign-up and sign-in: the first thing a System shows. */
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
     const { transaction, spacing } = useAppearance()
-    const application = ApplicationContext.useValue()
     const [password, setPassword] = useState("")
     const titleId = useId()
     const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength
@@ -140,9 +139,9 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                     >{pending ? `${submitLabel}…` : submitLabel}</Button>
 
-                    <Text size="small" tone="secondary" className="text-center select-none tabular-nums" aria-label={`${application.displayName} version ${application.version}`}>
+                    <Text size="small" tone="secondary" className="text-center select-none tabular-nums" aria-label={`${name} version ${version}`}>
 
-                        {application.displayName} {application.version}
+                        {name} {version}
 
                     </Text>
 

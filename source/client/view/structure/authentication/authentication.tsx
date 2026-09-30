@@ -87,9 +87,9 @@ export default function () {
 
         {sessionAuthenticate.solve.authentication.signedUp
 
-            ? <WallpaperStage file={signInWallpaper}><SignIn /></WallpaperStage>
+            ? <WallpaperStage place="signIn" file={signInWallpaper}><SignIn /></WallpaperStage>
 
-            : <WallpaperStage file={signInWallpaper}>
+            : <WallpaperStage place="signIn" file={signInWallpaper}>
 
                 <SignUp state={sessionAuthenticate.solve.authentication} onClosed={() => setRevision(value => value + 1)} />
 

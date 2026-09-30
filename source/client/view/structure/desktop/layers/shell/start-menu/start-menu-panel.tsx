@@ -9,6 +9,7 @@ import Processes from "./processes/processes"
 import { categories, categoryIcon, categoryOf } from "./programs/categories"
 import { matchesProcess, matchesProgram, searchTerms } from "./search"
 import useLive from "./live"
+import { name, version } from "@/source/identity"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 
 type Show = "programs" | "processes"
@@ -21,10 +22,8 @@ const all = "every-category"
  * chooses between the Programs and the Processes and among the Programs' categories; beside it, the
  * search and the way the Programs are shown, the list recessed below them, and a status line under it.
  */
-export default function StartMenuPanel({ labelId, name, version, onChoose }: Readonly<{
+export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
     labelId: string
-    name: string
-    version: string
     /** Called when a Program is chosen, before it opens. */
     onChoose: () => void
 }>) {

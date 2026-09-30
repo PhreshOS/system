@@ -13,12 +13,6 @@ import SystemLogs from "./logs"
 
 export default class Application {
 
-    public readonly name: string
-
-    public readonly displayName: string
-
-    public readonly version: string
-
     /** Filesystem-owned fallback used by the authoritative Program icon service. */
     public readonly defaultProgramIcon: string
 
@@ -49,12 +43,6 @@ export default class Application {
 
     private constructor(payload: ApplicationPayload) {
 
-        this.name = payload.name
-
-        this.displayName = payload.displayName
-
-        this.version = payload.version
-
         this.defaultProgramIcon = payload.defaultProgramIcon
 
         this.storage = payload.storage
@@ -78,7 +66,7 @@ export default class Application {
         this.system = new System(this)
     }
 
-    public static async initialize(name: string, displayName: string, version: string, homePath: string, defaultProgramIcon: string) {
+    public static async initialize(homePath: string, defaultProgramIcon: string) {
 
         const storage = new FileManager(homePath)
 
@@ -92,7 +80,7 @@ export default class Application {
 
         const appearanceManager = await AppearanceManager.open(store, uploads)
 
-        const application = new Application({ name, displayName, version, defaultProgramIcon, storage, home, store, authentication, appearanceManager, uploads })
+        const application = new Application({ defaultProgramIcon, storage, home, store, authentication, appearanceManager, uploads })
 
         await application.linkManager.authManager.programManager.initialize()
 
@@ -101,12 +89,6 @@ export default class Application {
 }
 
 interface ApplicationPayload {
-
-    name: string
-
-    displayName: string
-
-    version: string
 
     defaultProgramIcon: string
 

@@ -16,6 +16,7 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     const programs = ReactTunnel.useFactory(authManager.programManager.$inbound)
     const authentication = ReactTunnel.useFactory(authManager.$inbound)
     const permissions = ReactTunnel.useFactory(authManager.permissionManager.$inbound)
+    const opening = ReactTunnel.useFactory(authManager.openingManager.$inbound)
 
     const logs = ReactTunnel.useFactory(authManager.$inbound)
 
@@ -217,6 +218,17 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     logs.useSubscribe("/logs/log", useCallback((record: unknown) => {
 
         postVisible(access => access.systemLogs(), "host-log", "log", "system", record)
+    }, [postVisible]))
+
+    // Open requests belong to whoever may decide them: frames with complete authority.
+    opening.useSubscribe("/request", useCallback((request: unknown) => {
+
+        postVisible(access => access.all(), "host-opening", "request", "system", request)
+    }, [postVisible]))
+
+    opening.useSubscribe("/resolve", useCallback((request: unknown, program: unknown) => {
+
+        postVisible(access => access.all(), "host-opening", "resolve", "system", request, program)
     }, [postVisible]))
 
     permissions.useSubscribe("/request", useCallback((request: unknown) => {

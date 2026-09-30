@@ -7,23 +7,11 @@ import type { FileStat, Upload } from "@phreshos/core"
 
 export default class Application {
 
-    public readonly name: string
-
-    public readonly displayName: string
-
-    public readonly version: string
-
     public readonly doors: Doors
 
     public readonly httpClient: HttpClient
 
-    public constructor(name: string, displayName: string, version: string, doors: Doors) {
-
-        this.name = name
-
-        this.displayName = displayName
-
-        this.version = version
+    public constructor(doors: Doors) {
 
         this.doors = doors
 

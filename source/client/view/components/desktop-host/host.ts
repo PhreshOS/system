@@ -1,3 +1,5 @@
+import { planeSize } from "@client/view/components/window-manager/window-geometry"
+import { name, release, version } from "@/source/identity"
 import {
     type DesktopOffset,
     type DesktopViewportState,
@@ -736,6 +738,56 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             )]
         }
 
+        if (word === "about") return [Object.freeze({ name, version, release })]
+
+        if (word === "open") {
+
+            await authManager.open(pane, args[0])
+
+            return []
+        }
+
+        if (word === "opened") return [await authManager.opened(pane)]
+
+        if (word === "host-opening-requests") {
+
+            await access.requireAll()
+
+            return [authManager.openingManager.list()]
+        }
+
+        if (typeof word === "string" && word.startsWith("opening-request-")) {
+
+            await access.requireAll()
+
+            const operation = word.slice("opening-request-".length)
+            const identity = String(args[0])
+
+            if (operation === "pending") return [authManager.openingManager.pending(identity)]
+            if (operation === "choose") await authManager.openingManager.choose(identity, String(args[1]), args[2] as { always?: boolean } | undefined)
+            else if (operation === "cancel") await authManager.openingManager.cancel(identity)
+            else throw new Error(`The System does not know the OpenRequest operation "${operation}"`)
+
+            return []
+        }
+
+        if (word === "host-opening-defaults") {
+
+            await access.requireAll()
+
+            return [await authManager.openingManager.defaults()]
+        }
+
+        if (word === "host-opening-set-default" || word === "host-opening-clear-default") {
+
+            await access.requireAll()
+
+            if (word === "host-opening-set-default") await authManager.openingManager.setDefault(args[0], args[1])
+            else await authManager.openingManager.clearDefault(args[0])
+
+            return []
+        }
+
         if (word === "host-permission-requests") {
 
             await access.requireAll()
@@ -821,7 +873,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             const program = await permittedProgram(args[0])
 
             const operation = String(args[1])
-            const launch = operation === "enable" ? await access.launch(args[2]) : args[2]
+            const launch = operation === "set" ? await access.launch(args[2]) : args[2]
 
             return [await programManager.startup(address(program), operation, launch)]
         }
@@ -972,6 +1024,13 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             const target = presentationProcess(args[0])
             if (typeof args[1] !== "boolean") throw new Error("Presentation interaction must be true or false")
             presentation.setInteractive(target.identity, args[1])
+            return []
+        }
+
+        if (word === "presentationAnchor") {
+            const target = presentationProcess(args[0])
+            if (args[1] !== "viewport" && args[1] !== "plane") throw new Error("A presentation anchor is \"viewport\" or \"plane\"")
+            presentation.setAnchor(target.identity, args[1])
             return []
         }
 
@@ -1237,6 +1296,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         // one host fact. It is this desktop's answer rather than a machine
         // fact, and the gutter remains private desktop layout state.
         if (word === "desktopViewport") return [viewport.state()]
+
+        if (word === "desktopPlane") return [planeSize(viewport.state().size)]
 
         if (word === "moveDesktopViewport") {
 

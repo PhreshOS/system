@@ -10,9 +10,10 @@ import Taskbar from "@client/view/structure/desktop/layers/shell/taskbar/taskbar
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
 import { test } from "vitest"
+import { name, version } from "@/source/identity"
 
 test("panel contract", async () => {
-  const application = new Application("phreshos", "Example System", "1.2.3", {
+  const application = new Application({
       link: "/link",
       proxy: "/proxy",
       storage: "/storage",
@@ -70,7 +71,7 @@ test("panel contract", async () => {
   assert.match(authentication, /<label[^>]*>Password<\/label>/)
   assert.match(authentication, /type="submit"/)
   assert.match(authentication, /<h1[^>]*>Sign in<\/h1>/)
-  assert.match(authentication, /Example System version 1.2.3/)
+  assert(authentication.includes(`${name} version ${version}`))
   assert.doesNotMatch(authentication, /backdrop-blur/)
 
   const authenticationError = markup(<CredentialsForm title="Sign up" description="Welcome" submitLabel="Continue" passwordAutocomplete="new-password" pending={false}

@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { defaultProgramVersion, parseLaunch, parseProgramDefinition, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseOpens, parseProgramDefinition, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -211,6 +211,8 @@ export default class Program {
 
             keywords: this.config.keywords ?? [],
 
+            opens: this.config.opens ?? [],
+
             hasAgent: this.agentPath !== null,
 
             server: server && {
@@ -361,6 +363,8 @@ function coherent(config: ProgramConfig) {
 
         catch { throw new Error("A program's website must be a valid URL") }
     }
+
+    if (config.opens !== undefined) parseOpens(config.opens)
 
     for (const [field, maximum] of [["categories", 20], ["keywords", 50]] as const) {
 

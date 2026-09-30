@@ -11,6 +11,7 @@ import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
 import { parseLaunch, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
+import type { OpenTarget } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
@@ -653,7 +654,7 @@ export default class ProgramManager extends TheLink {
         return launch
     }
 
-    /** Read or change the system-managed startup launch for one Program. */
+    /** Read, set, or remove the one launch a Program starts when the System starts. */
     public async startup(program: Program, operation: string, value?: unknown): Promise<Launch | null | void> {
 
         const state = new ProgramStateStorage(program)
@@ -669,7 +670,7 @@ export default class ProgramManager extends TheLink {
             return launch
         }
 
-        if (operation === "enable") {
+        if (operation === "set") {
 
             await program.validate()
 
@@ -684,7 +685,7 @@ export default class ProgramManager extends TheLink {
             return
         }
 
-        if (operation === "disable") {
+        if (operation === "remove") {
 
             if (state.startup() === null) return
             state.setStartup(null)
@@ -1431,7 +1432,7 @@ export default class ProgramManager extends TheLink {
         return { options, server, client, shape, windowShape, intent }
     }
 
-    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>) {
+    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>, opened: OpenTarget | null = null) {
 
         if (!transitionOwnsIdentity && this.changing.has(program.identity)) throw new Error("This program is changing and cannot create a process")
 
@@ -1488,6 +1489,8 @@ export default class ProgramManager extends TheLink {
         await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, {
             window: resolved.windowShape,
             prepare: record => {
+                // Known before either Endpoint runs, so its first read already has it.
+                record.opened = opened
                 record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
                 record.onServerStop((code, signal) => logs.endpointExited(identity, "server", code, signal))
                 record.onClientStop(() => logs.endpointExited(identity, "client", null, null))
@@ -1501,6 +1504,12 @@ export default class ProgramManager extends TheLink {
         })
 
         return identity
+    }
+
+    /** Starts one Process of a Program with its default launch, to open one target. */
+    public async open(program: Program, target: OpenTarget) {
+
+        return await this.start(program, {}, undefined, null, false, undefined, target)
     }
 
     /** Creates one fresh execution runtime for a Server endpoint. */

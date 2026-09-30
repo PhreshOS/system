@@ -64,6 +64,12 @@ export function resolveWindowGeometry(position: Position, size: Size, surface: W
 /** How many whole views the plane of standard Windows reaches from its center, in each direction. */
 export const planeReach = 2
 
+/** The plane of standard Windows: as many views across and down as the view reaches on both sides, and its own. */
+export function planeSize(desktop: Readonly<{ width: number, height: number }>) {
+    const views = planeReach * 2 + 1
+    return { width: desktop.width * views, height: desktop.height * views }
+}
+
 /** The largest a standard Window is shown, in views, in each dimension. */
 export const largestWindowViews = 2
 

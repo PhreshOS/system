@@ -16,19 +16,20 @@ import { resolve } from "node:path"
 import { writeFile } from "node:fs/promises"
 import { styleText } from "node:util"
 import { listenOnPorts } from "./configuration"
+import { name, version } from "@/source/identity"
 
 export default async function (config: Config) {
 
     const debugging = config.mode === "development"
 
-    cfonts.say(`${config.displayName} v${config.version}`, {
+    cfonts.say(`${name} v${version}`, {
 
         colors: ["blue", "white"],
 
         font: "simple"
     })
 
-    const application = await Application.initialize(config.name, config.displayName, config.version, config.home, resolve("assets/default-icon.png"))
+    const application = await Application.initialize(config.home, resolve("assets/default-icon.png"))
 
     // One server, five doors, each at its own name. A program's client
     // is still not the API — it is files a browser reads, with no link,
@@ -76,12 +77,6 @@ export default async function (config: Config) {
 }
 
 export interface Config {
-
-    name: string
-
-    displayName: string
-
-    version: string
 
     mode: "development" | "production"
 

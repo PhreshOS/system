@@ -1,3 +1,4 @@
+import type { OpenTarget } from "@phreshos/core"
 import { Options } from "../program-manager/program-manager"
 import Program from "../program-manager/program"
 import Window, { Position, Size } from "./window"
@@ -92,6 +93,9 @@ export default class Process {
     private ending: { code: number | null, signal: NodeJS.Signals | null } | null = null
 
     private exitProcess: (() => Promise<unknown>) | null = null
+
+    /** What this Process was started to open, set before either Endpoint runs; `null` when it was not. */
+    public opened: OpenTarget | null = null
 
     public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, window: Window | null = null) {
 

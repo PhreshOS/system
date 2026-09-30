@@ -1,3 +1,4 @@
+import { planeSize } from "@client/view/components/window-manager/window-geometry"
 import { ReactTunnel } from "@the-link/react"
 import { type DesktopSize } from "@phreshos/core"
 import useAnnouncements from "./announcements"
@@ -96,6 +97,9 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
             for (const identity of sources.keys()) {
 
                 traffic.emit(identity, "host-desktop-viewport", "resize", size).catch(() => undefined)
+
+                // The plane grows and shrinks with the Desktop.
+                traffic.emit(identity, "host-desktop-plane", "resize", planeSize(size)).catch(() => undefined)
             }
         }
 

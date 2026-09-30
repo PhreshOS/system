@@ -80,7 +80,7 @@ test.each(restrictedLayers)("Client launch routes check %s before delegation", a
     const operations = [
         ["program-create-process", program, launch],
         ["program-find-or-create-process", program, launch],
-        ["startup", program, "enable", launch],
+        ["startup", program, "set", launch],
         ["start-endpoint", process, "client", { layer }]
     ] as const
     const anotherLayer = restrictedLayers.find(candidate => candidate !== layer)!
@@ -146,7 +146,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
     await expect(access.launch({ client: { layer: "invalid" } })).rejects.toThrow("layer")
     await expect(access.clientLaunch(false)).rejects.toThrow("object")
     await f.answer("startup", null, "get")
-    await f.answer("startup", null, "disable")
+    await f.answer("startup", null, "remove")
     await f.answer("start-endpoint", null, "server")
     await f.answer("program-create-process", null, {})
     expect(f.createProcess).toHaveBeenCalledOnce()

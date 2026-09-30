@@ -1097,6 +1097,8 @@ export default class ClientProcessBoundary extends TheLink {
                 if (drawing.interactive !== before.interactive) this.deliver("host-presentation", "changeInteractive", drawing.interactive).catch(() => undefined)
 
                 if (JSON.stringify(drawing.surface) !== JSON.stringify(before.surface)) this.deliver("host-presentation", "changeSurface", drawing.surface).catch(() => undefined)
+
+                if (drawing.anchor !== before.anchor) this.deliver("host-presentation", "changeAnchor", drawing.anchor).catch(() => undefined)
             })
         }
 

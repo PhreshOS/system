@@ -4,6 +4,7 @@ import type {
     Size,
     WindowGeometry,
     WindowLayer,
+    PresentationAnchor,
     PresentationGeometry,
     PresentationPosition,
     PresentationSize,
@@ -18,7 +19,7 @@ import type {
     PresentationHost
 } from "../desktop-host/presentation"
 import { resolveWindowGeometry, type WindowRegion } from "./window-geometry"
-import { requireRawPresentation, requirePresentationMoveGesture } from "@shared/window-layers"
+import { requireRawPresentation, requirePresentationMoveGesture, requireAnchorable } from "@shared/window-layers"
 
 export interface PresentationEntry {
     identity: string
@@ -36,6 +37,8 @@ export interface PresentedWindow {
     maximized: boolean
     interactive: boolean
     layer: WindowLayer
+    /** What the drawing is fixed to: its position is counted from the viewport's center or the plane's. */
+    anchor: PresentationAnchor
     depth: number
     surfaceAnimation: PresentationAnimation | null
     geometryAnimation: PresentationAnimation | null
@@ -67,6 +70,8 @@ export default class Presentations implements PresentationHost {
     private readonly watching = new Map<string, () => void>()
     private fronts = 0
     private revision = 0
+    /** How far this Desktop's view is moved across the plane, in pixels. */
+    private view = { x: 0, y: 0 }
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
 
     public constructor(initial: ReadonlyMap<string, PresentationEntry>, private readonly client: (process: string) => ClientState | null) {
@@ -134,6 +139,13 @@ export default class Presentations implements PresentationHost {
 
     public projection(process: string) { return this.existing(process).state }
 
+    /** Where this Desktop looks on the plane, which drawings fixed to it are shown against. */
+    public follow(view: Readonly<{ x: number, y: number }>) {
+        if (view.x === this.view.x && view.y === this.view.y) return
+        this.view = { x: view.x, y: view.y }
+        this.notify()
+    }
+
     /** Hears every change to what this Desktop draws, so a Client can learn how its own drawing changed. */
     public observe(listener: () => void) {
         this.observers.add(listener)
@@ -152,9 +164,12 @@ export default class Presentations implements PresentationHost {
         const height = surface?.offsetHeight ?? 0
         const box = this.representations.get(identity)?.read() ?? resolveWindowGeometry(state.position, state.size, { width, height })
         const inside = offsetWithin(frame, "[data-window-box]")
+        // Counted from the center of what the drawing is fixed to: the viewport, or the plane.
+        const from = state.anchor === "plane" ? this.view : { x: 0, y: 0 }
         return {
             layer: state.layer,
-            position: { x: box.x + inside.x - width / 2, y: box.y + inside.y - height / 2 },
+            anchor: state.anchor,
+            position: { x: box.x + inside.x - width / 2 + from.x, y: box.y + inside.y - height / 2 + from.y },
             size: { width: frame.offsetWidth, height: frame.offsetHeight },
             front: frontmost(this.windows, state.layer) === identity,
             interactive: state.interactive,
@@ -276,6 +291,19 @@ export default class Presentations implements PresentationHost {
         const { identity, state } = this.raw(process)
         if (state.interactive === interactive) return
         this.replace(identity, { ...state, interactive })
+    }
+
+    /**
+     * Fixes a drawing to the viewport or to the plane. It stays where it is in the viewport: its position
+     * is counted again from the center of what it is now fixed to, so nothing moves.
+     */
+    public setAnchor(process: string, anchor: PresentationAnchor) {
+        const { identity, state } = this.raw(process)
+        requireAnchorable(state.layer)
+        if (state.anchor === anchor) return
+        const shift = anchor === "plane" ? 1 : -1
+        const position = state.position as PresentationPosition
+        this.replace(identity, { ...state, anchor, position: { x: position.x + shift * this.view.x, y: position.y + shift * this.view.y } })
     }
 
     public raise(process: string) {
@@ -451,6 +479,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         maximized: window.maximized,
         interactive: true,
         layer,
+        anchor: "plane",
         depth: window.depth,
         surfaceAnimation: null,
         geometryAnimation: null,
@@ -466,6 +495,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         maximized: true,
         interactive: true,
         layer,
+        anchor: "viewport",
         depth: 0,
         surfaceAnimation: null,
         geometryAnimation: null,
@@ -483,6 +513,7 @@ function initialPresentationState(client: ClientState): PresentedWindow {
         maximized: false,
         interactive: true,
         layer,
+        anchor: "viewport",
         depth: window.depth,
         surfaceAnimation: null,
         geometryAnimation: null,

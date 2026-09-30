@@ -1,7 +1,7 @@
 import PhreshOSIcon from "@client/view/components/phreshos-icon"
 import { createContext, memo, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type PropsWithChildren, type RefObject } from "react"
 import StartMenuPanel from "./start-menu-panel"
-import { ApplicationContext } from "@client/view/contexts"
+import { name } from "@/source/identity"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
@@ -84,20 +84,18 @@ export function StartMenuProvider({ taskbar, spacing, children }: PropsWithChild
 /** The Start Menu's Taskbar-owned anchor and toggle. */
 export const StartMenuButton = memo(function StartMenuButton({ showLabel = true }: Readonly<{ showLabel?: boolean }>) {
 
-    const application = ApplicationContext.useValue()
-
     const control = useStartMenuControl()
 
     return <TaskbarButton
         icon={<PhreshOSIcon className="block size-full" />}
-        label={application.displayName}
+        label={name}
         showLabel={showLabel}
         color="default:base"
         material="extended"
         aria-controls={control.id}
         aria-expanded={control.open}
         aria-haspopup="dialog"
-        aria-label={application.displayName}
+        aria-label={name}
         onPressStart={control.beginToggle}
         onPress={control.toggle}
     />
@@ -105,8 +103,6 @@ export const StartMenuButton = memo(function StartMenuButton({ showLabel = true 
 
 /** Independent Start Menu surface in the default Shell. */
 export default memo(function StartMenu() {
-
-    const application = ApplicationContext.useValue()
 
     const control = useStartMenuControl()
 
@@ -148,8 +144,6 @@ export default memo(function StartMenu() {
 
         <StartMenuPanel
             labelId={`${control.id}-label`}
-            name={application.displayName}
-            version={application.version}
             onChoose={control.close}
         />
 

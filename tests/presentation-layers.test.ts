@@ -88,3 +88,34 @@ test("a standard Window shows a change at once and follows the System once its r
   await new Promise(resolve => setTimeout(resolve))
   expect(presentations.projection("own")).toMatchObject({ maximized: false })
 })
+
+test("each layer starts fixed to what it lives on", () => {
+  expect(fixture("window").presentations.projection("own").anchor).toBe("plane")
+  for (const layer of ["wallpaper", "under", "over", "shell"] as const) expect(fixture(layer).presentations.projection("own").anchor).toBe("viewport")
+})
+
+test.each(["under", "over"] as const)("a drawing in %s is fixed to the plane where it stands on the screen", async layer => {
+  const { presentations } = fixture(layer)
+  await presentations.setGeometry("own", { x: 10, y: 20, width: 400, height: 300 })
+  presentations.follow({ x: 1440, y: -900 })
+
+  // Its position is counted again from the plane's center, so it does not move on the screen.
+  presentations.setAnchor("own", "plane")
+  expect(presentations.projection("own")).toMatchObject({ anchor: "plane", position: { x: 1450, y: -880 } })
+
+  presentations.follow({ x: 0, y: 0 })
+  presentations.setAnchor("own", "viewport")
+  expect(presentations.projection("own")).toMatchObject({ anchor: "viewport", position: { x: 1450, y: -880 } })
+})
+
+test("only under and over choose what they are fixed to", () => {
+  expect(() => fixture("window").presentations.setAnchor("own", "viewport")).toThrow(/does not support raw/)
+  expect(() => fixture("wallpaper").presentations.setAnchor("own", "plane")).toThrow(/does not support raw/)
+  expect(() => fixture("shell").presentations.setAnchor("own", "plane")).toThrow(/always fixed to the viewport/)
+})
+
+test("the plane is five views across and down, whatever the Desktop's size", async () => {
+  const { planeSize } = await import("@client/view/components/window-manager/window-geometry")
+  expect(planeSize({ width: 1440, height: 900 })).toEqual({ width: 7200, height: 4500 })
+  expect(planeSize({ width: 1024, height: 768 })).toEqual({ width: 5120, height: 3840 })
+})

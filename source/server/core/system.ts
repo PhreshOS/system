@@ -1,4 +1,5 @@
 import type Application from "./application"
+import { name, release, version } from "@/source/identity"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
@@ -9,6 +10,7 @@ import type {
     Launch,
     ProgramInstallOptions,
     ProgramUninstallOptions,
+    SystemAbout,
     SystemProgramListOptions,
     PermissionInput,
     PermissionName,
@@ -18,6 +20,7 @@ import type {
     Size,
     WindowGeometry
 } from "@phreshos/core"
+import { opensType } from "@phreshos/core"
 import type { Half, TrafficKind } from "./link-manager/auth-manager/process-manager/process-traffic"
 import { processReference, type ProcessReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 import type { Area, Watching } from "./link-manager/auth-manager/program-manager/program-manager"
@@ -36,6 +39,9 @@ type ProgramSource = Parameters<Application["linkManager"]["authManager"]["progr
  */
 export default class System {
 
+    /** When this System started: its uptime is counted from here. */
+    private readonly startedAt = new Date()
+
     public constructor(private readonly application: Application) {}
 
     public shell(command: string, options: ShellOptions = {}) {
@@ -45,7 +51,9 @@ export default class System {
 
     public listPrograms(options: SystemProgramListOptions = {}) {
 
-        return [...this.programManager.programs.values()].filter(entry => options.installed === undefined || entry.installed === options.installed)
+        return [...this.programManager.programs.values()].filter(entry =>
+            (options.installed === undefined || entry.installed === options.installed)
+            && (options.opens === undefined || opensType(entry.program.config.opens ?? [], options.opens)))
     }
 
     public findProgram(identity: string) {
@@ -440,6 +448,12 @@ export default class System {
             server: Object.freeze({ declared: owner.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
             client: Object.freeze({ declared: owner.client !== null, running: process.client !== null, service: process.client?.service ?? false })
         })
+    }
+
+    /** What this System is, as its identity declares it, and when it started. Anyone may read it: it is not a secret. */
+    public about(): SystemAbout {
+
+        return Object.freeze({ name, version, release, startedAt: this.startedAt })
     }
 
     public get appearance() {

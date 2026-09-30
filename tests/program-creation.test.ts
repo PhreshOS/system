@@ -66,7 +66,7 @@ test("startup and pinned state share one file without overwriting each other", a
     const program = await manager.create(definition())
     const startup = { name: "background", options: { mode: "quiet" } }
 
-    await manager.startup(program, "enable", startup)
+    await manager.startup(program, "set", startup)
     await manager.pinned(program, "pin")
     await manager.setPermission(program, "network", false)
 
@@ -79,7 +79,7 @@ test("startup and pinned state share one file without overwriting each other", a
         permissions: { network: false }
     })
 
-    await manager.startup(program, "disable")
+    await manager.startup(program, "remove")
     await manager.pinned(program, "unpin")
     expect(await manager.startup(program, "get")).toBeNull()
     expect(await manager.pinned(program, "get")).toBe(false)
@@ -93,12 +93,12 @@ test("Program state mutations do not rewrite an already-satisfied value", async 
     const permissionWrite = vi.spyOn(ProgramStateStorage.prototype, "setPermission")
     context.onTestFinished(() => { startupWrite.mockRestore(); permissionWrite.mockRestore() })
 
-    await manager.startup(program, "enable", { name: "background" })
-    await manager.startup(program, "enable", { name: "background" })
+    await manager.startup(program, "set", { name: "background" })
+    await manager.startup(program, "set", { name: "background" })
     await manager.setPermission(program, "network", false)
     await manager.setPermission(program, "network", false)
-    await manager.startup(program, "disable")
-    await manager.startup(program, "disable")
+    await manager.startup(program, "remove")
+    await manager.startup(program, "remove")
 
     expect(startupWrite).toHaveBeenCalledTimes(2)
     expect(permissionWrite).toHaveBeenCalledTimes(1)

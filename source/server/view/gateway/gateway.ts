@@ -42,12 +42,11 @@ async function connect(linkManager: LinkManager, peer: GatewayPeer) {
         })
     }
 
-    catch (error) {
+    // A connection that closes before it is ready is simply gone: nothing waits for it to succeed.
+    catch {
 
         await close()
-        await peer.disconnect()
-
-        throw error
+        await peer.disconnect().catch(() => undefined)
     }
 }
 

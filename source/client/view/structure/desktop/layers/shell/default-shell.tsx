@@ -2,6 +2,7 @@ import { type AppearanceTaskbar } from "@phreshos/core"
 import { useState, type ReactNode } from "react"
 import SystemErrors from "./dialogs/system-errors"
 import PermissionRequests from "./dialogs/permission-requests"
+import OpenRequests from "./dialogs/open-requests"
 import StartMenu, { StartMenuButton, StartMenuProvider, useStartMenuOpen } from "./start-menu/start-menu"
 import SignOut from "./taskbar/sign-out"
 import Taskbar from "./taskbar/taskbar"
@@ -34,6 +35,8 @@ export default function DefaultShell({ spacing, taskbar, viewport, mappedWindows
         <SystemErrors />
 
         <PermissionRequests />
+
+        <OpenRequests />
 
     </>
 }
