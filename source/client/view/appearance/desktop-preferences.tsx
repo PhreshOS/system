@@ -6,7 +6,6 @@ import {
     type AppearanceTransaction,
     type DesktopPreferences,
     type DesktopPreferencesUpdate,
-    type DesktopScalePreference,
     type Theme
 } from "@phreshos/core"
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
@@ -39,21 +38,17 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
 
     const update = useCallback(function (change: DesktopPreferencesUpdate) {
         if (change.theme !== undefined) {
-            if (change.theme === "default") storedTheme.remove()
+            if (change.theme === "desktop") storedTheme.remove()
             else storedTheme.update(change.theme)
         }
 
         if (change.animations !== undefined) {
-            if (change.animations === "default") storedAnimations.remove()
+            if (change.animations === "desktop") storedAnimations.remove()
             else storedAnimations.update(change.animations ? "enabled" : "disabled")
         }
 
-        if (change.scale !== undefined) {
-            const stored = serializeDesktopScalePreference(change.scale)
-            if (stored === null) storedScale.remove()
-            else storedScale.update(stored)
-        }
-    }, [storedAnimations.remove, storedAnimations.update, storedScale.remove, storedScale.update, storedTheme.remove, storedTheme.update])
+        if (change.scale !== undefined) storedScale.update(String(change.scale))
+    }, [storedAnimations.remove, storedAnimations.update, storedScale.update, storedTheme.remove, storedTheme.update])
 
     const setTransaction = useCallback(function (value: AppearanceTransaction) {
         transaction.current = value
@@ -141,11 +136,6 @@ export function resolveStoredDesktopScale(value: string | null) {
     const scale = Number(value)
     const { minimum, maximum } = desktopPreferencesLimits.scale
     return value !== null && Number.isFinite(scale) && scale >= minimum && scale <= maximum ? scale : defaultDesktopScale
-}
-
-/** Converts a scale request into its persisted representation; null removes the override. */
-export function serializeDesktopScalePreference(value: DesktopScalePreference) {
-    return value === "default" ? null : String(value)
 }
 
 function useMediaPreference(query: string) {

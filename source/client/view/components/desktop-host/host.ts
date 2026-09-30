@@ -1,5 +1,4 @@
 import { planeSize } from "@client/view/components/window-manager/window-geometry"
-import { name, release, version } from "@/source/identity"
 import {
     type DesktopOffset,
     type DesktopViewportState,
@@ -738,7 +737,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             )]
         }
 
-        if (word === "about") return [Object.freeze({ name, version, release })]
+        if (word === "about") return [await authManager.about()]
 
         if (word === "open") {
 

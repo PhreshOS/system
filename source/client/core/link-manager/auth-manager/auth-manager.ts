@@ -137,6 +137,12 @@ export default class AuthManager extends TheLink {
     }
 
     /** Opens one target for a Client, as that Client's Process. */
+    /** What the System is, and when it started, as the System itself says. */
+    public async about() {
+
+        return await this.$outbound.publishFirst("/about")
+    }
+
     public async open(process: string, target: unknown) {
 
         await this.$outbound.publishFirst("/opening/open", process, target)
