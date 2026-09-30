@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
-import type { AppearanceTransaction } from "@phreshos/core"
+import type { Transaction } from "@phreshos/core"
 import { transitionTheme } from "@client/view/appearance/theme-transition"
 import { test } from "vitest"
 
-const transaction = { duration: 180, easing: [0.2, 0.4, 0.6, 0.8] } satisfies AppearanceTransaction
+const transaction = { duration: 180, easing: [0.2, 0.4, 0.6, 0.8] } satisfies Transaction
 
 test("theme transitions capture one complete old and new document state", async () => {
     const ready = deferred()

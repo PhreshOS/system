@@ -10,7 +10,7 @@ import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
 import usePrograms from "@client/view/structure/desktop/programs/programs"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
-import { Button, Checkbox, Text, useAppearance, useScale } from "@phreshos/react-ui"
+import { Button, Checkbox, Text, useAppearance, useScale, useTiming } from "@phreshos/react-ui"
 
 /** The default Shell's choice of a Program for something that has no default one. */
 export default function OpenRequests() {
@@ -22,7 +22,7 @@ export default function OpenRequests() {
     const surface = useRef<HTMLDialogElement>(null)
     const title = useId()
     const reducedMotion = useReducedMotion()
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     useEffect(() => {
 

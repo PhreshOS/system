@@ -1,3 +1,4 @@
+import { resolvePresentationTransaction } from "@client/view/appearance/motion"
 import assert from "node:assert/strict"
 import ClientProcessBoundary from "@client/view/components/desktop-host/client-process-boundary"
 import { presentationTransaction } from "@client/view/components/desktop-host/presentation"
@@ -7,7 +8,9 @@ import { test } from "vitest"
 
 test("presentation transaction selection has no boolean compatibility values", () => {
   assert.deepEqual(presentationTransaction({ wait: false }), { wait: false })
-  assert.deepEqual(presentationTransaction({ transaction: 120_000, wait: true }), { transaction: 120_000, wait: true })
+  assert.deepEqual(presentationTransaction({ transaction: 2, wait: true }), { transaction: 2, wait: true })
+  // A number is a multiplier of the derived motion, never milliseconds.
+  assert.throws(() => presentationTransaction({ transaction: 120_000, wait: true }), /multiplier/)
   assert.deepEqual(presentationTransaction({ transaction: { duration: 240, easing: "ease-out" }, wait: false }), {
     transaction: { duration: 240, easing: "ease-out" }, wait: false
   })
@@ -211,4 +214,11 @@ test("a drawing's box is heard at every step it moves, not only when it settles"
 
   presentations.reconcile(new Map())
   assert.equal(stopped, true)
+})
+
+test("a presentation write moves on the derived motion, that motion stretched, or an exact one", () => {
+  const derived = { duration: 300, easing: [0.22, 1, 0.36, 1] as const }
+  assert.equal(resolvePresentationTransaction(undefined, derived), derived)
+  assert.deepEqual(resolvePresentationTransaction(2, derived), { duration: 600, easing: derived.easing })
+  assert.deepEqual(resolvePresentationTransaction({ duration: 90, easing: "linear" }, derived), { duration: 90, easing: "linear" })
 })

@@ -2,12 +2,12 @@ import useStorage from "@libs/storage-hook"
 import {
     desktopPreferencesLimits,
     defaultDesktopScale,
-    defaultAppearance,
-    type AppearanceTransaction,
+    type Transaction,
     type DesktopPreferences,
     type DesktopPreferencesUpdate,
     type Theme
 } from "@phreshos/core"
+import { timing } from "@phreshos/react-ui"
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import { transitionTheme } from "./theme-transition"
 
@@ -34,7 +34,7 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
     const current = useRef(preferences)
     const pending = useRef<PendingCommit | null>(null)
     const revision = useRef(0)
-    const transaction = useRef<AppearanceTransaction>(defaultAppearance.transaction)
+    const transaction = useRef<Transaction>(timing("change"))
 
     const update = useCallback(function (change: DesktopPreferencesUpdate) {
         if (change.theme !== undefined) {
@@ -50,7 +50,7 @@ export default function DesktopPreferencesProvider({ children }: Readonly<{ chil
         if (change.scale !== undefined) storedScale.update(String(change.scale))
     }, [storedAnimations.remove, storedAnimations.update, storedScale.update, storedTheme.remove, storedTheme.update])
 
-    const setTransaction = useCallback(function (value: AppearanceTransaction) {
+    const setTransaction = useCallback(function (value: Transaction) {
         transaction.current = value
     }, [])
 
@@ -112,8 +112,8 @@ export function useDesktopPreferences() {
     return owner
 }
 
-/** Supplies the active Appearance timing to the Desktop-owned theme transition. */
-export function useDesktopThemeTransaction(transaction: AppearanceTransaction) {
+/** Supplies the motion of a change in place to the Desktop-owned theme transition. */
+export function useDesktopThemeTransaction(transaction: Transaction) {
     const owner = useDesktopPreferences()
 
     useLayoutEffect(() => {
@@ -153,7 +153,7 @@ function useMediaPreference(query: string) {
 interface DesktopPreferencesOwner {
     readonly preferences: DesktopPreferences
     readonly update: (change: DesktopPreferencesUpdate) => void
-    readonly setTransaction: (transaction: AppearanceTransaction) => void
+    readonly setTransaction: (transaction: Transaction) => void
 }
 
 interface PendingCommit {

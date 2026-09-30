@@ -1,5 +1,5 @@
-import type { AppearanceTransaction } from "@phreshos/core"
-import { cssEasing } from "./motion"
+import type { Transaction } from "@phreshos/core"
+import { cssEasing } from "@phreshos/core"
 
 const durationProperty = "--phreshos-theme-transition-duration"
 const easingProperty = "--phreshos-theme-transition-easing"
@@ -25,7 +25,7 @@ const revisions = new WeakMap<Document, number>()
 /** Applies one theme state change through the document's old and new rendered views. */
 export function transitionTheme(
     document: Document,
-    transaction: AppearanceTransaction,
+    transaction: Transaction,
     animated: boolean,
     update: () => Promise<void>
 ) {

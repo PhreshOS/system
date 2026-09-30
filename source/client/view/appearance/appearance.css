@@ -3,6 +3,22 @@
 
 @import "@fontsource/roboto";
 
+/* Nothing on the Desktop is selected as text by a drag across it, the Program frames least of all,
+   since a selected frame is tinted whole. What is written into stays selectable. */
+[data-desktop] {
+
+    user-select: none;
+    -webkit-user-select: none;
+
+}
+
+[data-desktop] :is(input, textarea, [contenteditable="true"], [contenteditable=""]) {
+
+    user-select: text;
+    -webkit-user-select: text;
+
+}
+
 /* Pseudo-elements carry Surface paint, so they settle instantly too. */
 html[data-phreshos-theme-capture] *,
 html[data-phreshos-theme-capture] *::before,
@@ -14,46 +30,24 @@ html[data-phreshos-theme-capture] *::after {
 
 }
 
+/* A theme turns the whole screen at once, so it changes as a slow crossfade: the old view stays as
+   it was and the new one comes up over it, with nothing moving and no dip in light between them. */
 html[data-phreshos-theme-transition]::view-transition-old(root),
 html[data-phreshos-theme-transition]::view-transition-new(root) {
 
-    animation-duration: var(--phreshos-theme-transition-duration);
-
-    animation-fill-mode: both;
-
-    animation-timing-function: var(--phreshos-theme-transition-easing);
+    mix-blend-mode: normal;
 
 }
 
 html[data-phreshos-theme-transition]::view-transition-old(root) {
 
-    animation-name: phreshos-theme-leave;
+    animation: none;
 
 }
 
 html[data-phreshos-theme-transition]::view-transition-new(root) {
 
-    animation-name: phreshos-theme-enter;
-
-}
-
-@keyframes phreshos-theme-leave {
-
-    from {
-
-        opacity: 1;
-
-        scale: 1;
-
-    }
-
-    to {
-
-        opacity: 0;
-
-        scale: 1.05;
-
-    }
+    animation: phreshos-theme-enter var(--phreshos-theme-transition-duration) var(--phreshos-theme-transition-easing) both;
 
 }
 
@@ -63,15 +57,11 @@ html[data-phreshos-theme-transition]::view-transition-new(root) {
 
         opacity: 0;
 
-        scale: 1.05;
-
     }
 
     to {
 
         opacity: 1;
-
-        scale: 1;
 
     }
 

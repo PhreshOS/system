@@ -1,8 +1,8 @@
 import DesktopPreferencesProvider, { useDesktopPreferences, useDesktopThemeTransaction } from "./desktop-preferences"
-import { applyAppearanceUpdate, defaultAppearance, type Appearance } from "@phreshos/core"
-import { UIProvider } from "@phreshos/react-ui"
+import { applyAppearanceUpdate, defaultAppearance, type Appearance, type Transaction } from "@phreshos/core"
+import { timing, UIProvider } from "@phreshos/react-ui"
 import ReducedMotion from "@libs/react-motion"
-import { createContext, type PropsWithChildren, useCallback, useContext, useLayoutEffect, useState } from "react"
+import { createContext, type PropsWithChildren, useCallback, useContext, useLayoutEffect, useMemo, useState } from "react"
 import { DesktopScaleProvider } from "../structure/desktop/desktop-scale"
 import "./appearance.css"
 
@@ -28,7 +28,11 @@ function AppearanceRoot({ children }: PropsWithChildren) {
     }, [])
     const background = appearance.colors[preferences.theme].background
 
-    useDesktopThemeTransaction(appearance.transaction)
+    // A theme turns the whole screen: it fades five times as long as a change in place, softly at
+    // both ends, so the eye follows it instead of being struck by it.
+    const change = timing("change", { tempo: appearance.tempo })
+    const themeChange = useMemo<Transaction>(() => ({ duration: change.duration * 5, easing: "ease-in-out" }), [change])
+    useDesktopThemeTransaction(themeChange)
 
     return <RememberAppearanceContext.Provider value={remember}>
 

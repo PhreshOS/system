@@ -8,7 +8,7 @@ import { AuthManagerContext } from "@client/view/contexts"
 import ShellSurface, { shellSurfaceClassName } from "../shell-surface"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
-import { Button, useAppearance } from "@phreshos/react-ui"
+import { Button, useTiming } from "@phreshos/react-ui"
 
 /** Default Shell representation of raw pending permission requests. */
 export default function PermissionRequests() {
@@ -21,7 +21,7 @@ export default function PermissionRequests() {
     const title = useId()
     const description = useId()
     const reducedMotion = useReducedMotion()
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     useEffect(() => {
 

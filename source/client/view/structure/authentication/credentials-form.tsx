@@ -2,7 +2,7 @@ import { type AuthenticationState } from "@server/core/authentication/authentica
 import { surfaceLifecyclePose, surfacePresenceTransition } from "../../appearance/surface-presence"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance } from "@phreshos/react-ui"
+import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance, useTiming } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
 import { useId, useState, type SyntheticEvent } from "react"
 import logo from "@/assets/logo.png"
@@ -12,7 +12,8 @@ import { name, version } from "@/source/identity"
 export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
-    const { transaction, spacing } = useAppearance()
+    const { spacing } = useAppearance()
+    const transaction = useTiming()("change")
     const [password, setPassword] = useState("")
     const titleId = useId()
     const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength

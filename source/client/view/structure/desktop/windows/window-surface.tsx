@@ -5,18 +5,18 @@ import { motion } from "motion/react"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/presentation"
 import { type AppearanceColor, type PresentationSurface as WindowSurfaceDefinition } from "@phreshos/core"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
-import { resolveWindowTransaction } from "@client/view/appearance/motion"
+import { resolvePresentationTransaction } from "@client/view/appearance/motion"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
-import { useAppearance } from "@phreshos/react-ui"
+import { useAppearance, useTiming } from "@phreshos/react-ui"
 
 /** Paints the optional Desktop-owned backing surface for a supported presentation. */
 export default function WindowSurface({ surface, active = true, floating = false, animation, onComplete }: WindowSurfaceProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
-    const appearanceTransaction = appearance.transaction
+    const change = useTiming()("change")
     const revision = animation?.revision
-    const transaction = animation ? resolveWindowTransaction(animation.transaction, appearanceTransaction) : null
+    const transaction = animation ? resolvePresentationTransaction(animation.transaction, change) : null
     const visible = surface !== false
     const animated = revision !== undefined && transaction !== null
     const [hidden, setHidden] = useState(!visible)

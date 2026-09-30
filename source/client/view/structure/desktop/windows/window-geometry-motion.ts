@@ -1,12 +1,11 @@
 import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/presentation"
-import { resolveWindowTransaction } from "@client/view/appearance/motion"
-import { type AppearanceTransaction, type Position, type Size, type PresentationTransaction } from "@phreshos/core"
+import { resolvePresentationTransaction } from "@client/view/appearance/motion"
+import { type Transaction, type Position, type Size, type PresentationTransaction } from "@phreshos/core"
 import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
 import { useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
-import motionAcross, { travel } from "../motion-across"
-import { useAppearance } from "@phreshos/react-ui"
+import { timing, useAppearance } from "@phreshos/react-ui"
 
 interface WindowGeometryMotionOptions {
     position: Position
@@ -14,11 +13,6 @@ interface WindowGeometryMotionOptions {
     animation?: PresentationAnimation | null
     transaction?: PresentationTransaction | null
     immediate: boolean
-    /**
-     * A standard Window, which the Desktop moves itself: its motions are chosen from how far it
-     * goes, not taken from the Appearance timing. A raw drawing keeps the timing its Program asked.
-     */
-    standard?: boolean
     /** Moves visibly only when the person can see where it starts or where it ends; otherwise it is simply there. */
     seenOnly?: boolean
     minimumSize?: WindowSurfaceSize
@@ -32,9 +26,8 @@ interface WindowGeometryMotionOptions {
  * visible pixels, including during a pointer gesture, so releasing a drag
  * cannot hand the transform to another renderer before snapping begins.
  */
-export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, standard = false, seenOnly = false, minimumSize, onComplete }: WindowGeometryMotionOptions) {
+export default function useWindowGeometryMotion({ position, size, animation, transaction, immediate, seenOnly = false, minimumSize, onComplete }: WindowGeometryMotionOptions) {
 
-    const appearanceTransaction = useAppearance().transaction
     const frame = useRef<HTMLDivElement>(null)
     const x = useMotionValue(typeof position.x === "number" ? position.x : 0)
     const y = useMotionValue(typeof position.y === "number" ? position.y : 0)
@@ -51,9 +44,10 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const gestureRevision = useRef(0)
     const restoringGesture = useRef(false)
     const initialized = useRef(false)
-    const values = useRef({ position, size, animation, transaction, immediate, standard, seenOnly, minimumSize, onComplete })
+    const tempo = useAppearance().tempo
+    const values = useRef({ position, size, animation, transaction, immediate, tempo, seenOnly, minimumSize, onComplete })
 
-    values.current = { position, size, animation, transaction, immediate, standard, seenOnly, minimumSize, onComplete }
+    values.current = { position, size, animation, transaction, immediate, tempo, seenOnly, minimumSize, onComplete }
 
     function read(): WindowRegion {
 
@@ -97,19 +91,17 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     }
 
     /**
-     * The motion to a place when none was asked for: a standard Window's comes from how far it goes,
-     * and from whether it leaves the person's sight on the way.
+     * The motion to a place when none was asked for: it comes from how far the box goes, and from
+     * whether it leaves the person's sight on the way.
      */
     function timingTo(region: WindowRegion) {
 
-        if (!values.current.standard) return appearanceTransaction
-
         const from = read()
 
-        return motionAcross(travel(from, region), "window", seen(from) && !seen(region))
+        return timing("window", { distance: travel(from, region), leaving: seen(from) && !seen(region), tempo: values.current.tempo })
     }
 
-    function transition(region: WindowRegion, transaction: AppearanceTransaction = timingTo(region), complete?: () => void) {
+    function transition(region: WindowRegion, transaction: Transaction = timingTo(region), complete?: () => void) {
 
         if (immediate) {
 
@@ -174,10 +166,10 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         }
 
         const selected = animation
-            ? animation.transaction === undefined ? timingTo(region) : resolveWindowTransaction(animation.transaction, appearanceTransaction)
+            ? resolvePresentationTransaction(animation.transaction, timingTo(region))
             : transaction === undefined || transaction === null
                 ? null
-                : resolveWindowTransaction(transaction, appearanceTransaction)
+                : resolvePresentationTransaction(transaction, timingTo(region))
 
         // A motion shows where something went or where it came from; between two places the person
         // does not see, there is nothing to show, and a path across the screen would only distract.
@@ -317,7 +309,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
         restoringGesture.current = true
         transformOrigin.set(`${originX}px ${originY}px`)
-        animator.current!.transitionSize(region, values.current.standard ? motionAcross(Math.hypot(region.width - shown.width, region.height - shown.height), "window") : appearanceTransaction, () => {
+        animator.current!.transitionSize(region, timing("window", { distance: Math.hypot(region.width - shown.width, region.height - shown.height), tempo: values.current.tempo }), () => {
 
             completeGestureRestore()
         })
@@ -403,4 +395,12 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
 function logicalSize(element: HTMLElement) {
     return { width: element.clientWidth, height: element.clientHeight }
+}
+
+/** How far a box travels between two places: its center's path, and half of how much its size changes. */
+function travel(from: WindowRegion, to: WindowRegion) {
+
+    const moved = Math.hypot(to.x + to.width / 2 - from.x - from.width / 2, to.y + to.height / 2 - from.y - from.height / 2)
+
+    return moved + Math.hypot(to.width - from.width, to.height - from.height) / 2
 }

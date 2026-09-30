@@ -2,7 +2,7 @@ import { ReactTunnel } from "@the-link/react"
 import { useProperty } from "@the-link/react"
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
-import { useAppearance } from "@phreshos/react-ui"
+import { timing, useAppearance } from "@phreshos/react-ui"
 import Loading from "../components/loading"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
@@ -13,7 +13,7 @@ import Authentication from "./authentication/authentication"
 import { useCallback, useEffect, useState } from "react"
 import Readiness, { useReadiness, useReady } from "@libs/readiness"
 import { type DesktopPreferencesUpdate } from "@phreshos/core"
-import { cssEasing } from "../appearance/motion"
+import { cssEasing } from "@phreshos/core"
 import {
     connectionRequirement,
     sessionRequirement,
@@ -40,7 +40,9 @@ function DesktopReadiness({ appearance }: { appearance: ReturnType<typeof useApp
 
     const covering = pending.length > 0
 
-    const duration = appearance.transaction.duration
+    const change = timing("change", { tempo: appearance.tempo })
+
+    const duration = change.duration
 
     // Once faded out, the cover leaves the tree. Kept at zero opacity, it
     // stayed a full-screen layer over the Desktop that repainted with every
@@ -63,7 +65,7 @@ function DesktopReadiness({ appearance }: { appearance: ReturnType<typeof useApp
             // New pending work must cover the next representation
             // immediately; only completed readiness fades away.
             transitionDuration: covering ? "0ms" : String(duration) + "ms",
-            transitionTimingFunction: cssEasing(appearance.transaction.easing),
+            transitionTimingFunction: cssEasing(change.easing),
             transitionProperty: "opacity"
         }}
 

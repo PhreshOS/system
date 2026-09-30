@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react"
-import { Surface, Toolbar, useAppearance, type SurfaceProps } from "@phreshos/react-ui"
+import { Surface, Toolbar, type SurfaceProps, useTiming } from "@phreshos/react-ui"
 import { type AppearanceTaskbar, type TaskbarPosition } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
-import { cssEasing } from "@client/view/appearance/motion"
+import { cssEasing } from "@phreshos/core"
 
 /**
  * The Desktop's Taskbar is a Shell entity; React UI's Toolbar supplies the
@@ -13,7 +13,7 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
     const horizontal = taskbar.position === "top" || taskbar.position === "bottom"
     const orientation = horizontal ? "horizontal" : "vertical"
     // Every section stands the same distance from the separators beside it, and across a vertical Taskbar its buttons share one width.
-    const room = spacing / 4
+    const room = spacing / 8
     const section = (before: boolean, after: boolean): CSSProperties => ({
         flexShrink: 0,
         minWidth: 0,
@@ -22,7 +22,7 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
         [horizontal ? "paddingInlineStart" : "paddingBlockStart"]: before ? room : 0,
         [horizontal ? "paddingInlineEnd" : "paddingBlockEnd"]: after ? room : 0
     })
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
     const reducedMotion = useReducedMotion()
     const [revealed, setRevealed] = useState(false)
     const configuration = { position: taskbar.position, overlay: taskbar.overlay }
@@ -99,7 +99,7 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
             </>}
 
             {/* Clipped only along the Taskbar, and a little past its ends, so the items' shadows and focus show whole. */}
-            <Toolbar.Group style={{ ...section(true, true), flex: "1 1 0", alignSelf: "stretch", minHeight: 0, overflowClipMargin: room, ...(horizontal ? { overflowX: "clip" } : { overflowY: "clip" }) }}>
+            <Toolbar.Group style={{ ...section(true, true), flex: "1 1 0", alignSelf: "stretch", minHeight: 0, overflowClipMargin: spacing / 4, ...(horizontal ? { overflowX: "clip" } : { overflowY: "clip" }) }}>
 
                 {children}
 

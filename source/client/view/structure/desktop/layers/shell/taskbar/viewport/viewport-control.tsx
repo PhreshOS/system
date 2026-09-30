@@ -1,4 +1,5 @@
-import { Button, ContextMenu, Panel, Surface, Text, Tooltip, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { cssEasing } from "@phreshos/core"
+import { Button, ContextMenu, Panel, Surface, Text, Tooltip, useAppearance, useColor, useScale, useTiming } from "@phreshos/react-ui"
 import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
 import TaskbarTooltip from "../taskbar-tooltip"
@@ -7,8 +8,7 @@ import { planeReach, type WindowRegion } from "@client/view/components/window-ma
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
-import { cssEasing, motionTransition } from "@client/view/appearance/motion"
-import motionAcross from "../../../../motion-across"
+import { motionTransition } from "@client/view/appearance/motion"
 import { EdgeHold, against, useViewTravel } from "../../../../edge-hold"
 import { createPortal } from "react-dom"
 import SnapPreview, { type SnapTarget } from "../../../../windows/snap-preview"
@@ -96,7 +96,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
     const reducedMotion = useReducedMotion()
 
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     const vertical = taskbar.position === "left" || taskbar.position === "right"
 
@@ -456,7 +456,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
 
     const reducedMotion = useReducedMotion()
 
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     // The map is small and the view is large, so every pixel the hand moves is many on the
     // screen. The frame therefore does not jump to the pointer: it follows it, smoothed each
@@ -653,7 +653,8 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
     const last = useRef(center)
     const distance = Math.hypot(center.x - last.current.x, center.y - last.current.y)
     useEffect(() => { last.current = center }, [center.x, center.y])
-    const cardMotion = dragged || reducedMotion ? { duration: 0 } : motionTransition(motionAcross(distance, "window"))
+    const motionOf = useTiming()
+    const cardMotion = dragged || reducedMotion ? { duration: 0 } : motionTransition(motionOf("window", { distance }))
 
     const icon = space.medium + space.xsmall
 

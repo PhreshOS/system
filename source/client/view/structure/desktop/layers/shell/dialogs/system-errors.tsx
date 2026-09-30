@@ -6,7 +6,7 @@ import { motion } from "motion/react"
 import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { AuthManagerContext } from "@client/view/contexts"
 import ShellSurface, { shellSurfaceClassName } from "../shell-surface"
-import { Button, useAppearance } from "@phreshos/react-ui"
+import { Button, useTiming } from "@phreshos/react-ui"
 
 /** Shell-owned real-time presentation of new System errors. */
 export default function SystemErrors() {
@@ -32,7 +32,7 @@ export default function SystemErrors() {
 
     const reducedMotion = useReducedMotion()
 
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     const visible = record !== null
 

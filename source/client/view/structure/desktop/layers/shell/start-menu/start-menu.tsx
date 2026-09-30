@@ -7,8 +7,8 @@ import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { shellSurfaceClassName } from "../shell-surface"
 import TaskbarButton from "../taskbar/taskbar-button"
-import { useAppearance } from "@phreshos/react-ui"
-import { cssEasing } from "@client/view/appearance/motion"
+import { useTiming } from "@phreshos/react-ui"
+import { cssEasing } from "@phreshos/core"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { usePortrait } from "../../../orientation"
 
@@ -108,7 +108,7 @@ export default memo(function StartMenu() {
 
     const reducedMotion = useReducedMotion()
 
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
 
     const portrait = usePortrait()
 

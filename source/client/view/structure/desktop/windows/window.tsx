@@ -11,11 +11,10 @@ import { type PresentationGeometryRepresentation } from "@client/view/components
 import { motion, useMotionValue, type MotionValue } from "motion/react"
 import { PlaneSlideContext, ViewCellShift } from "../plane-slide"
 import { EdgeHold, against } from "../edge-hold"
-import { motionTransition, resolveWindowTransaction } from "@client/view/appearance/motion"
-import { useAppearance, Window as UIWindow } from "@phreshos/react-ui"
+import { motionTransition, resolvePresentationTransaction } from "@client/view/appearance/motion"
+import { useAppearance, Window as UIWindow, timing } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
-import motionAcross from "../motion-across"
 import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 import { createPortal } from "react-dom"
@@ -75,7 +74,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
-    const appearanceTransaction = appearance.transaction
     const desktopScale = useDesktopScale()
     const standard = layer === "window"
     const surfaceDefinition = surface ?? (standard ? true : false)
@@ -100,7 +98,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
         size: presented.current.size,
         animation: geometryAnimation,
         immediate: reducedMotion,
-        standard,
         // The Desktop moves its own Windows visibly only when the person sees one end or both; a
         // raw drawing moves the way its Program asked.
         seenOnly: standard,
@@ -271,14 +268,12 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // happen in place, so they cover little of it; leaving for the Taskbar crosses more.
     const shownBox = geometryMotion.read()
     const reach = Math.hypot(shownBox.width, shownBox.height)
-    const presenceMotion = motionAcross(reach * 0.35, "window")
+    const presenceMotion = timing("window", { distance: reach * 0.35, tempo: appearance.tempo })
     const entryTransaction = standard ? presenceMotion : null
     const opening = entering && !reducedMotion ? entryTransaction : null
     const [opened, setOpened] = useState(opening === null)
     const minimizeTransaction = minimizeAnimation
-        ? standard && minimizeAnimation.transaction === undefined
-            ? motionAcross(reach * 0.75, "window")
-            : resolveWindowTransaction(minimizeAnimation.transaction, appearanceTransaction)
+        ? resolvePresentationTransaction(minimizeAnimation.transaction, timing("window", { distance: reach * 0.75, tempo: appearance.tempo }))
         : null
     const initialPresence = standard
         ? opening ? windowSurfaceLifecyclePose.hidden : windowSurfaceLifecyclePose.visible

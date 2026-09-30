@@ -1,5 +1,5 @@
 import type { WindowRegion } from "@client/view/components/window-manager/window-geometry"
-import type { AppearanceTransaction } from "@phreshos/core"
+import type { Transaction } from "@phreshos/core"
 import { animate, type AnimationPlaybackControls, type MotionValue } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
 
@@ -40,7 +40,7 @@ export class WindowGeometryAnimation {
         this.settleLayout()
     }
 
-    transition(region: WindowRegion, transaction: AppearanceTransaction, complete?: () => void) {
+    transition(region: WindowRegion, transaction: Transaction, complete?: () => void) {
 
         this.animate(region, transaction, axes, complete)
     }
@@ -59,7 +59,7 @@ export class WindowGeometryAnimation {
     }
 
     /** Starts from the visible size while the pointer immediately owns position. */
-    transitionSize(region: WindowRegion, transaction: AppearanceTransaction, complete?: () => void) {
+    transitionSize(region: WindowRegion, transaction: Transaction, complete?: () => void) {
 
         this.stop()
         this.values.x.set(region.x)
@@ -67,7 +67,7 @@ export class WindowGeometryAnimation {
         this.animate(region, transaction, sizeAxes, complete)
     }
 
-    private animate(region: WindowRegion, transaction: AppearanceTransaction, animatedAxes: readonly Axis[], complete?: () => void) {
+    private animate(region: WindowRegion, transaction: Transaction, animatedAxes: readonly Axis[], complete?: () => void) {
 
         if (transaction.duration === 0) {
             this.set(region)

@@ -7,9 +7,9 @@ import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type Trans
 import Loading from "@client/view/components/loading"
 import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
-import { useAppearance, usePreferences } from "@phreshos/react-ui"
+import { usePreferences, useTiming } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
-import { cssEasing } from "@client/view/appearance/motion"
+import { cssEasing } from "@phreshos/core"
 import { wallpaperKind, type WallpaperKind } from "@shared/wallpaper"
 
 /** Where a wallpaper is shown. */
@@ -141,7 +141,7 @@ function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: R
     onError?: () => void
     onTransitionEnd?: (event: TransitionEvent<HTMLDivElement>) => void
 }>) {
-    const transaction = useAppearance().transaction
+    const transaction = useTiming()("change")
     const reducedMotion = useReducedMotion()
     const interactive = source.kind === "html" && visible
 

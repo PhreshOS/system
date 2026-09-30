@@ -1,7 +1,7 @@
 import { useCallback } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { planeReach } from "@client/view/components/window-manager/window-geometry"
-import motionAcross from "./motion-across"
+import { timing, useAppearance } from "@phreshos/react-ui"
 import { type ViewportControl } from "./viewport-offset"
 
 export type Direction = Readonly<{ x: number, y: number }>
@@ -15,6 +15,8 @@ export function useViewTravel(viewport: ViewportControl) {
 
     const reducedMotion = useReducedMotion()
 
+    const tempo = useAppearance().tempo
+
     const { view, moveTo, surface } = viewport
 
     return useCallback(function (direction: Direction) {
@@ -25,9 +27,9 @@ export function useViewTravel(viewport: ViewportControl) {
 
         moveTo(next)
 
-        return reducedMotion ? 0 : motionAcross(Math.hypot(direction.x * surface.width, direction.y * surface.height)).duration
+        return reducedMotion ? 0 : timing("view", { distance: Math.hypot(direction.x * surface.width, direction.y * surface.height), tempo }).duration
 
-    }, [view.x, view.y, moveTo, reducedMotion, surface.width, surface.height])
+    }, [view.x, view.y, moveTo, reducedMotion, tempo, surface.width, surface.height])
 }
 
 /** Which edges of a box a point is held against, within 16 pixels: -1, 0 or 1 in each direction. */

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react"
-import { progressAt, type AppearanceTransaction } from "@phreshos/core"
-import motionAcross from "./motion-across"
+import { progressAt, type Transaction } from "@phreshos/core"
+import { timing, useAppearance } from "@phreshos/react-ui"
 import { planeReach, type ViewportOffset, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
 
 /**
@@ -23,6 +23,10 @@ export default function useViewportOffset(surface: WindowSurfaceSize) {
     const size = useRef(surface)
 
     size.current = surface
+
+    const tempo = useRef(1)
+
+    tempo.current = useAppearance().tempo
 
     const setViews = useCallback((next: ViewportOffset, glides = true) => setState(current => {
 
@@ -60,12 +64,12 @@ export default function useViewportOffset(surface: WindowSurfaceSize) {
 
         if (distance === 0) return { views: next, transaction: null, journey: null }
 
-        const motion = motionAcross(distance)
+        const motion = timing("view", { distance, tempo: tempo.current })
 
         // The speed it already has, in lengths of the new journey a second.
         const velocity = (speed.x * path.x + speed.y * path.y) / (distance * distance)
 
-        const transaction: AppearanceTransaction = typeof motion.easing === "object" && "spring" in motion.easing
+        const transaction: Transaction = typeof motion.easing === "object" && "spring" in motion.easing
             ? Object.freeze({ duration: motion.duration, easing: Object.freeze({ spring: Object.freeze({ ...motion.easing.spring, velocity }) }) })
             : motion
 
@@ -100,9 +104,9 @@ export type ViewportControl = ReturnType<typeof useViewportOffset>
 
 type ViewportState = Readonly<{
     views: ViewportOffset
-    transaction: AppearanceTransaction | null
+    transaction: Transaction | null
     /** The glide on its way, in pixels of the plane, and when it set off. */
-    journey: Readonly<{ from: ViewportOffset, to: ViewportOffset, transaction: AppearanceTransaction, start: number }> | null
+    journey: Readonly<{ from: ViewportOffset, to: ViewportOffset, transaction: Transaction, start: number }> | null
 }>
 
 function within(value: number) {

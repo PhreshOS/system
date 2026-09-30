@@ -1,4 +1,4 @@
-import { progressAt, type AppearanceTransaction, type Easing, type PresentationTransaction } from "@phreshos/core"
+import { progressAt, type Transaction, type Easing, type PresentationTransaction } from "@phreshos/core"
 import { type Transition } from "motion/react"
 
 const easings: Record<Extract<Easing, string>, Transition["ease"]> = {
@@ -9,8 +9,8 @@ const easings: Record<Extract<Easing, string>, Transition["ease"]> = {
     "ease-in-out": "easeInOut"
 }
 
-/** Translates the public Appearance timing contract into Motion's units. */
-export function motionTransition(transaction: AppearanceTransaction, reduced = false): Transition {
+/** Translates one transaction into Motion's units. */
+export function motionTransition(transaction: Transaction, reduced = false): Transition {
 
     return {
         type: "tween",
@@ -22,30 +22,18 @@ export function motionTransition(transaction: AppearanceTransaction, reduced = f
     }
 }
 
-/** Resolves an optional presentation timing against the current Appearance. */
-export function resolveWindowTransaction(transaction: PresentationTransaction | undefined, appearance: AppearanceTransaction): AppearanceTransaction {
+/**
+ * The motion a presentation write moves on: the one derived for the change, that one made a
+ * number of times as long, or the exact one the Program chose. Stretching a derived motion keeps its
+ * shape: even a spring's stiffness follows its duration.
+ */
+export function resolvePresentationTransaction(transaction: PresentationTransaction | null | undefined, derived: Transaction): Transaction {
 
-    if (transaction === undefined) return appearance
+    if (transaction === undefined || transaction === null) return derived
 
-    if (typeof transaction === "number") return { duration: transaction, easing: appearance.easing }
+    if (typeof transaction === "number") return Object.freeze({ duration: Math.round(derived.duration * transaction), easing: derived.easing })
 
     return transaction
-}
-
-/** Translates the public easing vocabulary into a CSS timing function. */
-export function cssEasing(easing: Easing) {
-
-    if (typeof easing === "string") return easing
-
-    if (!isCurve(easing)) {
-
-        // A spring in CSS: its path sampled as a linear() curve over a nominal duration.
-        const samples = Array.from({ length: 41 }, (_, index) => progressAt({ duration: 1000, easing }, index * 25).toFixed(4))
-
-        return "linear(" + samples.join(", ") + ")"
-    }
-
-    return "cubic-bezier(" + (easing as readonly number[]).join(", ") + ")"
 }
 
 type Curve = Extract<Easing, string> | readonly [number, number, number, number]

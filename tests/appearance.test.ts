@@ -28,7 +28,7 @@ test("appearance contract", async () => {
   }))
   assert.throws(() => parseAppearance({
     ...defaultAppearance,
-    transaction: { duration: 120 }
+    tempo: 5
   }))
 
   const store = new Keyv()
@@ -110,7 +110,7 @@ test("appearance contract", async () => {
 
   const updated = {
     ...manager.value,
-    transaction: { duration: 180, easing: [0.25, 0.1, 0.25, 1] as const }
+    tempo: 1.5
   }
 
   await manager.update(updated)

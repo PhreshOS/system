@@ -1,4 +1,4 @@
-import { type AppearanceTransaction } from "@phreshos/core"
+import { type Transaction } from "@phreshos/core"
 import { type DOMKeyframesDefinition, type Transition } from "motion/react"
 import { motionTransition } from "./motion"
 
@@ -14,7 +14,7 @@ export const surfaceLifecyclePose = Object.freeze({
 }) satisfies Record<string, DOMKeyframesDefinition>
 
 /** One shared presence transition owned by Appearance. */
-export function surfacePresenceTransition(reducedMotion: boolean, transaction: AppearanceTransaction): Transition {
+export function surfacePresenceTransition(reducedMotion: boolean, transaction: Transaction): Transition {
 
     return motionTransition(transaction, reducedMotion)
 }

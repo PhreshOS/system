@@ -421,6 +421,35 @@ export default function Workspace() {
 
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
+    // A Window the person can see, maximized, fills the whole view it is in: unless the view rests on
+    // exactly that view, the view goes with it there, so the Window fills the screen. One out of sight,
+    // maximized, leaves the view where the person is.
+    const wasMaximized = useRef(new Map<string, boolean>())
+
+    useLayoutEffect(function () {
+
+        const before = wasMaximized.current
+        const now = new Map<string, boolean>()
+
+        for (const window of mappedWindows) {
+
+            now.set(window.identity, window.maximized)
+
+            if (!window.maximized || before.get(window.identity) !== false || window.minimized) continue
+
+            const { region } = window
+            const seen = region.x < offset.x + windowSurfaceSize.width / 2 && region.x + region.width > offset.x - windowSurfaceSize.width / 2
+                && region.y < offset.y + windowSurfaceSize.height / 2 && region.y + region.height > offset.y - windowSurfaceSize.height / 2
+            const view = { x: Math.round((region.x + region.width / 2) / windowSurfaceSize.width), y: Math.round((region.y + region.height / 2) / windowSurfaceSize.height) }
+
+            // Against where the view exactly is, not the view nearest to it: a view resting between two
+            // would show the maximized Window cut at the edges of its own view.
+            if (seen && (view.x !== views.x || view.y !== views.y)) viewport.moveTo(view)
+        }
+
+        wasMaximized.current = now
+    })
+
     // Going to a Window brings the view to the view it is in, whether it was minimized or only out of
     // view, and brings it to the front.
     const show = useCallback(function (record: Process) {
@@ -524,7 +553,9 @@ export default function Workspace() {
             <DefaultShell spacing={appearance.spacing} taskbar={appearance.taskbar} viewport={viewport} mappedWindows={mappedWindows}>{taskbarItems}</DefaultShell>
         </LaunchPlacementContext.Provider>
 
-    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" onFocusCapture={focus.remember} className="relative isolate h-full min-h-0 w-full overflow-hidden outline-none" style={{ color: foreground }}>
+    // The Desktop is a place to arrange things, not text to select: a drag across it would otherwise
+    // select the Program frames it passes as if they were words, and tint them blue.
+    return <div ref={desktop} tabIndex={-1} aria-label="Desktop" data-desktop="" onFocusCapture={focus.remember} className="relative isolate h-full min-h-0 w-full overflow-hidden outline-none" style={{ color: foreground }}>
 
         <ProgramAccessProbe door={application.doors.program} setAccess={setProgramAccess} />
 
