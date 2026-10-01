@@ -1,33 +1,46 @@
 # Contributing
 
-The system repository owns the authoritative PhreshOS runtime: server state,
-the desktop that represents it, owner-local gateway, persistence boundaries,
-and Process management.
+This repository is the PhreshOS System: the service that runs Programs, their
+Processes and Endpoints, authentication, permissions, storage, and the Desktop
+that shows them.
 
-## Development
+## Setup
 
-Install the pinned toolchain and verify the repository:
+You need [Bun](https://bun.sh) 1.3 and Node.js 24.15 or newer.
 
 ```sh
 bun install --frozen-lockfile
+bun run dev
+```
+
+`dev` keeps its data in `storage/`, which is never committed, and serves the
+Desktop on the first free port from `5300`.
+
+## Before a pull request
+
+```sh
 bun run verify
 ```
 
-`verify` type-checks the source and exercises the actual release archive from a
-temporary installation; CI also boots it and requests the desktop. Changes to
-production dependencies, assets, startup, or build layout must preserve that
-standalone path.
+`verify` type-checks the source, builds it, and runs the tests. One test packs
+the release, installs it in a temporary folder the way a user's System is
+installed, and boots it. A change to production dependencies, assets, startup,
+or the build layout must keep that path working. CI runs `verify` on Linux and
+Windows.
 
-Consume other PhreshOS components only through published releases. Do not add
-workspace ranges, sibling paths, source aliases into another checkout, Git
-submodules, or assumptions about an enclosing directory.
+## Rules
 
-Runtime state must remain outside version control. Tests and development runs
-must use isolated storage and clean up every process and temporary resource they
-create.
+- Use other PhreshOS packages only through their published releases. Do not
+  add workspace ranges, paths to sibling folders, source aliases into another
+  checkout, Git submodules, or assumptions about an enclosing folder.
+- Keep runtime state out of version control. Tests and development runs use
+  their own storage, and clean up every process and temporary file they
+  create.
+- Tests and their fixtures go in `tests/`; tooling goes in `scripts/`.
 
 ## Pull requests
 
-Explain which system-owned behavior the change serves, include focused proof
-for new behavior, update public documentation when the contract changes, and
-keep each pull request focused on one coherent change.
+Keep each pull request to one change. Explain what it changes in the System
+and why, add tests for new behavior, and update the
+[documentation](https://github.com/PhreshOS/website) when a public behavior
+changes.
