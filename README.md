@@ -15,7 +15,7 @@
   <a href="https://github.com/PhreshOS/system/releases">Releases</a>
 </p>
 
-[![The PhreshOS Desktop: Terminal, Files, and Settings over a living wallpaper](.github/desktop.gif)](https://phreshos.com/media/phreshos-desktop.mp4)
+![The PhreshOS Desktop, with Settings showing the System at a glance](.github/desktop.jpg)
 
 PhreshOS runs on the machine you install it on, keeps your Programs running
 there, and gives you a Desktop in the browser to use them from. Programs are
@@ -84,6 +84,12 @@ The browser shows this state; it does not hold it. A Desktop, a Node script,
 and the `phresh` command all reach the same System, through contracts defined
 in [`@phreshos/core`](https://github.com/PhreshOS/core). See
 [The System](https://phreshos.com/docs/the-system) for the full model.
+
+<p align="center">
+  <a href="https://phreshos.com/media/phreshos-desktop.mp4">
+    <img src=".github/desktop.gif" width="480" alt="Terminal, Files, and Settings on the PhreshOS Desktop">
+  </a>
+</p>
 
 ## Development
 
