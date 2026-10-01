@@ -396,7 +396,7 @@ export default class ClientProcessBoundary extends TheLink {
 
         const bytes = messagepack.serialize(message, { attachments, streams: this.relay })
 
-        target.postMessage([bytes, ...attachments], "*", [bytes.buffer, ...transfer])
+        target.postMessage([bytes, ...attachments], window.location.origin, [bytes.buffer, ...transfer])
     }
 
     private newRelay() {
