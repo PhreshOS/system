@@ -10,7 +10,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseLaunch, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
+import { parseLaunch, withProcessDefaults, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
 import type { OpenTarget } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
@@ -1360,6 +1360,8 @@ export default class ProgramManager extends TheLink {
 
             if (program !== held) throw new Error("The Program represented by this handle does not exist")
 
+            launch = this.launchOf(program, launch) as Launch & { name: string }
+
             const resolved = this.resolveLaunch(program, launch)
 
             if (typeof launch.name !== "string" || !launch.name) throw new Error("findOrCreate requires a non-empty process name")
@@ -1378,12 +1380,18 @@ export default class ProgramManager extends TheLink {
         })
     }
 
+    /** A launch with what the Program's definition says every launch takes unless it says otherwise. */
+    private launchOf(program: Program, value: unknown): Launch {
+
+        return withProcessDefaults(parseLaunch(value), program.config.process)
+    }
+
     // One interpretation of a Process launch, used both when it is created now
     // and when a future startup launch is persisted. Runtime-only facts such as
     // name occupancy and capacity remain in `start`.
     private resolveLaunch(program: Program, value: unknown) {
 
-        const launch = parseLaunch(value)
+        const launch = this.launchOf(program, value)
 
         const options = Object.fromEntries(Object.entries(launch.options ?? {}).sort(([left], [right]) => left.localeCompare(right)))
 
@@ -1440,6 +1448,9 @@ export default class ProgramManager extends TheLink {
         // files do not. Refuse before a process identity or window is
         // allocated, so a failed launch never briefly exists.
         await program.validate()
+
+        // Every launch takes the Program's Process defaults first: its name, replacement, and options.
+        launch = this.launchOf(program, launch)
 
         const resolved = prepared ?? this.resolveLaunch(program, launch)
 
