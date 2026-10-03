@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, snapPlacement, windowPaintInsets, type PaintMargins, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginPresentationMoveGesture, type Position, type Size, type TaskbarPosition, type PresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -474,31 +474,13 @@ export default function ({ title, header = true, surface, layer, icon, children,
             })
         }
 
-        // Zones are where the pointer is — within 16px of an edge — and
-        // they name shares of the surface, which each client resolves in
-        // its own space.
+        // A zone is where the pointer is, within 16 pixels of an edge, and names a half or a quarter of
+        // the room the view leaves for Windows, which each Desktop resolves in its own space.
         function snapTerm(motion: DesktopMovePoint): Snap | null {
 
-            const pointerX = physicalToDesktopPixels(motion.x - bounds!.left, desktopScale)
+            const direction = against(physicalToDesktopPixels(motion.x - bounds!.left, desktopScale), physicalToDesktopPixels(motion.y - bounds!.top, desktopScale), bounds!.width, bounds!.height)
 
-            const pointerY = physicalToDesktopPixels(motion.y - bounds!.top, desktopScale)
-
-            const west = pointerX <= 16
-
-            const east = pointerX >= bounds!.width - 16
-
-            const north = pointerY <= 16
-
-            const south = pointerY >= bounds!.height - 16
-
-            if (!west && !east && !north && !south) return null
-
-            return {
-
-                position: { x: east ? "0/1" : "-1/2", y: south ? "0/1" : "-1/2" },
-
-                size: { width: west || east ? "1/2" : "1/1", height: north || south ? "1/2" : "1/1" }
-            }
+            return direction.x || direction.y ? snapPlacement(direction, paintMargins) : null
         }
 
         function move(motion: DesktopMovePoint) {

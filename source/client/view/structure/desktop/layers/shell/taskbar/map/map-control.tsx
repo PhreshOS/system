@@ -4,7 +4,7 @@ import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
 import TaskbarTooltip from "../taskbar-tooltip"
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
-import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { planeReach, snapPlacement, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
@@ -204,7 +204,7 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
             edges.update(direction)
 
-            const zone = direction.x || direction.y ? placementAt(direction) : null
+            const zone = direction.x || direction.y ? snapPlacement(direction, desktopMargins(spacing, taskbar)) : null
 
             setEdge(current => ({ ...current, zone, shown: zone ?? current.shown, layer: windowLayer }))
         }
@@ -794,10 +794,3 @@ function clamp(value: number, minimum: number, maximum: number) {
 }
 
 /** The placement a Window takes against edges of the Desktop: a half against a side, a quarter in a corner. */
-function placementAt(direction: Readonly<{ x: number, y: number }>): SnapTarget {
-
-    return {
-        position: { x: direction.x > 0 ? "0/1" : "-1/2", y: direction.y > 0 ? "0/1" : "-1/2" },
-        size: { width: direction.x ? "1/2" : "1/1", height: direction.y ? "1/2" : "1/1" }
-    }
-}

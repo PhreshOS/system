@@ -193,6 +193,46 @@ export function constrainWindowGeometry(region: WindowRegion, surface: ViewSize,
     }
 }
 
+/**
+ * Where a standard Window goes when it is held against edges of the view: a half, or a quarter at a
+ * corner, of the room the view leaves for Windows. That room is the view less the margins painted at
+ * its edges, which are larger on the Taskbar's side, so the line between two halves is at the room's
+ * middle, not the view's: the view's middle moved by half the difference of the margins. It is written
+ * as a share of the view and pixels, so every Desktop resolves it in its own size.
+ *
+ * `direction` is -1 toward the start (left, top), 1 toward the end, or 0 for the whole room, per axis.
+ */
+export function snapPlacement(direction: Readonly<{ x: number, y: number }>, margins: PaintMargins): { position: Position, size: Size } {
+
+    const across = snapSpan(direction.x, margins.left, margins.right)
+
+    const down = snapSpan(direction.y, margins.top, margins.bottom)
+
+    return { position: { x: across.position, y: down.position }, size: { width: across.size, height: down.size } }
+}
+
+function snapSpan(direction: number, start: number, end: number): { position: Value, size: Value } {
+
+    if (!direction) return { position: "-1/2", size: "1/1" }
+
+    // Where the middle of the room is, in pixels from the view's middle.
+    const middle = Math.round((start - end) / 2)
+
+    return direction < 0
+        ? { position: "-1/2", size: shareAndPixels(0.5, middle) }
+        : { position: shareAndPixels(0, middle), size: shareAndPixels(0.5, -middle) }
+}
+
+/** A share of the view and pixels, in the form a Window's values take. */
+function shareAndPixels(share: number, pixels: number): Value {
+
+    if (share === 0) return pixels
+
+    if (pixels === 0) return `${share * 100}%`
+
+    return `${share * 100}% ${pixels < 0 ? "-" : "+"} ${Math.abs(pixels)}`
+}
+
 /** Space kept on each side of the Desktop when painting what touches it. */
 export interface PaintMargins {
 

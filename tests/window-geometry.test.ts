@@ -3,10 +3,10 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
+import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, snapPlacement, viewOfGeometry, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
 import { defaultAppearance } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
-import { test } from "vitest"
+import { expect, test } from "vitest"
 
 test("a position is the top-left corner on a plane whose zero is the surface's center", () => {
   const surface = { width: 1200, height: 800 }
@@ -228,4 +228,25 @@ test("the Desktop shows a standard Window on its plane, two views from the cente
   assert.deepEqual(boundedGeometry(inside, fitting, surface), { position: inside, size: fitting })
   assert.deepEqual(boundedGeometry({ x: 9000, y: -4000 }, { width: 500, height: 300 }, surface), { position: { x: 2000, y: -1500 }, size: { width: 500, height: 300 } })
   assert.deepEqual(boundedGeometry({ x: 1000, y: 0 }, { width: "3/1", height: 5000 }, surface), { position: { x: 500, y: 0 }, size: { width: 2000, height: 1200 } })
+})
+
+test.each([
+  ["bottom", { top: 12, right: 12, bottom: 68, left: 12 }],
+  ["right", { top: 12, right: 68, bottom: 12, left: 12 }]
+] as const)("halves held against the edges divide the room equally with the Taskbar at the %s", (_, margins) => {
+  const view = { width: 1440, height: 900 }
+  const inset = 6
+  const painted = (direction: { x: number, y: number }) => {
+    const { position, size } = snapPlacement(direction, margins)
+    const region = resolveWindowGeometry(position, size, view)
+    const insets = windowPaintInsets(position, size, view, inset, margins)
+    return { width: region.width - insets.left - insets.right, height: region.height - insets.top - insets.bottom, x: region.x + insets.left, y: region.y + insets.top }
+  }
+  const [top, bottom] = [painted({ x: 0, y: -1 }), painted({ x: 0, y: 1 })]
+  const [left, right] = [painted({ x: -1, y: 0 }), painted({ x: 1, y: 0 })]
+  expect(top.height).toBe(bottom.height)
+  expect(left.width).toBe(right.width)
+  // The gap between the halves is one spacing, as between any two Windows.
+  expect(bottom.y - (top.y + top.height)).toBe(inset * 2)
+  expect(right.x - (left.x + left.width)).toBe(inset * 2)
 })
