@@ -2,11 +2,6 @@ import { type Transaction } from "@phreshos/core"
 import { type DOMKeyframesDefinition, type Transition } from "motion/react"
 import { motionTransition } from "./motion"
 
-export const surfacePresencePose = Object.freeze({
-    entered: { scale: 1, y: 0, opacity: 1 },
-    entering: { scale: 0.96, y: 8, opacity: 0 }
-}) satisfies Record<string, DOMKeyframesDefinition>
-
 /** Shared appearance and disappearance of one complete interactive surface. */
 export const surfaceLifecyclePose = Object.freeze({
     visible: { scale: 1, y: 0, opacity: 1 },

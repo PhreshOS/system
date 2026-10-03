@@ -1,6 +1,6 @@
 import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useReducedMotion } from "@libs/react-motion"
-import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
 import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginPresentationMoveGesture, type Position, type Size, type TaskbarPosition, type PresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
@@ -20,24 +20,12 @@ import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
 import { createPortal } from "react-dom"
 
 /**
- * A window: a pure function of the record it is given. Every render
- * declares the whole target geometry from props — a float as left/top
- * pixels, a tile as its relative form. Motion interpolates only the Desktop
- * presentation between targets; the record remains the truth and a
- * refreshed page renders that truth directly.
- *
- * One set of Motion values owns the visible pixel geometry from rest,
- * through a gesture, and into the next target. Release reports the outcome
- * (onMove or onResize with resting pixels —
- * a resize carrying an origin only when the edge dragged moved one —
- * onSnap with the shares a zone names). The gesture retains the visible
- * result until those ordered authoritative mutations settle, then yields.
- *
- * Motion owns every local interpolation, never the authoritative record.
- *
- * The chrome uses the shared system material. Content currently uses the
- * plain WindowPanel test. The close control requests — the window leaves only when the truth
- * drops its process.
+ * One drawing on the Desktop: a standard Window, which the Desktop designs, or a Program's own drawing
+ * in another layer. Every render declares the whole target geometry from props; Motion values own the
+ * visible pixels from rest, through a gesture, and into the next target, while the System's record
+ * stays the truth. A gesture's release reports its outcome (onMove, onResize with an origin only when
+ * the dragged edge moved one, or onSnap with the shares a zone names) and keeps the visible result
+ * until those requests settle.
  */
 const edges: { edge: WindowEdge, className: string }[] = [
 
@@ -70,7 +58,7 @@ export function windowMinimizePose(position: TaskbarPosition) {
 
 const wholeView: Position = Object.freeze({ x: "-1/2", y: "-1/2" })
 
-export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, onEdgeHold, neighbours, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 0, height: 0 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, minWidth = minimumWindowSize.width, minHeight = minimumWindowSize.height, className, style, ...props }: WindowProps) {
+export default function ({ title, header = true, surface, layer, icon, children, onClose, onClosed, onMinimize, onMaximize, onActivate, onUnavailable, onMove, onResize, onSnap, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, onFocusCapture, onEdgeHold, neighbours, active = false, closing = false, stopping = false, minimized = false, maximized = false, maximizedPosition = wholeView, interactive = true, entering = false, position = { x: 0, y: 0 }, size = { width: 0, height: 0 }, taskbarPosition = "bottom", surfaceAnimation, geometryAnimation, minimizeAnimation, paintSurfaceSize = { width: 0, height: 0 }, paintMargins = noPaintMargins, spacing = 0, className, style, ...props }: WindowProps) {
 
     const reducedMotion = useReducedMotion()
     const appearance = useAppearance()
@@ -78,7 +66,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const standard = layer === "window"
     const surfaceDefinition = surface ?? (standard ? true : false)
     const surfaceRadius = surfaceDefinition === false ? undefined : windowSurfaceRadius(surfaceDefinition, appearance)
-    const presentationMinimum = standard ? { width: minWidth, height: minHeight } : undefined
+    const presentationMinimum = standard ? minimumWindowSize : undefined
+    const { width: minWidth, height: minHeight } = minimumWindowSize
 
     function resolvePresentedGeometry(selectedPosition: Position, selectedSize: Size, surface: ViewSize) {
 
@@ -226,8 +215,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // A window is absolute when none of its expressions depends on the surface.
     const absolute = absoluteWindowGeometry(presented.current.position, presented.current.size)
 
-    const whole = maximized
-
     const [presenceHidden, setPresenceHidden] = useState(minimized)
 
     useLayoutEffect(function () {
@@ -282,7 +269,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const presencePose = closing && standard
         ? windowSurfaceLifecyclePose.hidden
         : minimized
-            ? standard ? windowMinimizePose(taskbarPosition) : surfacePresencePose.entering
+            // Only a standard Window is ever minimized.
+            ? windowMinimizePose(taskbarPosition)
             : standard ? windowSurfaceLifecyclePose.visible : surfaceLifecyclePose.visible
 
     const presenceTransition = reducedMotion
@@ -397,9 +385,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
             ? event as DesktopMovePoint
             : { x: (event as ReactPointerEvent<HTMLElement>).clientX, y: (event as ReactPointerEvent<HTMLElement>).clientY }
 
-        // A cancelled pointerdown suppresses double-click synthesis, and
-        // a shared window restores by double-click; absolute ones keep
-        // it to block native drags.
+        // A Window placed in pixels blocks the browser's native drag; one placed by shares of the view
+        // keeps the pointerdown, so a double press can still reach it.
         if (absolute && !external) (event as ReactPointerEvent<HTMLElement>).preventDefault()
 
         const handle = external ? null : (event as ReactPointerEvent<HTMLElement>).currentTarget
@@ -422,10 +409,9 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         if (geometryAnimation) onPresentationAnimationComplete?.("geometry", geometryAnimation.revision)
 
-        // Pulling a shared window out of its placement belongs to the
-        // header alone. An edge is not a hand asking to float — it is a
-        // hand asking for a different size, and a window keeps whatever
-        // of its placement that edge does not touch.
+        // Pulling a Window placed by shares of the view (maximized or snapped) out of its place belongs
+        // to dragging it alone. An edge is a hand asking for a different size, and the Window keeps
+        // whatever of its place that edge does not touch.
         let restoring = !absolute && edge === null
 
         let moved = false
@@ -741,7 +727,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
             shown={gesture.shown}
             visible={gesture.zone !== null}
             blocked={gesture.blocked === true}
-            bare={!standard}
             minimumSize={presentationMinimum}
             paintSurfaceSize={paintSurfaceSize}
             paintInset={paintInset}
@@ -840,7 +825,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                     active={active}
 
-                    whole={whole}
+                    maximized={maximized}
 
                     beginMoveGesture={beginWindowMoveGesture}
 
@@ -971,10 +956,6 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
 
     /** Appearance spacing shared by the layer boundary and tiled gaps. */
     spacing?: number
-
-    minWidth?: number
-
-    minHeight?: number
 
 }
 

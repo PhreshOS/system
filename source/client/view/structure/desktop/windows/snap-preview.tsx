@@ -7,7 +7,7 @@ import { motionTransition } from "@client/view/appearance/motion"
 import useWindowGeometryMotion from "./window-geometry-motion"
 
 /** Preview of the placement currently offered by a drag. */
-export default function SnapPreview({ shown, visible, blocked = false, bare, minimumSize, paintSurfaceSize, paintInset, paintMargins, reducedMotion, zIndex }: SnapPreviewProps) {
+export default function SnapPreview({ shown, visible, blocked = false, minimumSize, paintSurfaceSize, paintInset, paintMargins, reducedMotion, zIndex }: SnapPreviewProps) {
 
     const transaction = useTiming()("change")
 
@@ -36,10 +36,7 @@ export default function SnapPreview({ shown, visible, blocked = false, bare, min
                 // Held where the plane goes no further, the same surface in a soft danger.
                 color={blocked ? "danger:soft" : undefined}
                 material={{ opacity: "small" }}
-                style={{
-                    position: "absolute",
-                    ...(bare ? { inset: 0 } : windowPaintInsets(shown.position, shown.size, paintSurfaceSize, paintInset, paintMargins))
-                }}
+                style={{ position: "absolute", ...windowPaintInsets(shown.position, shown.size, paintSurfaceSize, paintInset, paintMargins) }}
             />
         </motion.div>
     </motion.div>
@@ -55,7 +52,6 @@ interface SnapPreviewProps {
     visible: boolean
     /** The hand holds the Window against the plane's end. */
     blocked?: boolean
-    bare: boolean
     minimumSize?: ViewSize
     paintSurfaceSize: ViewSize
     paintInset: number

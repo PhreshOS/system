@@ -3,8 +3,8 @@ import type { BeginPresentationMoveGesture } from "@phreshos/core"
 import { Window } from "@phreshos/react-ui"
 
 /** Connects Desktop Window behavior to React UI's shared header. */
-export default function WindowHeader({ title, icon, active, whole, stopping, beginMoveGesture, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
-    return <Window.Header active={active} beginMoveGesture={beginMoveGesture} maximized={whole} onMaximize={onMaximize}>
+export default function WindowHeader({ title, icon, active, maximized, stopping, beginMoveGesture, onMinimize, onMaximize, onClose }: WindowHeaderProps) {
+    return <Window.Header active={active} beginMoveGesture={beginMoveGesture} maximized={maximized} onMaximize={onMaximize}>
         <Window.Header.Identity icon={icon} title={title} />
         <Window.Header.Actions>
             {/* The Desktop transfers focus before either operation makes the
@@ -21,7 +21,7 @@ interface WindowHeaderProps {
     title?: ReactNode
     icon: string
     active: boolean
-    whole: boolean
+    maximized: boolean
     stopping: boolean
     beginMoveGesture: BeginPresentationMoveGesture
     onMinimize?: () => void

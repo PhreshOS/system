@@ -117,7 +117,7 @@ export function boundedGeometry(position: Position, size: Size, surface: ViewSiz
     return bounded
 }
 
-/** How far this Desktop's view is moved across the plane, in pixels or in whole views as the context says. */
+/** How far this Desktop's view is moved across the plane: in pixels, or in views, as the name holding it says. */
 export interface ViewportOffset {
 
     x: number
@@ -207,14 +207,6 @@ export interface PaintMargins {
 
 export const noPaintMargins: PaintMargins = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 })
 
-/**
- * The window's box is its geometry; what is painted of it is drawn inside. An
- * edge between two Windows is drawn `inset` inside, so neighbors keep a gap
- * between them; an edge on the Desktop's own edge is drawn that side's margin
- * inside, clear of the screen's edge and the Taskbar. Gaps and margins are
- * paint, never geometry. Snap previews use this same function, so preview and
- * final paint cannot disagree.
- */
 /**
  * The space painted around a standard Window: the margins where it meets an edge of its view, the
  * inset elsewhere. The edges are those of the view the Window lives in on the plane, which is

@@ -1,7 +1,6 @@
-import { type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
-import { type PaintMargins, type ViewSize } from "@client/view/components/window-manager/window-geometry"
+import { type PaintMargins, type ViewSize, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation, type DesktopMoveGestureController } from "@client/view/components/desktop-host/presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
 import { type Position, type Size, type TaskbarPosition, type Theme, type PresentationSurface, type WindowLayer } from "@phreshos/core"

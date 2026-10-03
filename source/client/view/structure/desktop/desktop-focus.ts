@@ -66,12 +66,12 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
 
     }, [focusAfter, focusTaskbar])
 
+    // Focus needs nothing here: a Window minimized from its own header hands focus on once it becomes
+    // unavailable, and a press in the Taskbar already holds focus where it belongs.
     const minimize = useCallback(function (record: Process, minimized: boolean) {
 
-        windows.minimize(record, minimized)
+        windows.minimize(record, minimized).catch(() => undefined)
 
-        // If the request came from Window chrome, its later unavailable event
-        // transfers focus. A Taskbar-origin request already owns correct focus.
     }, [windows.minimize])
 
     const close = useCallback(function (record: Process) {

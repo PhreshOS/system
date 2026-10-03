@@ -297,7 +297,6 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
             shown={edge.shown}
             visible={edge.zone !== null}
             blocked={edge.blocked}
-            bare={false}
             paintSurfaceSize={{ width: edge.layer.clientWidth, height: edge.layer.clientHeight }}
             paintInset={spacing / 2}
             paintMargins={desktopMargins(spacing, taskbar)}
