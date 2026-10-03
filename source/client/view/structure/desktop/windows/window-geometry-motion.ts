@@ -1,4 +1,4 @@
-import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation } from "@client/view/components/desktop-host/presentation"
 import { resolvePresentationTransaction } from "@client/view/appearance/motion"
 import { type Transaction, type Position, type Size, type PresentationTransaction } from "@phreshos/core"
@@ -15,7 +15,7 @@ interface WindowGeometryMotionOptions {
     immediate: boolean
     /** Moves visibly only when the person can see where it starts or where it ends; otherwise it is simply there. */
     seenOnly?: boolean
-    minimumSize?: WindowSurfaceSize
+    minimumSize?: ViewSize
     onComplete?: (revision: number) => void
 }
 

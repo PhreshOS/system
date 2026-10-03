@@ -1,7 +1,7 @@
 import { type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import ClientState from "@client/core/link-manager/auth-manager/process-manager/client-state"
-import { type PaintMargins, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { type PaintMargins, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type PresentationAnimation, type DesktopMoveGestureController } from "@client/view/components/desktop-host/presentation"
 import { type PresentationGeometryRepresentation } from "@client/view/components/window-manager/presentations"
 import { type Position, type Size, type TaskbarPosition, type Theme, type PresentationSurface, type WindowLayer } from "@phreshos/core"
@@ -26,7 +26,7 @@ export function processWindowProgress(layer: WindowLayer, loading: boolean, stop
  * props so memoization can see which process actually changed even though
  * the peer deliberately keeps each Process instance alive and mutates it.
  */
-export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, paintMargins, spacing, depth, active, minimized, maximized, maximizedPosition, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onFill, onClose, onClosed, onUnavailable, onMove, onResize, onSnap, onEdgeHold, onNeighbours }: ProcessWindowProps) {
+export default memo(function ({ identity, record, assetId, client, title, header, surface, layer, icon, position, size, taskbarPosition, surfaceAnimation, geometryAnimation, minimizeAnimation, onPresentationAnimationComplete, onPresentationRepresentation, onPresentationMoveGesture, paintSurfaceSize, paintMargins, spacing, depth, active, minimized, maximized, maximizedPosition, interactive, closing, stopping, entering, door, programAccess, theme, onFrame, onFrameLoad, onReady, onRaise, onMinimize, onMaximize, onClose, onClosed, onUnavailable, onMove, onResize, onSnap, onEdgeHold, onNeighbours }: ProcessWindowProps) {
 
     const activate = useCallback(() => onRaise(record), [onRaise, record])
 
@@ -34,7 +34,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
     const minimize = useCallback(() => onMinimize(record, true), [onMinimize, record])
 
-    const fill = useCallback(() => onFill(record), [onFill, record])
+    const maximize = useCallback(() => onMaximize(record), [onMaximize, record])
 
     const close = useCallback(() => onClose(record), [onClose, record])
 
@@ -165,7 +165,7 @@ export default memo(function ({ identity, record, assetId, client, title, header
 
         onMinimize={minimize}
 
-        onMaximize={fill}
+        onMaximize={maximize}
 
         onClose={close}
 
@@ -268,7 +268,7 @@ interface ProcessWindowProps {
 
     onPresentationMoveGesture: (identity: string, controller: DesktopMoveGestureController | null) => void
 
-    paintSurfaceSize?: WindowSurfaceSize
+    paintSurfaceSize?: ViewSize
 
     paintMargins?: PaintMargins
 
@@ -308,7 +308,7 @@ interface ProcessWindowProps {
 
     onMinimize: (record: Process, minimized: boolean) => void
 
-    onFill: (record: Process) => Promise<boolean>
+    onMaximize: (record: Process) => Promise<boolean>
 
     onClose: (record: Process) => void
 

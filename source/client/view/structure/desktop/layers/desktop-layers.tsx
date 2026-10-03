@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, type Ref } from "react"
+import { type CSSProperties, type ReactNode } from "react"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { type PaintMargins } from "@client/view/components/window-manager/window-geometry"
 import { useDesktopScale } from "../desktop-scale"
@@ -7,7 +7,7 @@ import { useDesktopScale } from "../desktop-scale"
  * Five coextensive Desktop layers ordered from back to front. No layer owns
  * layout space for another; each receives the complete Desktop bounds.
  */
-export default function DesktopLayers({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, shell, windowSurfaceRef, spacing }: DesktopLayersProps) {
+export default function DesktopLayers({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, shell, spacing }: DesktopLayersProps) {
 
     // The Desktop's zoom multiplies viewport units too: what sizes itself by the viewport divides by it.
     const scale = useDesktopScale()
@@ -32,15 +32,11 @@ export default function DesktopLayers({ wallpaper, underWindows, windows, shared
 
         <div data-desktop-layer="window" className="pointer-events-none absolute inset-0 z-2 overflow-hidden">
 
-            {/* Standard Windows measure in the whole Desktop, like every other
-                layer; the margins around it are painted, not measured. */}
-            <div ref={windowSurfaceRef} data-window-surface="" className="absolute inset-0">
+            {/* Standard Windows measure in the whole view, like every other layer; the margins
+                around them are painted, not measured. */}
+            {windows}
 
-                {windows}
-
-                {sharedResizeBoundaries}
-
-            </div>
+            {sharedResizeBoundaries}
 
         </div>
 
@@ -70,8 +66,6 @@ interface DesktopLayersProps {
     sharedResizeBoundaries: ReactNode
 
     overWindows: ReactNode
-
-    windowSurfaceRef: Ref<HTMLDivElement>
 
     spacing: number
 

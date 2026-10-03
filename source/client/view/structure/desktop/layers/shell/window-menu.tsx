@@ -6,14 +6,14 @@ import { ArrowDownLeft, ArrowUpRight, LocateFixed, Magnet, Maximize2, Minimize2,
  * icon on the Map. Going to it and bringing it here move between views; the rest act on the Window
  * where it is, with the same icons as the Window's own title bar controls.
  */
-export default function WindowMenu({ title, minimized, maximized, onGoTo, onBringHere, onToggleMinimized, onFill, onClose }: Readonly<{
+export default function WindowMenu({ title, minimized, maximized, onGoTo, onBringHere, onToggleMinimized, onToggleMaximized, onClose }: Readonly<{
     title: string
     minimized: boolean
     maximized: boolean
     onGoTo: () => void
     onBringHere: () => void
     onToggleMinimized: () => void
-    onFill: () => void
+    onToggleMaximized: () => void
     onClose: () => void
 }>) {
 
@@ -21,7 +21,7 @@ export default function WindowMenu({ title, minimized, maximized, onGoTo, onBrin
         if (action === "goTo") onGoTo()
         else if (action === "bringHere") onBringHere()
         else if (action === "visibility") onToggleMinimized()
-        else if (action === "fill") onFill()
+        else if (action === "maximize") onToggleMaximized()
         else if (action === "close") onClose()
     }}>
 
@@ -33,7 +33,7 @@ export default function WindowMenu({ title, minimized, maximized, onGoTo, onBrin
 
         <Menu.Item id="visibility" textValue={minimized ? "Show" : "Minimize"}>{minimized ? <><ArrowUpRight aria-hidden />Show</> : <><ArrowDownLeft aria-hidden />Minimize</>}</Menu.Item>
 
-        <Menu.Item id="fill" textValue={maximized ? "Restore" : "Maximize"}>{maximized ? <><Minimize2 aria-hidden />Restore</> : <><Maximize2 aria-hidden />Maximize</>}</Menu.Item>
+        <Menu.Item id="maximize" textValue={maximized ? "Restore" : "Maximize"}>{maximized ? <><Minimize2 aria-hidden />Restore</> : <><Maximize2 aria-hidden />Maximize</>}</Menu.Item>
 
         <Menu.Separator />
 

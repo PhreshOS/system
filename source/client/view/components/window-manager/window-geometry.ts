@@ -11,7 +11,7 @@ export interface WindowRegion {
     height: number
 }
 
-export interface WindowSurfaceSize {
+export interface ViewSize {
 
     width: number
 
@@ -51,7 +51,7 @@ export function absoluteWindowGeometry(position: Position, size: Size) {
  * of the surface its layer provides; the region it returns is measured from
  * the surface's top-left corner, where the Desktop paints it.
  */
-export function resolveWindowGeometry(position: Position, size: Size, surface: WindowSurfaceSize): WindowRegion {
+export function resolveWindowGeometry(position: Position, size: Size, surface: ViewSize): WindowRegion {
 
     return {
         x: surface.width / 2 + pixels(position.x, surface.width),
@@ -73,7 +73,7 @@ export function planeSize(desktop: Readonly<{ width: number, height: number }>) 
 /** The largest a standard Window is shown, in views, in each dimension. */
 export const largestWindowViews = 2
 
-const boundedGeometries = new WeakMap<Position, { size: Size, surface: WindowSurfaceSize, bounded: { position: Position, size: Size } }>()
+const boundedGeometries = new WeakMap<Position, { size: Size, surface: ViewSize, bounded: { position: Position, size: Size } }>()
 
 /**
  * The Desktop shows standard Windows only on its plane, which reaches two views from the center in each
@@ -81,7 +81,7 @@ const boundedGeometries = new WeakMap<Position, { size: Size, surface: WindowSur
  * at its edge, and one recorded larger is shown at that size; what the System records stays as it is,
  * until the Window is moved or resized here.
  */
-export function boundedGeometry(position: Position, size: Size, surface: WindowSurfaceSize): { position: Position, size: Size } {
+export function boundedGeometry(position: Position, size: Size, surface: ViewSize): { position: Position, size: Size } {
 
     if (!surface.width || !surface.height) return { position, size }
 
@@ -138,7 +138,7 @@ export function shiftPosition(position: Position, views: ViewportOffset): Positi
 }
 
 /** The whole view a Window's center is in, counted from the plane's center. */
-export function viewOfGeometry(position: Position, size: Size, surface: WindowSurfaceSize): ViewportOffset {
+export function viewOfGeometry(position: Position, size: Size, surface: ViewSize): ViewportOffset {
 
     if (!surface.width || !surface.height) return { x: 0, y: 0 }
 
@@ -151,7 +151,7 @@ export function viewOfGeometry(position: Position, size: Size, surface: WindowSu
 }
 
 /** A point of the plane in pixels, recorded as the view it is in plus pixels within that view, so it keeps to its view on every Desktop. */
-export function recordedPosition(point: { x: number, y: number }, surface: WindowSurfaceSize): Position {
+export function recordedPosition(point: { x: number, y: number }, surface: ViewSize): Position {
 
     const views = { x: surface.width ? Math.round(point.x / surface.width) : 0, y: surface.height ? Math.round(point.y / surface.height) : 0 }
 
@@ -175,7 +175,7 @@ function shiftValue(value: Value, views: number): Value {
 }
 
 /** The inverse at the other end: a painted region's position on the plane, whose zero is the surface's center. */
-export function planeGeometry(region: WindowRegion, surface: WindowSurfaceSize): WindowRegion {
+export function planeGeometry(region: WindowRegion, surface: ViewSize): WindowRegion {
 
     return { ...region, x: region.x - surface.width / 2, y: region.y - surface.height / 2 }
 }
@@ -184,7 +184,7 @@ export function planeGeometry(region: WindowRegion, surface: WindowSurfaceSize):
  * Applies a presentation-owned minimum without rewriting authoritative values.
  * A smaller workspace is the only case where the Desktop cannot provide it.
  */
-export function constrainWindowGeometry(region: WindowRegion, surface: WindowSurfaceSize, minimum: WindowSurfaceSize): WindowRegion {
+export function constrainWindowGeometry(region: WindowRegion, surface: ViewSize, minimum: ViewSize): WindowRegion {
 
     return {
         ...region,
@@ -221,7 +221,7 @@ export const noPaintMargins: PaintMargins = Object.freeze({ top: 0, right: 0, bo
  * `shift` pixels away from what is shown when the Desktop looks between two views; so a Window keeps
  * its margins wherever the view looks from.
  */
-export function windowPaintInsets(position: Position, size: Size, surface: WindowSurfaceSize, inset: number, margins: PaintMargins, current?: WindowRegion, shift: Readonly<{ x: number, y: number }> = noShift) {
+export function windowPaintInsets(position: Position, size: Size, surface: ViewSize, inset: number, margins: PaintMargins, current?: WindowRegion, shift: Readonly<{ x: number, y: number }> = noShift) {
 
     const x = current?.x ?? surface.width / 2 + pixels(position.x, surface.width)
 

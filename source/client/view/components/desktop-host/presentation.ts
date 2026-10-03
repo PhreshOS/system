@@ -70,8 +70,6 @@ export interface PresentationHost {
     setInteractive(identity: string, interactive: boolean): void
     setAnchor(identity: string, anchor: PresentationAnchor): void
     raise(identity: string): void
-    /** This Desktop maximizes or restores a Process's Window; `request` is the request to the System. */
-    maximize(process: string, maximized: boolean, request: Promise<unknown>): void
     complete(identity: string, kind: "geometry" | "surface", revision: number): void
 }
 

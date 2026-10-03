@@ -67,36 +67,6 @@ test("transactionAndWait resolves only after the matching local animation", asyn
   await usingAppearance
 })
 
-test("only a Window this Desktop maximizes is known as maximized from here, until its request settles", async () => {
-  const ordinary = client("window")
-  const entries = entry("ordinary", ordinary)
-  const presentations = new Presentations(entries, () => ordinary as never)
-  const [identity] = [...presentations.windows.keys()]
-
-  // Maximized from another Desktop: the System's state changes, and this Desktop asked nothing.
-  ordinary.window.maximized = true
-  presentations.reconcile(entries)
-  assert.equal(presentations.projection("ordinary").maximized, true)
-  assert.equal(presentations.maximizingHere(identity!), false)
-
-  ordinary.window.maximized = false
-  presentations.reconcile(entries)
-  let answer!: () => void
-  const request = new Promise<void>(resolve => { answer = resolve })
-  presentations.maximize("ordinary", true, request)
-  assert.equal(presentations.projection("ordinary").maximized, true)
-  assert.equal(presentations.maximizingHere(identity!), true)
-
-  answer()
-  await request
-  await Promise.resolve()
-  assert.equal(presentations.maximizingHere(identity!), false)
-
-  // Restoring from here is not maximizing.
-  presentations.maximize("ordinary", false, Promise.resolve())
-  assert.equal(presentations.maximizingHere(identity!), false)
-})
-
 test("a standard Window follows authoritative state but accepts only move gestures", async () => {
   const ordinary = client("window")
   const entries = entry("ordinary", ordinary)
@@ -153,6 +123,7 @@ test("a Client boundary initializes each new document exactly once", async () =>
     { contentWindow: null } as unknown as HTMLIFrameElement,
     { processManager: { async ownFrame() {}, async releaseFrame() {} } } as never,
     { state: () => ({ size: { width: 1, height: 1 }, offset: { x: 0, y: 0 } }), move: () => undefined },
+    {} as never,
     {} as never,
     { begin(identity: string) { lifecycle.push(identity) }, cancelMoveGestures() {} } as never
   )

@@ -1,25 +1,22 @@
 import { planeSize } from "@client/view/components/window-manager/window-geometry"
 import { ReactTunnel } from "@the-link/react"
-import { type DesktopSize } from "@phreshos/core"
 import useAnnouncements from "./announcements"
 import ClientProcessBoundary from "./client-process-boundary"
 import ClientTraffic from "./client-traffic"
-import { type DesktopViewportHost } from "./host"
-import { type RefObject, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
-import useViewportOffset from "@client/view/structure/desktop/viewport-offset"
+import { type DesktopViewportHost, type DesktopWindowActions } from "./host"
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { type Viewport } from "@client/view/structure/desktop/viewport-offset"
 import { useReducedMotion } from "@libs/react-motion"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type PresentationHost } from "./presentation"
 import messagepack from "@the-link/messagepack"
 
 /**
- * The browser boundary between a program pane and the desktop that hosts it.
- * It owns frame messages and the measured desktop containing those frames;
- * neither fact participates in rendering.
+ * The browser boundary between Program frames and the Desktop that hosts them: it carries frame
+ * messages, and tells each frame what the Desktop it is drawn in does. The Desktop owns its view and
+ * its windows; this boundary only passes them on.
  */
-export default function useClientHost(authManager: AuthManager, desktop: RefObject<HTMLDivElement | null>, sources: Map<string, HTMLIFrameElement | null>, presentation: PresentationHost) {
-
-    const windowSurfaceRef = useRef<HTMLDivElement>(null)
+export default function useClientHost(authManager: AuthManager, sources: Map<string, HTMLIFrameElement | null>, presentation: PresentationHost, viewport: Viewport, actions: DesktopWindowActions) {
 
     const frameOwners = useRef(new Map<string, string>())
 
@@ -29,34 +26,18 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     const [traffic] = useState(() => new ClientTraffic())
 
-    const [windowSurfaceSize, setWindowSurfaceSize] = useState<SurfaceSize>({ width: 0, height: 0 })
+    const latest = useRef(viewport)
 
-    const latestDesktopSize = useRef<DesktopSize>({ width: 0, height: 0 })
-
-    // Where this Desktop looks on the plane of standard Windows. It is this connection's alone.
-    const viewport = useViewportOffset(windowSurfaceSize)
-
-    const offset = useRef(viewport.offset)
-
-    offset.current = viewport.offset
-
-    const place = useRef(viewport.place)
-
-    place.current = viewport.place
+    latest.current = viewport
 
     // What a Client reaches of this viewport: both values, and moving the view once it is permitted.
     const desktopViewport = useMemo<DesktopViewportHost>(() => ({
 
-        state() {
+        state: () => ({ size: latest.current.size, offset: latest.current.offset }),
 
-            const element = desktop.current
+        move: offset => latest.current.place(offset)
 
-            return { size: element ? measureElement(element) : latestDesktopSize.current, offset: offset.current }
-        },
-
-        move: offset => place.current(offset)
-
-    }), [desktop])
+    }), [])
 
     // Every Client following this Desktop hears that its view moved, as it sets off, with the motion
     // it takes; with animations off it is there at once. It is told before the move is drawn, so
@@ -77,72 +58,21 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }, [viewport.offset, viewport.transaction, reducedMotion, sources, traffic])
 
+    // Every Client hears the Desktop's new size, and the plane's, which grows and shrinks with it.
+    const { width, height } = viewport.size
+
     useLayoutEffect(function () {
 
-        if (!desktop.current || !windowSurfaceRef.current) return
+        if (!width) return
 
-        function measure(bounds: { width: number, height: number }): DesktopSize {
+        for (const identity of sources.keys()) {
 
-            return { width: Math.round(bounds.width), height: Math.round(bounds.height) }
+            traffic.emit(identity, "host-desktop-viewport", "resize", { width, height }).catch(() => undefined)
+
+            traffic.emit(identity, "host-desktop-plane", "resize", planeSize({ width, height })).catch(() => undefined)
         }
 
-        function announceDesktop(size: DesktopSize) {
-
-            const previous = latestDesktopSize.current
-
-            if (previous.width === size.width && previous.height === size.height) return
-
-            latestDesktopSize.current = size
-
-            // Announcements leave directly from the full desktop measurement.
-            // Traffic carries them only to boundaries with a live interest.
-            if (!size.width) return
-
-            for (const identity of sources.keys()) {
-
-                traffic.emit(identity, "host-desktop-viewport", "resize", size).catch(() => undefined)
-
-                // The plane grows and shrinks with the Desktop.
-                traffic.emit(identity, "host-desktop-plane", "resize", planeSize(size)).catch(() => undefined)
-            }
-        }
-
-        function rememberWindowSurfaceSize({ width, height }: SurfaceSize) {
-
-            setWindowSurfaceSize(current => current.width === width && current.height === height ? current : { width, height })
-        }
-
-        const initialDesktop = measureElement(desktop.current)
-
-        latestDesktopSize.current = initialDesktop
-
-        const initialWindowSurface = measureElement(windowSurfaceRef.current)
-
-        rememberWindowSurfaceSize(initialWindowSurface)
-
-        const desktopObserver = new ResizeObserver(function ([entry]) {
-
-            announceDesktop(measure(entry.contentRect))
-        })
-
-        const windowObserver = new ResizeObserver(function ([entry]) {
-
-            rememberWindowSurfaceSize(entry.contentRect)
-
-        })
-
-        desktopObserver.observe(desktop.current)
-
-        windowObserver.observe(windowSurfaceRef.current)
-
-        return function () {
-
-            desktopObserver.disconnect()
-
-            windowObserver.disconnect()
-        }
-
-    }, [authManager, desktop, sources, traffic])
+    }, [width, height, sources, traffic])
 
     useAnnouncements(authManager, boundaries.current, traffic)
 
@@ -242,7 +172,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, traffic, presentation))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, actions, traffic, presentation))
 
             return
         }
@@ -257,7 +187,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopViewport, presentation, sources, traffic])
+    }, [authManager, desktopViewport, actions, presentation, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
@@ -348,18 +278,7 @@ export default function useClientHost(authManager: AuthManager, desktop: RefObje
 
     }, [authManager, sources])
 
-    return { windowSurfaceRef, windowSurfaceSize, viewport, frame, frameLoaded }
+    return { frame, frameLoaded }
 }
 
 export type ClientHost = ReturnType<typeof useClientHost>
-
-export interface SurfaceSize {
-
-    width: number
-
-    height: number
-}
-
-function measureElement(element: HTMLElement): DesktopSize {
-    return { width: element.clientWidth, height: element.clientHeight }
-}

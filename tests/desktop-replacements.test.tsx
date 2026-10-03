@@ -30,7 +30,7 @@ vi.mock("@the-link/react", () => ({
     ReactTunnel: { useFactory: () => ({ useSubscribe() {} }) },
     useProperty: (property: { value: unknown }) => property.value
 }))
-vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({ windowSurfaceSize: { width: 0, height: 0 }, viewport: { views: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, view: { x: 0, y: 0 }, surface: { width: 0, height: 0 }, moveTo: () => undefined, place: () => undefined, home: () => undefined } }) }))
+vi.mock("@client/view/components/desktop-host/client-host", () => ({ default: () => ({ viewSize: { width: 0, height: 0 }, viewport: { views: { x: 0, y: 0 }, offset: { x: 0, y: 0 }, view: { x: 0, y: 0 }, surface: { width: 0, height: 0 }, moveTo: () => undefined, place: () => undefined, home: () => undefined } }) }))
 vi.mock("@client/view/components/program-access", () => ({ default: () => null }))
 vi.mock("@libs/readiness", () => ({ useRequirement: () => () => {} }))
 vi.mock("@client/view/structure/desktop/layers/shell/default-shell", () => ({
@@ -57,11 +57,9 @@ test("Desktop composes five full-bound stacked layers without a layout track", (
     const windowLayer = markup.match(/<div[^>]*data-desktop-layer="window"[^>]*>/)?.[0]
     expect(display).toContain("absolute inset-0")
     expect(display).not.toContain("grid")
+    // Standard Windows measure in the whole view, the layer they are drawn in; their margins are painted.
     expect(windowLayer).toContain("absolute inset-0")
-    const windowSurface = markup.match(/<div[^>]*data-window-surface=""[^>]*>/)?.[0]
-    expect(windowSurface).not.toContain("overflow-hidden")
-    // Standard Windows measure in the whole Desktop; their margins are painted.
-    expect(windowSurface).toContain("absolute inset-0")
+    expect(markup).not.toContain("data-window-surface")
 })
 
 test.each(["top", "right", "bottom", "left"] as const)("standard windows keep clear of the %s Taskbar edge when painting", position => {

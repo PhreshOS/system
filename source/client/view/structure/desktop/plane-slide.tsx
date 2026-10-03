@@ -3,7 +3,7 @@ import { animate, motion, useMotionValue, type MotionValue } from "motion/react"
 import { type Transaction } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motionTransition } from "@client/view/appearance/motion"
-import { type ViewportOffset, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { type ViewportOffset, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 
 export type PlaneSlideValue = Readonly<{ x: MotionValue<number>, y: MotionValue<number> }>
 
@@ -54,7 +54,7 @@ export const PlaneSlideContext = createContext<PlaneSlideValue | null>(null)
  * transform moves the whole plane. A resize changes the pixels of the view, not where it looks,
  * so it does not glide, and neither does a view placed under a hand that drags it.
  */
-export function usePlaneSlide(views: ViewportOffset, transaction: Transaction | null, surface: WindowSurfaceSize): PlaneSlideValue {
+export function usePlaneSlide(views: ViewportOffset, transaction: Transaction | null, surface: ViewSize): PlaneSlideValue {
 
     const x = useMotionValue(0)
 

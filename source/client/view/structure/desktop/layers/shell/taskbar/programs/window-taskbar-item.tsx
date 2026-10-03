@@ -9,7 +9,7 @@ import useDragHold from "../../../../drag-hold"
 import { memo, useCallback } from "react"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
-export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onGoTo, onBringHere, onFill, onClose }: WindowTaskbarItemProps) {
+export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onGoTo, onBringHere, onMaximize, onClose }: WindowTaskbarItemProps) {
 
     const scaleContainer = useDesktopScaleContainer()
 
@@ -35,7 +35,7 @@ export default memo(function ({ record, title, icon, position, active, minimized
         else onMinimize(record, true)
 
     }, [minimized, onMinimize, onShow, record])
-    const fill = useCallback(() => onFill(record), [onFill, record])
+    const maximize = useCallback(() => void onMaximize(record), [onMaximize, record])
     const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
 
@@ -55,7 +55,7 @@ export default memo(function ({ record, title, icon, position, active, minimized
         <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
             <WindowMenu title={title} minimized={minimized} maximized={maximized}
-                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onFill={fill} onClose={close} />
+                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onToggleMaximized={maximize} onClose={close} />
 
         </ContextMenu.Content>
 
@@ -90,7 +90,7 @@ interface WindowTaskbarItemProps {
     /** Moves the Window into the view on screen and brings it to the front. */
     onBringHere: (record: Process) => void
 
-    onFill: (record: Process) => void
+    onMaximize: (record: Process) => unknown
 
     onClose: (record: Process) => void
 }

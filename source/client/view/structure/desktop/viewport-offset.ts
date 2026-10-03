@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { progressAt, type Transaction } from "@phreshos/core"
 import { timing, useAppearance } from "@phreshos/react-ui"
-import { planeReach, type ViewportOffset, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { planeReach, type ViewportOffset, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 
 /**
  * Where this Desktop looks on the plane of standard Windows: the point shown at
@@ -12,7 +12,7 @@ import { planeReach, type ViewportOffset, type WindowSurfaceSize } from "@client
  * view has: a Desktop that is resized, or rescaled, keeps looking at the same
  * Windows. Its pixels follow from the current size.
  */
-export default function useViewportOffset(surface: WindowSurfaceSize) {
+export default function useViewportOffset(size: ViewSize) {
 
     // How the view gets to where it goes: a move to a whole view takes a motion chosen from how far
     // it goes; placing the view under a hand that drags it follows the hand at once, with none. The
@@ -20,9 +20,9 @@ export default function useViewportOffset(surface: WindowSurfaceSize) {
     // carries on at the speed it already has.
     const [{ views, transaction }, setState] = useState<ViewportState>({ views: origin, transaction: null, journey: null })
 
-    const size = useRef(surface)
+    const latestSize = useRef(size)
 
-    size.current = surface
+    latestSize.current = size
 
     const tempo = useRef(1)
 
@@ -34,7 +34,7 @@ export default function useViewportOffset(surface: WindowSurfaceSize) {
 
         const now = performance.now()
 
-        const { width, height } = size.current
+        const { width, height } = latestSize.current
 
         // Where the view is shown now, and how fast it moves there, in pixels a second.
         let from = { x: current.views.x * width, y: current.views.y * height }
@@ -82,25 +82,25 @@ export default function useViewportOffset(surface: WindowSurfaceSize) {
     /** Places the view at any point of the plane in pixels, not only whole views; its center stays over the plane's outer views. */
     const place = useCallback(function (point: ViewportOffset) {
 
-        if (!surface.width || !surface.height) return
+        if (!size.width || !size.height) return
 
-        setViews({ x: within(point.x / surface.width), y: within(point.y / surface.height) }, false)
+        setViews({ x: within(point.x / size.width), y: within(point.y / size.height) }, false)
 
-    }, [surface.width, surface.height, setViews])
+    }, [size.width, size.height, setViews])
 
     /** Returns the view to the plane's center. */
     const home = useCallback(() => setViews(origin), [setViews])
 
     // The same place in pixels, at the current size.
-    const offset = useMemo<ViewportOffset>(() => ({ x: Math.round(views.x * surface.width), y: Math.round(views.y * surface.height) }), [views, surface.width, surface.height])
+    const offset = useMemo<ViewportOffset>(() => ({ x: Math.round(views.x * size.width), y: Math.round(views.y * size.height) }), [views, size.width, size.height])
 
     // The nearest whole view from the center, which is what a person counts.
     const view = { x: Math.round(views.x), y: Math.round(views.y) }
 
-    return { views, transaction, offset, view, surface, moveTo, place, home }
+    return { views, transaction, offset, view, size, moveTo, place, home }
 }
 
-export type ViewportControl = ReturnType<typeof useViewportOffset>
+export type Viewport = ReturnType<typeof useViewportOffset>
 
 type ViewportState = Readonly<{
     views: ViewportOffset

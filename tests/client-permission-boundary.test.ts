@@ -26,7 +26,7 @@ test("Client Program creation requires all before reaching the creation boundary
         processManager: { processes: new Map([["caller", { identity: "caller", program: program.identity }]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
     const source = { identity: "created" }
     for (const operation of ["host-program-create", "host-program-force-create"]) {
         await expect(answer(operation, source)).rejects.toThrow("Execution is not permitted")
@@ -56,7 +56,7 @@ test("Program and Process discovery exposes only the accessible scope", async ()
         processManager: { processes: new Map([[current.identity, current], [hidden.identity, hidden]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
 
     await expect(answer("host-program-list")).resolves.toEqual([[expect.objectContaining({ identity: owner.identity })]])
     await expect(answer("host-process-list")).resolves.toEqual([[expect.objectContaining({ identity: current.identity })]])
@@ -97,7 +97,7 @@ test("Program permission reads require Program access while owner decisions requ
         processManager: { processes: new Map([[current.identity, current]]) },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
     const target = { identity: outside.identity, reference: outside.reference }
 
     await expect(answer("program-permissions", target, "get", "network")).resolves.toEqual([["https://example.com"]])
@@ -125,7 +125,7 @@ test("Program log access follows the Program handle while System logs require lo
         logs: systemLogs,
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
     const own = { identity: owner.identity, reference: owner.reference }
     const other = { identity: outside.identity, reference: outside.reference }
 
@@ -150,7 +150,7 @@ test("a Client Context requests only for its own Endpoint Program", async () => 
         processManager: { processes: new Map([[current.identity, current]]) },
         requestPermission
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
     const timeout = 1_000
 
     await expect(answer("context-permission-request", "request", "network", ["https://example.com"], timeout))
@@ -170,7 +170,7 @@ test("the system-wide permission registry requires all", async () => {
         permissionManager: { list },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, current.identity, { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
 
     await expect(answer("host-permission-requests")).rejects.toThrow("Execution is not permitted")
     expect(list).not.toHaveBeenCalled()
@@ -226,7 +226,7 @@ test.each([
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => "frame", clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => "frame", clientFrame(), {} as never)
     const key = { program: owningProgram, process: "main", endpoint: "server" } as const
     const operations = [
             ["service-available", key],
@@ -267,7 +267,7 @@ test("Service discovery filters ready addresses only by Service-name authority",
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
-    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => "frame", clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => "frame", clientFrame(), {} as never)
 
     await expect(answer("host-service-list")).resolves.toEqual([[]])
     await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[]])
@@ -323,7 +323,7 @@ test("Reading the Desktop view is open, and moving it requires desktopViewport",
     } as unknown as AuthManager
     const state = { size: { width: 1200, height: 800 }, offset: { x: 0, y: 0 } }
     const move = vi.fn()
-    const answer = host(auth, "caller", { state: () => state, move }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => state, move }, {} as never, () => null, clientFrame(), {} as never)
 
     expect(await answer("desktopViewport")).toEqual([state])
     await expect(answer("moveDesktopViewport", { x: 1200, y: 0 })).rejects.toThrow("Execution is not permitted")
@@ -338,7 +338,7 @@ test("Reading the Desktop view is open, and moving it requires desktopViewport",
 test("a Client reads what the System is from the System itself, when it started included", async () => {
     const about = Object.freeze({ name: "PhreshOS", version: "1.0.0", release: { name: "Sprout", program: "sprout" }, startedAt: new Date("2026-09-30T08:00:00.000Z") })
     const auth = { about: vi.fn(async () => about) } as unknown as AuthManager
-    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
 
     await expect(answer("about")).resolves.toEqual([about])
 })
@@ -347,7 +347,7 @@ test("a Client reads the System's icon from the System itself", async () => {
     const bytes = [137, 80, 78, 71]
     const icon = vi.fn(async () => bytes)
     const auth = { icon } as unknown as AuthManager
-    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, () => null, clientFrame(), {} as never)
+    const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => null, clientFrame(), {} as never)
 
     await expect(answer("system-icon", "large")).resolves.toEqual([bytes])
     expect(icon).toHaveBeenCalledWith("large")

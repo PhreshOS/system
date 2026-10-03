@@ -1,6 +1,6 @@
 import { type CSSProperties } from "react"
 import { motion } from "motion/react"
-import { windowPaintInsets, type PaintMargins, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { windowPaintInsets, type PaintMargins, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type Position, type Size } from "@phreshos/core"
 import { Surface, useTiming } from "@phreshos/react-ui"
 import { motionTransition } from "@client/view/appearance/motion"
@@ -56,8 +56,8 @@ interface SnapPreviewProps {
     /** The hand holds the Window against the plane's end. */
     blocked?: boolean
     bare: boolean
-    minimumSize?: WindowSurfaceSize
-    paintSurfaceSize: WindowSurfaceSize
+    minimumSize?: ViewSize
+    paintSurfaceSize: ViewSize
     paintInset: number
     paintMargins: PaintMargins
     reducedMotion: boolean

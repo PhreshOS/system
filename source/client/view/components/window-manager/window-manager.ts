@@ -9,13 +9,9 @@ import { type SharedResizeWindow } from "./shared-resize"
 import { type WindowRegion } from "./window-geometry"
 
 /**
- * The authorized view's windows: processes that have one. A window is a
- * process whose program has a client half, so the process itself says
- * whether it is shown — nothing else is consulted.
- *
- * The Desktop presentation and authoritative counterpart are distinct.
- * Following starts enabled for ordinary windows and disabled for the other layers.
- * Each Client can subsequently follow an authoritative Window or detach.
+ * Everything this Desktop draws: every Process with a running Client, in its layer. A standard Window
+ * follows the System's Window and shows this Desktop's own actions on it at once; a drawing in another
+ * layer is its Program's, drawn as the Program says.
  *
  * Departure is representation. Stopping a Client invalidates its live Window
  * state. The last desktop-owned representation is kept until its exit
@@ -182,14 +178,6 @@ export default function useWindows(authManager: AuthManager) {
         if (!bestWindow || bestWindow.depth <= window.depth) fronts[window.layer] = process
     }
 
-    // Presentation and authoritative mutation are two explicit acts.
-    // Standard Window control always crosses the authoritative handle. Pointer
-    // motion may already show the gesture, but the server echo owns its result.
-    const commit = useCallback(function (request: Promise<void>) {
-
-        request.catch(() => undefined)
-    }, [])
-
     // A pointer gesture must retain its visible result until the authoritative
     // request settles. Returning failure as data keeps ignored button presses
     // handled while allowing the gesture owner to restore authoritative state.
@@ -235,50 +223,59 @@ export default function useWindows(authManager: AuthManager) {
 
     }, [])
 
+    // This Desktop's actions on a standard Window: each shows at once, and the System's answer follows
+    // when it settles. They answer with the request, so whoever asked can wait for the System.
     const raise = useCallback(function (process: Process) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
-
-        const highest = summit(window.layer)
-
-        if (window.depth === highest) return
+        if (!window || window.layer !== "window" || window.depth === summit(window.layer)) return Promise.resolve()
 
         // Shown in front at once; the System's ranking follows when it answers.
         const request = window.raise()
 
         presentation.anticipate(process.identity, { front: true }, request)
 
-        commit(request)
+        return request
 
-    }, [commit, summit, presentation])
+    }, [summit, presentation])
 
     const minimize = useCallback(function (process: Process, minimized: boolean) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve()
 
         const request = window.minimize(minimized)
 
         presentation.anticipate(process.identity, { minimized }, request)
 
-        commit(request)
+        return request
 
-    }, [commit, presentation])
+    }, [presentation])
 
-    const show = useCallback(function (process: Process) {
+    const maximize = useCallback(function (process: Process, maximized: boolean) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window") return
+        if (!window || window.layer !== "window") return Promise.resolve()
 
-        if (presentation.projection(process.identity).minimized) minimize(process, false)
+        const request = window.maximize(maximized)
 
-        raise(process)
+        presentation.anticipate(process.identity, { maximized }, request)
 
-    }, [minimize, raise])
+        return request
+
+    }, [presentation])
+
+    // What a person means by showing a Window: shown, if it was minimized, and in front.
+    const bringForward = useCallback(function (process: Process) {
+
+        if (presentation.projection(process.identity).minimized) minimize(process, false).catch(() => undefined)
+
+        raise(process).catch(() => undefined)
+
+    }, [minimize, raise, presentation])
 
     const move = useCallback(function (process: Process, x: Value, y: Value) {
 
@@ -318,15 +315,6 @@ export default function useWindows(authManager: AuthManager) {
         return settle(window.setGeometry(geometry))
 
     }, [settle])
-
-    const fill = useCallback(function (process: Process) {
-        const window = process.client?.window
-        if (!window || window.layer !== "window") return Promise.resolve(false)
-        const maximized = !presentation.projection(process.identity).maximized
-        const request = window.maximize(maximized)
-        presentation.maximize(process.identity, maximized, request)
-        return settle(request)
-    }, [presentation, settle])
 
     // Every window on the desktop, in one list and one order.
     //
@@ -420,11 +408,10 @@ export default function useWindows(authManager: AuthManager) {
 
             if (!window || window.layer !== "window") continue
 
-            const geometry = { ...region }
-            commit(window.setGeometry(geometry))
+            window.setGeometry({ ...region }).catch(() => undefined)
         }
 
-    }, [commit, peer])
+    }, [peer])
 
     return {
 
@@ -451,24 +438,13 @@ export default function useWindows(authManager: AuthManager) {
 
         closed,
 
-        // ── The primitives, one act each ─────────────────────────────
-        //
-        // The window manager composes them below; nothing here does two
-        // things at once, because the system beneath does not either.
         raise,
 
         minimize,
 
-        // ── And the policy, which is the window manager's ────────────
-        //
-        // A person pressing a taskbar item means *show me this one*, so
-        // it is shown and brought to the front — two primitives, said
-        // here, where a person's expectation belongs. The system knows
-        // nothing about the pairing.
-        show,
+        maximize,
 
-        // Toggle authoritative maximization and its local presentation.
-        fill,
+        bringForward,
 
         move,
 

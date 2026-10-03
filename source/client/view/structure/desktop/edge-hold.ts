@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { planeReach } from "@client/view/components/window-manager/window-geometry"
 import { timing, useAppearance } from "@phreshos/react-ui"
-import { type ViewportControl } from "./viewport-offset"
+import { type Viewport } from "./viewport-offset"
 
 export type Direction = Readonly<{ x: number, y: number }>
 
@@ -11,13 +11,13 @@ export type Direction = Readonly<{ x: number, y: number }>
  * the view takes to get there, so whoever holds it there waits for it, or null when there is nowhere
  * further to go.
  */
-export function useViewTravel(viewport: ViewportControl) {
+export function useViewTravel(viewport: Viewport) {
 
     const reducedMotion = useReducedMotion()
 
     const tempo = useAppearance().tempo
 
-    const { view, moveTo, surface } = viewport
+    const { view, moveTo, size } = viewport
 
     return useCallback(function (direction: Direction) {
 
@@ -27,9 +27,9 @@ export function useViewTravel(viewport: ViewportControl) {
 
         moveTo(next)
 
-        return reducedMotion ? 0 : timing("view", { distance: Math.hypot(direction.x * surface.width, direction.y * surface.height), tempo }).duration
+        return reducedMotion ? 0 : timing("view", { distance: Math.hypot(direction.x * size.width, direction.y * size.height), tempo }).duration
 
-    }, [view.x, view.y, moveTo, reducedMotion, tempo, surface.width, surface.height])
+    }, [view.x, view.y, moveTo, reducedMotion, tempo, size.width, size.height])
 }
 
 /** Which edges of a box a point is held against, within 16 pixels: -1, 0 or 1 in each direction. */

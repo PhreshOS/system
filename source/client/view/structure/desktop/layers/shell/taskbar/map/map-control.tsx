@@ -16,7 +16,7 @@ import { desktopMargins } from "../../../desktop-layers"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { shellSurfaceClassName } from "../../shell-surface"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
-import { type ViewportControl as Viewport } from "../../../../viewport-offset"
+import { type Viewport } from "../../../../viewport-offset"
 
 /** A standard Window as the map shows it: where it is on the plane. */
 export interface MappedWindow {
@@ -38,7 +38,7 @@ export interface MappedWindow {
     maximized: boolean
 
     /** Brings the view to the Window and the Window to the front. */
-    show(): void
+    goTo(): void
 
     /** Moves the Window into the view on screen and brings it to the front. */
     bringHere(): void
@@ -47,7 +47,7 @@ export interface MappedWindow {
     toggleMinimized(): void
 
     /** Maximizes the Window in its view, or restores it. */
-    fill(): void
+    toggleMaximized(): void
 
     /** Closes the Window, which exits its Process. */
     close(): void
@@ -68,7 +68,7 @@ export interface MappedWindow {
  * itself when focus crosses into a Program frame; either way the press goes on
  * to what it was meant for.
  */
-export default function ViewportControl({ viewport, windows, taskbar, spacing, onOpenChange }: Readonly<{
+export default function MapControl({ viewport, windows, taskbar, spacing, onOpenChange }: Readonly<{
     viewport: Viewport
     windows: readonly MappedWindow[]
     taskbar: AppearanceTaskbar
@@ -146,7 +146,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
     // Where the ghost is held against the Desktop's edges: the placement a Window would take there,
     // shown as a Window's is, but only as a sign; nothing is placed when the hand lets go. It turns to
     // danger where the plane goes no further.
-    const [edge, setEdge] = useState<{ zone: SnapTarget | null, shown: SnapTarget | null, blocked: boolean, surface: HTMLElement | null }>({ zone: null, shown: null, blocked: false, surface: null })
+    const [edge, setEdge] = useState<{ zone: SnapTarget | null, shown: SnapTarget | null, blocked: boolean, layer: HTMLElement | null }>({ zone: null, shown: null, blocked: false, layer: null })
 
     function carry(event: ReactPointerEvent<HTMLElement>) {
 
@@ -160,7 +160,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
         const edges = new EdgeHold(direction => travelNow.current(direction), blocked => setEdge(current => ({ ...current, blocked })))
 
-        const windowSurface = document.querySelector<HTMLElement>("[data-window-surface]")
+        const windowLayer = document.querySelector<HTMLElement>("[data-desktop-layer=\"window\"]")
 
         const button = trigger.current
 
@@ -192,13 +192,13 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
             setGhost({ x: motion.clientX, y: motion.clientY, ...lifted.current })
 
             // Measured as the Desktop measures a Window's drag: in its own pixels, at its scale.
-            const bounds = windowSurface?.getBoundingClientRect()
+            const bounds = windowLayer?.getBoundingClientRect()
 
-            const scale = bounds && windowSurface?.clientWidth ? bounds.width / windowSurface.clientWidth : 1
+            const scale = bounds && windowLayer?.clientWidth ? bounds.width / windowLayer.clientWidth : 1
 
-            const width = windowSurface?.clientWidth ?? window.innerWidth
+            const width = windowLayer?.clientWidth ?? window.innerWidth
 
-            const height = windowSurface?.clientHeight ?? window.innerHeight
+            const height = windowLayer?.clientHeight ?? window.innerHeight
 
             const direction = against((motion.clientX - (bounds?.left ?? 0)) / scale, (motion.clientY - (bounds?.top ?? 0)) / scale, width, height)
 
@@ -206,7 +206,7 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
 
             const zone = direction.x || direction.y ? placementAt(direction) : null
 
-            setEdge(current => ({ ...current, zone, shown: zone ?? current.shown, surface: windowSurface }))
+            setEdge(current => ({ ...current, zone, shown: zone ?? current.shown, layer: windowLayer }))
         }
 
         function end(motion: PointerEvent) {
@@ -293,17 +293,17 @@ export default function ViewportControl({ viewport, windows, taskbar, spacing, o
         </TaskbarTooltip>
         </span>
 
-        {edge.shown && edge.surface && createPortal(<SnapPreview
+        {edge.shown && edge.layer && createPortal(<SnapPreview
             shown={edge.shown}
             visible={edge.zone !== null}
             blocked={edge.blocked}
             bare={false}
-            paintSurfaceSize={{ width: edge.surface.clientWidth, height: edge.surface.clientHeight }}
+            paintSurfaceSize={{ width: edge.layer.clientWidth, height: edge.layer.clientHeight }}
             paintInset={spacing / 2}
             paintMargins={desktopMargins(spacing, taskbar)}
             reducedMotion={reducedMotion}
             zIndex={2147483646}
-        />, edge.surface)}
+        />, edge.layer)}
 
         {ghost && createPortal(<div aria-hidden="true" inert className="pointer-events-none fixed"
             style={{ left: ghost.x - ghost.grip.x, top: ghost.y - ghost.grip.y, transform: `scale(${ghost.scale})`, transformOrigin: "0 0", zIndex: 2147483647 }}>
@@ -402,7 +402,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
     // The lines between views, as faint as React UI's separators.
     const line = `color-mix(in oklab, ${useColor("foreground").base} 10%, transparent)`
 
-    const { surface } = viewport
+    const { size: surface } = viewport
 
     const columns = range.maxX - range.minX + 1
 
@@ -633,7 +633,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
 
     const space = useScale(useAppearance().spacing)
 
-    const { surface } = viewport
+    const { size: surface } = viewport
 
     const center = { x: window.region.x + window.region.width / 2, y: window.region.y + window.region.height / 2 }
 
@@ -727,7 +727,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
                     {/* The front Window is apricot; a minimized one fades; a maximized one carries the title bar's maximize mark. */}
                     <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"}
                         aria-label={windowState(window) ? `${window.title}, ${windowState(window)}` : window.title}
-                        onPress={() => { if (!moved.current) window.show() }}
+                        onPress={() => { if (!moved.current) window.goTo() }}
                         style={{ width: card, height: card, paddingInline: 0, opacity: window.minimized ? 0.45 : 1 }}>
                         <img src={window.icon} alt="" draggable={false} className="object-contain" style={{ width: icon, height: icon }} />
                     </Button>
@@ -737,7 +737,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
                 <ContextMenu.Content portalContainer={menus ?? undefined}>
 
                     <WindowMenu title={window.title} minimized={window.minimized} maximized={window.maximized}
-                        onGoTo={window.show} onBringHere={window.bringHere} onToggleMinimized={window.toggleMinimized} onFill={window.fill} onClose={window.close} />
+                        onGoTo={window.goTo} onBringHere={window.bringHere} onToggleMinimized={window.toggleMinimized} onToggleMaximized={window.toggleMaximized} onClose={window.close} />
 
                 </ContextMenu.Content>
 

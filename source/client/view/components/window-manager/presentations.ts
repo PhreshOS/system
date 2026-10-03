@@ -66,13 +66,12 @@ export default class Presentations implements PresentationHost {
     private readonly moveGestureControllers = new Map<string, DesktopMoveGestureController>()
     private readonly moveGestures = new Map<string, ActiveMoveGesture>()
     private readonly anticipated = new Map<string, { change: AnticipatedWindow, pending: number }>()
-    private readonly maximizedHere = new Set<string>()
     private readonly observers = new Set<() => void>()
     private readonly watching = new Map<string, () => void>()
     private fronts = 0
     private revision = 0
     /** How far this Desktop's view is moved across the plane, in pixels. */
-    private view = { x: 0, y: 0 }
+    private offset = { x: 0, y: 0 }
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
 
     public constructor(initial: ReadonlyMap<string, PresentationEntry>, private readonly client: (process: string) => ClientState | null) {
@@ -138,29 +137,12 @@ export default class Presentations implements PresentationHost {
         })
     }
 
-    /**
-     * This Desktop maximizes or restores a Window, from its header or from the Program inside it. The
-     * change shows at once, and a Window maximized from here is known as such until its request settles,
-     * so this Desktop's view follows it; a Window maximized from another Desktop leaves this view alone.
-     */
-    public maximize(process: string, maximized: boolean, request: Promise<unknown>) {
-        const identity = this.live.get(process)
-        if (maximized && identity) {
-            this.maximizedHere.add(identity)
-            request.catch(() => undefined).finally(() => this.maximizedHere.delete(identity))
-        }
-        this.anticipate(process, { maximized }, request)
-    }
-
-    /** Whether this Desktop is maximizing this Window: it asked, and the System has not answered yet. */
-    public maximizingHere(identity: string) { return this.maximizedHere.has(identity) }
-
     public projection(process: string) { return this.existing(process).state }
 
-    /** Where this Desktop looks on the plane, which drawings fixed to it are shown against. */
-    public follow(view: Readonly<{ x: number, y: number }>) {
-        if (view.x === this.view.x && view.y === this.view.y) return
-        this.view = { x: view.x, y: view.y }
+    /** Where this Desktop looks on the plane, in pixels, which drawings fixed to it are shown against. */
+    public follow(offset: Readonly<{ x: number, y: number }>) {
+        if (offset.x === this.offset.x && offset.y === this.offset.y) return
+        this.offset = { x: offset.x, y: offset.y }
         this.notify()
     }
 
@@ -183,7 +165,7 @@ export default class Presentations implements PresentationHost {
         const box = this.representations.get(identity)?.read() ?? resolveWindowGeometry(state.position, state.size, { width, height })
         const inside = offsetWithin(frame, "[data-window-box]")
         // Counted from the center of what the drawing is fixed to: the viewport, or the plane.
-        const from = state.anchor === "plane" ? this.view : { x: 0, y: 0 }
+        const from = state.anchor === "plane" ? this.offset : { x: 0, y: 0 }
         return {
             layer: state.layer,
             anchor: state.anchor,
@@ -321,7 +303,7 @@ export default class Presentations implements PresentationHost {
         if (state.anchor === anchor) return
         const shift = anchor === "plane" ? 1 : -1
         const position = state.position as PresentationPosition
-        this.replace(identity, { ...state, anchor, position: { x: position.x + shift * this.view.x, y: position.y + shift * this.view.y } })
+        this.replace(identity, { ...state, anchor, position: { x: position.x + shift * this.offset.x, y: position.y + shift * this.offset.y } })
     }
 
     public raise(process: string) {

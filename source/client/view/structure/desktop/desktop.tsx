@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { ApplicationContext, AuthManagerContext, LinkManagerContext } from "../../contexts"
 import useClientHost from "../../components/desktop-host/client-host"
+import { type DesktopWindowActions } from "../../components/desktop-host/host"
+import useViewportOffset from "./viewport-offset"
+import useViewSize from "./view-size"
 import DesktopLayers, { desktopMargins } from "./layers/desktop-layers"
 import useDesktopFocus from "./desktop-focus"
 import programIcon from "./programs/program-icon"
@@ -21,7 +24,7 @@ import { LaunchPlacementContext, type LaunchPlacement } from "./launch-placement
 import { CellShiftStore, PlaneSlide, PlaneSlideContext, ViewCellShift, usePlaneSlide } from "./plane-slide"
 import { useViewTravel } from "./edge-hold"
 import { boundedGeometry, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, viewOfGeometry, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
-import { type MappedWindow } from "./layers/shell/taskbar/viewport/viewport-control"
+import { type MappedWindow } from "./layers/shell/taskbar/map/map-control"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import { type Layer, type Position, type PresentationAnchor, type Size } from "@phreshos/core"
 
@@ -69,11 +72,49 @@ export default function Workspace() {
 
     }, [completePrograms, initialProgramsReady])
 
-    // Each frame, by process identity. This resolves a message's sender and
-    // lets the desktop announce the surface that actually contains it.
+    // Each frame, by process identity, so a message's sender is known.
     const sources = useRef(new Map<string, HTMLIFrameElement | null>())
 
-    const { windowSurfaceRef, windowSurfaceSize, viewport, frame, frameLoaded } = useClientHost(authManager, desktop, sources.current, windows.presentation)
+    // One view of the plane, and where this Desktop looks on it: both this Desktop's own.
+    const viewSize = useViewSize(desktop)
+
+    const viewport = useViewportOffset(viewSize)
+
+    /**
+     * Moves the view to the whole view a Window at this position and size is in. It never centers on the
+     * Window itself: a view resting between two would put a maximized Window, which fills its own view,
+     * off the screen's edges. Moving within or between views stays the person's choice.
+     */
+    const reveal = useCallback(function (position: Position, size: Size | null) {
+
+        if (!viewSize.width || !viewSize.height) return
+
+        const shown = boundedGeometry(position, size ?? { width: 0, height: 0 }, viewSize)
+
+        viewport.moveTo(viewOfGeometry(shown.position, shown.size, viewSize))
+
+    }, [viewSize, viewport.moveTo])
+
+    // A Window maximized from this Desktop fills the whole view it is in, so this Desktop's view goes
+    // there with it. One maximized from another Desktop, or by the System, leaves this view alone.
+    const maximize = useCallback(function (record: Process, maximized: boolean) {
+
+        const request = windows.maximize(record, maximized)
+
+        const window = windows.presentation.projection(record.identity)
+
+        if (maximized && window.layer === "window") reveal(window.position, window.size)
+
+        return request
+
+    }, [windows.maximize, windows.presentation, reveal])
+
+    const toggleMaximized = useCallback((record: Process) => maximize(record, !windows.presentation.projection(record.identity).maximized).then(() => true, () => false), [maximize, windows.presentation])
+
+    // What this Desktop does to a standard Window, from its header, the Taskbar, the Map, or the Program inside it.
+    const actions = useMemo<DesktopWindowActions>(() => ({ raise: windows.raise, minimize: windows.minimize, maximize }), [windows.raise, windows.minimize, maximize])
+
+    const { frame, frameLoaded } = useClientHost(authManager, sources.current, windows.presentation, viewport, actions)
 
     // Standard Windows are shown moved by this Desktop's offset, and what is done to them is recorded
     // moved back. Nothing else knows it: a Window works only in what it shows.
@@ -115,7 +156,7 @@ export default function Workspace() {
 
     function maximizedPosition(position: Position, size: Size) {
 
-        const view = viewOfGeometry(position, size, windowSurfaceSize)
+        const view = viewOfGeometry(position, size, viewSize)
 
         const key = `${view.x},${view.y}`
 
@@ -200,25 +241,25 @@ export default function Workspace() {
     neighboursNow.current = identity => windows.panesByLayer.window
         .filter(pane => pane.identity !== identity && !pane.closing && !pane.presentation.minimized)
         .map(pane => {
-            const bounded = boundedGeometry(pane.presentation.position, pane.presentation.size, windowSurfaceSize)
-            return resolveWindowGeometry(shownPosition(bounded.position), bounded.size, windowSurfaceSize)
+            const bounded = boundedGeometry(pane.presentation.position, pane.presentation.size, viewSize)
+            return resolveWindowGeometry(shownPosition(bounded.position), bounded.size, viewSize)
         })
 
     const neighboursOf = useCallback((identity: string) => neighboursNow.current(identity), [])
 
     // What lives on the plane glides with the view; see usePlaneSlide.
-    const slide = usePlaneSlide(viewport.views, viewport.transaction, windowSurfaceSize)
+    const slide = usePlaneSlide(viewport.views, viewport.transaction, viewSize)
 
     // How far the shown view is from the grid of whole views: Windows paint their margins at the
     // edges of their own view, wherever the Desktop looks from.
     const [cellShift] = useState(() => new CellShiftStore())
 
     cellShift.take({
-        x: (views.x - Math.round(views.x)) * windowSurfaceSize.width,
-        y: (views.y - Math.round(views.y)) * windowSurfaceSize.height
+        x: (views.x - Math.round(views.x)) * viewSize.width,
+        y: (views.y - Math.round(views.y)) * viewSize.height
     })
 
-    useLayoutEffect(() => cellShift.announce(), [cellShift, views.x, views.y, windowSurfaceSize.width, windowSurfaceSize.height])
+    useLayoutEffect(() => cellShift.announce(), [cellShift, views.x, views.y, viewSize.width, viewSize.height])
 
     // A Window held against an edge takes the view one whole view that way; see useViewTravel.
     const edgeHold = useViewTravel(viewport)
@@ -236,7 +277,7 @@ export default function Workspace() {
 
         return windows.panesByLayer[layer].filter(({ presentation }) => anchor === undefined || presentation.anchor === anchor).map(({ identity, record, client, presentation, closing, entering, stopping }) => {
 
-            const bounded = boundedGeometry(presentation.position, presentation.size, windowSurfaceSize)
+            const bounded = boundedGeometry(presentation.position, presentation.size, viewSize)
 
             return <ProcessWindow
 
@@ -280,7 +321,7 @@ export default function Workspace() {
 
             // Only system-painted windows need to know which paint edges
             // touch their surface. Positioning is identical in every layer.
-            paintSurfaceSize={layer === "window" ? windowSurfaceSize : undefined}
+            paintSurfaceSize={layer === "window" ? viewSize : undefined}
 
             paintMargins={layer === "window" ? margins : undefined}
 
@@ -316,11 +357,11 @@ export default function Workspace() {
 
             onReady={programReady}
 
-            onRaise={windows.raise}
+            onRaise={record => void windows.raise(record).catch(() => undefined)}
 
             onMinimize={focus.minimize}
 
-            onFill={windows.fill}
+            onMaximize={toggleMaximized}
 
             onClose={focus.close}
 
@@ -345,12 +386,12 @@ export default function Workspace() {
     const taskbarOrientation = appearance.taskbar.position === "top" || appearance.taskbar.position === "bottom" ? "horizontal" : "vertical"
 
     // Each standard Window where it is on the plane, minimized or not, for the map of views.
-    const mappedWindows: MappedWindow[] = windowSurfaceSize.width && windowSurfaceSize.height
+    const mappedWindows: MappedWindow[] = viewSize.width && viewSize.height
         ? windows.panesByLayer.window.filter(pane => !pane.closing).map(({ identity, record, presentation }) => {
 
-            const shown = boundedGeometry(presentation.position, presentation.size, windowSurfaceSize)
+            const shown = boundedGeometry(presentation.position, presentation.size, viewSize)
 
-            const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, windowSurfaceSize), windowSurfaceSize)
+            const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, viewSize), viewSize)
 
             return {
                 identity,
@@ -360,14 +401,14 @@ export default function Workspace() {
                 front: fronts.window?.identity === record.identity,
                 minimized: presentation.minimized,
                 maximized: presentation.maximized,
-                show: () => show(record),
+                goTo: () => goTo(record),
                 bringHere: () => bringHere(record),
                 toggleMinimized: () => toggleMinimized(record),
-                fill: () => void windows.fill(record),
+                toggleMaximized: () => void toggleMaximized(record),
                 close: () => focus.close(record),
                 moveTo: center => {
 
-                    const recorded = recordedPosition({ x: center.x - region.width / 2, y: center.y - region.height / 2 }, windowSurfaceSize)
+                    const recorded = recordedPosition({ x: center.x - region.width / 2, y: center.y - region.height / 2 }, viewSize)
 
                     void windows.move(record, recorded.x, recorded.y)
                 }
@@ -379,7 +420,7 @@ export default function Workspace() {
     // view's shorter side. Shares of the view would stretch it with the screen's own proportions.
     function launchSize(): Size {
 
-        const side = Math.round(Math.min(windowSurfaceSize.width, windowSurfaceSize.height) * 0.6)
+        const side = Math.round(Math.min(viewSize.width, viewSize.height) * 0.6)
 
         return { width: side, height: side }
     }
@@ -390,76 +431,33 @@ export default function Workspace() {
 
         const size = declared ?? launchSize()
 
-        const shown = resolveWindowGeometry({ x: 0, y: 0 }, size, windowSurfaceSize)
+        const shown = resolveWindowGeometry({ x: 0, y: 0 }, size, viewSize)
 
         const inView = mappedWindows.filter(({ region }) =>
-            Math.abs(region.x + region.width / 2 - offset.x) < windowSurfaceSize.width / 2 &&
-            Math.abs(region.y + region.height / 2 - offset.y) < windowSurfaceSize.height / 2).length
+            Math.abs(region.x + region.width / 2 - offset.x) < viewSize.width / 2 &&
+            Math.abs(region.y + region.height / 2 - offset.y) < viewSize.height / 2).length
 
         const step = inView % 8 * appearance.spacing * 2
 
-        const position = recordedPosition({ x: offset.x - shown.width / 2 + step, y: offset.y - shown.height / 2 + step }, windowSurfaceSize)
+        const position = recordedPosition({ x: offset.x - shown.width / 2 + step, y: offset.y - shown.height / 2 + step }, viewSize)
 
         return declared ? { position } : { position, size }
 
-    }, [mappedWindows, offset.x, offset.y, windowSurfaceSize, appearance.spacing])
-
-    /**
-     * Moves the view to the whole view a Window at this position and size is in. It never centers on the
-     * Window itself: a view resting between two would put a maximized Window, which fills its own view,
-     * off the screen's edges. Moving within or between views stays the person's choice.
-     */
-    const reveal = useCallback(function (position: Position, size: Size | null) {
-
-        if (!windowSurfaceSize.width || !windowSurfaceSize.height) return
-
-        const shown = boundedGeometry(position, size ?? { width: 0, height: 0 }, windowSurfaceSize)
-
-        viewport.moveTo(viewOfGeometry(shown.position, shown.size, windowSurfaceSize))
-
-    }, [windowSurfaceSize, viewport.moveTo])
+    }, [mappedWindows, offset.x, offset.y, viewSize, appearance.spacing])
 
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
-    // A Window maximized from this Desktop fills the whole view it is in: unless the view rests on
-    // exactly that view, this view goes with it there, so the Window fills the screen. A Window
-    // maximized from another Desktop, or by the System, leaves this view where the person is.
-    const wasMaximized = useRef(new Map<string, boolean>())
-
-    useLayoutEffect(function () {
-
-        const before = wasMaximized.current
-        const now = new Map<string, boolean>()
-
-        for (const window of mappedWindows) {
-
-            now.set(window.identity, window.maximized)
-
-            if (!window.maximized || before.get(window.identity) !== false || window.minimized) continue
-            if (!windows.presentation.maximizingHere(window.identity)) continue
-
-            const { region } = window
-            const view = { x: Math.round((region.x + region.width / 2) / windowSurfaceSize.width), y: Math.round((region.y + region.height / 2) / windowSurfaceSize.height) }
-
-            // Against where the view exactly is, not the view nearest to it: a view resting between two
-            // would show the maximized Window cut at the edges of its own view.
-            if (view.x !== views.x || view.y !== views.y) viewport.moveTo(view)
-        }
-
-        wasMaximized.current = now
-    })
-
     // Going to a Window brings the view to the view it is in, whether it was minimized or only out of
-    // view, and brings it to the front.
-    const show = useCallback(function (record: Process) {
+    // view, and brings it forward.
+    const goTo = useCallback(function (record: Process) {
 
         const window = windows.presentation.projection(record.identity)
 
         if (window.layer === "window") reveal(window.position, window.size)
 
-        windows.show(record)
+        windows.bringForward(record)
 
-    }, [windows.presentation, windows.show, reveal])
+    }, [windows.presentation, windows.bringForward, reveal])
 
     // Bringing a Window here moves it by whole views into the view on screen, so it keeps its place
     // within a view: a Window on the left half arrives on the left half, a maximized one fills this view.
@@ -469,26 +467,26 @@ export default function Workspace() {
 
         if (window.layer !== "window") return
 
-        const shown = boundedGeometry(window.position, window.size, windowSurfaceSize)
+        const shown = boundedGeometry(window.position, window.size, viewSize)
 
-        const from = viewOfGeometry(shown.position, shown.size, windowSurfaceSize)
+        const from = viewOfGeometry(shown.position, shown.size, viewSize)
 
         const brought = shiftPosition(shown.position, { x: viewport.view.x - from.x, y: viewport.view.y - from.y })
 
         void windows.move(record, brought.x, brought.y)
 
-        windows.show(record)
+        windows.bringForward(record)
 
-    }, [windows.presentation, windows.move, windows.show, viewport.view.x, viewport.view.y, windowSurfaceSize])
+    }, [windows.presentation, windows.move, windows.bringForward, viewport.view.x, viewport.view.y, viewSize])
 
     // Showing and hiding in place, as the Taskbar does.
     const toggleMinimized = useCallback(function (record: Process) {
 
-        if (windows.presentation.projection(record.identity).minimized) windows.show(record)
+        if (windows.presentation.projection(record.identity).minimized) windows.bringForward(record)
 
         else focus.minimize(record, true)
 
-    }, [windows.presentation, windows.show, focus.minimize])
+    }, [windows.presentation, windows.bringForward, focus.minimize])
 
     const taskbarItems = <OverflowRow
         orientation={taskbarOrientation}
@@ -527,13 +525,13 @@ export default function Workspace() {
 
                 onMinimize={focus.minimize}
 
-                onShow={windows.show}
+                onShow={windows.bringForward}
 
-                onGoTo={show}
+                onGoTo={goTo}
 
                 onBringHere={bringHere}
 
-                onFill={windows.fill}
+                onMaximize={toggleMaximized}
 
                 onClose={focus.close}
 
@@ -571,8 +569,6 @@ export default function Workspace() {
             sharedResizeBoundaries={<PlaneSlide slide={slide}><SharedResizeBoundaries {...windows.sharedResize} commit={commitSharedResize} /></PlaneSlide>}
 
             overWindows={renderAnchored("over")}
-
-            windowSurfaceRef={windowSurfaceRef}
 
             spacing={appearance.spacing}
 

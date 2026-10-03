@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresencePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSurfaceSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, windowPaintInsets, type PaintMargins, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginPresentationMoveGesture, type Position, type Size, type TaskbarPosition, type PresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -80,7 +80,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const surfaceRadius = surfaceDefinition === false ? undefined : windowSurfaceRadius(surfaceDefinition, appearance)
     const presentationMinimum = standard ? { width: minWidth, height: minHeight } : undefined
 
-    function resolvePresentedGeometry(selectedPosition: Position, selectedSize: Size, surface: WindowSurfaceSize) {
+    function resolvePresentedGeometry(selectedPosition: Position, selectedSize: Size, surface: ViewSize) {
 
         const region = resolveWindowGeometry(selectedPosition, selectedSize, surface)
 
@@ -964,7 +964,7 @@ interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "
     onPresentationMoveGesture?: (controller: DesktopMoveGestureController | null) => void
 
     /** Surface used only to decide which painted edges receive an inset. */
-    paintSurfaceSize?: WindowSurfaceSize
+    paintSurfaceSize?: ViewSize
 
     /** Space kept from each edge of the Desktop when painting an edge that touches it. */
     paintMargins?: PaintMargins

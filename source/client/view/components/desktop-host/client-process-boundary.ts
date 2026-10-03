@@ -1,6 +1,6 @@
 import AuthManager from "@client/core/link-manager/auth-manager/auth-manager"
 import { StreamRelay, TheLink } from "@the-link/core"
-import host, { TransferredAnswer, type DesktopViewportHost } from "./host"
+import host, { TransferredAnswer, type DesktopViewportHost, type DesktopWindowActions } from "./host"
 import ClientTraffic from "./client-traffic"
 import { failed, succeeded } from "@libs/request-outcome"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
@@ -20,6 +20,8 @@ export default class ClientProcessBoundary extends TheLink {
     private readonly authManager: AuthManager
 
     private readonly viewport: DesktopViewportHost
+
+    private readonly actions: DesktopWindowActions
 
     private readonly traffic: ClientTraffic
 
@@ -77,7 +79,7 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, traffic: ClientTraffic, presentation: PresentationHost) {
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, actions: DesktopWindowActions, traffic: ClientTraffic, presentation: PresentationHost) {
 
         super()
 
@@ -88,6 +90,8 @@ export default class ClientProcessBoundary extends TheLink {
         this.authManager = authManager
 
         this.viewport = viewport
+
+        this.actions = actions
 
         this.traffic = traffic
 
@@ -311,6 +315,7 @@ export default class ClientProcessBoundary extends TheLink {
             this.authManager,
             this.pane,
             this.viewport,
+            this.actions,
             () => this.owner,
             this.frame,
             this.presentation

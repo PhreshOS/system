@@ -43,7 +43,6 @@ export class TransferredAnswer {
     public constructor(public readonly result: unknown[], public readonly transfer: Transferable[]) { }
 }
 
-/** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
 /** This Desktop's viewport as a Client reaches it: read both values, or move the view. */
 export interface DesktopViewportHost {
 
@@ -52,7 +51,22 @@ export interface DesktopViewportHost {
     move(offset: DesktopOffset): void
 }
 
-export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, frameOwner: () => string | null, frame: PresentationFrame, presentation: PresentationHost) {
+/**
+ * What this Desktop does to a standard Window, from wherever it is asked: the Window's own header, the
+ * Taskbar, the Map, or the Program inside it. Each shows at once on this Desktop, with what it brings
+ * here, while the request goes to the System.
+ */
+export interface DesktopWindowActions {
+
+    raise(process: ClientProcess): Promise<void>
+
+    minimize(process: ClientProcess, minimized: boolean): Promise<void>
+
+    maximize(process: ClientProcess, maximized: boolean): Promise<void>
+}
+
+/** Adapts the complete System contract and contextual Desktop capabilities to one Client frame. */
+export default function host(authManager: AuthManager, pane: string, viewport: DesktopViewportHost, actions: DesktopWindowActions, frameOwner: () => string | null, frame: PresentationFrame, presentation: PresentationHost) {
 
     const { processManager, programManager } = authManager
 
@@ -1059,25 +1073,36 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return [pane]
         }
 
+        // A standard Window is the Desktop's: it acts on it as it does from the Window's own header. A
+        // drawing in another layer is its Program's, and the request goes to the System as it is.
         if (word === "raise") {
 
-            await windowOf(await permittedProcess(args[0])).raise()
+            const target = await permittedProcess(args[0])
+            const window = windowOf(target)
+
+            await (window.layer === "window" ? actions.raise(target) : window.raise())
 
             return [pane]
         }
 
         if (word === "maximize") {
+
             const target = await permittedProcess(args[0])
+            const window = windowOf(target)
             const maximized = args[1] !== false
-            const request = windowOf(target).maximize(maximized)
-            presentation.maximize(target.identity, maximized, request)
-            await request
+
+            await (window.layer === "window" ? actions.maximize(target, maximized) : window.maximize(maximized))
+
             return [pane]
         }
 
         if (word === "minimize") {
 
-            await windowOf(await permittedProcess(args[0])).minimize(args[1] !== false)
+            const target = await permittedProcess(args[0])
+            const window = windowOf(target)
+            const minimized = args[1] !== false
+
+            await (window.layer === "window" ? actions.minimize(target, minimized) : window.minimize(minimized))
 
             return [pane]
         }
