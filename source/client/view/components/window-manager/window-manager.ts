@@ -324,7 +324,7 @@ export default function useWindows(authManager: AuthManager) {
         if (!window || window.layer !== "window") return Promise.resolve(false)
         const maximized = !presentation.projection(process.identity).maximized
         const request = window.maximize(maximized)
-        presentation.anticipate(process.identity, { maximized }, request)
+        presentation.maximize(process.identity, maximized, request)
         return settle(request)
     }, [presentation, settle])
 

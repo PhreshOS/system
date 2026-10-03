@@ -421,9 +421,9 @@ export default function Workspace() {
 
     const launchPlacement = useMemo<LaunchPlacement>(() => ({ place, reveal }), [place, reveal])
 
-    // A Window the person can see, maximized, fills the whole view it is in: unless the view rests on
-    // exactly that view, the view goes with it there, so the Window fills the screen. One out of sight,
-    // maximized, leaves the view where the person is.
+    // A Window maximized from this Desktop fills the whole view it is in: unless the view rests on
+    // exactly that view, this view goes with it there, so the Window fills the screen. A Window
+    // maximized from another Desktop, or by the System, leaves this view where the person is.
     const wasMaximized = useRef(new Map<string, boolean>())
 
     useLayoutEffect(function () {
@@ -436,15 +436,14 @@ export default function Workspace() {
             now.set(window.identity, window.maximized)
 
             if (!window.maximized || before.get(window.identity) !== false || window.minimized) continue
+            if (!windows.presentation.maximizingHere(window.identity)) continue
 
             const { region } = window
-            const seen = region.x < offset.x + windowSurfaceSize.width / 2 && region.x + region.width > offset.x - windowSurfaceSize.width / 2
-                && region.y < offset.y + windowSurfaceSize.height / 2 && region.y + region.height > offset.y - windowSurfaceSize.height / 2
             const view = { x: Math.round((region.x + region.width / 2) / windowSurfaceSize.width), y: Math.round((region.y + region.height / 2) / windowSurfaceSize.height) }
 
             // Against where the view exactly is, not the view nearest to it: a view resting between two
             // would show the maximized Window cut at the edges of its own view.
-            if (seen && (view.x !== views.x || view.y !== views.y)) viewport.moveTo(view)
+            if (view.x !== views.x || view.y !== views.y) viewport.moveTo(view)
         }
 
         wasMaximized.current = now

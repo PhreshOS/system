@@ -1067,7 +1067,11 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         }
 
         if (word === "maximize") {
-            await windowOf(await permittedProcess(args[0])).maximize(args[1] !== false)
+            const target = await permittedProcess(args[0])
+            const maximized = args[1] !== false
+            const request = windowOf(target).maximize(maximized)
+            presentation.maximize(target.identity, maximized, request)
+            await request
             return [pane]
         }
 

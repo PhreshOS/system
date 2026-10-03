@@ -66,6 +66,7 @@ export default class Presentations implements PresentationHost {
     private readonly moveGestureControllers = new Map<string, DesktopMoveGestureController>()
     private readonly moveGestures = new Map<string, ActiveMoveGesture>()
     private readonly anticipated = new Map<string, { change: AnticipatedWindow, pending: number }>()
+    private readonly maximizedHere = new Set<string>()
     private readonly observers = new Set<() => void>()
     private readonly watching = new Map<string, () => void>()
     private fronts = 0
@@ -136,6 +137,23 @@ export default class Presentations implements PresentationHost {
             if (current && live && current.layer === "window") this.replace(identity, followStandardWindow(current, live, ++this.revision))
         })
     }
+
+    /**
+     * This Desktop maximizes or restores a Window, from its header or from the Program inside it. The
+     * change shows at once, and a Window maximized from here is known as such until its request settles,
+     * so this Desktop's view follows it; a Window maximized from another Desktop leaves this view alone.
+     */
+    public maximize(process: string, maximized: boolean, request: Promise<unknown>) {
+        const identity = this.live.get(process)
+        if (maximized && identity) {
+            this.maximizedHere.add(identity)
+            request.catch(() => undefined).finally(() => this.maximizedHere.delete(identity))
+        }
+        this.anticipate(process, { maximized }, request)
+    }
+
+    /** Whether this Desktop is maximizing this Window: it asked, and the System has not answered yet. */
+    public maximizingHere(identity: string) { return this.maximizedHere.has(identity) }
 
     public projection(process: string) { return this.existing(process).state }
 
