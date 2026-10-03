@@ -5,14 +5,6 @@ on:
   push:
     branches:
       - main
-  # Run by hand from the Actions tab. With "debug", the Windows job then opens a terminal on its
-  # machine, reachable over SSH by whoever started the run, whether the tests passed or failed.
-  workflow_dispatch:
-    inputs:
-      debug:
-        description: Open a terminal on the Windows machine after its tests
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -45,10 +37,3 @@ jobs:
           package-manager-cache: false
       - run: bun install --frozen-lockfile
       - run: bun run verify
-      - name: Terminal on this machine
-        if: ${{ always() && inputs.debug }}
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 60
-        with:
-          # Only the person who started the run may connect: the log of a public repository is public.
-          limit-access-to-actor: true
