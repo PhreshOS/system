@@ -298,7 +298,8 @@ test("server runtime contract", async () => {
       assert.match(output.filter(([stream]) => stream === "err").map(([, text]) => text).join(""), new RegExp(message))
   }
 
-  async function until(condition: () => boolean, timeout = 2_000) {
+  // A slow machine, such as the Windows runner, can take seconds to start a worker; the wait ends as soon as it is ready.
+  async function until(condition: () => boolean, timeout = 15_000) {
       const began = Date.now()
 
       while (!condition()) {
