@@ -5,7 +5,7 @@
 <h1 align="center">PhreshOS</h1>
 
 <p align="center">
-  An operating system for software built with web technologies.
+  An open-source, self-hosted system for apps built with web technologies.
 </p>
 
 <p align="center">
