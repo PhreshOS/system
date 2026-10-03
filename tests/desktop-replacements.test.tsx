@@ -148,6 +148,12 @@ test.each(["top", "right", "bottom", "left"] as const)("Taskbar occupies its con
     if (position === "right") expect(menu).toMatchObject({ top: spacing, right: taskbarInset, bottom: "auto", left: "auto" })
 
     expect(menu).not.toHaveProperty("insetInlineStart")
+
+    // The room is the visible viewport, in Desktop pixels: a phone browser's bars and the Desktop's zoom both left out.
+    const scaled = startMenuStyle(taskbar, spacing, false, 1.25)
+    expect(String(scaled.height)).toContain("100dvh / 1.25")
+    expect(String(scaled.width)).toContain("100dvw / 1.25")
+    expect(String(menu.height)).not.toContain("100vh")
     expect(menu).not.toHaveProperty("insetBlockStart")
 })
 

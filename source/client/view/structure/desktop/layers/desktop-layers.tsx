@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactNode, type Ref } from "react"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { type PaintMargins } from "@client/view/components/window-manager/window-geometry"
+import { useDesktopScale } from "../desktop-scale"
 
 /**
  * Five coextensive Desktop layers ordered from back to front. No layer owns
@@ -8,10 +9,13 @@ import { type PaintMargins } from "@client/view/components/window-manager/window
  */
 export default function DesktopLayers({ wallpaper, underWindows, windows, sharedResizeBoundaries, overWindows, shell, windowSurfaceRef, spacing }: DesktopLayersProps) {
 
+    // The Desktop's zoom multiplies viewport units too: what sizes itself by the viewport divides by it.
+    const scale = useDesktopScale()
+
     return <div
         data-desktop-layers=""
         className="absolute inset-0 isolate overflow-hidden"
-        style={{ "--desktop-gutter": `${spacing}px` } as CSSProperties}
+        style={{ "--desktop-gutter": `${spacing}px`, "--desktop-scale": scale } as CSSProperties}
     >
 
         <div data-desktop-layer="wallpaper" className="absolute inset-0 z-0 overflow-hidden">

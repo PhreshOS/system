@@ -11,6 +11,7 @@ import { useTiming } from "@phreshos/react-ui"
 import { cssEasing } from "@phreshos/core"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { usePortrait } from "../../../orientation"
+import { useDesktopScale } from "../../../desktop-scale"
 
 const StartMenuContext = createContext<StartMenuControl | null>(null)
 
@@ -112,6 +113,8 @@ export default memo(function StartMenu() {
 
     const portrait = usePortrait()
 
+    const scale = useDesktopScale()
+
     return <motion.div
         ref={control.surface}
         id={control.id}
@@ -121,7 +124,7 @@ export default memo(function StartMenu() {
         tabIndex={-1}
         className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
         style={{
-            ...startMenuStyle(control.taskbar, control.spacing, portrait),
+            ...startMenuStyle(control.taskbar, control.spacing, portrait, scale),
             transitionBehavior: "allow-discrete",
             transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
             transitionTimingFunction: cssEasing(transaction.easing),
@@ -154,9 +157,12 @@ export default memo(function StartMenu() {
  * The menu occupies the leading corner beside the Taskbar: one spacing from
  * its perpendicular screen edge and two spacings beyond the Taskbar edge. It
  * takes the screen's shape: wide on a wide screen, and the same size turned on
- * a tall one, each within the room the screen has.
+ * a tall one, each within the room the screen has. That room is the visible
+ * viewport (`dvh`, which leaves out a phone browser's bars, as the Desktop
+ * itself does), in Desktop pixels: the Desktop's zoom multiplies viewport units
+ * too, so they are divided by its scale.
  */
-export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number, portrait = false): CSSProperties {
+export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number, portrait = false, scale = 1): CSSProperties {
     const [long, short] = ["44rem", "32rem"]
     const [across, down] = portrait ? [short, long] : [long, short]
     const horizontal = taskbar.position === "top" || taskbar.position === "bottom"
@@ -171,11 +177,11 @@ export function startMenuStyle(taskbar: AppearanceTaskbar, spacing: number, port
         bottom: "auto",
         left: "auto",
         width: horizontal
-            ? `min(${across}, calc(100vw - ${spacing * 2}px))`
-            : `min(${across}, calc(100vw - ${taskbarInset + spacing}px))`,
+            ? `min(${across}, calc(100dvw / ${scale} - ${spacing * 2}px))`
+            : `min(${across}, calc(100dvw / ${scale} - ${taskbarInset + spacing}px))`,
         height: horizontal
-            ? `min(${down}, calc(100vh - ${taskbarInset + spacing}px))`
-            : `min(${down}, calc(100vh - ${spacing * 2}px))`
+            ? `min(${down}, calc(100dvh / ${scale} - ${taskbarInset + spacing}px))`
+            : `min(${down}, calc(100dvh / ${scale} - ${spacing * 2}px))`
     } satisfies CSSProperties
 
     if (taskbar.position === "bottom") return { ...style, left: spacing, bottom: taskbarInset }

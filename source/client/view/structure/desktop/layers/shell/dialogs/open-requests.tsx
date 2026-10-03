@@ -45,7 +45,7 @@ export default function OpenRequests() {
         animate={surfaceLifecyclePose.visible}
         transition={surfacePresenceTransition(reducedMotion, transaction)}
         onCancel={event => { event.preventDefault(); void manager.cancel(request.identity).catch(() => undefined) }}
-        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(24rem,calc(100vw-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
+        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(24rem,calc(100dvw/var(--desktop-scale)-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
     >
         <ShellSurface material="full" label="Open with" labelId={title}>
             <OpenRequestView key={request.identity} request={request} />

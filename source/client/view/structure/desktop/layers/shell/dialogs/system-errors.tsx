@@ -75,7 +75,7 @@ export default function SystemErrors() {
 
         onCancel={event => event.preventDefault()}
 
-        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(28rem,calc(100vw-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
+        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(28rem,calc(100dvw/var(--desktop-scale)-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
 
     >
 
