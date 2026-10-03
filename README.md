@@ -15,7 +15,7 @@
   <a href="https://github.com/PhreshOS/system/releases">Releases</a>
 </p>
 
-![The PhreshOS Desktop, with Settings showing the System at a glance](.github/desktop.jpg)
+![The PhreshOS Desktop: Terminal showing phresh fetch, Files, and the Map with windows beyond the view](.github/desktop.jpg)
 
 PhreshOS runs on the machine you install it on, keeps your Programs running
 there, and gives you a Desktop in the browser to use them from. Programs are
