@@ -8,13 +8,17 @@ import { useId, useState, type SyntheticEvent } from "react"
 import logo from "@/assets/logo.png"
 import { name, version } from "@/source/identity"
 
-/** The common username-and-password welcome for sign-up and sign-in: the first thing a System shows. */
-export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
+/**
+ * The common username-and-password welcome for sign-up and sign-in: the first thing a System shows.
+ * Creating an account asks for the password twice, which also tells it apart from signing in.
+ */
+export default function CredentialsForm({ title, description, submitLabel, passwordAutocomplete, confirmPassword = false, requirements, error, pending, onEdit, onSubmit }: CredentialsFormProps) {
 
     const reducedMotion = useReducedMotion()
     const { spacing } = useAppearance()
     const transaction = useTiming()("change")
     const [password, setPassword] = useState("")
+    const [mismatch, setMismatch] = useState(false)
     const titleId = useId()
     const passwordReady = requirements === undefined || [...password].length >= requirements.password.minimumLength
 
@@ -25,6 +29,14 @@ export default function CredentialsForm({ title, description, submitLabel, passw
         if (pending) return
 
         const data = new FormData(event.currentTarget)
+
+        // The two passwords must agree before anything is sent.
+        if (confirmPassword && data.get("password") !== data.get("confirm")) {
+
+            setMismatch(true)
+
+            return
+        }
 
         onSubmit(String(data.get("username") ?? ""), String(data.get("password") ?? ""))
     }
@@ -115,10 +127,24 @@ export default function CredentialsForm({ title, description, submitLabel, passw
                                 // This controls registration readiness only; Authentication
                                 // remains the authority for accepting the submitted value.
                                 setPassword(value)
+                                setMismatch(false)
                                 onEdit?.()
                             }}
                             description={requirements ? `Use at least ${requirements.password.minimumLength} characters.` : undefined}
                         />
+
+                        {confirmPassword && <Input
+                            label="Confirm password"
+                            size="large"
+                            name="confirm"
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            disabled={pending}
+                            invalid={mismatch}
+                            errorMessage={mismatch ? "The passwords do not match." : undefined}
+                            onChange={() => setMismatch(false)}
+                        />}
 
                     </div>
 
@@ -164,6 +190,9 @@ interface CredentialsFormProps {
     submitLabel: string
 
     passwordAutocomplete: "current-password" | "new-password"
+
+    /** Asks for the password a second time, as creating an account does. */
+    confirmPassword?: boolean
 
     requirements?: AuthenticationState["requirements"]
 
