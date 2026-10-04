@@ -20,7 +20,7 @@ export default function SignUp({ state, onClosed }: SignUpProps) {
 
         title="Create your account"
 
-        description="This System is new and has no owner yet. Choose any username and password to become its owner."
+        description="Choose any username and password to become this System's owner."
 
         submitLabel="Create account"
 
