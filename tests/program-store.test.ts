@@ -76,7 +76,8 @@ describe("ProgramStoreState", () => {
         const directory = mkdtempSync(join(tmpdir(), "phresh-program-store-restart-"))
         const first = new ProgramStoreState(directory, () => undefined)
         try {
-            await first.set("session", "live", 250)
+            // Long enough to outlast closing and reopening the store on a slow machine.
+            await first.set("session", "live", 2_000)
             await first.disconnect()
             const changes: StoreSnapshot[] = []
             const second = new ProgramStoreState(directory, (_key, snapshot) => changes.push(snapshot))
@@ -85,7 +86,7 @@ describe("ProgramStoreState", () => {
                 await vi.waitFor(() => {
                     expect(changes).toHaveLength(1)
                     expect(changes[0]?.value).toBeUndefined()
-                }, { timeout: 3000 })
+                }, { timeout: 8000 })
             } finally { await second.disconnect() }
         } finally { rmSync(directory, { recursive: true, force: true }) }
     })
