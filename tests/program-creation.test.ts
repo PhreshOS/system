@@ -121,10 +121,10 @@ test("permission changes publish one complete effective snapshot through both Pr
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({ permissions })
     expect(announceHost).toHaveBeenCalledExactlyOnceWith(
-        "program", "permissions", program.identity, manager.find(program.identity)
+        "program", program.identity, "permissions", program.identity, manager.find(program.identity)
     )
     expect(announceSubject).toHaveBeenCalledExactlyOnceWith(
-        "program", "permissions", program.reference, permissions
+        "program", program.identity, "permissions", program.reference, permissions
     )
 })
 
@@ -137,9 +137,9 @@ test("pinning emits Program and global events only when the boolean changes", as
     await manager.pinned(program, "pin")
     await manager.pinned(program, "unpin")
 
-    expect(announceHost.mock.calls.map(([, event, , , pinned]) => [event, pinned])).toEqual([
-        ["pinned", true],
-        ["pinned", false]
+    expect(announceHost.mock.calls.map(([, owner, event, , , pinned]) => [owner, event, pinned])).toEqual([
+        [program.identity, "pinned", true],
+        [program.identity, "pinned", false]
     ])
 })
 
@@ -163,8 +163,8 @@ test("Program store changes originate once at System and retain their key revisi
         expect(delivered.map(([, key, snapshot]) => [key, snapshot.revision, snapshot.value])).toEqual([
             ["tab", 1, "colors"], ["tab", 2, undefined]
         ])
-        expect(announceSubject.mock.calls.map(([, event, subject]) => [event, subject])).toEqual([
-            ["storeChange", program.reference], ["storeChange", program.reference]
+        expect(announceSubject.mock.calls.map(([, owner, event, subject]) => [owner, event, subject])).toEqual([
+            [program.identity, "storeChange", program.reference], [program.identity, "storeChange", program.reference]
         ])
     } finally {
         // The store holds an SQLite handle; Windows cannot remove its fixture until the Program releases it.

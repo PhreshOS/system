@@ -77,7 +77,7 @@ export default class PermissionManager extends TheLink {
         })
 
         await Promise.all([
-            this.authManager.processManager.announceHost("permission", "request", process.program.identity, snapshot).catch(() => undefined),
+            this.authManager.processManager.announceHost("permission", null, "request", process.program.identity, snapshot).catch(() => undefined),
             this.$outbound.publish("/request", snapshot).catch(() => undefined)
         ])
 
@@ -167,6 +167,7 @@ export default class PermissionManager extends TheLink {
         await Promise.all([
             this.authManager.processManager.announceHost(
                 "permission",
+                null,
                 "resolve",
                 request.process.program.identity,
                 request.snapshot,
@@ -174,6 +175,7 @@ export default class PermissionManager extends TheLink {
             ).catch(() => undefined),
             this.authManager.processManager.announceSubject(
                 "permission",
+                null,
                 "resolve",
                 request.snapshot.identity,
                 request.snapshot,

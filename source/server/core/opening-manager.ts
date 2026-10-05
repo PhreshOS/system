@@ -84,7 +84,7 @@ export default class OpeningManager extends TheLink {
         this.pendingRequests.set(identity, { snapshot, settle, cancelEndpoint, timer: null, resolving: false })
 
         await Promise.all([
-            this.authManager.processManager.announceHost("opening", "request", "system", snapshot).catch(() => undefined),
+            this.authManager.processManager.announceHost("opening", null, "request", "system", snapshot).catch(() => undefined),
             this.$outbound.publish("/request", snapshot).catch(() => undefined)
         ])
 
@@ -231,7 +231,7 @@ export default class OpeningManager extends TheLink {
         request.cancelEndpoint()
 
         await Promise.all([
-            this.authManager.processManager.announceHost("opening", "resolve", "system", request.snapshot, chosen).catch(() => undefined),
+            this.authManager.processManager.announceHost("opening", null, "resolve", "system", request.snapshot, chosen).catch(() => undefined),
             this.$outbound.publish("/resolve", request.snapshot, chosen).catch(() => undefined)
         ])
 

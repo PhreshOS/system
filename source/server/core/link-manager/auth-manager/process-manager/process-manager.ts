@@ -9,7 +9,7 @@ import Process, { type HostedProcess, type ProcessLaunch, type ProcessSnapshot }
 import ServerProcessBoundary from "./server-process-boundary"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import ClientProcessForwarder from "./client-process-forwarder"
-import HostTraffic from "./host-traffic"
+import HostTraffic, { type HostDomain, type HostOwner } from "./host-traffic"
 import { failed, succeeded, type RequestOutcome } from "@libs/request-outcome"
 import { endpointReference, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
@@ -118,7 +118,7 @@ export default class ProcessManager extends TheLink {
             address => this.resolveService(address),
             () => this.processes.values(),
             (event, address) => Promise.all([
-                this.hostTraffic.emitHost("service", event, address.process, address),
+                this.hostTraffic.emitHost("service", null, event, address.process, address),
                 this.$outbound.publish(`/service-${event}`, address)
             ])
         )
@@ -887,7 +887,7 @@ export default class ProcessManager extends TheLink {
 
         const record = processReference(process)
 
-        await this.hostTraffic.emitSubject("process", event, process.reference, record, endpoint)
+        await this.hostTraffic.emitSubject("process", process.program.identity, event, process.reference, record, endpoint)
     }
 
     private async serverStarted(process: Process) {
@@ -975,7 +975,7 @@ export default class ProcessManager extends TheLink {
 
             this.authManager.linkManager.appearance.tunnel,
 
-            (domain, subject) => this.serverHostVisible(process, domain, subject)
+            (domain, subject, owner) => this.serverHostVisible(process, domain, subject, owner)
         )
 
         this.bindServer(process, server)
@@ -983,7 +983,12 @@ export default class ProcessManager extends TheLink {
         return server
     }
 
-    private serverHostVisible(process: Process, domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "opening" | "log" | "programLog" | "clientMemory", subject: string | null) {
+    /**
+     * Whether one fact may reach this Server. A fact about a Program, its Processes, their windows,
+     * memory, or logs is seen by whoever can see that Program, decided from the owner the fact
+     * carries; the same rule decides it for Clients on the Desktop.
+     */
+    private serverHostVisible(process: Process, domain: HostDomain, subject: string | null, owner: HostOwner) {
 
         const access = new SystemAccess(this, process)
 
@@ -993,29 +998,9 @@ export default class ProcessManager extends TheLink {
 
         if (domain === "log") return this.grants(process.identity, "logs", [])
 
-        if (domain === "programLog") {
+        if (domain === "service") return subject !== null && this.grants(process.identity, "services", [subject])
 
-            if (!subject) return false
-
-            const program = [...this.authManager.programManager.programs.values()].find(entry => entry.program.reference === subject)?.program
-
-            return program ? access.canProgram(program) : false
-        }
-
-        if (!subject) return false
-
-        if (domain === "service") return this.grants(process.identity, "services", [subject])
-
-        if (domain === "program") {
-
-            const program = [...this.authManager.programManager.programs.values()].find(entry => entry.program.reference === subject)?.program
-
-            return program ? access.canProgram(program) : false
-        }
-
-        const target = [...this.processes.values()].find(candidate => candidate.reference === subject)
-
-        return target ? access.canProcess(target) : false
+        return owner !== null && access.canProgram({ identity: owner })
     }
 
     private window() {
@@ -1080,7 +1065,7 @@ export default class ProcessManager extends TheLink {
         process.client?.memory.changes(({ key, snapshot }) => {
             // A browser document may disappear while the Client run remains.
             // Publish from the run so every current representation sees one order.
-            this.hostTraffic.emitSubject("clientMemory", key, process.reference, processReference(process), snapshot).catch(() => undefined)
+            this.hostTraffic.emitSubject("clientMemory", process.program.identity, key, process.reference, processReference(process), snapshot).catch(() => undefined)
             this.$outbound.publish("/client-memory-change", process.identity, key, snapshot).catch(() => undefined)
         })
     }
@@ -1168,9 +1153,9 @@ export default class ProcessManager extends TheLink {
                 // receives the subject as its first value.
                 await Promise.all([
 
-                    this.announceHost("process", "create", program.identity, processReference(process)),
+                    this.announceHost("process", program.identity, "create", program.identity, processReference(process)),
 
-                    this.announceSubject("program", "processCreate", program.reference, processReference(process))
+                    this.announceSubject("program", program.identity, "processCreate", program.reference, processReference(process))
                 ])
 
                 await this.$outbound.publish("/created", process.hosted())
@@ -1262,15 +1247,15 @@ export default class ProcessManager extends TheLink {
             // why holding it is legitimate.
             () => Promise.all([
 
-                this.announceHost("process", "exit", process.program.identity, processReference(process), code, signal),
+                this.announceHost("process", process.program.identity, "exit", process.program.identity, processReference(process), code, signal),
 
-                this.announceSubject("program", "processExit", process.program.reference, processReference(process), code, signal)
+                this.announceSubject("program", process.program.identity, "processExit", process.program.reference, processReference(process), code, signal)
             ]),
 
             // The same ending, said to whoever holds this one process rather
             // than to whoever watches the program. A launcher wants the
             // second; a program managing its instances wants the first.
-            () => this.hostTraffic.emitSubject("process", "exit", process.reference, code, signal),
+            () => this.hostTraffic.emitSubject("process", process.program.identity, "exit", process.reference, code, signal),
 
             // The window that had it is gone, so nobody is told they lost
             // it — only whoever inherits it is told they have it.
@@ -1764,15 +1749,15 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Announces one fact only through an authoritative Host registry. */
-    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
+    public async announceHost(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", owner: HostOwner, event: string, subject: string, ...values: unknown[]) {
 
-        await this.hostTraffic.emitHost(domain, event, subject, ...values)
+        await this.hostTraffic.emitHost(domain, owner, event, subject, ...values)
     }
 
     /** Announces one fact only to observers of an exact Program or Process subject. */
-    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", event: string, subject: string, ...values: unknown[]) {
+    public async announceSubject(domain: "program" | "process" | "connection" | "session" | "service" | "permission" | "opening" | "log" | "programLog", owner: HostOwner, event: string, subject: string, ...values: unknown[]) {
 
-        await this.hostTraffic.emitSubject(domain, event, subject, ...values)
+        await this.hostTraffic.emitSubject(domain, owner, event, subject, ...values)
     }
 
     /** Reads only the persistent user grant belonging to this Process's Program. */
@@ -1834,7 +1819,7 @@ export default class ProcessManager extends TheLink {
 
         const process = this.processes.get(identity)
 
-        if (process?.client) this.hostTraffic.emitSubject("window", event, process.reference, value).catch(() => undefined)
+        if (process?.client) this.hostTraffic.emitSubject("window", process.program.identity, event, process.reference, value).catch(() => undefined)
 
         this.$outbound.publish("/said", identity, event, value).catch(() => undefined)
     }

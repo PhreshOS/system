@@ -122,9 +122,9 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceSubject("connection", "disconnect", connection.identity),
+            this.authManager.processManager.announceSubject("connection", null, "disconnect", connection.identity),
 
-            this.authManager.processManager.announceHost("connection", "disconnect", connection.identity, snapshot),
+            this.authManager.processManager.announceHost("connection", null, "disconnect", connection.identity, snapshot),
 
             this.authManager.$outbound.publish("/connection/disconnect", snapshot)
         ])
@@ -370,7 +370,7 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceHost("connection", "create", connection.identity, snapshot),
+            this.authManager.processManager.announceHost("connection", null, "create", connection.identity, snapshot),
 
             this.authManager.$outbound.publish("/connection/create", snapshot)
         ])
@@ -415,7 +415,7 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceSubject("connection", "sessionChange", connection.identity, session),
+            this.authManager.processManager.announceSubject("connection", null, "sessionChange", connection.identity, session),
 
             this.authManager.$outbound.publish("/connection/session-change", this.connectionSnapshot(connection), session)
         ])
@@ -427,7 +427,7 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceHost("session", "create", identity, session),
+            this.authManager.processManager.announceHost("session", null, "create", identity, session),
 
             this.authManager.$outbound.publish("/session/create", session)
         ])
@@ -445,7 +445,7 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceSubject("session", event, identity, snapshot),
+            this.authManager.processManager.announceSubject("session", null, event, identity, snapshot),
 
             this.authManager.$outbound.publish(route, session, snapshot)
         ])
@@ -457,9 +457,9 @@ export default class LinkManager extends TheLink {
 
         await Promise.all([
 
-            this.authManager.processManager.announceSubject("session", "end", identity, reason),
+            this.authManager.processManager.announceSubject("session", null, "end", identity, reason),
 
-            this.authManager.processManager.announceHost("session", "end", identity, session, reason),
+            this.authManager.processManager.announceHost("session", null, "end", identity, session, reason),
 
             this.authManager.$outbound.publish(
                 "/session/end",

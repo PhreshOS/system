@@ -266,8 +266,8 @@ export default class ProgramManager extends TheLink {
         const permissions = entry.permissions()
 
         await Promise.all([
-            this.authManager.processManager.announceHost("program", "permissions", entry.identity, entry),
-            this.authManager.processManager.announceSubject("program", "permissions", entry.program.reference, permissions),
+            this.authManager.processManager.announceHost("program", entry.identity, "permissions", entry.identity, entry),
+            this.authManager.processManager.announceSubject("program", entry.identity, "permissions", entry.program.reference, permissions),
             this.$outbound.publish("/permissions-change", entry.record())
         ])
     }
@@ -479,7 +479,7 @@ export default class ProgramManager extends TheLink {
     // replayed event history, so only runtime registrations use this.
     private async created(entry: Entry) {
 
-        await this.authManager.processManager.announceHost("program", "create", entry.identity, entry)
+        await this.authManager.processManager.announceHost("program", entry.identity, "create", entry.identity, entry)
 
         await this.$outbound.publish("/create", entry.record())
     }
@@ -548,7 +548,7 @@ export default class ProgramManager extends TheLink {
 
         const store = new ProgramStoreState(program.storagePath, (key, snapshot) => {
             // The System is the only publisher; endpoint adapters must consume, never echo, this fact.
-            this.authManager.processManager.announceSubject("program", "storeChange", program.reference, key, snapshot).catch(() => undefined)
+            this.authManager.processManager.announceSubject("program", program.identity, "storeChange", program.reference, key, snapshot).catch(() => undefined)
             this.$outbound.publish("/store-change", program.reference, key, snapshot).catch(() => undefined)
         })
 
@@ -571,7 +571,7 @@ export default class ProgramManager extends TheLink {
             // post-commit record to observers that are authorized to see it.
             this.$outbound.publish("/log", program.reference, record).catch(() => undefined)
 
-            this.authManager.processManager.announceSubject("programLog", "log", program.reference, record).catch(() => undefined)
+            this.authManager.processManager.announceSubject("programLog", program.identity, "log", program.reference, record).catch(() => undefined)
         })
 
         this.said.set(program.identity, logs)
@@ -707,7 +707,7 @@ export default class ProgramManager extends TheLink {
 
         state.setPinned(pinned)
         const entry = this.find(program.identity)
-        await this.authManager.processManager.announceHost("program", "pinned", entry.identity, entry, pinned)
+        await this.authManager.processManager.announceHost("program", entry.identity, "pinned", entry.identity, entry, pinned)
         await this.$outbound.publish("/pinned", entry.record(), pinned)
         return pinned
     }
@@ -1141,7 +1141,7 @@ export default class ProgramManager extends TheLink {
 
                 if (createdHere) await this.created(entry)
 
-                await this.authManager.processManager.announceHost("program", "install", entry.identity, entry)
+                await this.authManager.processManager.announceHost("program", entry.identity, "install", entry.identity, entry)
 
                 // Installation is shared registry state, so it is announced
                 // independently of the response returned to its caller.
@@ -1249,9 +1249,9 @@ export default class ProgramManager extends TheLink {
 
         entry.installed = false
 
-        await this.authManager.processManager.announceHost("program", "uninstall", entry.identity, entry, purge)
+        await this.authManager.processManager.announceHost("program", entry.identity, "uninstall", entry.identity, entry, purge)
 
-        await this.authManager.processManager.announceSubject("program", "uninstall", entry.program.reference, purge)
+        await this.authManager.processManager.announceSubject("program", entry.identity, "uninstall", entry.program.reference, purge)
 
         await this.$outbound.publish("/uninstall", entry.record(), purge)
 
@@ -1280,9 +1280,9 @@ export default class ProgramManager extends TheLink {
 
         this.programs.delete(entry.identity)
 
-        await this.authManager.processManager.announceHost("program", "forget", entry.identity, entry)
+        await this.authManager.processManager.announceHost("program", entry.identity, "forget", entry.identity, entry)
 
-        await this.authManager.processManager.announceSubject("program", "forget", entry.program.reference)
+        await this.authManager.processManager.announceSubject("program", entry.identity, "forget", entry.program.reference)
 
         await this.$outbound.publish("/forget", entry.identity)
 

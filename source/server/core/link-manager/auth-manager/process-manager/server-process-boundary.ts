@@ -1,6 +1,6 @@
 import { TheLink } from "@the-link/core"
 import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
-import HostTraffic from "./host-traffic"
+import HostTraffic, { type HostDelivery, type HostDomain, type HostOwner } from "./host-traffic"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices, { type ServiceScope } from "./endpoint-services"
 import type { ServiceAddress } from "@phreshos/core"
@@ -42,6 +42,9 @@ export default class ServerProcessBoundary extends TheLink {
     private readonly serviceSubscriptions = new Map<string, () => void>()
 
     private readonly hostSubscriptions = new Map<string, () => void>()
+
+    /** The routes each fact has already reached this Server on. */
+    private readonly deliveredFacts = new WeakMap<HostDelivery, Set<string>>()
 
     private readonly resources = new Set<() => void>()
 
@@ -384,15 +387,23 @@ export default class ServerProcessBoundary extends TheLink {
 
                 this.hostSubscriptions.get(subscription)?.()
 
-                this.hostSubscriptions.set(subscription, this.hostTraffic.observe(hostDomain, event, subject, (_delivery, word, ...values) => {
+                this.hostSubscriptions.set(subscription, this.hostTraffic.observe(hostDomain, event, subject, (delivery, word, ...values) => {
 
-                    const eventSubject = hostDomain === "service" && typeof values[0] === "string"
-                        ? values[0]
-                        : typeof values[0] === "object" && values[0] !== null && "reference" in values[0]
-                        ? String((values[0] as { reference: unknown }).reference)
-                        : subject
+                    // A Service's announcement names the Service it is about; every other fact
+                    // carries the Program it belongs to.
+                    const eventSubject = hostDomain === "service" && typeof values[0] === "string" ? values[0] : subject
 
-                    if (!this.hostVisible(hostDomain, eventSubject)) return
+                    if (!this.hostVisible(hostDomain, eventSubject, delivery.owner)) return
+
+                    // One fact reaches this Server once on each route, however many of its
+                    // subscriptions it matches; the Server hands it to each of its listeners.
+                    const routes = this.deliveredFacts.get(delivery) ?? new Set<string>()
+
+                    if (routes.has(route)) return
+
+                    routes.add(route)
+
+                    this.deliveredFacts.set(delivery, routes)
 
                     this.deliver(route, word, ...values).catch(() => undefined)
                 }))
@@ -540,4 +551,4 @@ export type { Stream } from "@server/core/server-runtime"
 
 export type Ending = (code: number | null, signal: NodeJS.Signals | null) => void
 
-export type HostVisibility = (domain: "program" | "process" | "connection" | "session" | "service" | "window" | "permission" | "opening" | "log" | "programLog" | "clientMemory", subject: string | null) => boolean
+export type HostVisibility = (domain: HostDomain, subject: string | null, owner: HostOwner) => boolean

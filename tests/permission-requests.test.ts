@@ -85,8 +85,8 @@ test("permission request lifecycle belongs to one live Endpoint", async () => {
         assert.equal(await stopped, null)
         assert(!manager.pending("endpoint-stop"))
 
-        assert(hostEvents.some(values => values[0] === "permission" && values[1] === "request"))
-        assert(hostEvents.some(values => values[0] === "permission" && values[1] === "resolve"))
+        assert(hostEvents.some(values => values[0] === "permission" && values[2] === "request"))
+        assert(hostEvents.some(values => values[0] === "permission" && values[2] === "resolve"))
     }
     finally {
         rmSync(temporary, { recursive: true, force: true })

@@ -45,7 +45,7 @@ export default class AuthManager extends TheLink {
 
             this.$outbound.publish("/logs/log", record).catch(() => undefined)
 
-            this.processManager.announceHost("log", "log", "system", record).catch(() => undefined)
+            this.processManager.announceHost("log", null, "log", "system", record).catch(() => undefined)
         })
 
         this.subscribeTo(this.linkManager, "/auth")

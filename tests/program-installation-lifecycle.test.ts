@@ -149,11 +149,11 @@ test("uninstallation converges silently while its Program handle remains valid",
     expect(entry.installed).toBe(false)
     expect(await manager.pinned(program, "get")).toBe(true)
     expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
-    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
+    expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
 
     await manager.uninstall(program)
 
-    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
+    expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
     expect(exitAll).not.toHaveBeenCalled()
 
     await manager.uninstall(program, { purge: true })
@@ -161,8 +161,8 @@ test("uninstallation converges silently while its Program handle remains valid",
     expect(manager.programs.has(program.identity)).toBe(false)
     expect(existsSync(home)).toBe(false)
     expect(exitAll).toHaveBeenCalledExactlyOnceWith(program.identity, null)
-    expect(announceHost.mock.calls.filter(([, event]) => event === "uninstall")).toHaveLength(1)
-    expect(announceHost.mock.calls.filter(([, event]) => event === "forget")).toHaveLength(1)
+    expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
+    expect(announceHost.mock.calls.filter(([, , event]) => event === "forget")).toHaveLength(1)
 
     await expect(manager.uninstall(program)).rejects.toThrow("does not know this program")
 })
