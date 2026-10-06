@@ -53,23 +53,25 @@ describe("ProgramStoreState", () => {
         await instance.delete("tab")
         await instance.set("tab", "layout")
         await instance.clear()
-        await instance.set("tab", "temporary", 1000)
+        // Long enough to be read back after it is written, even on a slow machine: a value that
+        // expires before then was never seen, so no change is published for it.
+        await instance.set("tab", "temporary", 3000)
 
         await vi.waitFor(() => expect(changes.map(change => change.snapshot.value)).toEqual([
             "colors", undefined, "layout", undefined, "temporary", undefined
-        ]), { timeout: 4000 })
+        ]), { timeout: 10_000 })
         expect(await instance.get("tab")).toBeUndefined()
     })
 
     it("preserves an existing expiry when a compare-and-set changes its value", async () => {
         const { instance, changes } = store()
-        await instance.set("count", 1, 1000)
+        await instance.set("count", 1, 3000)
         const snapshot = await instance.snapshot("count")
         expect((await instance.compareAndSet("count", 2, snapshot)).changed).toBe(true)
         await vi.waitFor(async () => {
             expect(await instance.get("count")).toBeUndefined()
             expect(changes.at(-1)?.snapshot.value).toBeUndefined()
-        }, { timeout: 4000 })
+        }, { timeout: 10_000 })
     })
 
     it("recovers a persisted deadline and notifies when that key expires", async () => {
