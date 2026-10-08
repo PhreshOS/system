@@ -239,10 +239,14 @@ export default class Logs {
      */
     public query(sql: string, values: unknown[] = []) {
 
-        // A program that has never printed has no file, and a read-only
-        // connection will not make one. Answered with nothing, which is
-        // what it said.
-        if (!existsSync(this.path)) return []
+        const database = existsSync(this.path) ? this.reader() : this.nothingSaid()
+
+        try { return database.prepare(sql).all(...values as never[]).map(row => ({ ...row })) }
+
+        finally { database.close() }
+    }
+
+    private reader() {
 
         if (!this.ready) {
 
@@ -258,11 +262,22 @@ export default class Logs {
             finally { writable.close() }
         }
 
-        const database = new DatabaseSync(this.path, { readOnly: true })
+        return new DatabaseSync(this.path, { readOnly: true })
+    }
 
-        try { return database.prepare(sql).all(...values as never[]).map(row => ({ ...row })) }
+    // A program that has never printed has no file, and asking must not
+    // make one. The question is put to the same table, empty and refusing
+    // changes, so it gets the answer it would get the moment before the
+    // first line: a count is zero and a mistaken query still fails.
+    private nothingSaid() {
 
-        finally { database.close() }
+        const database = new DatabaseSync(":memory:")
+
+        this.prepare(database)
+
+        database.exec("pragma query_only = true")
+
+        return database
     }
 
     // Closed because the file is about to go, or has. An open handle to

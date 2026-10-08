@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { SystemLogRecord } from "@phreshos/core"
@@ -107,6 +107,28 @@ test("Program log listeners receive the record after its row is stored", async (
     }])
   } finally {
     logs.close()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test("logs answer every question before their first record, without making a file", () => {
+  const directory = mkdtempSync(join(tmpdir(), "phresh-logs-unwritten-"))
+  const system = new SystemLogs(join(directory, "system", "logs.sqlite"))
+  const program = new ProgramLogs(join(directory, "program", "logs.sqlite"))
+
+  try {
+    for (const logs of [system, program]) {
+      assert.deepEqual(logs.query("select count(*) as count from logs"), [{ count: 0 }])
+      assert.deepEqual(logs.query("select * from logs where kind = ?", ["exit"]), [])
+      assert.throws(() => logs.query("select * from missing"))
+      assert.throws(() => logs.query("delete from logs"))
+    }
+
+    assert.equal(existsSync(join(directory, "system")), false)
+    assert.equal(existsSync(join(directory, "program")), false)
+  } finally {
+    system.close()
+    program.close()
     rmSync(directory, { recursive: true, force: true })
   }
 })

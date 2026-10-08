@@ -53,7 +53,14 @@ export default class SystemLogs {
 
     public query(sql: string, values: unknown[] = []) {
 
-        if (!existsSync(this.path)) return []
+        const database = existsSync(this.path) ? this.reader() : this.nothingRecorded()
+
+        try { return database.prepare(sql).all(...values as never[]).map(row => ({ ...row })) }
+
+        finally { database.close() }
+    }
+
+    private reader() {
 
         if (!this.ready) {
 
@@ -69,11 +76,19 @@ export default class SystemLogs {
             finally { writable.close() }
         }
 
-        const database = new DatabaseSync(this.path, { readOnly: true })
+        return new DatabaseSync(this.path, { readOnly: true })
+    }
 
-        try { return database.prepare(sql).all(...values as never[]).map(row => ({ ...row })) }
+    /** Before the first record there is no file; the same empty, read-only table answers instead. */
+    private nothingRecorded() {
 
-        finally { database.close() }
+        const database = new DatabaseSync(":memory:")
+
+        this.prepare(database)
+
+        database.exec("pragma query_only = true")
+
+        return database
     }
 
     public close() {
