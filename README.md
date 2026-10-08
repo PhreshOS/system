@@ -49,8 +49,12 @@ the Desktop it serves.
 The [live demo](https://demo.phreshos.com) gives you a disposable Desktop for an
 hour, with nothing to install.
 
-To install PhreshOS on macOS, Linux, or Windows, you need Node.js 24.15 or
+To install PhreshOS on macOS or Linux, you need Node.js 24.15 or
 newer:
+
+> [!NOTE]
+> Windows is not fully supported yet. The System installs and runs there, but
+> some Programs do not work.
 
 ```sh
 npm install --global @phreshos/cli
