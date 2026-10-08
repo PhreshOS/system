@@ -207,6 +207,16 @@ export default class ProgramManager extends TheLink {
         return this.arrived(payload)
     }
 
+    @Subscribe("/startup-change")
+    protected async startupChanged(payload: ProgramRecord | null, launch: unknown) {
+
+        if (!payload) return
+        const program = this.programs.get(payload.identity)
+        if (!program || program.reference !== payload.reference) return
+        program.startup = launch !== null
+        await this.$inbound.publish("/startup", program, launch)
+    }
+
     @Subscribe("/pinned")
     protected async pinnedChanged(payload: ProgramRecord | null, pinned: boolean) {
 

@@ -19,6 +19,7 @@ import {
     parsePermission,
     parsePermissionName,
     parsePermissions,
+    opensType,
     parseSystemProgramListOptions,
     parseSystemServiceListOptions,
     type PermissionRequestInput,
@@ -217,8 +218,11 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         if (word === "host-program-list") {
 
-            const { installed } = parseSystemProgramListOptions(args[0])
-            const programs = [...programManager.programs.values()].filter(program => installed === undefined || program.installed === installed)
+            const { installed, opens, startup } = parseSystemProgramListOptions(args[0])
+            const programs = [...programManager.programs.values()].filter(program =>
+                (installed === undefined || program.installed === installed)
+                && (opens === undefined || opensType(program.opens, opens))
+                && (startup === undefined || program.startup === startup))
             const visible = []
 
             for (const program of programs) if (await access.canProgram(program)) visible.push(program)

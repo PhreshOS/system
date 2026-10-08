@@ -1,4 +1,5 @@
 import Program from "./program"
+import ProgramStateStorage from "./state"
 import type { Permissions, ProgramSnapshot } from "@phreshos/core"
 
 /**
@@ -53,8 +54,12 @@ export default class Entry {
 
             permissions: this.permissions(),
 
-            installed: this.installed
-        } satisfies ProgramSnapshot & { permissions: Permissions }
+            installed: this.installed,
+
+            // Whether it starts with the System, so a list can be filtered
+            // where it is held. The launch itself stays behind `startup.get()`.
+            startup: new ProgramStateStorage(this.program).startup() !== null
+        } satisfies ProgramSnapshot & { permissions: Permissions, startup: boolean }
     }
 
     public toJSON() {

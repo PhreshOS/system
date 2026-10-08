@@ -57,7 +57,8 @@ export default class System {
 
         return [...this.programManager.programs.values()].filter(entry =>
             (options.installed === undefined || entry.installed === options.installed)
-            && (options.opens === undefined || opensType(entry.program.config.opens ?? [], options.opens)))
+            && (options.opens === undefined || opensType(entry.program.config.opens ?? [], options.opens))
+            && (options.startup === undefined || entry.record().startup === options.startup))
     }
 
     public findProgram(identity: string) {

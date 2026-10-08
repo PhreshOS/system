@@ -188,14 +188,19 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     programs.useSubscribe("/pinned", useCallback((entry: Program | null, pinned: boolean) => {
         if (!entry || typeof pinned !== "boolean") return
         const record = sdkProgram(entry)
-        post(entry.identity, "host-program", "pinned", entry.identity, record, pinned)
-        post(entry.identity, "program-host", "pinned", entry.reference, pinned)
+        post(entry.identity, "host-program", "pin", entry.identity, record, pinned)
+        post(entry.identity, "program-host", "pin", entry.reference, pinned)
     }, [post]))
     programs.useSubscribe("/permissions", useCallback((entry: Program | null) => {
         if (!entry) return
         const record = sdkProgram(entry)
-        post(entry.identity, "host-program", "permissions", entry.identity, record)
-        post(entry.identity, "program-host", "permissions", entry.reference, record)
+        post(entry.identity, "host-program", "changePermissions", entry.identity, record)
+        post(entry.identity, "program-host", "changePermissions", entry.reference, record)
+    }, [post]))
+    programs.useSubscribe("/startup", useCallback((entry: Program | null, launch: unknown) => {
+        if (!entry) return
+        post(entry.identity, "host-program", "changeStartup", entry.identity, sdkProgram(entry), launch)
+        post(entry.identity, "program-host", "changeStartup", entry.reference, launch)
     }, [post]))
 
     programs.useSubscribe("/store-change", useCallback((reference: unknown, key: unknown, snapshot: unknown) => {

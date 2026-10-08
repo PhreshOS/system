@@ -121,25 +121,60 @@ test("permission changes publish one complete effective snapshot through both Pr
     expect(records).toHaveLength(1)
     expect(records[0]).toMatchObject({ permissions })
     expect(announceHost).toHaveBeenCalledExactlyOnceWith(
-        "program", program.identity, "permissions", program.identity, manager.find(program.identity)
+        "program", program.identity, "changePermissions", program.identity, manager.find(program.identity)
     )
     expect(announceSubject).toHaveBeenCalledExactlyOnceWith(
-        "program", program.identity, "permissions", program.reference, permissions
+        "program", program.identity, "changePermissions", program.reference, permissions
     )
 })
 
 test("pinning emits Program and global events only when the boolean changes", async context => {
-    const { manager, definition, announceHost } = fixture(context)
+    const { manager, definition, announceHost, announceSubject } = fixture(context)
     const program = await manager.create(definition())
     announceHost.mockClear()
+    announceSubject.mockClear()
 
     await manager.pinned(program, "pin")
     await manager.pinned(program, "pin")
     await manager.pinned(program, "unpin")
 
     expect(announceHost.mock.calls.map(([, owner, event, , , pinned]) => [owner, event, pinned])).toEqual([
-        [program.identity, "pinned", true],
-        [program.identity, "pinned", false]
+        [program.identity, "pin", true],
+        [program.identity, "pin", false]
+    ])
+    expect(announceSubject.mock.calls.map(([, , event, subject, pinned]) => [event, subject, pinned])).toEqual([
+        ["pin", program.reference, true],
+        ["pin", program.reference, false]
+    ])
+})
+
+test("startup changes emit Program and global events, and filter the Program list", async context => {
+    const { manager, definition, announceHost, announceSubject } = fixture(context)
+    const program = await manager.create(definition())
+    const records: unknown[][] = []
+    const stop = manager.$outbound.subscribe("/startup-change", (record, launch) => { records.push([record, launch]) })
+    context.onTestFinished(stop)
+    announceHost.mockClear()
+    announceSubject.mockClear()
+
+    await manager.startup(program, "set", { name: "background" })
+    await manager.startup(program, "set", { name: "background" })
+    expect(manager.find(program.identity).record().startup).toBe(true)
+    await manager.startup(program, "remove")
+    await manager.startup(program, "remove")
+    expect(manager.find(program.identity).record().startup).toBe(false)
+
+    expect(announceHost.mock.calls.map(([, owner, event, , , launch]) => [owner, event, launch])).toEqual([
+        [program.identity, "changeStartup", { name: "background" }],
+        [program.identity, "changeStartup", null]
+    ])
+    expect(announceSubject.mock.calls.map(([, , event, subject, launch]) => [event, subject, launch])).toEqual([
+        ["changeStartup", program.reference, { name: "background" }],
+        ["changeStartup", program.reference, null]
+    ])
+    expect(records.map(([record, launch]) => [(record as { startup: boolean }).startup, launch])).toEqual([
+        [true, { name: "background" }],
+        [false, null]
     ])
 })
 

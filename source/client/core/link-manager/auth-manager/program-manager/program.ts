@@ -42,6 +42,12 @@ export default class Program {
     /** Effective authority synchronized with the authoritative Program state. */
     public permissions: Permissions
 
+    /** The media types it opens, as its definition declares them. */
+    public readonly opens: readonly string[]
+
+    /** Whether it starts with the System. */
+    public startup: boolean
+
     public constructor(programManager: ProgramManager, payload: ProgramRecord) {
 
         this.programManager = programManager
@@ -71,6 +77,10 @@ export default class Program {
         this.client = payload.client
 
         this.permissions = parsePermissions(payload.permissions)
+
+        this.opens = payload.opens
+
+        this.startup = payload.startup
     }
 
     public updatePermissions(permissions: unknown) {

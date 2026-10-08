@@ -266,8 +266,8 @@ export default class ProgramManager extends TheLink {
         const permissions = entry.permissions()
 
         await Promise.all([
-            this.authManager.processManager.announceHost("program", entry.identity, "permissions", entry.identity, entry),
-            this.authManager.processManager.announceSubject("program", entry.identity, "permissions", entry.program.reference, permissions),
+            this.authManager.processManager.announceHost("program", entry.identity, "changePermissions", entry.identity, entry),
+            this.authManager.processManager.announceSubject("program", entry.identity, "changePermissions", entry.program.reference, permissions),
             this.$outbound.publish("/permissions-change", entry.record())
         ])
     }
@@ -682,6 +682,8 @@ export default class ProgramManager extends TheLink {
             if (isDeepStrictEqual(state.startup(), launch)) return
             state.setStartup(launch)
 
+            await this.announceStartup(program, launch)
+
             return
         }
 
@@ -690,10 +692,27 @@ export default class ProgramManager extends TheLink {
             if (state.startup() === null) return
             state.setStartup(null)
 
+            await this.announceStartup(program, null)
+
             return
         }
 
         throw new Error(`The host does not know the startup operation "${operation}"`)
+    }
+
+    // Said once the record is written, whoever set or removed it: the
+    // Program itself, the owner's Settings, or the terminal.
+    private async announceStartup(program: Program, launch: Launch | null) {
+
+        const entry = this.programs.get(program.identity)
+
+        if (!entry || entry.program !== program) return
+
+        await Promise.all([
+            this.authManager.processManager.announceHost("program", entry.identity, "changeStartup", entry.identity, entry, launch),
+            this.authManager.processManager.announceSubject("program", entry.identity, "changeStartup", entry.program.reference, launch),
+            this.$outbound.publish("/startup-change", entry.record(), launch)
+        ])
     }
 
     /** Read or change the pinned state and publish only effective transitions. */
@@ -707,7 +726,10 @@ export default class ProgramManager extends TheLink {
 
         state.setPinned(pinned)
         const entry = this.find(program.identity)
-        await this.authManager.processManager.announceHost("program", entry.identity, "pinned", entry.identity, entry, pinned)
+        await Promise.all([
+            this.authManager.processManager.announceHost("program", entry.identity, "pin", entry.identity, entry, pinned),
+            this.authManager.processManager.announceSubject("program", entry.identity, "pin", entry.program.reference, pinned)
+        ])
         await this.$outbound.publish("/pinned", entry.record(), pinned)
         return pinned
     }

@@ -20,7 +20,8 @@ function record(permissions: ProgramRecord["permissions"]): ProgramRecord {
         hasAgent: false,
         server: null,
         client: null,
-        permissions
+        permissions,
+        startup: false
     }
 }
 
