@@ -50,7 +50,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
     return <ScrollArea axis="horizontal"><Table aria-label="Programs" size="small" onAction={launch}>
 
         <Table.Header>
-            <Table.Column id="name" rowHeader minWidth={space.xlarge * 6}>Name</Table.Column>
+            <Table.Column id="name" rowHeader minWidth={space.xlarge * 3}>Name</Table.Column>
             <Table.Column id="version" width={space.xlarge * 3}>Version</Table.Column>
             <Table.Column id="category" width={space.xlarge * 4.5}>Category</Table.Column>
             <Table.Column id="state" width={space.xlarge * 3.5}>State</Table.Column>

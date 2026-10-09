@@ -19,8 +19,8 @@ export default function Processes({ processes, programs, empty }: Readonly<{
     return <ScrollArea axis="horizontal"><Table aria-label="Processes" size="small">
 
         <Table.Header>
-            <Table.Column id="process" rowHeader minWidth={space.xlarge * 6}>Process</Table.Column>
-            <Table.Column id="program" width={space.xlarge * 6}>Program</Table.Column>
+            <Table.Column id="process" rowHeader minWidth={space.xlarge * 3}>Process</Table.Column>
+            <Table.Column id="program" width={space.xlarge * 4}>Program</Table.Column>
             <Table.Column id="endpoints" width={space.xlarge * 5}>Endpoints</Table.Column>
             <Table.Column id="end" aria-label="End" width={space.xlarge * 2}> </Table.Column>
         </Table.Header>
