@@ -754,7 +754,8 @@ export default class ProgramManager extends TheLink {
             this.authManager.processManager.announceHost("program", entry.identity, "pin", entry.identity, entry, pinned),
             this.authManager.processManager.announceSubject("program", entry.identity, "pin", entry.program.reference, pinned)
         ])
-        await this.$outbound.publish("/pinned", entry.record(), pinned)
+        // Its own route, apart from the "/pinned" a Desktop asks on, as every change has.
+        await this.$outbound.publish("/pin-change", entry.record(), pinned)
         return pinned
     }
 

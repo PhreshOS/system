@@ -217,7 +217,7 @@ export default class ProgramManager extends TheLink {
         await this.$inbound.publish("/startup", program, launch)
     }
 
-    @Subscribe("/pinned")
+    @Subscribe("/pin-change")
     protected async pinnedChanged(payload: ProgramRecord | null, pinned: boolean) {
 
         if (!payload || typeof pinned !== "boolean") return
