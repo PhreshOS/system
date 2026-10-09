@@ -30,7 +30,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     const icon = (program: Program) => programIcon(application.doors.program, program.assetId)
 
-    if (layout === "grid") return <GridList aria-label="Programs" selectionMode="none" restColor="primary:subtle" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
+    if (layout === "grid") return <GridList aria-label="Programs" selectionMode="none" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
 
         {programs.map(program => <GridList.Item key={program.identity} id={program.identity} textValue={program.name}>
 
