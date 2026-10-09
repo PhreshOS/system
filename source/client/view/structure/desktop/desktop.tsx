@@ -540,7 +540,7 @@ export default function Workspace() {
 
     const wallpaper = hasWallpaperClient
         ? renderWindows("wallpaper")
-        : <WallpaperBackground place="desktop" wallpaper={appearance.wallpaper} onReady={fileWallpaperLoaded} />
+        : <WallpaperBackground place="desktop" wallpapers={appearance.wallpapers} onReady={fileWallpaperLoaded} />
 
     const shell = hasShellClient
         ? renderWindows("shell")

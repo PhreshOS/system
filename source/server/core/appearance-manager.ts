@@ -34,7 +34,7 @@ export default class AppearanceManager {
     public async update(value: unknown) {
         const appearance = applyAppearanceUpdate(this.current, value)
 
-        for (const wallpaper of [appearance.wallpaper.light, appearance.wallpaper.dark]) {
+        for (const wallpaper of [appearance.wallpapers.light, appearance.wallpapers.dark]) {
             this.validateWallpaper(wallpaper.signIn)
             this.validateWallpaper(wallpaper.desktop)
         }

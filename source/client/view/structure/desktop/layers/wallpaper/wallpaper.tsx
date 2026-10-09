@@ -5,11 +5,11 @@ import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
 import { usePreferences, useTiming } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
-import { cssEasing, type AppearanceWallpaper, type ThemedValue } from "@phreshos/core"
+import { cssEasing, type AppearanceWallpapers, type ThemedValue } from "@phreshos/core"
 import { wallpaperKind, type WallpaperKind } from "@shared/wallpaper"
 
 /** Where a wallpaper is shown. */
-export type WallpaperPlace = keyof AppearanceWallpaper
+export type WallpaperPlace = keyof AppearanceWallpapers
 
 type WallpaperSource = Readonly<{
     identity: string
@@ -24,12 +24,12 @@ type WallpaperLayers = Readonly<{
 }>
 
 /** Displays one completely loaded wallpaper source. */
-export function WallpaperBackground({ place, wallpaper, onReady }: WallpaperBackgroundProps) {
+export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBackgroundProps) {
     const application = ApplicationContext.useValue()
     const { theme } = usePreferences()
     const reducedMotion = useReducedMotion()
-    const desired = resolveWallpaper(wallpaper[theme][place], application.doors.uploads)
-    const other = resolveWallpaper(wallpaper[theme === "light" ? "dark" : "light"][place], application.doors.uploads)
+    const desired = resolveWallpaper(wallpapers[theme][place], application.doors.uploads)
+    const other = resolveWallpaper(wallpapers[theme === "light" ? "dark" : "light"][place], application.doors.uploads)
     const [layers, setLayers] = useState<WallpaperLayers>({
         displayed: null,
         incoming: desired,
@@ -191,14 +191,14 @@ function cancelSwitch(frame: { current: number | null }) {
 }
 
 /** A complete surface whose content sits above one file-backed wallpaper. */
-export function WallpaperStage({ place, wallpaper, children }: WallpaperStageProps) {
+export function WallpaperStage({ place, wallpapers, children }: WallpaperStageProps) {
     const { theme } = usePreferences()
-    const file = wallpaper[theme][place]
+    const file = wallpapers[theme][place]
     const [readyFile, setReadyFile] = useState<string>()
     const ready = readyFile === file
 
     return <div className="relative isolate grid min-h-0">
-        <WallpaperBackground place={place} wallpaper={wallpaper} onReady={() => setReadyFile(file)} />
+        <WallpaperBackground place={place} wallpapers={wallpapers} onReady={() => setReadyFile(file)} />
 
         <div className="pointer-events-none relative z-1 grid min-h-0">
             {children}
@@ -217,12 +217,12 @@ export function ReadyWallpaper() {
 
 interface WallpaperStageProps {
     place: WallpaperPlace
-    wallpaper: ThemedValue<AppearanceWallpaper>
+    wallpapers: ThemedValue<AppearanceWallpapers>
     children: ReactNode
 }
 
 interface WallpaperBackgroundProps {
     place: WallpaperPlace
-    wallpaper: ThemedValue<AppearanceWallpaper>
+    wallpapers: ThemedValue<AppearanceWallpapers>
     onReady?: () => void
 }

@@ -124,24 +124,24 @@ test("appearance contract", async () => {
     uploads.write(extension, new Blob(["wallpaper"]).stream())))
 
   for (const file of wallpaperFiles) {
-    await manager.update({ wallpaper: { light: { desktop: file } } })
-    assert.equal(manager.value.wallpaper.light.desktop, file)
-    assert.equal(manager.value.wallpaper.light.signIn, systemWallpapers.light.signIn)
+    await manager.update({ wallpapers: { light: { desktop: file } } })
+    assert.equal(manager.value.wallpapers.light.desktop, file)
+    assert.equal(manager.value.wallpapers.light.signIn, systemWallpapers.light.signIn)
   }
 
   // The System's own wallpapers are uploads it keeps, each read from the files it comes with.
   for (const wallpaper of Object.values(systemWallpapers)) for (const file of Object.values(wallpaper)) {
     assert(uploads.stat(file)!.size > 0)
   }
-  await manager.update({ wallpaper: { light: { desktop: systemWallpapers.dark.desktop } } })
-  assert.equal(manager.value.wallpaper.light.desktop, systemWallpapers.dark.desktop)
-  await assert.rejects(manager.update({ wallpaper: { light: { desktop: null } } }))
-  await assert.rejects(manager.update({ wallpaper: { light: { desktop: `${randomUUID()}.png` } } }), /does not exist/)
+  await manager.update({ wallpapers: { light: { desktop: systemWallpapers.dark.desktop } } })
+  assert.equal(manager.value.wallpapers.light.desktop, systemWallpapers.dark.desktop)
+  await assert.rejects(manager.update({ wallpapers: { light: { desktop: null } } }))
+  await assert.rejects(manager.update({ wallpapers: { light: { desktop: `${randomUUID()}.png` } } }), /does not exist/)
 
   const unsupported = await uploads.write("txt", new Blob(["wallpaper"]).stream())
   await assert.rejects(manager.update({
     ...manager.value,
-    wallpaper: { ...manager.value.wallpaper, light: { ...manager.value.wallpaper.light, desktop: unsupported } }
+    wallpapers: { ...manager.value.wallpapers, light: { ...manager.value.wallpapers.light, desktop: unsupported } }
   }), /image, video, or HTML/)
 
   const oversized = `${randomUUID()}.html`
@@ -149,7 +149,7 @@ test("appearance contract", async () => {
   await truncate(uploads.path(oversized), wallpaperSizeLimit + 1)
   await assert.rejects(manager.update({
     ...manager.value,
-    wallpaper: { ...manager.value.wallpaper, light: { ...manager.value.wallpaper.light, desktop: oversized } }
+    wallpapers: { ...manager.value.wallpapers, light: { ...manager.value.wallpapers.light, desktop: oversized } }
   }), /50 MiB/)
 
   await rm(directory, { recursive: true, force: true })

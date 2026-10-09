@@ -17,10 +17,10 @@ test("wallpaper source contract", () => {
     })
 
     function render(file: string, place: WallpaperPlace = "desktop") {
-        const wallpaper = { ...systemWallpapers, dark: { ...systemWallpapers.dark, [place]: file } }
+        const wallpapers = { ...systemWallpapers, dark: { ...systemWallpapers.dark, [place]: file } }
         return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
             <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
-                <WallpaperBackground place={place} wallpaper={wallpaper} />
+                <WallpaperBackground place={place} wallpapers={wallpapers} />
             </UIProvider>
         </ApplicationContext.Provider>)
     }
