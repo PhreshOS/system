@@ -39,7 +39,7 @@
     "@phreshos/core": "^0.1.72",
     "@phreshos/react-ui": "^0.1.51",
     "@the-link/core": "^0.4.0",
-    "@the-link/http": "^0.2.1",
+    "@the-link/http": "^0.3.0",
     "@the-link/ipc": "^0.3.0",
     "@the-link/messagepack": "^0.2.0",
     "@the-link/react": "^0.3.0",

@@ -11,7 +11,7 @@
         "@phreshos/core": "^0.1.72",
         "@phreshos/react-ui": "^0.1.51",
         "@the-link/core": "^0.4.0",
-        "@the-link/http": "^0.2.1",
+        "@the-link/http": "^0.3.0",
         "@the-link/ipc": "^0.3.0",
         "@the-link/messagepack": "^0.2.0",
         "@the-link/react": "^0.3.0",
@@ -276,7 +276,7 @@
 
     "@the-link/core": ["@the-link/core@0.4.0", "", { "dependencies": { "uuid": "^14.0.1" } }, "sha512-pwZsM6lq4XRudHhm4RBgmptvrHsgps0yx0EZxqGMcaaQ45usafE/WhReDAGzHtGkT4+y1ad8cNjCGYViNbug8g=="],
 
-    "@the-link/http": ["@the-link/http@0.2.1", "", { "dependencies": { "@the-link/core": "^0.4.0", "hono": "^4.13.2", "uuid": "^14.0.1" } }, "sha512-kEfGSXQh+U1R55LxESi0frV22FRVMI+npeLj+YA56JpWcGc1uwr6xrp8SfbUdKK1shsoHzi7O+KeN9F7dk7piw=="],
+    "@the-link/http": ["@the-link/http@0.3.0", "", { "dependencies": { "@the-link/core": "^0.4.0", "hono": "^4.13.2", "uuid": "^14.0.1" } }, "sha512-vBixfvGETHdkX3GxXp/5Dls5DWmgD5+nogl/NUNMLGtRXrlC0GS0KcXWAegVMYYLZ3TaQwaU031SxRj+Pl2LtA=="],
 
     "@the-link/ipc": ["@the-link/ipc@0.3.0", "", { "dependencies": { "@the-link/core": "^0.4.0" } }, "sha512-qIvn9dzoAck3AkchS5agEXCHi9083I0JXCPOXgG1GpQlm2fBoMjf5yLHeHC4hZZP1Q1gcxrYQTILJsPzWGUqtw=="],
 
