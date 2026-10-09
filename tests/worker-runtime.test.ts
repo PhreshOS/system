@@ -220,9 +220,8 @@ test("server runtime contract", async () => {
 
       runtime.stop()
 
-      const ending = await runtime.finished
-
-      assert.equal(ending.signal, null)
+      // A requested end never reads as a crash.
+      assert.deepEqual(await runtime.finished, { code: null, signal: "SIGTERM" })
   }
 
   async function verifyCodecRuntime(runtime: SandboxServerRuntime) {

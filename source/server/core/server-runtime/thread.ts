@@ -19,6 +19,8 @@ export default abstract class ThreadServerRuntime implements ServerRuntime {
 
     private readonly pendingOutput: [Stream, string][] = []
 
+    private stopping = false
+
     private clearingPendingOutput = false
 
     protected constructor(bootstrap: URL, workerData: object) {
@@ -27,7 +29,14 @@ export default abstract class ThreadServerRuntime implements ServerRuntime {
 
         this.channel = new RuntimeChannel(bytes => this.worker.postMessage(bytes))
 
-        this.finished = new Promise(resolve => { this.worker.once("exit", code => { this.channel.close(); resolve({ code, signal: null }) }) })
+        // Ending a thread on request gives it code 1, the same code an uncaught error gives. A
+        // requested end is reported as an OS process ended by SIGTERM is, so it never reads as a crash.
+        this.finished = new Promise(resolve => {
+            this.worker.once("exit", code => {
+                this.channel.close()
+                resolve(this.stopping ? { code: null, signal: "SIGTERM" } : { code, signal: null })
+            })
+        })
 
         this.worker.on("message", message => this.channel.receive(message))
         this.worker.stdout?.on("data", chunk => this.print("out", String(chunk)))
@@ -57,7 +66,11 @@ export default abstract class ThreadServerRuntime implements ServerRuntime {
         }
     }
 
-    public stop() { this.worker.terminate().catch(() => undefined) }
+    public stop() {
+
+        this.stopping = true
+        this.worker.terminate().catch(() => undefined)
+    }
 
     private print(stream: Stream, text: string) {
 
