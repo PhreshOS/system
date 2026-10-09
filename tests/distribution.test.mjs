@@ -49,7 +49,7 @@ test("distribution contract", async () => {
     }
 
     // The files the server reads travel inside its build, under content-hashed names.
-    for (const name of ["logo", "default-icon", "SIGN_IN_LIGHT_WALLPAPER", "SIGN_IN_DARK_WALLPAPER", "DESKTOP_LIGHT_WALLPAPER", "DESKTOP_DARK_WALLPAPER"]) {
+    for (const name of ["logo", "default-icon", "sign-in-light", "sign-in-dark", "desktop-light", "desktop-dark"]) {
       assert([...paths].some(path => path.startsWith(`server/assets/${name}-`)), `the server build carries no ${name}`)
     }
 
