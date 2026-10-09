@@ -264,15 +264,9 @@ export default class System {
         return this.application.linkManager.findConnection(identity)
     }
 
-    public connectionSnapshot(identity: string) {
+    public connectionState(identity: string) {
 
-        const connection = this.findConnection(identity)
-
-        return connection
-
-            ? this.application.linkManager.connectionSnapshot(connection)
-
-            : Object.freeze({ identity, connected: false, session: null })
+        return this.application.linkManager.connectionState(identity)
     }
 
     public connectionSession(identity: string) {
@@ -305,9 +299,9 @@ export default class System {
         return this.application.authentication.sessionFind(identity)
     }
 
-    public sessionSnapshot(identity: string) {
+    public sessionState(identity: string) {
 
-        return this.application.linkManager.sessionSnapshot(identity)
+        return this.application.linkManager.sessionState(identity)
     }
 
     public sessionConnections(identity: string) {

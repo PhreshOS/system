@@ -14,7 +14,7 @@ export default class Sessions {
 
     private readonly hashes = new Map<string, StoredSession>()
 
-    private readonly expirationListeners = new Set<(identity: string) => void>()
+    private readonly expirationListeners = new Set<(identity: string, createdAt: Date) => void>()
 
     private constructor(private readonly store: Keyv) {}
 
@@ -32,7 +32,9 @@ export default class Sessions {
 
             const record = parse(value, hash)
 
-            if (sessions.expired(record, Date.now())) {
+            // A Session stored without its sign-in time is not one this System can describe; the
+            // owner signs in again.
+            if (!record || sessions.expired(record, Date.now())) {
 
                 await store.delete(key)
 
@@ -60,6 +62,8 @@ export default class Sessions {
             hash: hashToken(token),
 
             exposed: false,
+
+            createdAt: Date.now(),
 
             disconnectedAt: Date.now(),
 
@@ -116,6 +120,16 @@ export default class Sessions {
         return true
     }
 
+    /** When one known Session signed in, and when it was last used: now while a Connection uses it. */
+    public describe(identity: string) {
+
+        const record = this.identities.get(identity)
+
+        if (!record) return null
+
+        return { createdAt: new Date(record.createdAt), lastActiveAt: new Date(record.connections > 0 ? Date.now() : record.disconnectedAt ?? Date.now()) }
+    }
+
     /** Whether one Session still exists and can authorize a Connection. */
     public valid(identity: string) {
 
@@ -126,14 +140,14 @@ export default class Sessions {
         if (this.validRecord(record, Date.now())) return true
 
         this.forget(record)
-        this.expiredSession(record.identity)
+        this.expiredSession(record)
         this.store.delete(this.key(record.hash)).catch(() => undefined)
 
         return false
     }
 
     /** Observes browser Sessions removed by disconnected-lifetime expiration. */
-    public onExpire(listener: (identity: string) => void) {
+    public onExpire(listener: (identity: string, createdAt: Date) => void) {
 
         this.expirationListeners.add(listener)
 
@@ -168,18 +182,18 @@ export default class Sessions {
         await this.persist(record)
     }
 
-    /** Permanently removes one Session. */
+    /** Permanently removes one Session and returns when it signed in, or `null` when it was unknown. */
     public async remove(identity: string) {
 
         const record = this.identities.get(identity)
 
-        if (!record) return false
+        if (!record) return null
 
         this.forget(record)
 
         await this.store.delete(this.key(record.hash))
 
-        return true
+        return new Date(record.createdAt)
     }
 
     private validRecord(record: StoredSession, now: number) {
@@ -209,7 +223,7 @@ export default class Sessions {
         for (const record of expired) {
 
             this.forget(record)
-            this.expiredSession(record.identity)
+            this.expiredSession(record)
         }
 
         await Promise.all(expired.map(record => this.store.delete(this.key(record.hash))))
@@ -223,6 +237,8 @@ export default class Sessions {
 
             identity: record.identity,
 
+            createdAt: record.createdAt,
+
             disconnectedAt: record.disconnectedAt
         })
     }
@@ -233,9 +249,9 @@ export default class Sessions {
         this.hashes.delete(record.hash)
     }
 
-    private expiredSession(identity: string) {
+    private expiredSession(record: StoredSession) {
 
-        for (const listener of this.expirationListeners) listener(identity)
+        for (const listener of this.expirationListeners) listener(record.identity, new Date(record.createdAt))
     }
 
     private key(hash: string) { return storagePrefix + hash }
@@ -246,13 +262,17 @@ function hashToken(token: string) {
     return createHash("sha256").update(token).digest("base64url")
 }
 
-function parse(value: unknown, hash: string): StoredSession {
+function parse(value: unknown, hash: string): StoredSession | null {
 
     if (!value || typeof value !== "object") throw new Error("An authentication Session is invalid")
 
-    const record = value as { identity?: unknown, disconnectedAt?: unknown }
+    const record = value as { identity?: unknown, createdAt?: unknown, disconnectedAt?: unknown }
+
+    if (record.createdAt === undefined) return null
 
     if (typeof record.identity !== "string"
+
+        || typeof record.createdAt !== "number" || !Number.isFinite(record.createdAt)
 
         || record.disconnectedAt !== null && (typeof record.disconnectedAt !== "number" || !Number.isFinite(record.disconnectedAt))) {
 
@@ -267,6 +287,8 @@ function parse(value: unknown, hash: string): StoredSession {
 
         exposed: true,
 
+        createdAt: record.createdAt,
+
         disconnectedAt: record.disconnectedAt,
 
         connections: 0
@@ -280,6 +302,8 @@ interface StoredSession {
     hash: string
 
     exposed: boolean
+
+    createdAt: number
 
     disconnectedAt: number | null
 

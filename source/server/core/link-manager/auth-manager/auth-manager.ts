@@ -334,7 +334,7 @@ export default class AuthManager extends TheLink {
     @Subscribe("/connection/state")
     protected async connectionState(identity: unknown) {
 
-        return this.linkManager.application.system.connectionSnapshot(domainIdentity(identity, "Connection"))
+        return this.linkManager.application.system.connectionState(domainIdentity(identity, "Connection"))
     }
 
     @Subscribe("/connection/session")
@@ -368,7 +368,7 @@ export default class AuthManager extends TheLink {
     @Subscribe("/session/state")
     protected async sessionState(identity: unknown) {
 
-        return this.linkManager.application.system.sessionSnapshot(domainIdentity(identity, "Session"))
+        return this.linkManager.application.system.sessionState(domainIdentity(identity, "Session"))
     }
 
     @Subscribe("/session/connections")

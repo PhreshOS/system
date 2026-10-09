@@ -224,9 +224,15 @@ export default class Authentication {
     }
 
     /** Observes browser Sessions removed by disconnected-lifetime expiration. */
-    public onSessionExpire(listener: (identity: string) => void) {
+    public onSessionExpire(listener: (identity: string, createdAt: Date) => void) {
 
         return this.sessions.onExpire(listener)
+    }
+
+    /** When one known Session signed in and was last used, or `null` when it is unknown. */
+    public describeSession(identity: string) {
+
+        return this.sessions.describe(identity)
     }
 
     /** Whether a session is still within its connection-bound lifetime. */

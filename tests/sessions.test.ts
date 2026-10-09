@@ -28,6 +28,7 @@ describe("Session persistence and connection-bound lifetime", () => {
         expect(sessions.find(created.identity)).toBe(created.identity)
         expect(await store.get(`authentication:sessions:${hash}`)).toEqual({
             identity: created.identity,
+            createdAt: expect.any(Number),
             disconnectedAt: expect.any(Number)
         })
         expect(await store.get(`authentication:sessions:${created.token}`)).toBeUndefined()
@@ -50,6 +51,7 @@ describe("Session persistence and connection-bound lifetime", () => {
         expect(sessions.valid(created.identity)).toBe(true)
         expect(await persisted(store, created.token)).toEqual({
             identity: created.identity,
+            createdAt: expect.any(Number),
             disconnectedAt: null
         })
 
@@ -62,11 +64,40 @@ describe("Session persistence and connection-bound lifetime", () => {
         await store.disconnect()
     })
 
+    test("describes when a Session signed in, and when it was last used", async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date("2026-01-01T00:00:00Z"))
+        const { sessions, store } = await fixture()
+        const created = await sessions.create()
+        await sessions.expose(created.identity)
+        await sessions.attach(created.identity)
+
+        vi.setSystemTime(new Date("2026-01-01T01:00:00Z"))
+        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), lastActiveAt: new Date("2026-01-01T01:00:00Z") })
+
+        await sessions.detach(created.identity)
+        vi.setSystemTime(new Date("2026-01-01T02:00:00Z"))
+        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), lastActiveAt: new Date("2026-01-01T01:00:00Z") })
+
+        await store.disconnect()
+    })
+
+    test("a stored Session without its sign-in time is removed when the System opens", async () => {
+        const { store } = await fixture()
+        await store.set("authentication:sessions:old-hash", { identity: "old", disconnectedAt: Date.now() })
+
+        const sessions = await Sessions.open(store)
+
+        expect(sessions.find("old")).toBeNull()
+        expect(await store.get("authentication:sessions:old-hash")).toBeUndefined()
+        await store.disconnect()
+    })
+
     test("removes an explicitly signed-out Session", async () => {
         const { sessions, store } = await fixture()
         const created = await sessions.create()
 
-        expect(await sessions.remove(created.identity)).toBe(true)
+        expect(await sessions.remove(created.identity)).toBeInstanceOf(Date)
         expect(sessions.find(created.identity)).toBeNull()
         expect(sessions.resolve(created.token)).toBeNull()
 

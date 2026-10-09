@@ -1929,7 +1929,7 @@ export default class ProcessManager extends TheLink {
 
             if (word.startsWith("host-connection-") && !access.canAuthentication()) throw new Error("Connection not found")
 
-            if (word === "host-connection-state") return [this.system.connectionSnapshot(String(rest[0]))]
+            if (word === "host-connection-state") return [this.system.connectionState(String(rest[0]))]
 
             if (word === "host-connection-session") return [this.system.connectionSession(String(rest[0]))]
 
@@ -1937,7 +1937,7 @@ export default class ProcessManager extends TheLink {
 
             if (!access.canAuthentication()) throw new Error("Session not found")
 
-            if (word === "host-session-state") return [this.system.sessionSnapshot(String(rest[0]))]
+            if (word === "host-session-state") return [this.system.sessionState(String(rest[0]))]
 
             if (word === "host-session-connections") {
 

@@ -62,18 +62,14 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
         expect(application.system.connectionSession(connection.identity)).toBeNull()
         expect(application.system.connectionSession(secondConnection.identity)).toBeNull()
         expect(application.system.listConnections()).toEqual([connection, secondConnection])
-        expect(application.system.sessionSnapshot(created.identity)).toEqual({ identity: created.identity, valid: false })
+        expect(application.system.sessionState(created.identity)).toEqual({ valid: false, lastActiveAt: null })
         expect(application.system.sessionConnections(created.identity)).toEqual([])
         await expect(application.system.signOutSession(created.identity)).rejects.toThrow("Session not found")
 
         await application.linkManager.removeConnection(secondConnection)
         secondRemoved = true
 
-        expect(application.system.connectionSnapshot(secondConnection.identity)).toEqual({
-            identity: secondConnection.identity,
-            connected: false,
-            session: null
-        })
+        expect(application.system.connectionState(secondConnection.identity)).toEqual({ connected: false, session: null })
         expect(application.system.connectionSession(secondConnection.identity)).toBeNull()
         expect(() => application.system.signInConnection(secondConnection.identity)).toThrow("Connection not found")
     } finally {

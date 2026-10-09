@@ -2,7 +2,7 @@ import { Forward, Subscribe } from "@the-link/core/decorators"
 import AuthManager from "./auth-manager/auth-manager"
 import { Property, TheLink } from "@the-link/core"
 import Application from "../application"
-import type { Appearance, ConnectionSnapshot, SessionEndReason, SessionSnapshot } from "@phreshos/core"
+import type { Appearance, ConnectionSnapshot, ConnectionState, SessionEndReason, SessionSnapshot, SessionState } from "@phreshos/core"
 import { type AuthenticationState, type SignUpError } from "../authentication/authentication"
 import { AsyncLocalStorage } from "node:async_hooks"
 import shortIdentity from "@libs/short-identity"
@@ -34,9 +34,9 @@ export default class LinkManager extends TheLink {
 
         this.authManager = new AuthManager(this)
 
-        this.application.authentication.onSessionExpire(identity => {
+        this.application.authentication.onSessionExpire((identity, createdAt) => {
 
-            this.announceSessionEnd(identity, "expired").catch(() => undefined)
+            this.announceSessionEnd(identity, createdAt, "expired").catch(() => undefined)
         })
     }
 
@@ -226,7 +226,10 @@ export default class LinkManager extends TheLink {
 
         for (const connection of connections) connection.session = null
 
-        await this.application.authentication.removeSession(identity)
+        // Removal returns when it signed in, so the ended Session is still described as it was.
+        const createdAt = await this.application.authentication.removeSession(identity)
+
+        if (!createdAt) throw new Error("Session not found")
 
         await Promise.allSettled(connections.map(connection => connection.link.$outbound.publish("/session/signed-out")))
 
@@ -234,10 +237,10 @@ export default class LinkManager extends TheLink {
 
             await this.announceConnectionSession(connection, null)
 
-            await this.announceSessionConnection(identity, connection, false)
+            await this.announceSessionConnection(identity, connection, false, createdAt)
         }
 
-        await this.announceSessionEnd(identity, "signedOut", connections)
+        await this.announceSessionEnd(identity, createdAt, "signedOut", connections)
     }
 
     /** Ends the Sessions present at this operation's authoritative snapshot. */
@@ -351,13 +354,49 @@ export default class LinkManager extends TheLink {
 
             connected: this.boundaries.get(connection.identity) === connection && !connection.signal.aborted,
 
-            session: connection.session && this.application.authentication.sessionFind(connection.session)
+            session: connection.session && this.application.authentication.sessionFind(connection.session),
+
+            connectedAt: connection.connectedAt
         })
     }
 
-    public sessionSnapshot(identity: string, valid = this.application.authentication.sessionFind(identity) !== null): SessionSnapshot {
+    /** What may change about one Connection, also after it is gone. */
+    public connectionState(identity: string): ConnectionState {
 
-        return Object.freeze({ identity, valid })
+        const connection = this.findConnection(identity)
+
+        return Object.freeze({
+
+            connected: connection !== null && this.boundaries.get(identity) === connection && !connection.signal.aborted,
+
+            session: connection?.session ? this.application.authentication.sessionFind(connection.session) : null
+        })
+    }
+
+    public sessionSnapshot(
+        identity: string,
+        valid = this.application.authentication.sessionFind(identity) !== null,
+        createdAt = this.sessionCreatedAt(identity)
+    ): SessionSnapshot {
+
+        return Object.freeze({ identity, valid, createdAt })
+    }
+
+    /** What may change about one Session, also after it ended. */
+    public sessionState(identity: string): SessionState {
+
+        const valid = this.application.authentication.sessionFind(identity) !== null
+
+        return Object.freeze({ valid, lastActiveAt: valid ? this.application.authentication.describeSession(identity)!.lastActiveAt : null })
+    }
+
+    private sessionCreatedAt(identity: string) {
+
+        const described = this.application.authentication.describeSession(identity)
+
+        if (!described) throw new Error("Session not found")
+
+        return described.createdAt
     }
 
     private async expose(connection: LinkBoundary) {
@@ -433,9 +472,9 @@ export default class LinkManager extends TheLink {
         ])
     }
 
-    private async announceSessionConnection(identity: string, connection: LinkBoundary, attached: boolean) {
+    private async announceSessionConnection(identity: string, connection: LinkBoundary, attached: boolean, createdAt?: Date) {
 
-        const session = this.sessionSnapshot(identity, attached || this.application.authentication.sessionValid(identity))
+        const session = this.sessionSnapshot(identity, attached || this.application.authentication.sessionValid(identity), createdAt)
 
         const snapshot = this.connectionSnapshot(connection)
 
@@ -451,9 +490,9 @@ export default class LinkManager extends TheLink {
         ])
     }
 
-    private async announceSessionEnd(identity: string, reason: SessionEndReason, previousConnections: readonly LinkBoundary[] = []) {
+    private async announceSessionEnd(identity: string, createdAt: Date, reason: SessionEndReason, previousConnections: readonly LinkBoundary[] = []) {
 
-        const session = this.sessionSnapshot(identity, false)
+        const session = this.sessionSnapshot(identity, false, createdAt)
 
         await Promise.all([
 
@@ -505,6 +544,9 @@ export type SignUpResponse = { signedUp: true } | { error: SignUpError }
 export class LinkBoundary {
 
     public readonly identity = shortIdentity()
+
+    /** When the browser connected. */
+    public readonly connectedAt = new Date()
 
     public session: string | null = null
 
