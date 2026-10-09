@@ -445,6 +445,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             // The box and its insets change in the same frame, so what is painted stays still.
             geometryMotion.reshapeGesture(shown => letGoOfEdges(shown, contacts, sides, paintInset, paintMargins))
+
+            setInsets(insets)
         }
 
         if (carried !== noWindowSides) carry(carried)
@@ -732,6 +734,22 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const insetsKey = useSyncExternalStore(cellShift.subscribe, () => JSON.stringify(insetsNow()), () => JSON.stringify(insetsNow()))
     const paintedInsets = JSON.parse(insetsKey) as ReturnType<typeof windowPaintInsets>
 
+    // The painted surface's insets are drawn with the box, as Motion values: a change to both in one
+    // moment, such as sides letting go of the edges, shows in one frame and never half of it.
+    const insetTop = useMotionValue(paintedInsets.top)
+    const insetRight = useMotionValue(paintedInsets.right)
+    const insetBottom = useMotionValue(paintedInsets.bottom)
+    const insetLeft = useMotionValue(paintedInsets.left)
+
+    function setInsets(insets: PaintMargins) {
+        insetTop.set(insets.top)
+        insetRight.set(insets.right)
+        insetBottom.set(insets.bottom)
+        insetLeft.set(insets.left)
+    }
+
+    useLayoutEffect(() => setInsets(paintedInsets), [insetsKey])
+
     return <>
 
         {externalMoveActive && createPortal(<UIWindow.MoveCapture
@@ -830,7 +848,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 animate={presencePose}
                 transition={presenceTransition}
                 onAnimationComplete={completePresence}
-                style={{ position: "absolute", visibility: minimized && presenceHidden ? "hidden" : "visible", ...paintedInsets }}
+                style={{ position: "absolute", visibility: minimized && presenceHidden ? "hidden" : "visible", top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft }}
             >
                 <WindowSurface
                     surface={surfaceDefinition}
