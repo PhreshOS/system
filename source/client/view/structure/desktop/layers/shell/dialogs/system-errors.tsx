@@ -1,12 +1,10 @@
 import { parseSystemLogRecord, type SystemLogRecord } from "@phreshos/core"
 import { ReactTunnel } from "@the-link/react"
-import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
-import { useReducedMotion } from "@libs/react-motion"
-import { motion } from "motion/react"
-import { useCallback, useEffect, useId, useRef, useState } from "react"
+import { useCallback, useState } from "react"
 import { AuthManagerContext } from "@client/view/contexts"
-import ShellSurface, { shellSurfaceClassName } from "../shell-surface"
-import { Button, useTiming } from "@phreshos/react-ui"
+import { AlertDialog, Button } from "@phreshos/react-ui"
+import { useDesktopScaleContainer } from "../../../desktop-scale"
+import useShown from "./shown"
 
 /** Shell-owned real-time presentation of new System errors. */
 export default function SystemErrors() {
@@ -24,86 +22,40 @@ export default function SystemErrors() {
         if (received.level === "error") setRecord(received)
     }, []))
 
-    const surface = useRef<HTMLDialogElement>(null)
+    const container = useDesktopScaleContainer()
 
-    const title = useId()
+    const shown = useShown(record ?? undefined)
 
-    const description = useId()
+    // The latest error replaces what the open dialog shows; it does not close and reopen it.
+    return <AlertDialog open={record !== null}>
 
-    const reducedMotion = useReducedMotion()
+        <AlertDialog.Backdrop portalContainer={container ?? undefined}>
 
-    const transaction = useTiming()("change")
+            <AlertDialog.Content style={{ width: "28rem" }}>
 
-    const visible = record !== null
+                {shown && <>
 
-    useEffect(function () {
+                    <AlertDialog.Header>
 
-        const element = surface.current
+                        <AlertDialog.Title>{errorTitle(shown)}</AlertDialog.Title>
 
-        if (!visible || !element || element.open) return
+                        <AlertDialog.Description>{shown.content}</AlertDialog.Description>
 
-        element.showModal()
+                    </AlertDialog.Header>
 
-        return function () {
+                    <AlertDialog.Footer>
 
-            if (element.open) element.close()
-        }
+                        <Button autoFocus onPress={() => setRecord(null)}>I understand</Button>
 
-    // The latest error may replace the visible content, but it must not close
-    // and reopen the same Shell-owned dialog merely because its record changed.
-    }, [visible])
+                    </AlertDialog.Footer>
 
-    if (!record) return null
+                </>}
 
-    return <motion.dialog
+            </AlertDialog.Content>
 
-        ref={surface}
+        </AlertDialog.Backdrop>
 
-        role="alertdialog"
-
-        aria-modal="true"
-
-        aria-labelledby={title}
-
-        aria-describedby={description}
-
-        initial={reducedMotion ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
-
-        animate={surfaceLifecyclePose.visible}
-
-        transition={surfacePresenceTransition(reducedMotion, transaction)}
-
-        onCancel={event => event.preventDefault()}
-
-        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(28rem,calc(100dvw/var(--desktop-scale)-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
-
-    >
-
-        <ShellSurface material="full" label="System error" labelId={title}>
-
-            <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-5">
-
-                <span aria-hidden="true" className="grid size-8 place-items-center rounded-full border border-rose-600/25 bg-rose-500/15 text-lg font-medium">!</span>
-
-                <div className="grid gap-1">
-
-                    <h3 className="text-base font-medium">{errorTitle(record)}</h3>
-
-                    <p id={description} className="text-sm leading-6 opacity-60">{record.content}</p>
-
-                </div>
-
-                <Button size="xsmall" autoFocus onPress={() => setRecord(null)} className="col-span-full justify-self-end font-medium">
-
-                    I understand
-
-                </Button>
-
-            </div>
-
-        </ShellSurface>
-
-    </motion.dialog>
+    </AlertDialog>
 }
 
 function errorTitle(record: SystemLogRecord) {

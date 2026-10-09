@@ -1,56 +1,35 @@
 import type { OpenRequestSnapshot } from "@phreshos/core"
 import { ReactTunnel } from "@the-link/react"
-import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
-import { useReducedMotion } from "@libs/react-motion"
-import { motion } from "motion/react"
-import { useEffect, useId, useRef, useState } from "react"
+import { useState } from "react"
 import { ApplicationContext, AuthManagerContext } from "@client/view/contexts"
-import ShellSurface, { shellSurfaceClassName } from "../shell-surface"
+import { useDesktopScaleContainer } from "../../../desktop-scale"
+import useShown from "./shown"
 import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
 import usePrograms from "@client/view/structure/desktop/programs/programs"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
-import { Button, Checkbox, Text, useAppearance, useScale, useTiming } from "@phreshos/react-ui"
+import { Button, Checkbox, Dialog, useAppearance, useScale } from "@phreshos/react-ui"
 
-/** The default Shell's choice of a Program for something that has no default one. */
+/**
+ * The default Shell's choice of a Program for something that has no default one: the first request
+ * waiting, as a Dialog over the dimmed Desktop, which a choice or Cancel ends.
+ */
 export default function OpenRequests() {
 
     const manager = AuthManagerContext.useValue().openingManager
     const inbound = ReactTunnel.useFactory(manager.$inbound)
     const requests = inbound.useFirstState("/requests", manager.list())
     const request = requests[0]
-    const surface = useRef<HTMLDialogElement>(null)
-    const title = useId()
-    const reducedMotion = useReducedMotion()
-    const transaction = useTiming()("change")
+    const container = useDesktopScaleContainer()
+    const shown = useShown(request)
 
-    useEffect(() => {
-
-        const element = surface.current
-
-        if (!request || !element || element.open) return
-
-        element.showModal()
-
-        return () => { if (element.open) element.close() }
-    }, [request?.identity])
-
-    if (!request) return null
-
-    return <motion.dialog
-        ref={surface}
-        aria-modal="true"
-        aria-labelledby={title}
-        initial={reducedMotion ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
-        animate={surfaceLifecyclePose.visible}
-        transition={surfacePresenceTransition(reducedMotion, transaction)}
-        onCancel={event => { event.preventDefault(); void manager.cancel(request.identity).catch(() => undefined) }}
-        className={`${shellSurfaceClassName} pointer-events-auto fixed inset-0 m-auto h-fit w-[min(24rem,calc(100dvw/var(--desktop-scale)-var(--desktop-gutter)*2))] backdrop:bg-transparent`}
-    >
-        <ShellSurface material="full" label="Open with" labelId={title}>
-            <OpenRequestView key={request.identity} request={request} />
-        </ShellSurface>
-    </motion.dialog>
+    return <Dialog open={request !== undefined}>
+        <Dialog.Backdrop portalContainer={container ?? undefined} keyboardDismissable={false}>
+            <Dialog.Content style={{ width: "24rem" }}>
+                {shown && <OpenRequestView request={shown} />}
+            </Dialog.Content>
+        </Dialog.Backdrop>
+    </Dialog>
 }
 
 function OpenRequestView({ request }: Readonly<{ request: OpenRequestSnapshot }>) {
@@ -65,29 +44,29 @@ function OpenRequestView({ request }: Readonly<{ request: OpenRequestSnapshot }>
         : manager.choose(request.identity, program, { always }))
     const programs = request.programs.map(offered => installed.find(program => program.identity === offered.identity)).filter(program => program !== undefined)
 
-    return <div className="grid" style={{ gap: space.medium }}>
-
-        <div className="grid" style={{ gap: space.xsmall }}>
-            <span className="truncate" title={request.target.uri}><Text style={{ fontWeight: 500 }}>{describe(request.target.uri)}</Text></span>
-            <Text tone="secondary" size="small">{request.from ? `${request.from.process.program.name} asks to open it` : "Opened from outside the Desktop"} · {request.target.type}</Text>
-        </div>
-
-        <div className="grid" style={{ gap: space.xsmall }}>
-            {programs.map(program => <Button key={program.identity} disabled={decision.isPending} onPress={() => decision.safeExecute(program.identity)}
-                style={{ justifyContent: "flex-start" }}>
-                <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.large, height: space.large }} />
-                {program.name}
-            </Button>)}
-        </div>
-
-        <Checkbox size="small" checked={always} onChange={setAlways} label={`Always open ${request.target.type} with it`} />
-
-        <div className="flex justify-end">
-            <Button size="small" autoFocus disabled={decision.isPending} onPress={() => decision.safeExecute(null)}>Cancel</Button>
-        </div>
-
-        {decision.exception && <Alert className="text-sm">{String(decision.exception.current)}</Alert>}
-    </div>
+    return <>
+        <Dialog.Header>
+            <Dialog.Title>Open with</Dialog.Title>
+            <Dialog.Description>
+                <span className="truncate" title={request.target.uri} style={{ display: "block", fontWeight: 500 }}>{describe(request.target.uri)}</span>
+                {request.from ? `${request.from.process.program.name} asks to open it` : "Opened from outside the Desktop"} · {request.target.type}
+            </Dialog.Description>
+        </Dialog.Header>
+        <Dialog.Body>
+            <div className="grid" style={{ gap: space.xsmall }}>
+                {programs.map(program => <Button key={program.identity} disabled={decision.isPending} onPress={() => decision.safeExecute(program.identity)}
+                    style={{ justifyContent: "flex-start" }}>
+                    <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.large, height: space.large }} />
+                    {program.name}
+                </Button>)}
+            </div>
+            <Checkbox size="small" checked={always} onChange={setAlways} label={`Always open ${request.target.type} with it`} />
+            {decision.exception && <Alert className="text-sm">{String(decision.exception.current)}</Alert>}
+        </Dialog.Body>
+        <Dialog.Footer>
+            <Button autoFocus disabled={decision.isPending} onPress={() => decision.safeExecute(null)}>Cancel</Button>
+        </Dialog.Footer>
+    </>
 }
 
 /** A short name for what is being opened: a file's name, or the address itself. */
