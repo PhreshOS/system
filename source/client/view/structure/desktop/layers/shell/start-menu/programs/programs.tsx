@@ -2,7 +2,7 @@ import programIcon from "@client/view/structure/desktop/programs/program-icon"
 import { ApplicationContext } from "@client/view/contexts"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { useLaunchPlacement } from "@client/view/structure/desktop/launch-placement"
-import { Badge, GridList, Table, Text, useAppearance, useScale } from "@phreshos/react-ui"
+import { Badge, GridList, Table, Text, useAppearance, useScale, ScrollArea } from "@phreshos/react-ui"
 import { useRef } from "react"
 import Empty from "../empty"
 
@@ -47,13 +47,13 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     </GridList>
 
-    return <Table aria-label="Programs" size="small" onAction={launch} style={{ minWidth: 0, tableLayout: "fixed" }}>
+    return <ScrollArea axis="horizontal"><Table aria-label="Programs" size="small" onAction={launch}>
 
         <Table.Header>
-            <Table.Column id="name" rowHeader>Name</Table.Column>
-            <Table.Column id="version" style={{ width: space.xlarge * 3 }}>Version</Table.Column>
-            <Table.Column id="category" style={{ width: space.xlarge * 4.5 }}>Category</Table.Column>
-            <Table.Column id="state" style={{ width: space.xlarge * 3.5 }}>State</Table.Column>
+            <Table.Column id="name" rowHeader minWidth={space.xlarge * 6}>Name</Table.Column>
+            <Table.Column id="version" width={space.xlarge * 3}>Version</Table.Column>
+            <Table.Column id="category" width={space.xlarge * 4.5}>Category</Table.Column>
+            <Table.Column id="state" width={space.xlarge * 3.5}>State</Table.Column>
         </Table.Header>
 
         <Table.Body>
@@ -61,7 +61,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
                 <Table.Cell>
                     <span className="flex min-w-0 items-center" title={program.description ?? undefined} style={{ gap: space.small }}>
                         <img src={icon(program)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.medium * 1.5, height: space.medium * 1.5 }} />
-                        <span className="min-w-0 truncate">{program.name}</span>
+                        <Text truncate>{program.name}</Text>
                     </span>
                 </Table.Cell>
                 <Table.Cell><Text tone="secondary" className="tabular-nums">{program.version}</Text></Table.Cell>
@@ -70,7 +70,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
             </Table.Row>)}
         </Table.Body>
 
-    </Table>
+    </Table></ScrollArea>
 }
 
 /**

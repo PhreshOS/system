@@ -35,13 +35,13 @@ export default function ProcessRow({ process, program, server, client }: Readonl
         <Table.Cell>
             <span className="flex min-w-0 items-center" style={{ gap: space.small, maxWidth: "100%" }}>
                 {program ? <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} style={{ width: space.medium, height: space.medium }} className="shrink-0 object-contain" /> : null}
-                <span className="min-w-0 truncate" title={process.identity}>{label}</span>
+                <Text truncate title={process.identity}>{label}</Text>
                 {/* A failure to end stays beside the Process it belongs to. */}
-                {failure && <span role="alert" className="min-w-0 truncate" title={failure} style={{ color: danger }}>{failure}</span>}
+                {failure && <span role="alert" style={{ display: "flex", minWidth: 0, color: danger }}><Text truncate title={failure}>{failure}</Text></span>}
             </span>
         </Table.Cell>
 
-        <Table.Cell><Text tone="secondary" className="block truncate">{program?.name ?? process.program}</Text></Table.Cell>
+        <Table.Cell><Text tone="secondary">{program?.name ?? process.program}</Text></Table.Cell>
 
         <Table.Cell>
             <span className="flex" style={{ gap: space.xsmall }}>
