@@ -189,6 +189,20 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
     }, [layer, onPresentationMoveGesture])
 
+    // A closing dialog, menu, or popover returns focus to what held it before it opened. Into a Window
+    // no longer in front, that would bring it forward again, though no person chose it; the Desktop
+    // keeps focus instead. React Aria announces each return with this cancelable event.
+    useEffect(function () {
+        const element = frameElement.current
+        if (!element || active) return
+        const decline = (event: Event) => {
+            event.preventDefault()
+            element.closest<HTMLElement>("[data-desktop]")?.focus({ preventScroll: true })
+        }
+        element.addEventListener("react-aria-focus-scope-restore", decline)
+        return () => element.removeEventListener("react-aria-focus-scope-restore", decline)
+    }, [frameElement, active])
+
     useEffect(function () {
         if (!externalMoveActive) return
         const cancel = () => finishExternalMove(null)
