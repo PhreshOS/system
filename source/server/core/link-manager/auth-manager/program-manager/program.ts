@@ -207,6 +207,8 @@ export default class Program {
 
             description: description ?? null,
 
+            website: this.config.website ?? null,
+
             categories: this.config.categories ?? [],
 
             keywords: this.config.keywords ?? [],

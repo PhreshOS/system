@@ -25,6 +25,8 @@ export function sdkProgram(program: SdkProgramSource & { permissions: Permission
 
         description: program.description,
 
+        website: program.website,
+
         categories: program.categories,
 
         keywords: program.keywords,

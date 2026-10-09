@@ -15,7 +15,7 @@ test("Client Program creation requires all before reaching the creation boundary
     let permissions: Permissions = { programs: [] }
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "created", reference: "created-reference", assetId: "created-assets",
-        name: "Created", version: "0.0.0", description: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false,
+        name: "Created", version: "0.0.0", description: null, website: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false,
         server: null, client: null,
         get permissions() { return permissions }
     }
@@ -296,6 +296,7 @@ function program(identity: string): ProgramSnapshot & { permissions: Permissions
         name: identity,
         version: "0.0.0",
         description: null,
+        website: null,
         categories: [],
         keywords: [],
         opens: [],

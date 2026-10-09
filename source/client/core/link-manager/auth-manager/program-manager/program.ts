@@ -29,6 +29,8 @@ export default class Program {
 
     public readonly description: string | null
 
+    public readonly website: string | null
+
     public readonly categories: readonly string[]
 
     public readonly keywords: readonly string[]
@@ -67,6 +69,8 @@ export default class Program {
         this.version = payload.version
 
         this.description = payload.description
+
+        this.website = payload.website
 
         this.categories = payload.categories
 

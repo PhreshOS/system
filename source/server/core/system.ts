@@ -394,6 +394,7 @@ export default class System {
             name: program.name,
             version: program.version,
             description: program.config.description ?? null,
+            website: program.config.website ?? null,
             installed: entry.installed,
             hasAgent: program.agentPath !== null,
             server: program.server ? Object.freeze({ start: program.server.start, service: program.server.service }) : null,
@@ -437,6 +438,7 @@ export default class System {
                 name: owner.name,
                 version: owner.version,
                 description: owner.description,
+                website: owner.website,
                 hasAgent: owner.hasAgent,
                 server: owner.server,
                 client: owner.client

@@ -769,10 +769,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        // What a Process was started to open is part of it, as its options are: the synchronized
-        // Process holds it, for the asking Process or any other it may see.
-        if (word === "opened") return [(args[0] === undefined ? process() : await permittedProcess(args[0])).opened]
-
         if (word === "host-opening-requests") {
 
             await access.requireAll()

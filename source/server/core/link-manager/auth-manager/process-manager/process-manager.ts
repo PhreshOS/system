@@ -1973,8 +1973,6 @@ export default class ProcessManager extends TheLink {
             return []
         }
 
-        if (word === "opened") return [process.opened]
-
         if (word === "host-opening-requests") {
 
             access.requireAll()
