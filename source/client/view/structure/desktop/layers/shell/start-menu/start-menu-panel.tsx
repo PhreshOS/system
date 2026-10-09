@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react"
-import { AppLayout, Button, Drawer, Panel, SearchField, SegmentedControl, Text, Tree, useAppearance, useColor, useScale } from "@phreshos/react-ui"
-import { Activity, LayoutGrid, List, PanelLeft, Settings as SettingsIcon } from "@phreshos/react-ui/icons"
+import { useState, type ReactNode } from "react"
+import { AppLayout, Button, Panel, SearchField, SegmentedControl, Text, Tree, useAppLayout, useAppearance, useColor, useScale } from "@phreshos/react-ui"
+import { Activity, LayoutGrid, List, Settings as SettingsIcon } from "@phreshos/react-ui/icons"
 import logo from "@/assets/logo.png"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import usePrograms from "@client/view/structure/desktop/programs/programs"
@@ -42,12 +42,6 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
     const [problem, setProblem] = useState<string | null>(null)
 
-    const frame = useRef<HTMLDivElement>(null)
-
-    const narrow = useNarrow(frame)
-
-    const [drawer, setDrawer] = useState(false)
-
     const launch = useLaunch()
 
     const installed = usePrograms()
@@ -80,8 +74,6 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
         setCategory(nextCategory)
 
         setProblem(null)
-
-        setDrawer(false)
     }
 
     const identity = <>
@@ -100,28 +92,6 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
     </>
 
-    const navigation = <>
-
-        <Heading first>Show</Heading>
-
-        <Tree aria-label="Show" selectionMode="single" value={show} onChange={value => { if (value) choose(value as Show) }}>
-            <Place id="programs" icon={<LayoutGrid />} label="Programs" count={installed.length} />
-            <Place id="processes" icon={<Activity />} label="Processes" count={live.processes.length} />
-        </Tree>
-
-        <Heading>Categories</Heading>
-
-        {/* A category shows the Programs in it, so it is chosen only while the Programs are shown. */}
-        <Tree aria-label="Categories" selectionMode="single" value={show === "programs" ? category : null} onChange={value => { if (value) choose("programs", value) }}>
-            <Place id={all} icon={<LayoutGrid />} label="All" count={installed.length} />
-            {categories(installed).map(({ category, count }) => {
-                const Icon = categoryIcon(category)
-                return <Place key={category} id={category} icon={<Icon />} label={category} count={count} />
-            })}
-        </Tree>
-
-    </>
-
     function open(program: Program) {
 
         onChoose()
@@ -134,22 +104,21 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
     const settingsEntry = settings ? <Button depth="none" size="small" onPress={() => open(settings)}><SettingsIcon />{settings.name}</Button> : null
 
-        // As in Files, a narrow menu gives the sidebar up to the Programs and keeps it one press away, in a drawer.
-    return <Panel ref={frame} shadow={floatingShadow} style={{ position: "relative", height: "100%", maxHeight: "inherit" }}>
+    // As in Files, a narrow menu gives the sidebar up to the Programs; the layout keeps it one press away.
+    return <Panel shadow={floatingShadow} style={{ height: "100%", maxHeight: "inherit" }}>
 
         {/* The Appearance spacing all around the frame. */}
-        <AppLayout sidebarWidth={narrow ? 0 : undefined} style={{ padding: space.medium, paddingTop: space.small, ...(narrow ? { columnGap: 0 } : {}) }}>
+        <AppLayout style={{ padding: space.medium, paddingTop: space.small }}>
 
-            {!narrow && <AppLayout.Title id={labelId} style={{ gap: space.small, paddingInline: space.small, fontSize: "1.25rem" }}>{identity}</AppLayout.Title>}
+            <AppLayout.Title id={labelId} style={{ gap: space.small, paddingInline: space.small, fontSize: "1.25rem" }}>{identity}</AppLayout.Title>
 
-            {!narrow && <AppLayout.Sidebar aria-label="Start" footer={settingsEntry}>{navigation}</AppLayout.Sidebar>}
+            <AppLayout.Sidebar aria-label="Show and categories" footer={settingsEntry}>
+                <Navigation show={show} category={category} installed={installed} processes={live.processes.length} choose={choose} />
+            </AppLayout.Sidebar>
 
             <AppLayout.Header style={{ paddingInline: space.small, marginBottom: space.small }}>
 
-                {narrow && <>
-                    <span id={labelId} className="sr-only">{name}</span>
-                    <Button iconOnly depth="flat" size="small" aria-label="Show and categories" aria-expanded={drawer} onPress={() => setDrawer(!drawer)}><PanelLeft /></Button>
-                </>}
+                <AppLayout.SidebarToggle />
 
                 <Text size="xlarge" className="min-w-0 flex-1 truncate" style={{ fontWeight: 600 }}>{show === "processes" ? "Processes" : category === all ? "All Programs" : category}</Text>
 
@@ -181,12 +150,43 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
         </AppLayout>
 
-        {narrow && <Drawer open={drawer} onClose={() => setDrawer(false)} aria-label="Start"
-            title={<span className="flex min-w-0 items-center" style={{ gap: space.small }}>{identity}</span>} style={{ display: "flex", flexDirection: "column" }}>
-            {navigation}{settingsEntry && <div style={{ marginTop: "auto" }}>{settingsEntry}</div>}
-        </Drawer>}
-
     </Panel>
+}
+
+/** What the menu shows, and the categories of Programs; a choice also puts a narrow menu's drawer away. */
+function Navigation({ show, category, installed, processes, choose }: Readonly<{
+    show: Show
+    category: string
+    installed: readonly Program[]
+    processes: number
+    choose: (show: Show, category?: string) => void
+}>) {
+
+    const { closeSidebar } = useAppLayout()
+
+    const select = (next: Show, nextCategory?: string) => { choose(next, nextCategory); closeSidebar() }
+
+    return <>
+
+        <Heading first>Show</Heading>
+
+        <Tree aria-label="Show" selectionMode="single" value={show} onChange={value => { if (value) select(value as Show) }}>
+            <Place id="programs" icon={<LayoutGrid />} label="Programs" count={installed.length} />
+            <Place id="processes" icon={<Activity />} label="Processes" count={processes} />
+        </Tree>
+
+        <Heading>Categories</Heading>
+
+        {/* A category shows the Programs in it, so it is chosen only while the Programs are shown. */}
+        <Tree aria-label="Categories" selectionMode="single" value={show === "programs" ? category : null} onChange={value => { if (value) select("programs", String(value)) }}>
+            <Place id={all} icon={<LayoutGrid />} label="All" count={installed.length} />
+            {categories(installed).map(({ category, count }) => {
+                const Icon = categoryIcon(category)
+                return <Place key={category} id={category} icon={<Icon />} label={category} count={count} />
+            })}
+        </Tree>
+
+    </>
 }
 
 /** One choice in the sidebar: its icon, its name, and how many it holds. */
@@ -211,23 +211,3 @@ function count(amount: number, noun: string) {
 }
 
 /** Narrow enough that the sidebar would crowd the Programs out: the width at which Files gives up its places. */
-function useNarrow(frame: RefObject<HTMLElement | null>) {
-
-    const [narrow, setNarrow] = useState(false)
-
-    useLayoutEffect(function () {
-
-        const element = frame.current
-
-        if (!element) return
-
-        const observer = new ResizeObserver(([entry]) => setNarrow((entry?.contentRect.width ?? Infinity) <= 640))
-
-        observer.observe(element)
-
-        return () => observer.disconnect()
-
-    }, [frame])
-
-    return narrow
-}
