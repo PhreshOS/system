@@ -261,6 +261,24 @@ export default class ProgramManager extends TheLink {
         if (entry && !isDeepStrictEqual(before, after)) await this.announcePermissions(entry)
     }
 
+    /** Removes one stored permission, so the Program definition's declaration applies again. */
+    public async resetPermission(program: Program, name: PermissionName): Promise<void> {
+
+        const entry = this.programs?.get(program.identity)
+        if (entry && entry.program !== program) throw new Error("The Program represented by this handle does not exist")
+
+        const state = new ProgramStateStorage(program)
+        if (state.permissions()[name] === undefined) return
+
+        const before = entry?.permissions() ?? this.resolvePermissions(program)
+        state.removePermission(name)
+
+        const after = this.resolvePermissions(program)
+        entry?.updatePermissions(after)
+
+        if (entry && !isDeepStrictEqual(before, after)) await this.announcePermissions(entry)
+    }
+
     private async announcePermissions(entry: Entry) {
 
         const permissions = entry.permissions()
@@ -296,6 +314,12 @@ export default class ProgramManager extends TheLink {
         if (operation === "deny") {
 
             await this.setPermission(program, parsePermissionName(first), false)
+
+            return
+        }
+        if (operation === "reset") {
+
+            await this.resetPermission(program, parsePermissionName(first))
 
             return
         }

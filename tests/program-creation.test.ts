@@ -128,6 +128,23 @@ test("permission changes publish one complete effective snapshot through both Pr
     )
 })
 
+test("resetting a permission removes only its stored assignment and announces the declaration again", async context => {
+    const { manager, definition, announceSubject } = fixture(context)
+    const program = await manager.create(definition({ network: ["https://api.example.test"] }))
+    await manager.setPermission(program, "network", false)
+    await manager.setPermission(program, "uploads", true)
+    announceSubject.mockClear()
+
+    await manager.resetPermission(program, "network")
+    await manager.resetPermission(program, "network")
+
+    expect(new ProgramStateStorage(program).permissions()).toEqual({ uploads: [] })
+    expect(manager.permissions(program)).toEqual({ network: ["https://api.example.test"], uploads: [] })
+    expect(announceSubject).toHaveBeenCalledExactlyOnceWith(
+        "program", program.identity, "changePermissions", program.reference, { network: ["https://api.example.test"], uploads: [] }
+    )
+})
+
 test("pinning emits Program and global events only when the boolean changes", async context => {
     const { manager, definition, announceHost, announceSubject } = fixture(context)
     const program = await manager.create(definition())

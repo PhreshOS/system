@@ -2082,6 +2082,13 @@ export default class ProcessManager extends TheLink {
 
                 return []
             }
+            if (operation === "reset") {
+
+                access.requireAll()
+                await this.authManager.programManager.resetPermission(program, parsePermissionName(rest[2]))
+
+                return []
+            }
             throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
         }
 

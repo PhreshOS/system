@@ -35,6 +35,13 @@ export default class ProgramStateStorage {
         })
     }
 
+    public removePermission(name: PermissionName) {
+        this.change(state => {
+            const { [name]: _removed, ...permissions } = permissionCatalog.stored(state.permissions ?? {})
+            state.permissions = permissions
+        })
+    }
+
     public pinned(): boolean {
         const value = this.read().pinned
         if (value === undefined) return false

@@ -105,10 +105,13 @@ test("Program permission reads require Program access while owner decisions requ
     await expect(answer("program-permissions", target, "request", "request", "network", ["https://example.com"])).rejects.toThrow("does not know")
     await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).rejects.toThrow("Execution is not permitted")
     await expect(answer("program-permissions", target, "deny", "network")).rejects.toThrow("Execution is not permitted")
+    await expect(answer("program-permissions", target, "reset", "network")).rejects.toThrow("Execution is not permitted")
 
     permissions = { all: [] }
     await expect(answer("program-permissions", target, "allow", "network", ["https://example.com"])).resolves.toEqual([])
     await expect(answer("program-permissions", target, "deny", "network")).resolves.toEqual([])
+    await expect(answer("program-permissions", target, "reset", "network")).resolves.toEqual([])
+    expect(read).toHaveBeenLastCalledWith(target, "reset", "network")
 })
 
 test("Program log access follows the Program handle while System logs require logs", async () => {

@@ -836,7 +836,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
             const operation = args[1]
 
-            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
+            if (operation !== "all" && operation !== "get" && operation !== "allows" && operation !== "allow" && operation !== "deny" && operation !== "reset") throw new Error(`The System does not know the Program permission operation "${String(operation)}"`)
 
             if (operation === "all") return [parsePermissions(program.permissions)]
 
@@ -876,7 +876,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
                 return []
             }
 
-            if (operation === "deny") {
+            if (operation === "deny" || operation === "reset") {
 
                 await access.requireAll()
                 await programManager.permissions(address(program), operation, permission)
