@@ -131,8 +131,7 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
             </AppLayout.Header>
 
-            {/* A size container, so a quiet line can stand in its middle. */}
-            <AppLayout.Content style={{ containerType: "size" }}>
+            <AppLayout.Content>
 
                 {show === "programs"
                     ? <Programs programs={programs} layout={layout} running={running}
