@@ -30,6 +30,23 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
     latest.current = viewport
 
+    // A frame's link lives as long as its frame: what the link uses is read through stable facades,
+    // so a change elsewhere, such as the view's size when the scale or the browser changes, never
+    // detaches and attaches the frame again, which would leave it a link that is never owned.
+    const latestActions = useRef(actions)
+
+    latestActions.current = actions
+
+    const windowActions = useMemo<DesktopWindowActions>(() => ({
+
+        raise: process => latestActions.current.raise(process),
+
+        minimize: (process, minimized) => latestActions.current.minimize(process, minimized),
+
+        maximize: (process, maximized) => latestActions.current.maximize(process, maximized)
+
+    }), [])
+
     // What a Client reaches of this viewport: both values, and moving the view once it is permitted.
     const desktopViewport = useMemo<DesktopViewportHost>(() => ({
 
@@ -172,7 +189,7 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, actions, traffic, presentation))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, windowActions, traffic, presentation))
 
             return
         }
@@ -187,7 +204,7 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopViewport, actions, presentation, sources, traffic])
+    }, [authManager, desktopViewport, windowActions, presentation, sources, traffic])
 
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
