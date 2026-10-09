@@ -23,7 +23,7 @@ export default memo(function ({ showLabel = true, ...props }: SignOutProps) {
 
         showLabel={showLabel}
 
-        color="danger:base"
+        color="danger:soft"
 
         aria-label="Sign out"
 
