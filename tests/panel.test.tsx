@@ -8,6 +8,7 @@ import ShellSurface, { shellSurfaceClassName } from "@client/view/structure/desk
 import Window from "@client/view/structure/desktop/windows/window"
 import Taskbar from "@client/view/structure/desktop/layers/shell/taskbar/taskbar"
 import { ApplicationContext } from "@client/view/contexts"
+import Readiness from "@libs/readiness"
 import Application from "@client/core/application"
 import { test } from "vitest"
 import { name, version } from "@/source/identity"
@@ -23,7 +24,8 @@ test("panel contract", async () => {
 
   function markup(children: ReactNode) {
       return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
-          <UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}>{children}</UIProvider>
+          {/* As in the Desktop, what renders here sits inside a readiness boundary. */}
+          <Readiness requirements={[]}><UIProvider appearance={defaultAppearance} preferences={{ theme: "light", animations: true }}>{children}</UIProvider></Readiness>
       </ApplicationContext.Provider>)
   }
 

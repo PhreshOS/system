@@ -4,7 +4,9 @@ import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { Button, Heading, Input, resolveSpacing, Surface, Text, useAppearance, useTiming } from "@phreshos/react-ui"
 import Alert from "../../components/alert"
-import { useId, useState, type SyntheticEvent } from "react"
+import { useId, useLayoutEffect, useRef, useState, type SyntheticEvent } from "react"
+import { useRequirement } from "@libs/readiness"
+import { logoRequirement } from "../readiness-requirements"
 import logo from "@/assets/logo.png"
 import { name, version } from "@/source/identity"
 
@@ -16,6 +18,12 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
     const reducedMotion = useReducedMotion()
     const { spacing } = useAppearance()
+    // The form waits for its picture; one that cannot load does not hold the page.
+    const logoLoaded = useRequirement(logoRequirement)
+    // A picture already in the cache may finish before its load event is heard. This runs after the
+    // requirement above is registered, since effects run in the order they are declared.
+    const logoImage = useRef<HTMLImageElement>(null)
+    useLayoutEffect(() => { if (logoImage.current?.complete) logoLoaded() }, [logoLoaded])
     const transaction = useTiming()("change")
     const [password, setPassword] = useState("")
     const [mismatch, setMismatch] = useState(false)
@@ -79,7 +87,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                     <div className="grid justify-items-center text-center" style={{ gap: resolveSpacing("medium", spacing) }}>
 
-                        <img src={logo} alt="" draggable={false} className="size-12 object-contain select-none" />
+                        <img ref={logoImage} src={logo} alt="" draggable={false} className="size-12 object-contain select-none" onLoad={logoLoaded} onError={logoLoaded} />
 
                         <div className="grid" style={{ gap: resolveSpacing("small", spacing) }}>
 
