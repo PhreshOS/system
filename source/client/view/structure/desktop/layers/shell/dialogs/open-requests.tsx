@@ -8,7 +8,7 @@ import usePromise from "@libs/react-promise"
 import Alert from "@client/view/components/alert"
 import usePrograms from "@client/view/structure/desktop/programs/programs"
 import programIcon from "@client/view/structure/desktop/programs/program-icon"
-import { Button, Checkbox, Dialog, useAppearance, useScale } from "@phreshos/react-ui"
+import { Button, Checkbox, Dialog, Text, useAppearance, useScale } from "@phreshos/react-ui"
 
 /**
  * The default Shell's choice of a Program for something that has no default one: the first request
@@ -47,12 +47,12 @@ function OpenRequestView({ request }: Readonly<{ request: OpenRequestSnapshot }>
     return <>
         <Dialog.Header>
             <Dialog.Title>Open with</Dialog.Title>
-            <Dialog.Description>
-                <span className="truncate" title={request.target.uri} style={{ display: "block", fontWeight: 500 }}>{describe(request.target.uri)}</span>
-                {request.from ? `${request.from.process.program.name} asks to open it` : "Opened from outside the Desktop"} · {request.target.type}
-            </Dialog.Description>
         </Dialog.Header>
         <Dialog.Body>
+            <div className="grid" style={{ gap: space.xsmall }}>
+                <span className="truncate" title={request.target.uri}><Text size="small" style={{ fontWeight: 500 }}>{describe(request.target.uri)}</Text></span>
+                <Dialog.Description>{request.from ? `${request.from.process.program.name} asks to open it` : "Opened from outside the Desktop"} · {request.target.type}</Dialog.Description>
+            </div>
             <div className="grid" style={{ gap: space.xsmall }}>
                 {programs.map(program => <Button key={program.identity} disabled={decision.isPending} onPress={() => decision.safeExecute(program.identity)}
                     style={{ justifyContent: "flex-start" }}>
