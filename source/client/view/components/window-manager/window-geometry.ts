@@ -255,6 +255,19 @@ export const noPaintMargins: PaintMargins = Object.freeze({ top: 0, right: 0, bo
  */
 export function windowPaintInsets(position: Position, size: Size, surface: ViewSize, inset: number, margins: PaintMargins, current?: WindowRegion, shift: Readonly<{ x: number, y: number }> = noShift) {
 
+    return contactInsets(windowEdgeContacts(position, size, surface, current, shift), inset, margins)
+}
+
+/** Which sides of a standard Window meet an edge of its view. */
+export type WindowSides = Readonly<{ top: boolean, right: boolean, bottom: boolean, left: boolean }>
+
+export const noWindowSides: WindowSides = Object.freeze({ top: false, right: false, bottom: false, left: false })
+
+export const allWindowSides: WindowSides = Object.freeze({ top: true, right: true, bottom: true, left: true })
+
+/** The sides of a Window that meet an edge of the view it lives in; see `windowPaintInsets`. */
+export function windowEdgeContacts(position: Position, size: Size, surface: ViewSize, current?: WindowRegion, shift: Readonly<{ x: number, y: number }> = noShift): WindowSides {
+
     const x = current?.x ?? surface.width / 2 + pixels(position.x, surface.width)
 
     const y = current?.y ?? surface.height / 2 + pixels(position.y, surface.height)
@@ -265,14 +278,43 @@ export function windowPaintInsets(position: Position, size: Size, surface: ViewS
 
     return {
 
-        top: startsAtBoundary(position.y, y + shift.y, surface.height) ? margins.top : inset,
+        top: startsAtBoundary(position.y, y + shift.y, surface.height),
 
-        right: endsAtBoundary(position.x, size.width, x + shift.x, width, surface.width) ? margins.right : inset,
+        right: endsAtBoundary(position.x, size.width, x + shift.x, width, surface.width),
 
-        bottom: endsAtBoundary(position.y, size.height, y + shift.y, height, surface.height) ? margins.bottom : inset,
+        bottom: endsAtBoundary(position.y, size.height, y + shift.y, height, surface.height),
 
-        left: startsAtBoundary(position.x, x + shift.x, surface.width) ? margins.left : inset
+        left: startsAtBoundary(position.x, x + shift.x, surface.width)
     }
+}
+
+/** The margins on the sides that meet an edge, the inset on the others. */
+export function contactInsets(contacts: WindowSides, inset: number, margins: PaintMargins): PaintMargins {
+
+    return {
+        top: contacts.top ? margins.top : inset,
+        right: contacts.right ? margins.right : inset,
+        bottom: contacts.bottom ? margins.bottom : inset,
+        left: contacts.left ? margins.left : inset
+    }
+}
+
+/**
+ * The box that keeps a Window's painted surface where it is while the `carried` sides let go of the
+ * edges they meet: each such side moves in by what its margin kept beyond the inset. A hand carrying
+ * a side takes it off the edge, and what a person sees of the Window must not jump when it does.
+ */
+export function letGoOfEdges(region: WindowRegion, contacts: WindowSides, carried: WindowSides, inset: number, margins: PaintMargins): WindowRegion {
+
+    const top = carried.top && contacts.top ? margins.top - inset : 0
+
+    const right = carried.right && contacts.right ? margins.right - inset : 0
+
+    const bottom = carried.bottom && contacts.bottom ? margins.bottom - inset : 0
+
+    const left = carried.left && contacts.left ? margins.left - inset : 0
+
+    return { x: region.x + left, y: region.y + top, width: region.width - left - right, height: region.height - top - bottom }
 }
 
 function pixels(value: Value, span: number) {

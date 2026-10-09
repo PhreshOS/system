@@ -2,7 +2,7 @@ import { ComponentProps, PointerEvent as ReactPointerEvent, ReactNode, useCallba
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import WindowPanel from "./window-panel"
-import { absoluteWindowGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, resolveWindowGeometry, snapPlacement, windowPaintInsets, type PaintMargins, type WindowRegion, type ViewSize } from "@client/view/components/window-manager/window-geometry"
+import { absoluteWindowGeometry, allWindowSides, constrainWindowGeometry, contactInsets, letGoOfEdges, minimumWindowSize, noPaintMargins, noWindowSides, planeGeometry, resolveWindowGeometry, snapPlacement, windowEdgeContacts, windowPaintInsets, type PaintMargins, type WindowRegion, type WindowSides, type ViewSize } from "@client/view/components/window-manager/window-geometry"
 import { type BeginPresentationMoveGesture, type Position, type Size, type TaskbarPosition, type PresentationSurface as WindowSurfaceDefinition, type WindowLayer } from "@phreshos/core"
 import WindowHeader from "./window-header"
 import WindowSurface, { windowSurfaceRadius } from "./window-surface"
@@ -407,6 +407,48 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         let current: WindowRegion = { ...origin }
 
+        // What a person sees of the Window never jumps under the hand. The sides the gesture carries
+        // let go of the edges they meet, the box moving in to keep the painted surface still; the
+        // others keep the contact they had. A resize carries its edge at once, a move once it moves.
+        const declared = started.region
+
+        const contacts = windowEdgeContacts(presented.current.position, presented.current.size, paintSurfaceSize, origin, cellShift.get())
+
+        let carried: WindowSides = edge !== null ? sidesOf(edge) : absolute ? allWindowSides : noWindowSides
+
+        let insets = gestureInsets()
+
+        let letGo = false
+
+        function gestureInsets() {
+
+            const kept = { top: contacts.top && !carried.top, right: contacts.right && !carried.right, bottom: contacts.bottom && !carried.bottom, left: contacts.left && !carried.left }
+
+            return contactInsets(kept, paintInset, paintMargins)
+        }
+
+        function carry(sides: WindowSides) {
+
+            carried = sides
+
+            const box = letGoOfEdges(origin, contacts, sides, paintInset, paintMargins)
+
+            if (box.width === origin.width && box.height === origin.height) return
+
+            letGo = true
+
+            origin = box
+
+            current = { ...origin }
+
+            insets = gestureInsets()
+
+            // The box and its insets change in the same frame, so what is painted stays still.
+            geometryMotion.reshapeGesture(shown => letGoOfEdges(shown, contacts, sides, paintInset, paintMargins))
+        }
+
+        if (carried !== noWindowSides) carry(carried)
+
         if (geometryAnimation) onPresentationAnimationComplete?.("geometry", geometryAnimation.revision)
 
         // Pulling a Window placed by shares of the view (maximized or snapped) out of its place belongs
@@ -470,7 +512,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 renderFrame = 0
 
-                setGesture({ origin, current, zone, shown, blocked })
+                setGesture({ origin, current, zone, shown, blocked, insets })
             })
         }
 
@@ -517,8 +559,12 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 if (restoringMaximized) {
                     const stored = resolvePresentedGeometry(position, size, bounds)
                     origin = { ...origin, width: stored.width, height: stored.height }
+                    carried = allWindowSides
+                    insets = contactInsets(noWindowSides, paintInset, paintMargins)
                     request(() => onMaximize?.())
                 }
+
+                else carry(allWindowSides)
 
                 origin = { x: pointerX - origin.width * ratio, y: pointerY - Math.min(Math.max(pointerY - origin.y, 0), 40), width: origin.width, height: origin.height }
 
@@ -535,7 +581,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 if (restoringMaximized) geometryMotion.restoreGesture(current)
 
                 else geometryMotion.updateGesture(current)
-                setGesture({ origin, current, zone, shown, blocked })
+                setGesture({ origin, current, zone, shown, blocked, insets })
 
                 return
             }
@@ -625,13 +671,14 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 // The Desktop paints from the surface's corner; the System records from its center.
                 const placed = planeGeometry(current, bounds!)
 
-                if (edge === null) request(() => latest.current.onMove?.(placed.x, placed.y))
+                // A Window whose sides let go of the edges keeps the size it is seen at.
+                if (edge === null) request(() => letGo ? latest.current.onResize?.(current.width, current.height, { x: placed.x, y: placed.y }) : latest.current.onMove?.(placed.x, placed.y))
 
                 // Only the west and north edges move the origin. A drag
                 // on any other reports no position, because none was
                 // chosen — and a position nobody chose would replace a
                 // share with the pixels it happened to resolve to.
-                else request(() => latest.current.onResize?.(current.width, current.height, current.x === origin.x && current.y === origin.y ? null : { x: placed.x, y: placed.y }))
+                else request(() => latest.current.onResize?.(current.width, current.height, current.x === declared.x && current.y === declared.y ? null : { x: placed.x, y: placed.y }))
 
                 settle()
 
@@ -670,7 +717,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
             cancel() { release(pointer, false) }
         })
 
-        setGesture({ origin, current, zone, shown, blocked })
+        setGesture({ origin, current, zone, shown, blocked, insets })
     }
 
     // ------------------------------------------------------------ render
@@ -683,7 +730,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
     // follows the same locally owned geometry throughout that interval so an
     // old boundary contact cannot flash back for one frame.
     // Follows where the view looks from, but redraws only when this Window's own margins change.
-    const insetsNow = () => windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, paintMargins, gesture?.current ?? settlingGeometry ?? undefined, cellShift.get())
+    const insetsNow = () => gesture?.insets ?? windowPaintInsets(presented.current.position, presented.current.size, paintSurfaceSize, paintInset, paintMargins, settlingGeometry ?? undefined, cellShift.get())
     const insetsKey = useSyncExternalStore(cellShift.subscribe, () => JSON.stringify(insetsNow()), () => JSON.stringify(insetsNow()))
     const paintedInsets = JSON.parse(insetsKey) as ReturnType<typeof windowPaintInsets>
 
@@ -842,6 +889,12 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
 type WindowEdge = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw"
 
+/** The sides a resize from an edge or corner carries. */
+function sidesOf(edge: WindowEdge): WindowSides {
+
+    return { top: edge.includes("n"), right: edge.includes("e"), bottom: edge.includes("s"), left: edge.includes("w") }
+}
+
 type Snap = SnapTarget
 
 interface WindowProps extends Omit<ComponentProps<"div">, "onAnimationStart" | "onDrag" | "onDragEnd" | "onDragStart" | "title"> {
@@ -953,6 +1006,9 @@ interface Gesture {
     blocked?: boolean
 
     shown: Snap | null
+
+    /** What the Window is painted inset by while the gesture lasts. */
+    insets: PaintMargins
 }
 
 interface ActivePointerGesture {

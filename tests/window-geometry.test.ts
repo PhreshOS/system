@@ -3,7 +3,7 @@ import ClientWindow from "@client/core/link-manager/auth-manager/process-manager
 import ClientProcessManager from "@client/core/link-manager/auth-manager/process-manager/process-manager"
 import ProcessManager from "@server/core/link-manager/auth-manager/process-manager/process-manager"
 import ServerWindow from "@server/core/link-manager/auth-manager/process-manager/window"
-import { boundedGeometry, constrainWindowGeometry, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, snapPlacement, viewOfGeometry, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
+import { allWindowSides, boundedGeometry, constrainWindowGeometry, contactInsets, letGoOfEdges, minimumWindowSize, noPaintMargins, planeGeometry, recordedPosition, resolveWindowGeometry, shiftPosition, snapPlacement, viewOfGeometry, windowEdgeContacts, windowPaintInsets } from "@client/view/components/window-manager/window-geometry"
 import { defaultAppearance } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import { expect, test } from "vitest"
@@ -82,6 +82,31 @@ test("settling paint follows released geometry instead of its former boundary co
       windowPaintInsets({ x: "-1/2", y: "-1/2" }, { width: 500, height: 300 }, surface, half, noPaintMargins, released),
       { top: half, right: half, bottom: half, left: half }
   )
+})
+
+test("sides a hand carries let go of their edges without moving what is painted", () => {
+  const surface = { width: 1000, height: 600 }
+  const half = defaultAppearance.spacing / 2
+  const margins = { top: 12, right: 12, bottom: 68, left: 12 }
+  // The right half of the view: it meets the top, right, and bottom edges.
+  const position = { x: 0, y: "-1/2" }, size = { width: "1/2", height: "1/1" }
+  const box = resolveWindowGeometry(position, size, surface)
+  const contacts = windowEdgeContacts(position, size, surface)
+  const painted = (region: typeof box, insets: ReturnType<typeof contactInsets>) => ({
+    x: region.x + insets.left, y: region.y + insets.top,
+    width: region.width - insets.left - insets.right, height: region.height - insets.top - insets.bottom
+  })
+
+  assert.deepEqual(contacts, { top: true, right: true, bottom: true, left: false })
+
+  // Moved, every side lets go; the box moves in, and the painted surface stays where it was.
+  const carried = letGoOfEdges(box, contacts, allWindowSides, half, margins)
+  assert.deepEqual(painted(carried, contactInsets({ top: false, right: false, bottom: false, left: false }, half, margins)), painted(box, contactInsets(contacts, half, margins)))
+
+  // Pulled by its bottom edge, only that side lets go; the others keep their margins.
+  const pulled = letGoOfEdges(box, contacts, { top: false, right: false, bottom: true, left: false }, half, margins)
+  assert.deepEqual(painted(pulled, contactInsets({ ...contacts, bottom: false }, half, margins)), painted(box, contactInsets(contacts, half, margins)))
+  assert.deepEqual({ x: pulled.x, y: pulled.y, width: pulled.width }, { x: box.x, y: box.y, width: box.width })
 })
 
 test("a tiled window keeps the margins of its own view while the Desktop looks between two", () => {

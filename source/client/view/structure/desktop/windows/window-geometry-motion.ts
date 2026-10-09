@@ -299,6 +299,16 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         if (!chase.current.frame) chase.current.frame = requestAnimationFrame(follow)
     }
 
+    /**
+     * Changes the shown box at once, outside the chase that smooths a hand's motion: for a change
+     * the painting makes at the same moment, such as sides letting go of the edges, which must not
+     * show between its two states.
+     */
+    function reshapeGesture(change: (shown: WindowRegion) => WindowRegion) {
+
+        set(change(read()))
+    }
+
     function restoreGesture(region: WindowRegion) {
 
         const shown = read()
@@ -385,6 +395,7 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
         present,
         beginGesture,
         updateGesture,
+        reshapeGesture,
         restoreGesture,
         targetGesture,
         settleGesture,
