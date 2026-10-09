@@ -1,5 +1,4 @@
 import { Badge, Button, Table, Text, useAppearance, useColor, useScale } from "@phreshos/react-ui"
-import { X } from "@phreshos/react-ui/icons"
 import type Process from "@client/core/link-manager/auth-manager/process-manager/process"
 import usePromise from "@libs/react-promise"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
@@ -8,8 +7,8 @@ import programIcon from "@client/view/structure/desktop/programs/program-icon"
 
 /**
  * One live Process as a table row: its name, its Program, a mark for each
- * running Endpoint, colored only while it is still starting, and a quiet action
- * to end it. The live list owns removal.
+ * running Endpoint, colored only while it is still starting, and End, as in
+ * Settings. The live list owns removal.
  */
 export default function ProcessRow({ process, program, server, client }: Readonly<{
     process: Process
@@ -54,12 +53,12 @@ export default function ProcessRow({ process, program, server, client }: Readonl
         <Table.Cell>
             <Button
                 size="xsmall"
-                iconOnly
-                color="transparent"
+                depth="none"
+                color="danger"
                 pending={ending.isPending}
                 aria-label={`End process ${label}`}
                 onPress={() => void ending.safeExecute()}
-            >{/* Quiet until it is needed: the danger color, softened. */}<X style={{ color: `color-mix(in oklab, ${danger} 55%, transparent)` }} /></Button>
+            >End</Button>
         </Table.Cell>
 
     </Table.Row>
