@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { type ReadableStream as NodeReadableStream } from "node:stream/web"
-import { isUploadFile, type FileStat } from "@phreshos/core"
+import { join } from "node:path"
+import { isSystemUploadFile, isUploadFile, type FileStat } from "@phreshos/core"
 
 export const uploadLimit = 1024 * 1024 * 1024
 
@@ -32,12 +33,15 @@ export class UploadTooLargeError extends Error {
  * Incoming bytes are written beside their destination under a hidden name.
  * Only a complete value at or below the limit is renamed into public reach;
  * interruption and refusal remove the temporary file.
+ *
+ * The keys the System keeps for its own wallpapers read the files it comes
+ * with instead, so each release shows its own pictures behind them.
  */
 export default class UploadManager {
 
     public readonly fileManager: FileManager
 
-    public constructor(fileManager: FileManager) {
+    public constructor(fileManager: FileManager, public readonly systemPath: string) {
 
         this.fileManager = fileManager
 
@@ -48,7 +52,7 @@ export default class UploadManager {
 
         if (!isUploadFile(file)) throw new Error("That is not an upload file")
 
-        return this.fileManager.join(file)
+        return isSystemUploadFile(file) ? join(this.systemPath, file) : this.fileManager.join(file)
     }
 
     public async write(extension: string, content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {

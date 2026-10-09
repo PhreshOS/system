@@ -36,8 +36,6 @@ export default function Workspace() {
 
     const appearance = useProperty(LinkManagerContext.useValue().appearance)
 
-    const desktopWallpaper = useThemedValue(appearance.desktopWallpaper)
-
     const foreground = useThemedValue(appearance.colors).foreground
 
     const { theme } = usePreferences()
@@ -542,7 +540,7 @@ export default function Workspace() {
 
     const wallpaper = hasWallpaperClient
         ? renderWindows("wallpaper")
-        : <WallpaperBackground place="desktop" file={desktopWallpaper} onReady={fileWallpaperLoaded} />
+        : <WallpaperBackground place="desktop" wallpaper={appearance.wallpaper} onReady={fileWallpaperLoaded} />
 
     const shell = hasShellClient
         ? renderWindows("shell")

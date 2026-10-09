@@ -11,7 +11,6 @@ import { useEffect, useState, type ReactNode } from "react"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { WallpaperStage } from "../desktop/layers/wallpaper/wallpaper"
 import { useReady } from "@libs/readiness"
-import { useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
 import { sessionRequirement, wallpaperRequirement } from "../readiness-requirements"
 
@@ -22,8 +21,6 @@ export default function () {
     const linkManager = LinkManagerContext.useValue()
 
     const appearance = useProperty(linkManager.appearance)
-
-    const signInWallpaper = useThemedValue(appearance.signInWallpaper)
 
     const [revision, setRevision] = useState(0)
 
@@ -87,9 +84,9 @@ export default function () {
 
         {sessionAuthenticate.solve.authentication.signedUp
 
-            ? <WallpaperStage place="signIn" file={signInWallpaper}><SignIn /></WallpaperStage>
+            ? <WallpaperStage place="signIn" wallpaper={appearance.wallpaper}><SignIn /></WallpaperStage>
 
-            : <WallpaperStage place="signIn" file={signInWallpaper}>
+            : <WallpaperStage place="signIn" wallpaper={appearance.wallpaper}>
 
                 <SignUp state={sessionAuthenticate.solve.authentication} onClosed={() => setRevision(value => value + 1)} />
 

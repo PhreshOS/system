@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { resolve } from "node:path"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
+import { systemWallpapers } from "@phreshos/core"
 import uploadView from "@server/view/http/uploads"
 import type Application from "@server/core/application"
 import { Hono } from "hono"
@@ -10,7 +11,7 @@ import { test } from "vitest"
 
 test("uploads contract", async () => {
   const directory = await mkdtemp(resolve(".verify-uploads-"))
-  const uploads = new UploadManager(new FileManager(directory))
+  const uploads = new UploadManager(new FileManager(directory), resolve("assets/wallpapers"))
 
   try {
       const file = await uploads.write("txt", new Blob(["hello uploads"]).stream())
@@ -81,6 +82,13 @@ test("uploads contract", async () => {
       assert.match(wallpaper.headers.get("content-security-policy") ?? "", /sandbox allow-scripts/)
       assert.equal(await wallpaper.text(), htmlSource)
       assert.equal((await view.request(`http://system/uploads/wallpaper/${created.file}`)).status, 400)
+
+      // A key the System keeps reads the file it comes with, asked for again after a release.
+      const kept = await view.request(`http://system/uploads/${systemWallpapers.light.desktop}`)
+      assert.equal(kept.status, 200)
+      assert.equal(kept.headers.get("cache-control"), "no-cache")
+      assert.deepEqual(new Uint8Array(await kept.arrayBuffer()), new Uint8Array(await readFile(resolve("assets/wallpapers", systemWallpapers.light.desktop))))
+      assert.equal(uploads.stat(systemWallpapers.dark.signIn)?.size, (await readFile(resolve("assets/wallpapers", systemWallpapers.dark.signIn))).byteLength)
       assert.equal((await view.request("http://system/uploads/not-a-key")).status, 400)
       assert.equal((await view.request("http://system/uploads/00000000-0000-0000-0000-000000000000.txt")).status, 404)
   } finally {

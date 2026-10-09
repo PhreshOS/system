@@ -3,11 +3,14 @@ import { MissingUploadValueError, UploadTooLargeError, uploadLimit } from "@serv
 import Application from "@server/core/application"
 import doors from "./doors"
 import { Hono } from "hono"
-import { isUploadFile } from "@phreshos/core"
+import { isSystemUploadFile, isUploadFile } from "@phreshos/core"
 import { readFile } from "node:fs/promises"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
 const immutableCache = "public, max-age=31536000, immutable"
+
+// The System's own files keep their keys while a release replaces them, so a browser asks again.
+const systemCache = "no-cache"
 
 const wallpaperPolicy = [
     "default-src 'none'",
@@ -95,7 +98,7 @@ export default function (application: Application) {
 
             if (!upload) return context.body(null, 404)
 
-            context.header("Cache-Control", immutableCache)
+            context.header("Cache-Control", isSystemUploadFile(context.req.param("file")) ? systemCache : immutableCache)
 
             return context.json(upload)
         }
@@ -149,16 +152,15 @@ export default function (application: Application) {
 
         await next()
 
-        context.header("Cache-Control", immutableCache)
+        context.header("Cache-Control", isSystemUploadFile(file) ? systemCache : immutableCache)
         context.header("Access-Control-Allow-Origin", "*")
     })
 
-    uploads.use("/:file", serveStatic({
+    const uploaded = serveStatic({ root: application.uploads.fileManager.path, rewriteRequestPath: path => path.slice(doors.uploads.length + 1) })
 
-        root: application.uploads.fileManager.path,
+    const kept = serveStatic({ root: application.uploads.systemPath, rewriteRequestPath: path => path.slice(doors.uploads.length + 1) })
 
-        rewriteRequestPath: path => path.slice(doors.uploads.length + 1)
-    }))
+    uploads.use("/:file", (context, next) => (isSystemUploadFile(context.req.param("file")) ? kept : uploaded)(context, next))
 
     return uploads
 }

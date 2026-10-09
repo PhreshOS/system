@@ -66,7 +66,8 @@ export default class Application {
         this.system = new System(this)
     }
 
-    public static async initialize(homePath: string, icons: ApplicationIcons) {
+    /** `wallpapers` is the directory of the wallpapers the System comes with, named by their upload keys. */
+    public static async initialize(homePath: string, icons: ApplicationIcons, wallpapers: string) {
 
         const storage = new FileManager(homePath)
 
@@ -76,7 +77,7 @@ export default class Application {
 
         const authentication = await Authentication.open(storage.join("credentials.json"), store)
 
-        const uploads = new UploadManager(storage.navigateTo("uploads"))
+        const uploads = new UploadManager(storage.navigateTo("uploads"), wallpapers)
 
         const appearanceManager = await AppearanceManager.open(store, uploads)
 

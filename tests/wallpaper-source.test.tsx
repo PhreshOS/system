@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { renderToStaticMarkup } from "react-dom/server"
 import { UIProvider } from "@phreshos/react-ui"
-import { defaultAppearance } from "@phreshos/core"
+import { defaultAppearance, systemWallpapers } from "@phreshos/core"
 import { ApplicationContext } from "@client/view/contexts"
 import Application from "@client/core/application"
 import { WallpaperBackground, type WallpaperPlace } from "@client/view/structure/desktop/layers/wallpaper/wallpaper"
@@ -16,17 +16,18 @@ test("wallpaper source contract", () => {
         program: "/program"
     })
 
-    function render(file: string | null, place: WallpaperPlace = "desktop") {
+    function render(file: string, place: WallpaperPlace = "desktop") {
+        const wallpaper = { ...systemWallpapers, dark: { ...systemWallpapers.dark, [place]: file } }
         return renderToStaticMarkup(<ApplicationContext.Provider value={application}>
             <UIProvider appearance={defaultAppearance} preferences={{ theme: "dark", animations: true }}>
-                <WallpaperBackground place={place} file={file} />
+                <WallpaperBackground place={place} wallpaper={wallpaper} />
             </UIProvider>
         </ApplicationContext.Provider>)
     }
 
-    // Without a chosen wallpaper, the sign-in screen shows the seed and the Desktop the release's own.
-    assert.match(render(null, "signIn"), /seed-dark/)
-    assert.match(render(null, "desktop"), /sprout-dark/)
+    // The System's own wallpapers are uploads like any other, each shown in its own place.
+    assert.match(render(systemWallpapers.dark.signIn, "signIn"), /src="\/uploads\/sign-in-dark\.webp"/)
+    assert.match(render(systemWallpapers.dark.desktop), /src="\/uploads\/desktop-dark\.webp"/)
 
     const image = render("00000000-0000-0000-0000-000000000000.png")
     assert.match(image, /<img/)

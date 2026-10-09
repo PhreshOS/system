@@ -9,7 +9,7 @@ import { name, release, version } from "@/source/identity"
 test("the System says what it is from its identity, and when it started", async () => {
     const home = await mkdtemp(join(tmpdir(), "phreshos-about-"))
     const before = Date.now()
-    const application = await Application.initialize(home, { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") })
+    const application = await Application.initialize(home, { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") }, join(home, "wallpapers"))
     try {
         const about = application.system.about()
 

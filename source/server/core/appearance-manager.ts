@@ -1,11 +1,10 @@
 import Keyv from "keyv"
 import { isDeepStrictEqual } from "node:util"
-import { applyAppearanceUpdate, defaultAppearance, type Appearance } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, isUploadFile, type Appearance } from "@phreshos/core"
 import UploadManager from "./upload-manager"
 import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
 const storageKey = "appearance"
-const servedFile = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$/
 
 /** Durable, complete Appearance state owned by Server Core. */
 export default class AppearanceManager {
@@ -35,10 +34,10 @@ export default class AppearanceManager {
     public async update(value: unknown) {
         const appearance = applyAppearanceUpdate(this.current, value)
 
-        this.validateWallpaper(appearance.signInWallpaper.light)
-        this.validateWallpaper(appearance.signInWallpaper.dark)
-        this.validateWallpaper(appearance.desktopWallpaper.light)
-        this.validateWallpaper(appearance.desktopWallpaper.dark)
+        for (const wallpaper of [appearance.wallpaper.light, appearance.wallpaper.dark]) {
+            this.validateWallpaper(wallpaper.signIn)
+            this.validateWallpaper(wallpaper.desktop)
+        }
 
         if (isDeepStrictEqual(this.current, appearance)) return this.current
 
@@ -48,9 +47,8 @@ export default class AppearanceManager {
         return appearance
     }
 
-    private validateWallpaper(file: string | null) {
-        if (file === null) return
-        if (!servedFile.test(file)) throw new Error("A wallpaper must be a system upload")
+    private validateWallpaper(file: string) {
+        if (!isUploadFile(file)) throw new Error("A wallpaper must be a system upload")
 
         const upload = this.uploads.stat(file)
 

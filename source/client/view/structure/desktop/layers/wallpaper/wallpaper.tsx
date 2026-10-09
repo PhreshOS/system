@@ -1,7 +1,3 @@
-import seedDark from "@/assets/bundled/seed-dark.webp"
-import seedLight from "@/assets/bundled/seed-light.webp"
-import sproutDark from "@/assets/bundled/sprout-dark.webp"
-import sproutLight from "@/assets/bundled/sprout-light.webp"
 import { ApplicationContext } from "@client/view/contexts"
 import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type TransitionEvent } from "react"
 import Loading from "@client/view/components/loading"
@@ -9,20 +5,11 @@ import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
 import { usePreferences, useTiming } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
-import { cssEasing } from "@phreshos/core"
+import { cssEasing, type AppearanceWallpaper, type ThemedValue } from "@phreshos/core"
 import { wallpaperKind, type WallpaperKind } from "@shared/wallpaper"
 
 /** Where a wallpaper is shown. */
-export type WallpaperPlace = "signIn" | "desktop"
-
-/**
- * What each place shows until its owner chooses a wallpaper: the seed before you sign in, and the
- * release's own wallpaper once you are in. Both follow the theme.
- */
-const bundledWallpapers: Readonly<Record<WallpaperPlace, Readonly<Record<"light" | "dark", string>>>> = {
-    signIn: { light: seedLight, dark: seedDark },
-    desktop: { light: sproutLight, dark: sproutDark }
-}
+export type WallpaperPlace = keyof AppearanceWallpaper
 
 type WallpaperSource = Readonly<{
     identity: string
@@ -37,11 +24,12 @@ type WallpaperLayers = Readonly<{
 }>
 
 /** Displays one completely loaded wallpaper source. */
-export function WallpaperBackground({ place, file, onReady }: WallpaperBackgroundProps) {
+export function WallpaperBackground({ place, wallpaper, onReady }: WallpaperBackgroundProps) {
     const application = ApplicationContext.useValue()
     const { theme } = usePreferences()
     const reducedMotion = useReducedMotion()
-    const desired = resolveWallpaper(place, file, theme, application.doors.uploads)
+    const desired = resolveWallpaper(wallpaper[theme][place], application.doors.uploads)
+    const other = resolveWallpaper(wallpaper[theme === "light" ? "dark" : "light"][place], application.doors.uploads)
     const [layers, setLayers] = useState<WallpaperLayers>({
         displayed: null,
         incoming: desired,
@@ -55,12 +43,11 @@ export function WallpaperBackground({ place, file, onReady }: WallpaperBackgroun
     const ready = useEffectEvent(() => onReady?.())
 
     useEffect(() => {
-        // Both themes of this place's default, so a change of theme shows at once.
-        for (const wallpaper of Object.values(bundledWallpapers[place])) {
-            const image = new Image()
-            image.src = wallpaper
-        }
-    }, [place])
+        // The other theme's picture too, so a change of theme shows at once.
+        if (other.kind !== "image") return
+        const image = new Image()
+        image.src = other.url
+    }, [other.url, other.kind])
 
     useEffect(() => {
         cancelSwitch(frame)
@@ -189,9 +176,7 @@ function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: R
     </div>
 }
 
-function resolveWallpaper(place: WallpaperPlace, file: string | null, theme: "light" | "dark", uploads: string): WallpaperSource {
-    if (file === null) return { identity: `bundled:${place}:${theme}`, kind: "image", url: bundledWallpapers[place][theme] }
-
+function resolveWallpaper(file: string, uploads: string): WallpaperSource {
     const kind = wallpaperKind(file) ?? "image"
     const path = kind === "html" ? `${uploads}/wallpaper/${encodeURIComponent(file)}` : `${uploads}/${encodeURIComponent(file)}`
 
@@ -206,12 +191,14 @@ function cancelSwitch(frame: { current: number | null }) {
 }
 
 /** A complete surface whose content sits above one file-backed wallpaper. */
-export function WallpaperStage({ place, file, children }: WallpaperStageProps) {
-    const [readyFile, setReadyFile] = useState<string | null>()
+export function WallpaperStage({ place, wallpaper, children }: WallpaperStageProps) {
+    const { theme } = usePreferences()
+    const file = wallpaper[theme][place]
+    const [readyFile, setReadyFile] = useState<string>()
     const ready = readyFile === file
 
     return <div className="relative isolate grid min-h-0">
-        <WallpaperBackground place={place} file={file} onReady={() => setReadyFile(file)} />
+        <WallpaperBackground place={place} wallpaper={wallpaper} onReady={() => setReadyFile(file)} />
 
         <div className="pointer-events-none relative z-1 grid min-h-0">
             {children}
@@ -230,12 +217,12 @@ export function ReadyWallpaper() {
 
 interface WallpaperStageProps {
     place: WallpaperPlace
-    file: string | null
+    wallpaper: ThemedValue<AppearanceWallpaper>
     children: ReactNode
 }
 
 interface WallpaperBackgroundProps {
     place: WallpaperPlace
-    file: string | null
+    wallpaper: ThemedValue<AppearanceWallpaper>
     onReady?: () => void
 }

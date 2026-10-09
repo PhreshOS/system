@@ -29,7 +29,7 @@ export default async function (config: Config) {
         font: "simple"
     })
 
-    const application = await Application.initialize(config.home, { system: resolve("assets/logo.png"), defaultProgram: resolve("assets/default-icon.png") })
+    const application = await Application.initialize(config.home, { system: resolve("assets/logo.png"), defaultProgram: resolve("assets/default-icon.png") }, resolve("assets/wallpapers"))
 
     // One server, five doors, each at its own name. A program's client
     // is still not the API — it is files a browser reads, with no link,

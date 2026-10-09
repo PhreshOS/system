@@ -1,12 +1,12 @@
 import assert from "node:assert/strict"
 import Keyv from "keyv"
-import { defaultAppearance, parseAppearance } from "@phreshos/core"
+import { defaultAppearance, parseAppearance, systemWallpapers } from "@phreshos/core"
 import AppearanceManager from "@server/core/appearance-manager"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
 import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { test } from "vitest"
 import { randomUUID } from "node:crypto"
 import { wallpaperSizeLimit } from "@shared/wallpaper"
@@ -33,7 +33,7 @@ test("appearance contract", async () => {
 
   const store = new Keyv()
   const directory = await mkdtemp(join(tmpdir(), "phresh-appearance-"))
-  const uploads = new UploadManager(new FileManager(directory))
+  const uploads = new UploadManager(new FileManager(directory), resolve("assets/wallpapers"))
   const manager = await AppearanceManager.open(store, uploads)
 
   assert.deepEqual(manager.value, defaultAppearance)
@@ -124,17 +124,24 @@ test("appearance contract", async () => {
     uploads.write(extension, new Blob(["wallpaper"]).stream())))
 
   for (const file of wallpaperFiles) {
-    await manager.update({
-      ...manager.value,
-      desktopWallpaper: { ...manager.value.desktopWallpaper, light: file }
-    })
-    assert.equal(manager.value.desktopWallpaper.light, file)
+    await manager.update({ wallpaper: { light: { desktop: file } } })
+    assert.equal(manager.value.wallpaper.light.desktop, file)
+    assert.equal(manager.value.wallpaper.light.signIn, systemWallpapers.light.signIn)
   }
+
+  // The System's own wallpapers are uploads it keeps, each read from the files it comes with.
+  for (const wallpaper of Object.values(systemWallpapers)) for (const file of Object.values(wallpaper)) {
+    assert(uploads.stat(file)!.size > 0)
+  }
+  await manager.update({ wallpaper: { light: { desktop: systemWallpapers.dark.desktop } } })
+  assert.equal(manager.value.wallpaper.light.desktop, systemWallpapers.dark.desktop)
+  await assert.rejects(manager.update({ wallpaper: { light: { desktop: null } } }))
+  await assert.rejects(manager.update({ wallpaper: { light: { desktop: `${randomUUID()}.png` } } }), /does not exist/)
 
   const unsupported = await uploads.write("txt", new Blob(["wallpaper"]).stream())
   await assert.rejects(manager.update({
     ...manager.value,
-    desktopWallpaper: { ...manager.value.desktopWallpaper, light: unsupported }
+    wallpaper: { ...manager.value.wallpaper, light: { ...manager.value.wallpaper.light, desktop: unsupported } }
   }), /image, video, or HTML/)
 
   const oversized = `${randomUUID()}.html`
@@ -142,7 +149,7 @@ test("appearance contract", async () => {
   await truncate(uploads.path(oversized), wallpaperSizeLimit + 1)
   await assert.rejects(manager.update({
     ...manager.value,
-    desktopWallpaper: { ...manager.value.desktopWallpaper, light: oversized }
+    wallpaper: { ...manager.value.wallpaper, light: { ...manager.value.wallpaper.light, desktop: oversized } }
   }), /50 MiB/)
 
   await rm(directory, { recursive: true, force: true })

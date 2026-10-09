@@ -8,7 +8,7 @@ import Application from "@server/core/application"
 
 test("the System renders its own icon at each standard size, and only those", async () => {
     const home = await mkdtemp(join(tmpdir(), "phreshos-icon-"))
-    const application = await Application.initialize(home, { system: resolve("assets/logo.png"), defaultProgram: resolve("assets/default-icon.png") })
+    const application = await Application.initialize(home, { system: resolve("assets/logo.png"), defaultProgram: resolve("assets/default-icon.png") }, resolve("assets/wallpapers"))
     try {
         for (const [size, length] of [["small", 32], ["medium", 64], ["large", 128]] as const) {
             const metadata = await sharp(Buffer.from(await application.system.icon(size))).metadata()
