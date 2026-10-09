@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { defaultAppearance, type DesktopPreferences } from "@phreshos/core"
+import { defaultAppearance, type DesktopPreferences, type ResolvedDesktopPreferences } from "@phreshos/core"
 import { TheLink } from "@the-link/core"
 import ClientLinkManager from "@client/core/link-manager/link-manager"
 import Application from "@server/core/application"
@@ -56,24 +56,32 @@ test("Desktop preferences remain inside their owning browser Desktop", async () 
 
     const source = new TheLink()
     const outbound: unknown[][] = []
-    const preferences: DesktopPreferences = { theme: "light", animations: true, scale: 1 }
-    const changed: DesktopPreferences[] = []
+    const preferences: DesktopPreferences = { theme: "browser", animations: true, scale: 1 }
+    const resolved: ResolvedDesktopPreferences = { theme: "light", animations: true, scale: 1 }
+    const changed: unknown[][] = []
     const stopOutbound = source.$outbound.forwardTo((event, ...values) => { outbound.push([event, ...values]) })
     const manager = new ClientLinkManager(
         {} as never,
         source,
         { appearance: { key: "appearance", value: defaultAppearance } },
-        preferences
+        preferences,
+        resolved
     )
-    const stopChanged = manager.desktopPreferences.tunnel.subscribe("change", value => { changed.push(value as DesktopPreferences) })
-    const next: DesktopPreferences = { ...preferences, theme: "dark" }
+    const stops = (["change", "changeResolved"] as const).map(event => manager.desktopPreferences.tunnel.subscribe(event, value => { changed.push([event, value]) }))
+    const stopChanged = () => stops.forEach(stop => stop())
+    const darkBrowser: ResolvedDesktopPreferences = { ...resolved, theme: "dark" }
+    const chosenDark: DesktopPreferences = { ...preferences, theme: "dark" }
 
     try {
-        await manager.updateDesktopPreferences(next)
-        await manager.updateDesktopPreferences(next)
+        // The browser turns dark while it is followed: only what is used changes.
+        await manager.updateDesktopPreferences(preferences, darkBrowser)
+        await manager.updateDesktopPreferences(preferences, darkBrowser)
+        // The owner chooses dark, which it already resolves to: only what was chosen changes.
+        await manager.updateDesktopPreferences(chosenDark, darkBrowser)
 
-        assert.deepEqual(manager.desktopPreferences.value, next)
-        assert.deepEqual(changed, [next])
+        assert.deepEqual(manager.desktopPreferences.preferences, chosenDark)
+        assert.deepEqual(manager.desktopPreferences.resolved, darkBrowser)
+        assert.deepEqual(changed, [["changeResolved", darkBrowser], ["change", chosenDark]])
         assert.deepEqual(outbound, [])
     }
     finally {

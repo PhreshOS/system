@@ -19,14 +19,14 @@ export default function ({ children }: PropsWithChildren) {
 }
 
 function AppearanceRoot({ children }: PropsWithChildren) {
-    const { preferences } = useDesktopPreferences()
+    const { resolved } = useDesktopPreferences()
     const [appearance, setAppearance] = useState(() => resolveStoredAppearance(localStorage.getItem(appearanceKey)))
     const [overlays, setOverlays] = useState<HTMLDivElement | null>(null)
     const remember = useCallback(function (value: Appearance) {
         setAppearance(value)
         localStorage.setItem(appearanceKey, JSON.stringify(value))
     }, [])
-    const background = appearance.colors[preferences.theme].background
+    const background = appearance.colors[resolved.theme].background
 
     // A theme turns the whole screen: it fades five times as long as a change in place, softly at
     // both ends, so the eye follows it instead of being struck by it.
@@ -36,17 +36,17 @@ function AppearanceRoot({ children }: PropsWithChildren) {
 
     return <RememberAppearanceContext.Provider value={remember}>
 
-        <UIProvider appearance={appearance} preferences={preferences}>
+        <UIProvider appearance={appearance} preferences={resolved}>
 
-            <DesktopScaleProvider scale={preferences.scale} container={overlays}>
+            <DesktopScaleProvider scale={resolved.scale} container={overlays}>
 
                 <div className="relative isolate h-dvh overflow-hidden" style={{ backgroundColor: background }}>
 
-                    <ReducedMotion reduced={!preferences.animations}>
+                    <ReducedMotion reduced={!resolved.animations}>
 
                         <div
                             className="absolute top-0 left-0 isolate grid font-roboto"
-                            style={{ width: "100%", height: "100%", zoom: preferences.scale }}
+                            style={{ width: "100%", height: "100%", zoom: resolved.scale }}
                         >
 
                             {children}

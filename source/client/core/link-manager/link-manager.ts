@@ -2,7 +2,7 @@ import { AuthManagerSnapshot } from "@server/core/link-manager/auth-manager/auth
 import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import { type AuthenticationState } from "@server/core/authentication/authentication"
 import { type SignUpResponse } from "@server/core/link-manager/link-manager"
-import { type Appearance, type DesktopPreferences, type DesktopPreferencesUpdate } from "@phreshos/core"
+import { type Appearance, type DesktopPreferences, type DesktopPreferencesUpdate, type ResolvedDesktopPreferences } from "@phreshos/core"
 import { Forward } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import { Property } from "@the-link/core"
@@ -20,10 +20,10 @@ export default class LinkManager extends TheLink {
     /** Immediate unresolved System Appearance and future authoritative updates. */
     public readonly appearance: Property<Appearance>
 
-    /** Complete effective local Desktop preferences and future updates. */
+    /** What this Desktop's owner chose, what it resolves to, and their future changes. */
     public readonly desktopPreferences: DesktopPreferencesState
 
-    public constructor(application: Application, sourceLink: TheLink, payload: LinkManagerSnapshot, desktopPreferences: DesktopPreferences) {
+    public constructor(application: Application, sourceLink: TheLink, payload: LinkManagerSnapshot, desktopPreferences: DesktopPreferences, resolvedDesktopPreferences: ResolvedDesktopPreferences) {
 
         super()
 
@@ -35,15 +35,15 @@ export default class LinkManager extends TheLink {
 
         this.appearance = Property.consumer(this, payload.appearance.key, payload.appearance.value)
 
-        this.desktopPreferences = new DesktopPreferencesState(desktopPreferences)
+        this.desktopPreferences = new DesktopPreferencesState(desktopPreferences, resolvedDesktopPreferences)
     }
 
     public requestDesktopPreferences(preferences: DesktopPreferencesUpdate) {
         return this.$inbound.publish("/change-desktop-preferences", preferences)
     }
 
-    public updateDesktopPreferences(preferences: DesktopPreferences) {
-        return this.desktopPreferences.update(preferences)
+    public updateDesktopPreferences(preferences: DesktopPreferences, resolved: ResolvedDesktopPreferences) {
+        return this.desktopPreferences.update(preferences, resolved)
     }
 
     @Forward("outbound")

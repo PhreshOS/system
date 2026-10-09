@@ -344,7 +344,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "desktopPreferences") return [authManager.linkManager.desktopPreferences.value]
+        if (word === "desktopPreferences") return [authManager.linkManager.desktopPreferences.preferences]
+
+        if (word === "resolvedDesktopPreferences") return [authManager.linkManager.desktopPreferences.resolved]
 
         if (word === "updateDesktopPreferences") {
 

@@ -80,7 +80,7 @@ function DesktopReadiness({ appearance }: { appearance: ReturnType<typeof useApp
 function Desktop() {
 
     const application = ApplicationContext.useValue()
-    const { preferences } = useDesktopPreferences()
+    const { preferences, resolved } = useDesktopPreferences()
 
     const [linkManager, setLinkManager] = useState<LinkManager | null>(null)
 
@@ -90,7 +90,7 @@ function Desktop() {
 
         return application.httpClient.onSubscribe<LinkManagerSnapshot>(function (link) {
 
-            const manager = new LinkManager(application, link, link.payload, preferences)
+            const manager = new LinkManager(application, link, link.payload, preferences, resolved)
 
             link.$internal.subscribeOnce("unsubscribe", () => {
                 setLinkManager(current => current === manager ? null : current)
@@ -98,7 +98,7 @@ function Desktop() {
 
             setLinkManager(manager)
         })
-    }, [application, preferences])
+    }, [application, preferences, resolved])
 
     useEffect(subscribe, [subscribe])
 
@@ -138,7 +138,7 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
 
     useReady(connectionRequirement)
 
-    const { preferences, update } = useDesktopPreferences()
+    const { preferences, resolved, update } = useDesktopPreferences()
 
     const inbound = ReactTunnel.useFactory(linkManager.$inbound)
 
@@ -151,8 +151,8 @@ function ConnectedDesktop({ linkManager }: { linkManager: LinkManager }) {
     useRememberSystemAppearance(appearance)
 
     useEffect(function () {
-        void linkManager.updateDesktopPreferences(preferences)
-    }, [linkManager, preferences])
+        void linkManager.updateDesktopPreferences(preferences, resolved)
+    }, [linkManager, preferences, resolved])
 
     return <LinkManagerContext.Provider value={linkManager}>
 

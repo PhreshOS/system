@@ -541,10 +541,16 @@ export default class ClientProcessBoundary extends TheLink {
 
                 this.desktopPreferencesSubscriptions.add(subscription)
 
-                if (!this.stopDesktopPreferences) this.stopDesktopPreferences = this.authManager.linkManager.desktopPreferences.tunnel.subscribe("change", (preferences: unknown) => {
+                if (!this.stopDesktopPreferences) {
 
-                    this.deliver("host-desktop-preferences", "change", preferences).catch(() => undefined)
-                })
+                    const tunnel = this.authManager.linkManager.desktopPreferences.tunnel
+                    const stops = (["change", "changeResolved"] as const).map(event => tunnel.subscribe(event, (value: unknown) => {
+
+                        this.deliver("host-desktop-preferences", event, value).catch(() => undefined)
+                    }))
+
+                    this.stopDesktopPreferences = () => stops.forEach(stop => stop())
+                }
 
             }
 
@@ -1308,7 +1314,7 @@ type SystemSubscriptionTarget =
 
 function desktopPreferencesSubscription(subscription: EndpointSubscription) {
 
-    return subscription.kind === "publish" && subscription.route === "host-desktop-preferences" && (subscription.event === null || subscription.event === "change")
+    return subscription.kind === "publish" && subscription.route === "host-desktop-preferences" && (subscription.event === null || subscription.event === "change" || subscription.event === "changeResolved")
 }
 
 function appearanceSubscription(subscription: EndpointSubscription) {
