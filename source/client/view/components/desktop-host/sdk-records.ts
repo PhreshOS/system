@@ -25,6 +25,14 @@ export function sdkProgram(program: SdkProgramSource & { permissions: Permission
 
         description: program.description,
 
+        categories: program.categories,
+
+        keywords: program.keywords,
+
+        opens: program.opens,
+
+        declaredPermissions: program.declaredPermissions,
+
         hasAgent: program.hasAgent,
 
         server: program.server,

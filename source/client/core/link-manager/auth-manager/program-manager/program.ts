@@ -33,6 +33,8 @@ export default class Program {
 
     public readonly keywords: readonly string[]
 
+    public readonly declaredPermissions: ProgramRecord["declaredPermissions"]
+
     public readonly hasAgent: boolean
 
     public readonly server: ProgramRecord["server"]
@@ -69,6 +71,8 @@ export default class Program {
         this.categories = payload.categories
 
         this.keywords = payload.keywords
+
+        this.declaredPermissions = payload.declaredPermissions
 
         this.hasAgent = payload.hasAgent
 

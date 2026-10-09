@@ -213,6 +213,9 @@ export default class Program {
 
             opens: this.config.opens ?? [],
 
+            // Canonical, as effective permissions are: a whole permission is an empty list.
+            declaredPermissions: this.declaredPermissions,
+
             hasAgent: this.agentPath !== null,
 
             server: server && {

@@ -17,7 +17,7 @@ function fixture() {
     let permissions: Permissions = {}
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
         identity: "owner", reference: "program-reference", assetId: "assets", name: "Owner",
-        version: "0.0.0", description: null, hasAgent: false, server: null,
+        version: "0.0.0", description: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false, server: null,
         client: { sandbox: true, start: true, service: false, title: null, header: null, size: null, position: null, layer: "over", minimize: null, maximize: null },
         get permissions() { return permissions }
     }
