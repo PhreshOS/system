@@ -254,14 +254,6 @@ export default class AuthManager extends TheLink {
         await this.openingManager.open(target, { process: held, endpoint: "client" })
     }
 
-    @Subscribe("/opening/opened")
-    protected openedForClient(process: unknown) {
-
-        if (typeof process !== "string") throw new Error("An opened read is invalid")
-
-        return this.processManager.processes.get(process)?.opened ?? null
-    }
-
     /** The owner opens something from outside, such as a Node script. */
     @Subscribe("/open")
     protected async openForOwner(target: unknown) {

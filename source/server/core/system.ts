@@ -443,6 +443,7 @@ export default class System {
             }),
             parent,
             options: Object.freeze({ ...process.options }),
+            opened: process.opened,
             startedAt: process.startedAt.toISOString(),
             server: Object.freeze({ declared: owner.server !== null, running: process.server !== null, service: process.server?.service ?? false }),
             client: Object.freeze({ declared: owner.client !== null, running: process.client !== null, service: process.client?.service ?? false })

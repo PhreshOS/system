@@ -154,12 +154,6 @@ export default class AuthManager extends TheLink {
         await this.$outbound.publishFirst("/opening/open", process, target)
     }
 
-    /** What a Client's Process was started to open, or null. */
-    public async opened(process: string) {
-
-        return await this.$outbound.publishFirst("/opening/opened", process)
-    }
-
     public disconnect() {
 
         this.disconnectFrom(this.linkManager, "/auth")

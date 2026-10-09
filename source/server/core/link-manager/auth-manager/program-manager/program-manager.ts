@@ -1546,9 +1546,8 @@ export default class ProgramManager extends TheLink {
         // complete output and exit record.
         await this.authManager.processManager.register(identity, launch.name ?? null, program, options, resolved.intent, runtime, client !== null, shape, parent, {
             window: resolved.windowShape,
+            opened,
             prepare: record => {
-                // Known before either Endpoint runs, so its first read already has it.
-                record.opened = opened
                 record.onServerStart(server => server.onOutput((stream, text) => logs.printed(identity, stream === "err" ? "stderr" : "stdout", text)))
                 record.onServerStop((code, signal) => logs.endpointExited(identity, "server", code, signal))
                 record.onClientStop(() => logs.endpointExited(identity, "client", null, null))

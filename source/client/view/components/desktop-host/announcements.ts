@@ -1,3 +1,4 @@
+import type { OpenTarget } from "@phreshos/core"
 import { type default as AuthManager } from "@client/core/link-manager/auth-manager/auth-manager"
 import { type ProgramRecord } from "@server/core/link-manager/auth-manager/program-manager/entry"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
@@ -316,6 +317,7 @@ type HostedProcessRecord = {
     startedAt: Date
     name: string | null
     options: Record<string, string>
+    opened: OpenTarget | null
     server: { ready: boolean, service: boolean } | null
     client: { service: boolean } | null
 }

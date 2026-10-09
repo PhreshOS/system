@@ -34,7 +34,8 @@ import {
     type ServiceAddress,
     type WindowGeometry,
     type WindowLayer,
-    type WindowState
+    type WindowState,
+    type OpenTarget
 } from "@phreshos/core"
 import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/window-layers"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
@@ -1114,7 +1115,9 @@ export default class ProcessManager extends TheLink {
 
             this.hostTraffic,
 
-            window
+            window,
+
+            registration?.opened ?? null
         )
 
         this.processes.set(identity, process)
@@ -3507,6 +3510,9 @@ interface ProcessRegistration {
 
     /** Client Endpoint-owned Window created even when its execution context starts stopped. */
     window?: Shape | null
+
+    /** What the Process is started to open, through `system.open()`. */
+    opened?: OpenTarget | null
 
     /** Attach observers before either Endpoint can emit output or exit. */
     prepare?: (process: Process) => void

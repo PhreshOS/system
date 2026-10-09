@@ -94,10 +94,10 @@ export default class Process {
 
     private exitProcess: (() => Promise<unknown>) | null = null
 
-    /** What this Process was started to open, set before either Endpoint runs; `null` when it was not. */
-    public opened: OpenTarget | null = null
+    /** What this Process was started to open; `null` when it was not. Part of its launch, as its options are. */
+    public readonly opened: OpenTarget | null
 
-    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, window: Window | null = null) {
+    public constructor(identity: string, name: string | null, program: Program, options: Options, launch: ProcessLaunch, parent: Process | null, hostTraffic: HostTraffic, window: Window | null = null, opened: OpenTarget | null = null) {
 
         this.identity = identity
 
@@ -106,6 +106,8 @@ export default class Process {
         this.program = program
 
         this.options = options
+
+        this.opened = opened
 
         this.launch = launch
 
@@ -302,6 +304,8 @@ export default class Process {
             program: this.program.identity,
 
             options: this.options,
+
+            opened: this.opened,
 
             startedAt: this.startedAt,
 

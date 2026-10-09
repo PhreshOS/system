@@ -58,6 +58,8 @@ export function sdkProcess(process: SdkProcessSource, program: SdkProgramSource 
 
         options: process.options,
 
+        opened: process.opened,
+
         startedAt: process.startedAt,
 
         server: process.server ? { service: process.server.service } : null,

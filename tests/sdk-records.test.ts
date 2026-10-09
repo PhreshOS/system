@@ -12,9 +12,11 @@ test("Desktop preserves Endpoint service roles in SDK snapshots", () => {
     for (const client of [null, { service: false }, { service: true }]) {
       const source: SdkProcessSource = {
         identity: "process-identity", reference: "process-reference", program: program.identity,
-        name: null, options: { language: "en" }, startedAt: new Date(0), server, client
+        name: null, options: { language: "en" }, opened: { type: "text/markdown", uri: "file:///notes.md" }, startedAt: new Date(0), server, client
       }
       const snapshot = parseProcessSnapshot(sdkProcess(source, program))
+      // What it was started to open crosses the boundary with it.
+      expect(snapshot.opened).toEqual(source.opened)
       expect(snapshot.server).toEqual(server)
       expect(snapshot.client).toEqual(client)
     }

@@ -1,3 +1,4 @@
+import type { OpenTarget } from "@phreshos/core"
 import { ProcessSnapshot } from "@server/core/link-manager/auth-manager/process-manager/process"
 import ProcessManager from "./process-manager"
 import ClientState from "./client-state"
@@ -40,6 +41,9 @@ export default class Process {
     // What its launch said, carried for its whole life.
     public readonly options: Record<string, string>
 
+    // What it was started to open, carried for its whole life too.
+    public readonly opened: OpenTarget | null
+
     public constructor(processManager: ProcessManager, payload: ProcessSnapshot) {
 
         this.processManager = processManager
@@ -65,6 +69,8 @@ export default class Process {
         this.parent = payload.parent
 
         this.options = payload.options
+
+        this.opened = payload.opened
 
     }
 
@@ -128,6 +134,8 @@ export interface ProcessLineage {
     readonly program: string
 
     readonly options: Record<string, string>
+
+    readonly opened: OpenTarget | null
 
     readonly startedAt: Date
 
