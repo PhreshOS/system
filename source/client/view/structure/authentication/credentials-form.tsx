@@ -8,7 +8,7 @@ import { useId, useLayoutEffect, useRef, useState, type SyntheticEvent } from "r
 import { useRequirement } from "@libs/readiness"
 import { logoRequirement } from "../readiness-requirements"
 import logo from "@/assets/logo.png"
-import { name, version } from "@/source/identity"
+import { name, release, version } from "@/source/identity"
 
 /**
  * The common username-and-password welcome for sign-up and sign-in: the first thing a System shows.
@@ -174,9 +174,9 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
                     >{pending ? `${submitLabel}…` : submitLabel}</Button>
 
-                    <Text size="small" tone="secondary" className="text-center select-none tabular-nums" aria-label={`${name} version ${version}`}>
+                    <Text size="small" tone="secondary" className="text-center select-none tabular-nums" aria-label={`${name} version ${version}, ${release.name}`}>
 
-                        {name} {version}
+                        {name} {version} · {release.name}
 
                     </Text>
 
