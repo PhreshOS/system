@@ -414,7 +414,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         const contacts = windowEdgeContacts(presented.current.position, presented.current.size, paintSurfaceSize, origin, cellShift.get())
 
-        let carried: WindowSides = edge !== null ? sidesOf(edge) : absolute ? allWindowSides : noWindowSides
+        let carried: WindowSides = edge !== null ? sidesOf(edge) : maximized ? noWindowSides : allWindowSides
 
         let insets = gestureInsets()
 
@@ -451,10 +451,11 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         if (geometryAnimation) onPresentationAnimationComplete?.("geometry", geometryAnimation.revision)
 
-        // Pulling a Window placed by shares of the view (maximized or snapped) out of its place belongs
-        // to dragging it alone. An edge is a hand asking for a different size, and the Window keeps
-        // whatever of its place that edge does not touch.
-        let restoring = !absolute && edge === null
+        // Only a maximized Window waits for the hand to mean it: pulled out, it returns to its
+        // floating size. Any other Window, placed in pixels or by shares of the view, keeps its size
+        // and follows the hand at once. An edge is a hand asking for a different size, and the
+        // Window keeps whatever of its place that edge does not touch.
+        let restoring = maximized && edge === null
 
         let moved = false
 
@@ -554,17 +555,15 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 const ratio = Math.min(Math.max((pointerX - origin.x) / origin.width, 0), 1)
 
-                const restoringMaximized = maximized
+                const stored = resolvePresentedGeometry(position, size, bounds)
 
-                if (restoringMaximized) {
-                    const stored = resolvePresentedGeometry(position, size, bounds)
-                    origin = { ...origin, width: stored.width, height: stored.height }
-                    carried = allWindowSides
-                    insets = contactInsets(noWindowSides, paintInset, paintMargins)
-                    request(() => onMaximize?.())
-                }
+                origin = { ...origin, width: stored.width, height: stored.height }
 
-                else carry(allWindowSides)
+                carried = allWindowSides
+
+                insets = contactInsets(noWindowSides, paintInset, paintMargins)
+
+                request(() => onMaximize?.())
 
                 origin = { x: pointerX - origin.width * ratio, y: pointerY - Math.min(Math.max(pointerY - origin.y, 0), 40), width: origin.width, height: origin.height }
 
@@ -578,9 +577,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 request(() => latest.current.onMove?.(floating.x, floating.y))
 
-                if (restoringMaximized) geometryMotion.restoreGesture(current)
+                geometryMotion.restoreGesture(current)
 
-                else geometryMotion.updateGesture(current)
                 setGesture({ origin, current, zone, shown, blocked, insets })
 
                 return
@@ -640,8 +638,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
             if (renderFrame) cancelAnimationFrame(renderFrame)
 
-            // A tiled press that never crossed the threshold changed
-            // nothing: the render returns to the tile it never left.
+            // A press on a maximized Window that never crossed the
+            // threshold changed nothing: it stays maximized.
             if (restoring) {
 
                 geometryMotion.finishGesture(undefined, revision)
