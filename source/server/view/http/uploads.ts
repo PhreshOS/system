@@ -157,7 +157,7 @@ export default function (application: Application) {
 
     const uploaded = serveStatic({ root: application.uploads.fileManager.path, rewriteRequestPath: path => path.slice(doors.uploads.length + 1) })
 
-    const kept = serveStatic({ root: application.uploads.systemPath, rewriteRequestPath: path => application.uploads.systemFile(path.slice(doors.uploads.length + 1)) })
+    const kept = serveStatic({ rewriteRequestPath: path => application.uploads.path(path.slice(doors.uploads.length + 1)) })
 
     uploads.use("/:file", (context, next) => (isSystemUploadFile(context.req.param("file")) ? kept : uploaded)(context, next))
 

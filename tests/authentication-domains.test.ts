@@ -10,7 +10,7 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
     const application = await Application.initialize(
         home,
         { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") },
-        join(home, "wallpapers")
+        {}
     )
     const link = new TheLink()
     const connection = application.linkManager.addConnection(link, "Chrome on macOS")

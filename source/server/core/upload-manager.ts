@@ -1,14 +1,16 @@
-import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs"
+import { createReadStream, createWriteStream, lstatSync, mkdirSync } from "node:fs"
 import FileManager from "@libs/file-manager"
 import { rename, rm } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
 import { Readable } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { type ReadableStream as NodeReadableStream } from "node:stream/web"
-import { join } from "node:path"
 import { isSystemUploadFile, isUploadFile, type FileStat } from "@phreshos/core"
 
 export const uploadLimit = 1024 * 1024 * 1024
+
+/** The path of the file behind each upload key the System keeps. */
+export type SystemFiles = Readonly<Record<string, string>>
 
 export class MissingUploadValueError extends Error {
 
@@ -35,37 +37,25 @@ export class UploadTooLargeError extends Error {
  * interruption and refusal remove the temporary file.
  *
  * The keys the System keeps for its own wallpapers read the files it comes
- * with instead, so each release shows its own pictures behind them. Each
- * such file is named by its key, with the extension of its format.
+ * with instead, so each release shows its own pictures behind them.
  */
 export default class UploadManager {
 
     public readonly fileManager: FileManager
 
-    private readonly systemFiles: ReadonlyMap<string, string>
-
-    public constructor(fileManager: FileManager, public readonly systemPath: string) {
+    /** `systemFiles` holds the file behind each key the System keeps. */
+    public constructor(fileManager: FileManager, private readonly systemFiles: SystemFiles) {
 
         this.fileManager = fileManager
 
         mkdirSync(fileManager.path, { recursive: true })
-
-        const named = existsSync(systemPath) ? readdirSync(systemPath) : []
-
-        this.systemFiles = new Map(named.map(name => [name.replace(/\.[^.]+$/, ""), name]))
-    }
-
-    /** The file the System comes with behind one of its own keys, by its name in `systemPath`. */
-    public systemFile(file: string) {
-
-        return this.systemFiles.get(file) ?? file
     }
 
     public path(file: string) {
 
         if (!isUploadFile(file)) throw new Error("That is not an upload file")
 
-        return isSystemUploadFile(file) ? join(this.systemPath, this.systemFile(file)) : this.fileManager.join(file)
+        return (isSystemUploadFile(file) ? this.systemFiles[file] : undefined) ?? this.fileManager.join(file)
     }
 
     public async write(extension: string, content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {

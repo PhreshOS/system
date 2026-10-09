@@ -12,7 +12,15 @@ import uploads from "./http/uploads"
 import link from "./http/link"
 import cfonts from "cfonts"
 import { Hono } from "hono"
-import { resolve } from "node:path"
+import { fileURLToPath } from "node:url"
+import { join } from "node:path"
+import { systemWallpapers } from "@phreshos/core"
+import logo from "@/assets/logo.png?url"
+import defaultIcon from "@/assets/default-icon.png?url"
+import signInLightWallpaper from "@/assets/wallpapers/SIGN_IN_LIGHT_WALLPAPER.webp?url"
+import signInDarkWallpaper from "@/assets/wallpapers/SIGN_IN_DARK_WALLPAPER.webp?url"
+import desktopLightWallpaper from "@/assets/wallpapers/DESKTOP_LIGHT_WALLPAPER.webp?url"
+import desktopDarkWallpaper from "@/assets/wallpapers/DESKTOP_DARK_WALLPAPER.webp?url"
 import { writeFile } from "node:fs/promises"
 import { styleText } from "node:util"
 import { listenOnPorts } from "./configuration"
@@ -29,7 +37,12 @@ export default async function (config: Config) {
         font: "simple"
     })
 
-    const application = await Application.initialize(config.home, { system: resolve("assets/logo.png"), defaultProgram: resolve("assets/default-icon.png") }, resolve("assets/wallpapers"))
+    const application = await Application.initialize(config.home, { system: assetFile(logo), defaultProgram: assetFile(defaultIcon) }, {
+        [systemWallpapers.light.signIn]: assetFile(signInLightWallpaper),
+        [systemWallpapers.dark.signIn]: assetFile(signInDarkWallpaper),
+        [systemWallpapers.light.desktop]: assetFile(desktopLightWallpaper),
+        [systemWallpapers.dark.desktop]: assetFile(desktopDarkWallpaper)
+    })
 
     // One server, five doors, each at its own name. A program's client
     // is still not the API — it is files a browser reads, with no link,
@@ -65,7 +78,7 @@ export default async function (config: Config) {
 
     const origin = `http://localhost:${port}`
 
-    await writeFile(resolve(application.storage.path, "desktop"), `${origin}\n`, { mode: 0o600 })
+    await writeFile(join(application.storage.path, "desktop"), `${origin}\n`, { mode: 0o600 })
 
     const localGateway = await gateway(application.linkManager, gatewayAddress(application.storage.path))
 
@@ -89,4 +102,13 @@ export interface Config {
 
     /** Ordered public port candidates. Omit to let the operating system assign one. */
     ports?: readonly number[]
+}
+
+/**
+ * The file on disk behind a `?url` import. Vite addresses it under `/@fs/` in development, and
+ * beside the built server once built.
+ */
+function assetFile(url: string) {
+
+    return url.startsWith("/@fs/") ? url.slice("/@fs".length) : fileURLToPath(new URL(`.${url}`, import.meta.url))
 }

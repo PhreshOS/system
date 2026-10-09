@@ -6,8 +6,9 @@ import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
 import { mkdtemp, rm, truncate, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { join } from "node:path"
 import { test } from "vitest"
+import { systemFiles } from "./system-files"
 import { randomUUID } from "node:crypto"
 
 test("appearance contract", async () => {
@@ -32,7 +33,7 @@ test("appearance contract", async () => {
 
   const store = new Keyv()
   const directory = await mkdtemp(join(tmpdir(), "phresh-appearance-"))
-  const uploads = new UploadManager(new FileManager(directory), resolve("assets/wallpapers"))
+  const uploads = new UploadManager(new FileManager(directory), systemFiles)
   const manager = await AppearanceManager.open(store, uploads)
 
   assert.deepEqual(manager.value, defaultAppearance)

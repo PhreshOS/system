@@ -21,6 +21,9 @@ export default defineConfig({
     },
     build: {
         ssr: true,
+        // The files the server reads, imported with `?url`, are carried beside it, never inlined.
+        ssrEmitAssets: true,
+        assetsInlineLimit: 0,
         emptyOutDir: true,
         outDir: resolve(import.meta.dirname, "dist/server"),
         rolldownOptions: {

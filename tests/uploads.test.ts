@@ -8,10 +8,11 @@ import uploadView from "@server/view/http/uploads"
 import type Application from "@server/core/application"
 import { Hono } from "hono"
 import { test } from "vitest"
+import { systemFiles } from "./system-files"
 
 test("uploads contract", async () => {
   const directory = await mkdtemp(resolve(".verify-uploads-"))
-  const uploads = new UploadManager(new FileManager(directory), resolve("assets/wallpapers"))
+  const uploads = new UploadManager(new FileManager(directory), systemFiles)
 
   try {
       const file = await uploads.write("txt", new Blob(["hello uploads"]).stream())

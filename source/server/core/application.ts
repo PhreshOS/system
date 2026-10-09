@@ -1,7 +1,7 @@
 import LinkManager from "./link-manager/link-manager"
 import Authentication from "./authentication/authentication"
 import FileManager from "@libs/file-manager"
-import UploadManager from "./upload-manager"
+import UploadManager, { type SystemFiles } from "./upload-manager"
 import AppearanceManager from "./appearance-manager"
 import openStore from "./open-store"
 import Keyv from "keyv"
@@ -66,8 +66,8 @@ export default class Application {
         this.system = new System(this)
     }
 
-    /** `wallpapers` is the directory of the wallpapers the System comes with, named by their upload keys. */
-    public static async initialize(homePath: string, icons: ApplicationIcons, wallpapers: string) {
+    /** `wallpapers` holds the file behind each upload key the System keeps for its own wallpapers. */
+    public static async initialize(homePath: string, icons: ApplicationIcons, wallpapers: SystemFiles) {
 
         const storage = new FileManager(homePath)
 

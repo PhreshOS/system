@@ -43,16 +43,20 @@ test("distribution contract", async () => {
     for (const required of [
       "package.json",
       "server/main.js",
-      "client/index.html",
-      "assets/default-icon.png",
-      "assets/logo.png"
+      "client/index.html"
     ]) {
       assert(paths.has(required), `the distribution has no ${required}`)
+    }
+
+    // The files the server reads travel inside its build, under content-hashed names.
+    for (const name of ["logo", "default-icon", "SIGN_IN_LIGHT_WALLPAPER", "SIGN_IN_DARK_WALLPAPER", "DESKTOP_LIGHT_WALLPAPER", "DESKTOP_DARK_WALLPAPER"]) {
+      assert([...paths].some(path => path.startsWith(`server/assets/${name}-`)), `the server build carries no ${name}`)
     }
 
     for (const path of paths) {
       assert(!path.startsWith("source/"), `TypeScript source entered the distribution: ${path}`)
       assert(!path.startsWith("storage/"), `runtime storage entered the distribution: ${path}`)
+      assert(!path.startsWith("assets/"), `a source asset entered the distribution beside the build: ${path}`)
       assert(!path.startsWith("node_modules/"), `development dependencies entered the distribution: ${path}`)
       assert(!path.startsWith(".git"), `repository state entered the distribution: ${path}`)
     }
@@ -125,6 +129,10 @@ test("distribution contract", async () => {
     runtime.stderr.on("data", data => output.push(data.toString()))
 
     await waitForDesktop(port, runtime, output)
+
+    const wallpaper = await fetch(`http://localhost:${port}/uploads/DESKTOP_LIGHT_WALLPAPER`)
+    assert.equal(wallpaper.status, 200, output.join(""))
+    assert.equal(wallpaper.headers.get("content-type"), "image/webp")
   }
 
   async function waitForDesktop(port, child, output) {
