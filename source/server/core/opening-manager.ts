@@ -1,20 +1,20 @@
 import { TheLink } from "@the-link/core"
 import { Subscribe } from "@the-link/core/decorators"
-import { opensType, parseOpenTarget, type OpenRequestSnapshot, type OpenTarget } from "@phreshos/core"
+import { opensType, parseOpenTarget, parseOpenType, type OpenRequestSnapshot, type OpenTarget } from "@phreshos/core"
 import shortIdentity from "@libs/short-identity"
 import type AuthManager from "./link-manager/auth-manager/auth-manager"
 import type Process from "./link-manager/auth-manager/process-manager/process"
 import { endpointReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 
-/** Where the default Program of each media type is kept. */
+/** Where the default Program of each media type and family is kept. */
 const defaultsKey = "opening-defaults"
 
 /** How long a request waits for the owner to choose before it ends with nothing opened. */
 export const openRequestTimeout = 120_000
 
 /**
- * Opening: something to open goes to its type's default Program, or waits as a request until the
- * owner chooses one. The System only records requests and choices; how a request is shown is up to the
+ * Opening: something to open goes to its type's default Program, else its family's (`image/*`), or
+ * waits as a request until the owner chooses one. The System only records requests and choices; how a request is shown is up to the
  * Shell.
  */
 export default class OpeningManager extends TheLink {
@@ -38,7 +38,7 @@ export default class OpeningManager extends TheLink {
         return this.pendingRequests.has(identity)
     }
 
-    /** The installed Programs that open this exact type, by identity. */
+    /** The installed Programs that open this exact type, or all of this family, by identity. */
     public programsFor(type: string): string[] {
 
         return [...this.authManager.programManager.programs.values()]
@@ -58,9 +58,12 @@ export default class OpeningManager extends TheLink {
 
         if (!programs.length) throw new Error(`No Program opens ${target.type}`)
 
-        const chosen = (await this.chosen())[target.type]
+        // The exact type's default is the stronger choice; its family's applies only without one.
+        const defaults = await this.chosen()
+        const chosen = [defaults[target.type], defaults[`${target.type.slice(0, target.type.indexOf("/"))}/*`]]
+            .find(program => program !== undefined && programs.includes(program))
 
-        if (chosen && programs.includes(chosen)) {
+        if (chosen) {
             await this.launch(chosen, target)
             return
         }
@@ -143,7 +146,7 @@ export default class OpeningManager extends TheLink {
         }
     }
 
-    /** The default Program of each media type, as the Programs themselves; one no longer known is left out. */
+    /** The default Program of each media type and family, as the Programs themselves; one no longer known is left out. */
     @Subscribe("/defaults")
     public async defaults() {
 
@@ -152,7 +155,7 @@ export default class OpeningManager extends TheLink {
             .map(([type, program]) => [type, this.record(program)]))
     }
 
-    /** The default Program of each media type, by identity, as stored. */
+    /** The default Program of each media type and family, by identity, as stored. */
     private async chosen(): Promise<Readonly<Record<string, string>>> {
 
         const stored = await this.store.get(defaultsKey) ?? {}
@@ -167,22 +170,40 @@ export default class OpeningManager extends TheLink {
     @Subscribe("/set-default")
     public async setDefault(type: unknown, program: unknown) {
 
-        const target = parseOpenTarget({ type, uri: "about:blank" })
+        const kept = parseOpenType(type)
 
-        if (typeof program !== "string" || !this.programsFor(target.type).includes(program)) {
-            throw new Error(`That Program does not open ${target.type}`)
+        if (typeof program !== "string" || !this.programsFor(kept).includes(program)) {
+            throw new Error(`That Program does not open ${kept}`)
         }
 
-        await this.store.set(defaultsKey, { ...await this.chosen(), [target.type]: program })
+        const defaults = await this.chosen()
+
+        if (defaults[kept] === program) return
+
+        await this.store.set(defaultsKey, { ...defaults, [kept]: program })
+        await this.announceDefault(kept, program)
     }
 
     @Subscribe("/clear-default")
     public async clearDefault(type: unknown) {
 
-        const target = parseOpenTarget({ type, uri: "about:blank" })
-        const { [target.type]: _cleared, ...kept } = await this.chosen()
+        const cleared = parseOpenType(type)
+        const { [cleared]: previous, ...kept } = await this.chosen()
+
+        if (previous === undefined) return
 
         await this.store.set(defaultsKey, kept)
+        await this.announceDefault(cleared, null)
+    }
+
+    private async announceDefault(type: string, program: string | null) {
+
+        const record = program === null ? null : this.record(program)
+
+        await Promise.all([
+            this.authManager.processManager.announceHost("opening", null, "changeDefault", "system", type, record).catch(() => undefined),
+            this.$outbound.publish("/default-change", type, record).catch(() => undefined)
+        ])
     }
 
     /** What every Endpoint may know of a Program it is offered: its public record. */

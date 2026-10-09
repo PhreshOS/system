@@ -236,6 +236,11 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
         postVisible(access => access.all(), "host-opening", "resolve", "system", request, program)
     }, [postVisible]))
 
+    opening.useSubscribe("/default-change", useCallback((type: unknown, program: unknown) => {
+
+        postVisible(access => access.all(), "host-opening", "changeDefault", "system", type, program)
+    }, [postVisible]))
+
     permissions.useSubscribe("/request", useCallback((request: unknown) => {
 
         const program = permissionProgram(request)

@@ -15,7 +15,8 @@ function fixture() {
         },
         processManager: { announceHost: vi.fn(async () => undefined) }
     }) as unknown as AuthManager
-    return { manager: new OpeningManager(auth), open, stored }
+    const announceHost = (auth as unknown as { processManager: { announceHost: ReturnType<typeof vi.fn> } }).processManager.announceHost
+    return { manager: new OpeningManager(auth), open, stored, announceHost }
 }
 
 const png = { type: "image/png", uri: "file:///home/me/a.png" }
@@ -44,6 +45,36 @@ test("a default Program opens it at once, with no request", async () => {
 
     expect(open).toHaveBeenCalledWith(expect.objectContaining({ identity: "paint" }), png)
     expect(manager.requests()).toEqual([])
+})
+
+test("a family's default opens every type in it, and an exact type's default wins over it", async () => {
+    const { manager, open, stored } = fixture()
+    stored.set("opening-defaults", { "image/*": "preview" })
+
+    await manager.open({ type: "image/jpeg", uri: "file:///a.jpg" }, null)
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), { type: "image/jpeg", uri: "file:///a.jpg" })
+
+    stored.set("opening-defaults", { "image/*": "preview", "image/png": "paint" })
+    await manager.open(png, null)
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png)
+    expect(manager.requests()).toEqual([])
+})
+
+test("a family's default needs a Program that opens all of it, and each change is announced once", async () => {
+    const { manager, announceHost } = fixture()
+
+    await expect(manager.setDefault("image/*", "paint")).rejects.toThrow(/does not open image\/\*/)
+    await expect(manager.setDefault("*/*", "preview")).rejects.toThrow(/family/)
+
+    await manager.setDefault("Image/*", "preview")
+    await manager.setDefault("image/*", "preview")
+    await manager.clearDefault("image/*")
+    await manager.clearDefault("image/*")
+
+    expect(announceHost.mock.calls.filter(([, , event]) => event === "changeDefault").map(([, , , , type, program]) => [type, program])).toEqual([
+        ["image/*", { identity: "preview" }],
+        ["image/*", null]
+    ])
 })
 
 test("without a default, a request waits; choosing always opens it and makes the default", async () => {
