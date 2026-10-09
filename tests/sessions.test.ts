@@ -17,7 +17,7 @@ afterEach(async () => {
 describe("Session persistence and connection-bound lifetime", () => {
     test("persists only a token hash and resolves the Client-owned token", async () => {
         const { sessions, store } = await fixture()
-        const created = await sessions.create()
+        const created = await sessions.create("Chrome on macOS")
         const hash = createHash("sha256").update(created.token).digest("base64url")
 
         expect(created.identity).not.toBe(created.token)
@@ -29,6 +29,7 @@ describe("Session persistence and connection-bound lifetime", () => {
         expect(await store.get(`authentication:sessions:${hash}`)).toEqual({
             identity: created.identity,
             createdAt: expect.any(Number),
+            device: "Chrome on macOS",
             disconnectedAt: expect.any(Number)
         })
         expect(await store.get(`authentication:sessions:${created.token}`)).toBeUndefined()
@@ -40,7 +41,7 @@ describe("Session persistence and connection-bound lifetime", () => {
         vi.useFakeTimers()
         vi.setSystemTime(new Date("2026-01-01T00:00:00Z"))
         const { sessions, store } = await fixture()
-        const created = await sessions.create()
+        const created = await sessions.create("Chrome on macOS")
 
         await sessions.attach(created.identity)
         await sessions.expose(created.identity)
@@ -52,6 +53,7 @@ describe("Session persistence and connection-bound lifetime", () => {
         expect(await persisted(store, created.token)).toEqual({
             identity: created.identity,
             createdAt: expect.any(Number),
+            device: "Chrome on macOS",
             disconnectedAt: null
         })
 
@@ -68,21 +70,21 @@ describe("Session persistence and connection-bound lifetime", () => {
         vi.useFakeTimers()
         vi.setSystemTime(new Date("2026-01-01T00:00:00Z"))
         const { sessions, store } = await fixture()
-        const created = await sessions.create()
+        const created = await sessions.create("Chrome on macOS")
         await sessions.expose(created.identity)
         await sessions.attach(created.identity)
 
         vi.setSystemTime(new Date("2026-01-01T01:00:00Z"))
-        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), lastActiveAt: new Date("2026-01-01T01:00:00Z") })
+        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), device: "Chrome on macOS", lastActiveAt: new Date("2026-01-01T01:00:00Z") })
 
         await sessions.detach(created.identity)
         vi.setSystemTime(new Date("2026-01-01T02:00:00Z"))
-        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), lastActiveAt: new Date("2026-01-01T01:00:00Z") })
+        expect(sessions.describe(created.identity)).toEqual({ createdAt: new Date("2026-01-01T00:00:00Z"), device: "Chrome on macOS", lastActiveAt: new Date("2026-01-01T01:00:00Z") })
 
         await store.disconnect()
     })
 
-    test("a stored Session without its sign-in time is removed when the System opens", async () => {
+    test("a stored Session without its sign-in time or device is removed when the System opens", async () => {
         const { store } = await fixture()
         await store.set("authentication:sessions:old-hash", { identity: "old", disconnectedAt: Date.now() })
 
@@ -95,9 +97,9 @@ describe("Session persistence and connection-bound lifetime", () => {
 
     test("removes an explicitly signed-out Session", async () => {
         const { sessions, store } = await fixture()
-        const created = await sessions.create()
+        const created = await sessions.create("Chrome on macOS")
 
-        expect(await sessions.remove(created.identity)).toBeInstanceOf(Date)
+        expect(await sessions.remove(created.identity)).toEqual({ createdAt: expect.any(Date), device: "Chrome on macOS" })
         expect(sessions.find(created.identity)).toBeNull()
         expect(sessions.resolve(created.token)).toBeNull()
 

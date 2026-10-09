@@ -14,7 +14,7 @@ export default class Sessions {
 
     private readonly hashes = new Map<string, StoredSession>()
 
-    private readonly expirationListeners = new Set<(identity: string, createdAt: Date) => void>()
+    private readonly expirationListeners = new Set<(identity: string, record: SessionRecord) => void>()
 
     private constructor(private readonly store: Keyv) {}
 
@@ -32,8 +32,8 @@ export default class Sessions {
 
             const record = parse(value, hash)
 
-            // A Session stored without its sign-in time is not one this System can describe; the
-            // owner signs in again.
+            // A Session stored without its sign-in time and device is not one this System can
+            // describe; the owner signs in again.
             if (!record || sessions.expired(record, Date.now())) {
 
                 await store.delete(key)
@@ -48,8 +48,8 @@ export default class Sessions {
         return sessions
     }
 
-    /** Creates one Session and returns the raw token exactly once. */
-    public async create(): Promise<CreatedSession> {
+    /** Creates one Session for the device it signs in from, and returns the raw token exactly once. */
+    public async create(device: string | null): Promise<CreatedSession> {
 
         await this.prune()
 
@@ -64,6 +64,8 @@ export default class Sessions {
             exposed: false,
 
             createdAt: Date.now(),
+
+            device,
 
             disconnectedAt: Date.now(),
 
@@ -127,7 +129,10 @@ export default class Sessions {
 
         if (!record) return null
 
-        return { createdAt: new Date(record.createdAt), lastActiveAt: new Date(record.connections > 0 ? Date.now() : record.disconnectedAt ?? Date.now()) }
+        return {
+            ...recordOf(record),
+            lastActiveAt: new Date(record.connections > 0 ? Date.now() : record.disconnectedAt ?? Date.now())
+        }
     }
 
     /** Whether one Session still exists and can authorize a Connection. */
@@ -147,7 +152,7 @@ export default class Sessions {
     }
 
     /** Observes browser Sessions removed by disconnected-lifetime expiration. */
-    public onExpire(listener: (identity: string, createdAt: Date) => void) {
+    public onExpire(listener: (identity: string, record: SessionRecord) => void) {
 
         this.expirationListeners.add(listener)
 
@@ -182,7 +187,7 @@ export default class Sessions {
         await this.persist(record)
     }
 
-    /** Permanently removes one Session and returns when it signed in, or `null` when it was unknown. */
+    /** Permanently removes one Session and returns what described it, or `null` when it was unknown. */
     public async remove(identity: string) {
 
         const record = this.identities.get(identity)
@@ -193,7 +198,7 @@ export default class Sessions {
 
         await this.store.delete(this.key(record.hash))
 
-        return new Date(record.createdAt)
+        return recordOf(record)
     }
 
     private validRecord(record: StoredSession, now: number) {
@@ -239,6 +244,8 @@ export default class Sessions {
 
             createdAt: record.createdAt,
 
+            device: record.device,
+
             disconnectedAt: record.disconnectedAt
         })
     }
@@ -251,7 +258,7 @@ export default class Sessions {
 
     private expiredSession(record: StoredSession) {
 
-        for (const listener of this.expirationListeners) listener(record.identity, new Date(record.createdAt))
+        for (const listener of this.expirationListeners) listener(record.identity, recordOf(record))
     }
 
     private key(hash: string) { return storagePrefix + hash }
@@ -266,13 +273,15 @@ function parse(value: unknown, hash: string): StoredSession | null {
 
     if (!value || typeof value !== "object") throw new Error("An authentication Session is invalid")
 
-    const record = value as { identity?: unknown, createdAt?: unknown, disconnectedAt?: unknown }
+    const record = value as { identity?: unknown, createdAt?: unknown, device?: unknown, disconnectedAt?: unknown }
 
-    if (record.createdAt === undefined) return null
+    if (record.createdAt === undefined || record.device === undefined) return null
 
     if (typeof record.identity !== "string"
 
         || typeof record.createdAt !== "number" || !Number.isFinite(record.createdAt)
+
+        || record.device !== null && typeof record.device !== "string"
 
         || record.disconnectedAt !== null && (typeof record.disconnectedAt !== "number" || !Number.isFinite(record.disconnectedAt))) {
 
@@ -288,6 +297,8 @@ function parse(value: unknown, hash: string): StoredSession | null {
         exposed: true,
 
         createdAt: record.createdAt,
+
+        device: record.device,
 
         disconnectedAt: record.disconnectedAt,
 
@@ -305,9 +316,19 @@ interface StoredSession {
 
     createdAt: number
 
+    device: string | null
+
     disconnectedAt: number | null
 
     connections: number
+}
+
+/** What describes one Session, also after it ended. */
+export type SessionRecord = Readonly<{ createdAt: Date, device: string | null }>
+
+function recordOf(record: StoredSession): SessionRecord {
+
+    return { createdAt: new Date(record.createdAt), device: record.device }
 }
 
 export type CreatedSession = Readonly<{

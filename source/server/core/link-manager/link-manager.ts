@@ -34,27 +34,27 @@ export default class LinkManager extends TheLink {
 
         this.authManager = new AuthManager(this)
 
-        this.application.authentication.onSessionExpire((identity, createdAt) => {
+        this.application.authentication.onSessionExpire((identity, record) => {
 
-            this.announceSessionEnd(identity, createdAt, "expired").catch(() => undefined)
+            this.announceSessionEnd(identity, record, "expired").catch(() => undefined)
         })
     }
 
-    /** Creates an unclassified browser boundary. */
-    public addConnection(link: TheLink) {
+    /** Creates an unclassified browser boundary; `device` describes the browser that opened it. */
+    public addConnection(link: TheLink, device: string | null) {
 
-        return this.addBoundary(link, false)
+        return this.addBoundary(link, false, device)
     }
 
     /** Creates a trusted transport boundary excluded from the Connection domain. */
     public addExternalConnection(link: TheLink) {
 
-        return this.addBoundary(link, true)
+        return this.addBoundary(link, true, null)
     }
 
-    private addBoundary(link: TheLink, external: boolean) {
+    private addBoundary(link: TheLink, external: boolean, device: string | null) {
 
-        const connection = new LinkBoundary(this, link, external)
+        const connection = new LinkBoundary(this, link, external, device)
 
         this.boundaries.set(connection.identity, connection)
 
@@ -70,7 +70,7 @@ export default class LinkManager extends TheLink {
 
         if (connection.external) throw new Error("External boundaries do not own browser Sessions")
 
-        const created = await this.application.authentication.createSession()
+        const created = await this.application.authentication.createSession(connection.device)
 
         try {
 
@@ -226,10 +226,10 @@ export default class LinkManager extends TheLink {
 
         for (const connection of connections) connection.session = null
 
-        // Removal returns when it signed in, so the ended Session is still described as it was.
-        const createdAt = await this.application.authentication.removeSession(identity)
+        // Removal returns what described it, so the ended Session is still described as it was.
+        const record = await this.application.authentication.removeSession(identity)
 
-        if (!createdAt) throw new Error("Session not found")
+        if (!record) throw new Error("Session not found")
 
         await Promise.allSettled(connections.map(connection => connection.link.$outbound.publish("/session/signed-out")))
 
@@ -237,10 +237,10 @@ export default class LinkManager extends TheLink {
 
             await this.announceConnectionSession(connection, null)
 
-            await this.announceSessionConnection(identity, connection, false, createdAt)
+            await this.announceSessionConnection(identity, connection, false, record)
         }
 
-        await this.announceSessionEnd(identity, createdAt, "signedOut", connections)
+        await this.announceSessionEnd(identity, record, "signedOut", connections)
     }
 
     /** Ends the Sessions present at this operation's authoritative snapshot. */
@@ -356,7 +356,9 @@ export default class LinkManager extends TheLink {
 
             session: connection.session && this.application.authentication.sessionFind(connection.session),
 
-            connectedAt: connection.connectedAt
+            connectedAt: connection.connectedAt,
+
+            device: connection.device
         })
     }
 
@@ -376,10 +378,10 @@ export default class LinkManager extends TheLink {
     public sessionSnapshot(
         identity: string,
         valid = this.application.authentication.sessionFind(identity) !== null,
-        createdAt = this.sessionCreatedAt(identity)
+        record: SessionRecord = this.sessionRecord(identity)
     ): SessionSnapshot {
 
-        return Object.freeze({ identity, valid, createdAt })
+        return Object.freeze({ identity, valid, createdAt: record.createdAt, device: record.device })
     }
 
     /** What may change about one Session, also after it ended. */
@@ -390,13 +392,13 @@ export default class LinkManager extends TheLink {
         return Object.freeze({ valid, lastActiveAt: valid ? this.application.authentication.describeSession(identity)!.lastActiveAt : null })
     }
 
-    private sessionCreatedAt(identity: string) {
+    private sessionRecord(identity: string): SessionRecord {
 
         const described = this.application.authentication.describeSession(identity)
 
         if (!described) throw new Error("Session not found")
 
-        return described.createdAt
+        return described
     }
 
     private async expose(connection: LinkBoundary) {
@@ -472,9 +474,9 @@ export default class LinkManager extends TheLink {
         ])
     }
 
-    private async announceSessionConnection(identity: string, connection: LinkBoundary, attached: boolean, createdAt?: Date) {
+    private async announceSessionConnection(identity: string, connection: LinkBoundary, attached: boolean, record?: SessionRecord) {
 
-        const session = this.sessionSnapshot(identity, attached || this.application.authentication.sessionValid(identity), createdAt)
+        const session = this.sessionSnapshot(identity, attached || this.application.authentication.sessionValid(identity), record)
 
         const snapshot = this.connectionSnapshot(connection)
 
@@ -490,9 +492,9 @@ export default class LinkManager extends TheLink {
         ])
     }
 
-    private async announceSessionEnd(identity: string, createdAt: Date, reason: SessionEndReason, previousConnections: readonly LinkBoundary[] = []) {
+    private async announceSessionEnd(identity: string, record: SessionRecord, reason: SessionEndReason, previousConnections: readonly LinkBoundary[] = []) {
 
-        const session = this.sessionSnapshot(identity, false, createdAt)
+        const session = this.sessionSnapshot(identity, false, record)
 
         await Promise.all([
 
@@ -538,6 +540,9 @@ export interface LinkManagerSnapshot {
     appearance: ReturnType<Property<Appearance>["toJSON"]>
 }
 
+/** What describes one Session, also after it ended. */
+type SessionRecord = Readonly<{ createdAt: Date, device: string | null }>
+
 export type SignUpResponse = { signedUp: true } | { error: SignUpError }
 
 /** One internal Link boundary. Only browser boundaries enter the public Connection registry. */
@@ -564,7 +569,10 @@ export class LinkBoundary {
 
         public readonly link: TheLink,
 
-        public readonly external: boolean
+        public readonly external: boolean,
+
+        /** The browser and system that opened it, such as "Chrome on macOS". */
+        public readonly device: string | null
 
     ) {}
 

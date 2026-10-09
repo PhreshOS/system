@@ -1,7 +1,7 @@
 import { readFile, rename, rm, writeFile } from "node:fs/promises"
 import { randomBytes, randomUUID, scrypt as derive, timingSafeEqual } from "node:crypto"
 import { parseAuthenticationCredentials, type AuthenticationRequirements } from "@phreshos/core"
-import Sessions from "./sessions"
+import Sessions, { type SessionRecord } from "./sessions"
 import Keyv from "keyv"
 
 const parameters = {
@@ -194,9 +194,9 @@ export default class Authentication {
     }
 
     /** Creates a Session and returns its Client-owned raw token exactly once. */
-    public createSession() {
+    public createSession(device: string | null) {
 
-        return this.sessions.create()
+        return this.sessions.create(device)
     }
 
     /** Resolves one Client-owned raw token to a valid Session identity. */
@@ -224,7 +224,7 @@ export default class Authentication {
     }
 
     /** Observes browser Sessions removed by disconnected-lifetime expiration. */
-    public onSessionExpire(listener: (identity: string, createdAt: Date) => void) {
+    public onSessionExpire(listener: (identity: string, record: SessionRecord) => void) {
 
         return this.sessions.onExpire(listener)
     }

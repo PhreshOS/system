@@ -3,6 +3,7 @@ import { upgradeWebSocket } from "@hono/node-server"
 import Application from "@server/core/application"
 import { HttpServer } from "@the-link/http/server"
 import messagepack from "@the-link/messagepack"
+import deviceDescription from "@libs/device-description"
 
 export default function (application: Application, debugging: boolean) {
 
@@ -16,7 +17,7 @@ export default function (application: Application, debugging: boolean) {
 
     http.onSubscribe(function (socketLink) {
 
-        const connection = application.linkManager.addConnection(socketLink)
+        const connection = application.linkManager.addConnection(socketLink, deviceDescription(socketLink.request.headers.get("user-agent")))
 
         const stopForwarding = socketLink.$inbound.forwardTo(async function (event, responseUuid: string | null, ...values: unknown[]) {
 

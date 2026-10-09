@@ -12,9 +12,9 @@ test("browser Connections and Sessions form one authoritative lifecycle", async 
         { system: join(home, "logo.png"), defaultProgram: join(home, "icon.png") }
     )
     const link = new TheLink()
-    const connection = application.linkManager.addConnection(link)
+    const connection = application.linkManager.addConnection(link, "Chrome on macOS")
     const secondLink = new TheLink()
-    const secondConnection = application.linkManager.addConnection(secondLink)
+    const secondConnection = application.linkManager.addConnection(secondLink, null)
     let token: string | null = null
     let signedOut = 0
     const stopToken = link.$outbound.subscribe("/session/signed-in", value => {
