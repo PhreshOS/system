@@ -26,8 +26,8 @@ test("wallpaper source contract", () => {
     }
 
     // The System's own wallpapers are uploads like any other, each shown in its own place.
-    assert.match(render(systemWallpapers.dark.signIn, "signIn"), /src="\/uploads\/sign-in-dark\.webp"/)
-    assert.match(render(systemWallpapers.dark.desktop), /src="\/uploads\/desktop-dark\.webp"/)
+    assert.match(render(systemWallpapers.dark.signIn, "signIn"), /src="\/uploads\/SIGN_IN_DARK_WALLPAPER"/)
+    assert.match(render(systemWallpapers.dark.desktop), /src="\/uploads\/DESKTOP_DARK_WALLPAPER"/)
 
     const image = render("00000000-0000-0000-0000-000000000000.png")
     assert.match(image, /<img/)

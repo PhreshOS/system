@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, lstatSync, mkdirSync } from "node:fs"
+import { createReadStream, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs"
 import FileManager from "@libs/file-manager"
 import { rename, rm } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
@@ -35,24 +35,37 @@ export class UploadTooLargeError extends Error {
  * interruption and refusal remove the temporary file.
  *
  * The keys the System keeps for its own wallpapers read the files it comes
- * with instead, so each release shows its own pictures behind them.
+ * with instead, so each release shows its own pictures behind them. Each
+ * such file is named by its key, with the extension of its format.
  */
 export default class UploadManager {
 
     public readonly fileManager: FileManager
+
+    private readonly systemFiles: ReadonlyMap<string, string>
 
     public constructor(fileManager: FileManager, public readonly systemPath: string) {
 
         this.fileManager = fileManager
 
         mkdirSync(fileManager.path, { recursive: true })
+
+        const named = existsSync(systemPath) ? readdirSync(systemPath) : []
+
+        this.systemFiles = new Map(named.map(name => [name.replace(/\.[^.]+$/, ""), name]))
+    }
+
+    /** The file the System comes with behind one of its own keys, by its name in `systemPath`. */
+    public systemFile(file: string) {
+
+        return this.systemFiles.get(file) ?? file
     }
 
     public path(file: string) {
 
         if (!isUploadFile(file)) throw new Error("That is not an upload file")
 
-        return isSystemUploadFile(file) ? join(this.systemPath, file) : this.fileManager.join(file)
+        return isSystemUploadFile(file) ? join(this.systemPath, this.systemFile(file)) : this.fileManager.join(file)
     }
 
     public async write(extension: string, content: ReadableStream<Uint8Array> | null, signal?: AbortSignal) {

@@ -3,9 +3,8 @@ import { MissingUploadValueError, UploadTooLargeError, uploadLimit } from "@serv
 import Application from "@server/core/application"
 import doors from "./doors"
 import { Hono } from "hono"
-import { isSystemUploadFile, isUploadFile } from "@phreshos/core"
+import { isSystemUploadFile, isUploadFile, wallpaperKind, wallpaperSizeLimit } from "@phreshos/core"
 import { readFile } from "node:fs/promises"
-import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
 const immutableCache = "public, max-age=31536000, immutable"
 
@@ -158,7 +157,7 @@ export default function (application: Application) {
 
     const uploaded = serveStatic({ root: application.uploads.fileManager.path, rewriteRequestPath: path => path.slice(doors.uploads.length + 1) })
 
-    const kept = serveStatic({ root: application.uploads.systemPath, rewriteRequestPath: path => path.slice(doors.uploads.length + 1) })
+    const kept = serveStatic({ root: application.uploads.systemPath, rewriteRequestPath: path => application.uploads.systemFile(path.slice(doors.uploads.length + 1)) })
 
     uploads.use("/:file", (context, next) => (isSystemUploadFile(context.req.param("file")) ? kept : uploaded)(context, next))
 

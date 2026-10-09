@@ -87,8 +87,9 @@ test("uploads contract", async () => {
       const kept = await view.request(`http://system/uploads/${systemWallpapers.light.desktop}`)
       assert.equal(kept.status, 200)
       assert.equal(kept.headers.get("cache-control"), "no-cache")
-      assert.deepEqual(new Uint8Array(await kept.arrayBuffer()), new Uint8Array(await readFile(resolve("assets/wallpapers", systemWallpapers.light.desktop))))
-      assert.equal(uploads.stat(systemWallpapers.dark.signIn)?.size, (await readFile(resolve("assets/wallpapers", systemWallpapers.dark.signIn))).byteLength)
+      assert.equal(kept.headers.get("content-type"), "image/webp")
+      assert.deepEqual(new Uint8Array(await kept.arrayBuffer()), new Uint8Array(await readFile(uploads.path(systemWallpapers.light.desktop))))
+      assert.equal(uploads.stat(systemWallpapers.dark.signIn)?.size, (await readFile(resolve("assets/wallpapers/SIGN_IN_DARK_WALLPAPER.webp"))).byteLength)
       assert.equal((await view.request("http://system/uploads/not-a-key")).status, 400)
       assert.equal((await view.request("http://system/uploads/00000000-0000-0000-0000-000000000000.txt")).status, 404)
   } finally {

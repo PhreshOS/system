@@ -5,8 +5,7 @@ import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
 import { usePreferences, useTiming } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
-import { cssEasing, type AppearanceWallpapers, type ThemedValue } from "@phreshos/core"
-import { wallpaperKind, type WallpaperKind } from "@shared/wallpaper"
+import { cssEasing, wallpaperKind, type AppearanceWallpapers, type ThemedValue, type WallpaperKind } from "@phreshos/core"
 
 /** Where a wallpaper is shown. */
 export type WallpaperPlace = keyof AppearanceWallpapers

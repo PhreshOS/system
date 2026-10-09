@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import Keyv from "keyv"
-import { defaultAppearance, parseAppearance, systemWallpapers } from "@phreshos/core"
+import { defaultAppearance, parseAppearance, systemWallpapers, wallpaperSizeLimit } from "@phreshos/core"
 import AppearanceManager from "@server/core/appearance-manager"
 import FileManager from "@libs/file-manager"
 import UploadManager from "@server/core/upload-manager"
@@ -9,7 +9,6 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { test } from "vitest"
 import { randomUUID } from "node:crypto"
-import { wallpaperSizeLimit } from "@shared/wallpaper"
 
 test("appearance contract", async () => {
   assert.deepEqual(parseAppearance(defaultAppearance), defaultAppearance)
@@ -151,6 +150,22 @@ test("appearance contract", async () => {
     ...manager.value,
     wallpapers: { ...manager.value.wallpapers, light: { ...manager.value.wallpapers.light, desktop: oversized } }
   }), /50 MiB/)
+
+  // A held wallpaper that can no longer be shown becomes the System's own for its place.
+  const kept = await uploads.write("png", new Blob(["wallpaper"]).stream())
+  const brokenStore = new Keyv()
+  await brokenStore.set("appearance", {
+    ...defaultAppearance,
+    wallpapers: { light: { signIn: "sign-in-light.webp", desktop: kept }, dark: { signIn: systemWallpapers.dark.signIn, desktop: `${randomUUID()}.png` } }
+  })
+  const repaired = await AppearanceManager.open(brokenStore, uploads)
+  assert.deepEqual(repaired.value.wallpapers, {
+    light: { signIn: systemWallpapers.light.signIn, desktop: kept },
+    dark: systemWallpapers.dark
+  })
+  assert.deepEqual((await brokenStore.get("appearance")).wallpapers, repaired.value.wallpapers)
+  await repaired.update({ wallpapers: { dark: { desktop: kept } } })
+  assert.equal(repaired.value.wallpapers.dark.desktop, kept)
 
   await rm(directory, { recursive: true, force: true })
 }, 120_000)

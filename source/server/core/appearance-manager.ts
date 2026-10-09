@@ -1,8 +1,7 @@
 import Keyv from "keyv"
 import { isDeepStrictEqual } from "node:util"
-import { applyAppearanceUpdate, defaultAppearance, isUploadFile, type Appearance } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, isUploadFile, systemWallpapers, wallpaperKind, wallpaperSizeLimit, type Appearance, type AppearanceWallpapers } from "@phreshos/core"
 import UploadManager from "./upload-manager"
-import { wallpaperKind, wallpaperSizeLimit } from "@shared/wallpaper"
 
 const storageKey = "appearance"
 
@@ -16,9 +15,15 @@ export default class AppearanceManager {
 
     public static async open(store: Keyv, uploads: UploadManager) {
         const stored = await store.get(storageKey)
-        const appearance = stored === undefined
+        const held = stored === undefined
             ? defaultAppearance
             : applyAppearanceUpdate(defaultAppearance, stored)
+
+        // A wallpaper that can no longer be shown, such as an upload gone from disk, becomes the
+        // System's own for its place, so the Desktop never shows nothing and later changes apply.
+        const shown = (theme: "light" | "dark") => Object.fromEntries((Object.keys(systemWallpapers[theme]) as (keyof AppearanceWallpapers)[])
+            .map(place => [place, wallpaperProblem(uploads, held.wallpapers[theme][place]) === null ? held.wallpapers[theme][place] : systemWallpapers[theme][place]]))
+        const appearance = applyAppearanceUpdate(held, { wallpapers: { light: shown("light"), dark: shown("dark") } })
 
         // Persisted Appearance values may predate newly introduced fields. They
         // remain overrides of the current defaults, then become canonical here.
@@ -48,12 +53,21 @@ export default class AppearanceManager {
     }
 
     private validateWallpaper(file: string) {
-        if (!isUploadFile(file)) throw new Error("A wallpaper must be a system upload")
+        const problem = wallpaperProblem(this.uploads, file)
 
-        const upload = this.uploads.stat(file)
-
-        if (!upload) throw new Error("The wallpaper upload does not exist")
-        if (!wallpaperKind(file)) throw new Error("A wallpaper must be an image, video, or HTML file")
-        if (upload.size > wallpaperSizeLimit) throw new Error("A wallpaper cannot exceed 50 MiB")
+        if (problem) throw new Error(problem)
     }
+}
+
+/** Why an upload cannot be a wallpaper, or `null` when it can. */
+function wallpaperProblem(uploads: UploadManager, file: string) {
+    if (!isUploadFile(file)) return "A wallpaper must be a system upload"
+
+    const upload = uploads.stat(file)
+
+    if (!upload) return "The wallpaper upload does not exist"
+    if (!wallpaperKind(file)) return "A wallpaper must be an image, video, or HTML file"
+    if (upload.size > wallpaperSizeLimit) return "A wallpaper cannot exceed 50 MiB"
+
+    return null
 }
