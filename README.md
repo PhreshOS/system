@@ -23,6 +23,8 @@ built with the web tools you already know. The System gives each of them a
 place to run, one sign-in, communication with other Programs, storage, and
 permissions, so a Program only holds its own logic.
 
+PhreshOS is still experimental and not yet ready for production use.
+
 Everything on the Desktop, from the file manager to Settings and the
 wallpaper, is a Program built on the System, not part of it.
 
