@@ -427,7 +427,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
                 throw new Error(`This Program declared no ${endpoint === "server" ? "Server" : "Client"} Endpoint`)
             }
 
-            return [await processManager.endpointIsService(pane, address(target), endpoint)]
+            // The synchronized Process holds it, as it holds whether the Endpoint runs.
+            return [endpoint === "server" ? target.server?.service === true : target.client?.service === true]
         }
 
         if (word === "host-service-list") {

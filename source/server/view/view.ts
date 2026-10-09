@@ -60,7 +60,12 @@ export default async function (config: Config) {
 
     server.route(doors.program, program(application))
 
-    if (config.assets) server.use("*", serveStatic({ root: config.assets }))
+    // The build names every file under assets by its content, so those never change; the page is
+    // asked for again each time, since a kept page would load the Desktop of an older System.
+    if (config.assets) server.use("*", serveStatic({
+        root: config.assets,
+        onFound: (path, context) => context.header("Cache-Control", /[\\/]assets[\\/]/.test(path) ? "public, max-age=31536000, immutable" : "no-cache")
+    }))
 
     const hostname = config.hostname ?? "localhost"
 

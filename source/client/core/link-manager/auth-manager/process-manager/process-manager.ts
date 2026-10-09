@@ -90,11 +90,6 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/emit", source, event, payload)
     }
 
-    public async endpointIsService(source: string, target: HandleAddress, endpoint: "server" | "client") {
-
-        return await this.$outbound.publishFirst("/endpoint/is-service", source, target, endpoint) as boolean
-    }
-
     /** Reads current availability for one exact Service address. */
     public async serviceAvailable(address: ServiceAddress) {
 

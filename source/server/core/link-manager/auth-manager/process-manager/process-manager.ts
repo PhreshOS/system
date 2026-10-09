@@ -1567,22 +1567,6 @@ export default class ProcessManager extends TheLink {
         ])
     }
 
-    @Subscribe("/endpoint/is-service")
-    protected async clientEndpointIsService(source: string, target: unknown, endpoint: unknown) {
-
-        const process = this.find(source)
-
-        if (!process.client) throw new Error("The current client endpoint is not running")
-
-        if (endpoint !== "server" && endpoint !== "client") throw new Error("A service Endpoint must be server or client")
-
-        const held = this.system.holdProcess(target)
-
-        if (held.program !== process.program) throw new Error("The desktop does not know this process")
-
-        return endpoint === "server" ? held.server?.service === true : held.client?.service === true
-    }
-
     @Subscribe("/service/available")
     protected async serviceAvailable(address: unknown) {
 
