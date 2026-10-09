@@ -35,9 +35,45 @@ export function environmentHostname(name: string, variables: NodeJS.ProcessEnv) 
     const value = selected.value
 
     if (value === undefined) return undefined
-    if (!value || value !== value.trim() || /\s/.test(value)) throw new Error(`${selected.key} must contain one hostname or IP address`)
+
+    return hostname(value, selected.key)
+}
+
+/** One hostname or IP address, as a listener takes it. */
+function hostname(value: string, source: string) {
+
+    if (!value || value !== value.trim() || /\s/.test(value)) throw new Error(`${source} must contain one hostname or IP address`)
 
     return value
+}
+
+/**
+ * Read the interface a CLI start asked for once, as it asks for a port: the variable set where
+ * `phresh system start` ran never reaches the service, so the CLI hands it over in a file.
+ */
+export async function requestedHostname(arguments_: string[]) {
+
+    const positions = arguments_.flatMap((value, index) => value === "--host-request" ? [index] : [])
+
+    if (positions.length === 0) return undefined
+    if (positions.length !== 1) throw new Error("--host-request can be supplied only once")
+
+    const path = arguments_[positions[0]! + 1]
+
+    if (!path || !isAbsolute(path)) throw new Error("--host-request must be followed by an absolute filesystem path")
+
+    let value: string
+
+    try { value = (await readFile(path, "utf8")).trim() }
+    catch (error) {
+
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
+        throw error
+    }
+
+    await rm(path, { force: true })
+
+    return hostname(value, "The requested PhreshOS host")
 }
 
 /** Read the optional ordered production port selection. */

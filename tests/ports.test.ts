@@ -3,7 +3,7 @@ import { createServer } from "node:http"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-import { defaultHome, defaultPorts, environmentPorts, listenOnPorts, parsePorts, portRange, requestedPorts } from "@server/view/configuration"
+import { defaultHome, defaultPorts, environmentPorts, listenOnPorts, parsePorts, portRange, requestedHostname, requestedPorts } from "@server/view/configuration"
 import { test } from "vitest"
 
 test("ports contract", async () => {
@@ -52,6 +52,15 @@ test("ports contract", async () => {
 
       assert.deepEqual(await requestedPorts(["node", "main.js", "--port-request", request]), [4400, 4500, 4501, 4502])
       await assert.rejects(readFile(request), error => (error as NodeJS.ErrnoException).code === "ENOENT")
+
+      // The interface a CLI start asked for arrives the same way, read once.
+      const hostRequest = join(temporary, "next-host")
+      assert.equal(await requestedHostname(["node", "main.js", "--host-request", hostRequest]), undefined)
+      await writeFile(hostRequest, "0.0.0.0\n")
+      assert.equal(await requestedHostname(["node", "main.js", "--host-request", hostRequest]), "0.0.0.0")
+      await assert.rejects(readFile(hostRequest), error => (error as NodeJS.ErrnoException).code === "ENOENT")
+      await writeFile(hostRequest, "two hosts")
+      await assert.rejects(requestedHostname(["node", "main.js", "--host-request", hostRequest]), /one hostname or IP address/)
   }
 
   finally { await rm(temporary, { recursive: true, force: true }) }

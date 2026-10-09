@@ -85,6 +85,10 @@ export default async function (config: Config) {
 
     await writeFile(join(application.storage.path, "desktop"), `${origin}\n`, { mode: 0o600 })
 
+    // The Desktop is opened on this machine at localhost; the interface it listens on, which may let
+    // other devices reach it, is recorded beside it, so what reports the address can say so.
+    await writeFile(join(application.storage.path, "listening"), `${hostname}\n`, { mode: 0o600 })
+
     const localGateway = await gateway(application.linkManager, gatewayAddress(application.storage.path))
 
     if (config.assets) console.log(`  ➜  ${styleText("bold", "Desktop:")} ${origin}`)
