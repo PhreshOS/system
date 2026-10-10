@@ -32,6 +32,12 @@ export function useViewTravel(viewport: Viewport) {
     }, [view.x, view.y, moveTo, reducedMotion, tempo, size.width, size.height])
 }
 
+/**
+ * How long a hand holds a Window against an edge before the view moves that way. Snapping waits at
+ * the same edges, so this is long enough to reach an edge, see the snap, and let go first.
+ */
+const edgeHoldDelay = 1500
+
 /** Which edges of a box a point is held against, within 16 pixels: -1, 0 or 1 in each direction. */
 export function against(x: number, y: number, width: number, height: number): Direction {
 
@@ -68,7 +74,7 @@ export class EdgeHold {
 
         this.direction = direction
 
-        if (direction.x || direction.y) this.timer = window.setTimeout(() => this.hold(), 700)
+        if (direction.x || direction.y) this.timer = window.setTimeout(() => this.hold(), edgeHoldDelay)
     }
 
     public stop() {
