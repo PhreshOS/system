@@ -2,7 +2,6 @@ import {
     parsePresentationSurface,
     parsePresentationTransaction,
     type WindowLayer,
-    type PresentationMoveGestureStart,
     type PresentationMovePoint,
     type PresentationGeometry,
     type PresentationAnchor,
@@ -33,16 +32,15 @@ export interface PresentationFrame {
 }
 
 export interface DesktopMoveGestureController {
-    begin(origin: DesktopMovePoint, point: DesktopMovePoint): DesktopMoveGesture
+    begin(origin: DesktopMovePoint): DesktopMoveGesture
     cancel(): void
 }
 
 /** A move the Desktop carries out while the Client document holds the pointer and reports it. */
 export interface DesktopMoveGesture {
-    ready: Promise<void>
     finished: Promise<void>
     move(point: DesktopMovePoint): void
-    end(point: DesktopMovePoint): void
+    end(): void
     cancel(): void
 }
 
@@ -62,10 +60,10 @@ export interface PresentationHost {
     begin(identity: string): void
     drawing(identity: string, frame: HTMLIFrameElement): PresentationState
     observe(listener: () => void): () => void
-    beginMoveGesture(identity: string, gesture: string, origin: DesktopMovePoint, point: DesktopMovePoint): Promise<void>
+    beginMoveGesture(identity: string, gesture: string, origin: DesktopMovePoint): void
     waitMoveGesture(identity: string, gesture: string): Promise<void>
     continueMoveGesture(identity: string, gesture: string, point: DesktopMovePoint): void
-    endMoveGesture(identity: string, gesture: string, point: DesktopMovePoint): void
+    endMoveGesture(identity: string, gesture: string): void
     cancelMoveGesture(identity: string, gesture: string): void
     cancelMoveGestures(identity: string): void
     move(identity: string, position: PresentationPosition, transaction?: PresentationTransactionRequest): Promise<void>
@@ -83,11 +81,6 @@ export function presentationMovePoint(value: unknown): PresentationMovePoint {
     if (typeof record.x !== "number" || !Number.isFinite(record.x)) throw new Error("Window move point x must be a finite number")
     if (typeof record.y !== "number" || !Number.isFinite(record.y)) throw new Error("Window move point y must be a finite number")
     return Object.freeze({ x: record.x, y: record.y })
-}
-
-export function presentationMoveGestureStart(value: unknown): PresentationMoveGestureStart {
-    const record = plain(value, "Window move gesture start")
-    return Object.freeze({ origin: presentationMovePoint(record.origin), point: presentationMovePoint(record.point) })
 }
 
 /** The drawing is written in pixels; shares belong to the Window, which every Desktop resolves itself. */

@@ -94,32 +94,27 @@ test("a standard Window follows authoritative state but accepts only move gestur
   assert.notEqual(restoring.revision, maximizing.revision)
 
   const events: unknown[] = []
-  let ready!: () => void
   let finish!: () => void
   presentations.registerMoveGesture("ordinary", {
-    begin(origin, point) {
-      events.push([origin, point])
+    begin(origin) {
+      events.push(["begin", origin])
       return {
-        ready: new Promise<void>(resolve => { ready = resolve }),
         finished: new Promise<void>(resolve => { finish = resolve }),
         move(point) { events.push(["move", point]) },
-        end(point) { events.push(["end", point]); finish() },
+        end() { events.push("end"); finish() },
         cancel() { events.push("gesture-cancel") }
       }
     },
     cancel() { events.push("cancel") }
   })
-  const beginning = presentations.beginMoveGesture("ordinary", "gesture", { x: 10, y: 20 }, { x: 30, y: 40 })
-  assert.deepEqual(events, [[{ x: 10, y: 20 }, { x: 30, y: 40 }]])
-  ready()
-  await beginning
+  presentations.beginMoveGesture("ordinary", "gesture", { x: 10, y: 20 })
   const moving = presentations.waitMoveGesture("ordinary", "gesture")
   presentations.continueMoveGesture("ordinary", "gesture", { x: 50, y: 60 })
-  presentations.endMoveGesture("ordinary", "gesture", { x: 70, y: 80 })
+  presentations.endMoveGesture("ordinary", "gesture")
   await moving
   // A position that arrives after its move ended has nothing left to move.
   presentations.continueMoveGesture("ordinary", "gesture", { x: 90, y: 100 })
-  assert.deepEqual(events.slice(1), [["move", { x: 50, y: 60 }], ["end", { x: 70, y: 80 }]])
+  assert.deepEqual(events, [["begin", { x: 10, y: 20 }], ["move", { x: 50, y: 60 }], "end"])
 })
 
 test("a Client boundary initializes each new document exactly once", async () => {

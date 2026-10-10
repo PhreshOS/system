@@ -26,7 +26,7 @@ test("wallpaper is fixed and rejects both raw operations and move gestures", () 
   expect(() => presentations.move("own", { x: 1, y: 2 })).toThrow(/does not support raw/)
   expect(() => presentations.setInteractive("own", false)).toThrow(/does not support raw/)
   expect(() => presentations.raise("own")).toThrow(/does not support raw/)
-  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/nowhere to move/)
+  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 })).toThrow(/nowhere to move/)
 })
 
 test.each(["under", "over", "shell"] as const)("%s is controlled only through raw presentation operations", async layer => {
@@ -52,7 +52,7 @@ test.each(["under", "over", "shell"] as const)("%s is controlled only through ra
   presentations.begin("own")
   expect(presentations.projection("own").interactive).toBe(true)
   // A raw drawing may hand a move to the Desktop too, once its Window can take one.
-  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 }, { x: 1, y: 1 })).toThrow(/cannot currently begin/)
+  expect(() => presentations.beginMoveGesture("own", "gesture", { x: 0, y: 0 })).toThrow(/cannot currently begin/)
 })
 
 test("standard Window presentation is exclusively Desktop-controlled", () => {

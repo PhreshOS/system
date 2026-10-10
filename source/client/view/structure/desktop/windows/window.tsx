@@ -17,6 +17,7 @@ import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
+import { createPortal } from "react-dom"
 
 /**
  * One drawing on the Desktop: a standard Window, which the Desktop designs, or a Program's own drawing
@@ -142,22 +143,22 @@ export default function ({ title, header = true, surface, layer, icon, children,
     const moveGestureController = useRef<DesktopMoveGestureController | null>(null)
     if (!moveGestureController.current) {
         moveGestureController.current = {
-            begin(origin, point) {
+            begin(origin) {
                 if (externalMove.current) throw new Error("This Window already has an active move gesture")
                 const pointer = beginPointerGesture.current(origin)
                 if (!pointer) throw new Error("This Window cannot currently begin a move gesture")
-                pointer.update(point)
                 let finish: () => void = () => undefined
                 const finished = new Promise<void>(resolve => { finish = resolve })
-                const move = { pointer, finish }
+                // The Desktop lays a layer over the screen and moves the Window by the pointer that
+                // reaches it; until one does, and where none ever does, by the places the Client document
+                // reports. The move settles at the last place either gave.
+                const move: ExternalMove = { pointer, finish, own: false, last: origin }
                 externalMove.current = move
                 setExternalMoveActive(true)
-                // The Client document holds the pointer and reports it; the move is ready once begun.
                 return {
-                    ready: Promise.resolve(),
                     finished,
-                    move: next => { if (externalMove.current === move) move.pointer.update(next) },
-                    end: last => { if (externalMove.current === move) finishExternalMove(last) },
+                    move: next => { if (externalMove.current === move && !move.own) { move.last = next; move.pointer.update(next) } },
+                    end: () => { if (externalMove.current === move) finishExternalMove(move.last) },
                     cancel: () => { if (externalMove.current === move) finishExternalMove(null) }
                 }
             },
@@ -165,8 +166,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
     }
 
-    const beginWindowMoveGesture = useCallback<BeginPresentationMoveGesture>(start => {
-        return moveGestureController.current!.begin(start.origin, start.point)
+    const beginWindowMoveGesture = useCallback<BeginPresentationMoveGesture>(origin => {
+        return moveGestureController.current!.begin(origin)
     }, [])
 
     function finishExternalMove(point: DesktopMovePoint | null) {
@@ -768,6 +769,28 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     return <>
 
+        {externalMoveActive && createPortal(<div
+            data-window-move-capture=""
+            style={{ position: "fixed", inset: 0, zIndex: 2147483647, touchAction: "none", userSelect: "none", cursor: "grabbing" }}
+            onPointerMove={event => {
+                const move = externalMove.current
+                // Only a pressed pointer moves the Window; one that arrives after the release is hover.
+                if (!move || (event.buttons & 1) === 0) return
+                if (!move.own) {
+                    move.own = true
+                    try { event.currentTarget.setPointerCapture(event.pointerId) }
+                    catch { /* The layer covers the screen; it hears the pointer anyway. */ }
+                }
+                move.last = { x: event.clientX, y: event.clientY }
+                move.pointer.update(move.last)
+            }}
+            onPointerUp={event => {
+                const move = externalMove.current
+                if (move?.own) finishExternalMove({ x: event.clientX, y: event.clientY })
+            }}
+            onPointerCancel={() => { if (externalMove.current?.own) finishExternalMove(null) }}
+        />, document.body)}
+
         {/* The snap preview and its result resolve the same edge contacts. */}
         {gesture?.shown && <SnapPreview
             shown={gesture.shown}
@@ -1037,6 +1060,9 @@ interface ActivePointerGesture {
 interface ExternalMove {
     pointer: ActivePointerGesture
     finish: () => void
+    /** The pointer reached the Desktop's layer, which now moves the Window by it. */
+    own: boolean
+    last: DesktopMovePoint
 }
 
 /**

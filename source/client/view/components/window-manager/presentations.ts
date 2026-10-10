@@ -198,20 +198,15 @@ export default class Presentations implements PresentationHost {
         else this.moveGestureControllers.delete(identity)
     }
 
-    public beginMoveGesture(process: string, gesture: string, origin: DesktopMovePoint, point: DesktopMovePoint) {
+    public beginMoveGesture(process: string, gesture: string, origin: DesktopMovePoint) {
         const { identity, state } = this.existing(process)
         requirePresentationMoveGesture(state.layer)
         if ([...this.moveGestures.values()].some(active => active.identity === identity)) throw new Error("This Window already has an active move gesture")
         const controller = this.moveGestureControllers.get(identity)
         if (!controller) throw new Error("This Window cannot currently begin a move gesture")
-        const movement = controller.begin(origin, point)
-        const active = { identity, movement }
-        this.moveGestures.set(gesture, active)
+        const movement = controller.begin(origin)
+        this.moveGestures.set(gesture, { identity, movement })
         void movement.finished.catch(() => undefined)
-        return movement.ready.catch(error => {
-            if (this.moveGestures.get(gesture) === active) this.moveGestures.delete(gesture)
-            throw error
-        })
     }
 
     public async waitMoveGesture(process: string, gesture: string) {
@@ -229,9 +224,9 @@ export default class Presentations implements PresentationHost {
         if (active && active.identity === this.live.get(process)) active.movement.move(point)
     }
 
-    public endMoveGesture(process: string, gesture: string, point: DesktopMovePoint) {
+    public endMoveGesture(process: string, gesture: string) {
         const active = this.moveGestures.get(gesture)
-        if (active && active.identity === this.live.get(process)) active.movement.end(point)
+        if (active && active.identity === this.live.get(process)) active.movement.end()
     }
 
     public cancelMoveGesture(process: string, gesture: string) {
