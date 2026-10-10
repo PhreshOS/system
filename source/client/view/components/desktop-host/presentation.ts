@@ -37,9 +37,12 @@ export interface DesktopMoveGestureController {
     cancel(): void
 }
 
+/** A move the Desktop carries out while the Client document holds the pointer and reports it. */
 export interface DesktopMoveGesture {
     ready: Promise<void>
     finished: Promise<void>
+    move(point: DesktopMovePoint): void
+    end(point: DesktopMovePoint): void
     cancel(): void
 }
 
@@ -61,6 +64,8 @@ export interface PresentationHost {
     observe(listener: () => void): () => void
     beginMoveGesture(identity: string, gesture: string, origin: DesktopMovePoint, point: DesktopMovePoint): Promise<void>
     waitMoveGesture(identity: string, gesture: string): Promise<void>
+    continueMoveGesture(identity: string, gesture: string, point: DesktopMovePoint): void
+    endMoveGesture(identity: string, gesture: string, point: DesktopMovePoint): void
     cancelMoveGesture(identity: string, gesture: string): void
     cancelMoveGestures(identity: string): void
     move(identity: string, position: PresentationPosition, transaction?: PresentationTransactionRequest): Promise<void>

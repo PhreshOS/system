@@ -208,8 +208,6 @@ export default class Presentations implements PresentationHost {
         const active = { identity, movement }
         this.moveGestures.set(gesture, active)
         void movement.finished.catch(() => undefined)
-        // The iframe must retain pointer capture until the Desktop capture
-        // surface exists; otherwise early movement falls between documents.
         return movement.ready.catch(error => {
             if (this.moveGestures.get(gesture) === active) this.moveGestures.delete(gesture)
             throw error
@@ -222,6 +220,18 @@ export default class Presentations implements PresentationHost {
         finally {
             if (this.moveGestures.get(gesture) === active) this.moveGestures.delete(gesture)
         }
+    }
+
+    // Positions travel from the Client document as they come; one that arrives after its move ended,
+    // or for a move of another Window, has nothing left to move.
+    public continueMoveGesture(process: string, gesture: string, point: DesktopMovePoint) {
+        const active = this.moveGestures.get(gesture)
+        if (active && active.identity === this.live.get(process)) active.movement.move(point)
+    }
+
+    public endMoveGesture(process: string, gesture: string, point: DesktopMovePoint) {
+        const active = this.moveGestures.get(gesture)
+        if (active && active.identity === this.live.get(process)) active.movement.end(point)
     }
 
     public cancelMoveGesture(process: string, gesture: string) {

@@ -29,6 +29,7 @@ import {
     presentationSurface,
     presentationGeometry,
     presentationMoveGestureStart,
+    presentationMovePoint,
     presentationPosition,
     presentationSize,
     presentationTransaction,
@@ -998,6 +999,18 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             const target = presentationProcess(args[0])
             const gesture = gestureIdentity(args[1])
             await presentation.waitMoveGesture(target.identity, gesture)
+            return []
+        }
+
+        if (word === "presentationMoveGestureMove") {
+            const target = presentationProcess(args[0])
+            presentation.continueMoveGesture(target.identity, gestureIdentity(args[1]), frame.point(presentationMovePoint(args[2])))
+            return []
+        }
+
+        if (word === "presentationMoveGestureEnd") {
+            const target = presentationProcess(args[0])
+            presentation.endMoveGesture(target.identity, gestureIdentity(args[1]), frame.point(presentationMovePoint(args[2])))
             return []
         }
 

@@ -12,12 +12,11 @@ import { motion, useMotionValue, type MotionValue } from "motion/react"
 import { PlaneSlideContext, ViewCellShift } from "../plane-slide"
 import { EdgeHold, against } from "../edge-hold"
 import { motionTransition, resolvePresentationTransaction } from "@client/view/appearance/motion"
-import { useAppearance, Window as UIWindow, timing } from "@phreshos/react-ui"
+import { useAppearance, timing } from "@phreshos/react-ui"
 import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
-import { createPortal } from "react-dom"
 
 /**
  * One drawing on the Desktop: a standard Window, which the Desktop designs, or a Program's own drawing
@@ -148,13 +147,19 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 const pointer = beginPointerGesture.current(origin)
                 if (!pointer) throw new Error("This Window cannot currently begin a move gesture")
                 pointer.update(point)
-                let markReady: () => void = () => undefined
-                const ready = new Promise<void>(resolve => { markReady = resolve })
                 let finish: () => void = () => undefined
                 const finished = new Promise<void>(resolve => { finish = resolve })
-                externalMove.current = { pointer, markReady, finish }
+                const move = { pointer, finish }
+                externalMove.current = move
                 setExternalMoveActive(true)
-                return { ready, finished, cancel: () => finishExternalMove(null) }
+                // The Client document holds the pointer and reports it; the move is ready once begun.
+                return {
+                    ready: Promise.resolve(),
+                    finished,
+                    move: next => { if (externalMove.current === move) move.pointer.update(next) },
+                    end: last => { if (externalMove.current === move) finishExternalMove(last) },
+                    cancel: () => { if (externalMove.current === move) finishExternalMove(null) }
+                }
             },
             cancel: () => finishExternalMove(null)
         }
@@ -169,9 +174,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
         if (!active) return
         externalMove.current = null
         setExternalMoveActive(false)
-        // Cancellation may happen before the portal commits. Readiness must
-        // still settle so the remote owner can observe the completed gesture.
-        active.markReady()
         if (point) active.pointer.end(point)
         else active.pointer.cancel()
         active.finish()
@@ -766,21 +768,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
     return <>
 
-        {externalMoveActive && createPortal(<UIWindow.MoveCapture
-            data-window-move-capture
-            ref={element => { if (element) externalMove.current?.markReady() }}
-            style={{ zIndex: 2147483647 }}
-            onPointerMove={event => {
-                if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-                    try { event.currentTarget.setPointerCapture(event.pointerId) }
-                    catch { /* The full-viewport capture surface still owns in-bounds movement. */ }
-                }
-                externalMove.current?.pointer.update({ x: event.clientX, y: event.clientY })
-            }}
-            onPointerUp={event => finishExternalMove({ x: event.clientX, y: event.clientY })}
-            onPointerCancel={() => finishExternalMove(null)}
-        />, document.body)}
-
         {/* The snap preview and its result resolve the same edge contacts. */}
         {gesture?.shown && <SnapPreview
             shown={gesture.shown}
@@ -1049,7 +1036,6 @@ interface ActivePointerGesture {
 
 interface ExternalMove {
     pointer: ActivePointerGesture
-    markReady: () => void
     finish: () => void
 }
 
