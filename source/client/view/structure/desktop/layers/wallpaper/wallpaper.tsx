@@ -1,5 +1,5 @@
 import { ApplicationContext } from "@client/view/contexts"
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type TransitionEvent } from "react"
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
 import Loading from "@client/view/components/loading"
 import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
@@ -27,8 +27,9 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
     const application = ApplicationContext.useValue()
     const { theme } = usePreferences()
     const reducedMotion = useReducedMotion()
-    const desired = resolveWallpaper(wallpapers[theme][place], application.doors.uploads)
-    const other = resolveWallpaper(wallpapers[theme === "light" ? "dark" : "light"][place], application.doors.uploads)
+    const otherTheme = theme === "light" ? "dark" : "light"
+    const desired = resolveWallpaper(wallpapers[theme][place], application.doors.uploads, theme)
+    const other = resolveWallpaper(wallpapers[otherTheme][place], application.doors.uploads, otherTheme)
     const [layers, setLayers] = useState<WallpaperLayers>({
         displayed: null,
         incoming: desired,
@@ -95,8 +96,8 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
         ready()
     }
 
-    function transitionEnded(event: TransitionEvent<HTMLDivElement>, source: WallpaperSource) {
-        if (event.propertyName !== "opacity" || layers.incoming?.identity !== source.identity || !layers.switching) return
+    function shown(source: WallpaperSource) {
+        if (layers.incoming?.identity !== source.identity || !layers.switching) return
         setLayers({ displayed: source, incoming: null, switching: false })
     }
 
@@ -115,21 +116,35 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
             visible={layers.switching}
             onLoad={() => loaded(incoming)}
             onError={() => failed(incoming)}
-            onTransitionEnd={event => transitionEnded(event, incoming)}
+            onShown={() => shown(incoming)}
         />}
     </>
 }
 
-function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: Readonly<{
+/**
+ * One wallpaper, faded in when it becomes visible. `onShown` tells when it fully shows: at the end of
+ * its fade, or at once when no fade runs, as while the Theme changes and every transition is held
+ * at no duration; the one it replaces can then go.
+ */
+function WallpaperLayer({ source, visible, onLoad, onError, onShown }: Readonly<{
     source: WallpaperSource
     visible: boolean
     onLoad?: () => void
     onError?: () => void
-    onTransitionEnd?: (event: TransitionEvent<HTMLDivElement>) => void
+    onShown?: () => void
 }>) {
     const transaction = useTiming()("change")
     const reducedMotion = useReducedMotion()
     const interactive = source.kind === "html" && visible
+    const element = useRef<HTMLDivElement>(null)
+    const showing = useEffectEvent(() => onShown?.())
+
+    // A frame after it becomes visible, a fade is running or none will: without one, it already shows.
+    useEffect(() => {
+        if (!visible) return
+        const frame = requestAnimationFrame(() => { if (element.current?.getAnimations().length === 0) showing() })
+        return () => cancelAnimationFrame(frame)
+    }, [visible])
 
     return <div
         className={`absolute inset-0 ${interactive ? "pointer-events-auto" : "pointer-events-none"} ${visible ? "opacity-100" : "opacity-0"}`}
@@ -138,7 +153,8 @@ function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: R
             transitionTimingFunction: cssEasing(transaction.easing),
             transitionProperty: "opacity"
         }}
-        onTransitionEnd={onTransitionEnd}
+        ref={element}
+        onTransitionEnd={event => { if (event.target === event.currentTarget && event.propertyName === "opacity" && visible) onShown?.() }}
     >
         {source.kind === "image" && <img
             aria-hidden="true"
@@ -175,11 +191,17 @@ function WallpaperLayer({ source, visible, onLoad, onError, onTransitionEnd }: R
     </div>
 }
 
-function resolveWallpaper(file: string, uploads: string): WallpaperSource {
+/**
+ * Where one wallpaper is read from. An HTML page is told the Theme it is shown in, `?theme=light` or
+ * `?theme=dark`, the Desktop's own and not the browser's: one page can serve both Themes, and each
+ * Theme is its own page to fade to, as two pictures are.
+ */
+function resolveWallpaper(file: string, uploads: string, theme: "light" | "dark"): WallpaperSource {
     const kind = wallpaperKind(file) ?? "image"
-    const path = kind === "html" ? `${uploads}/wallpaper/${encodeURIComponent(file)}` : `${uploads}/${encodeURIComponent(file)}`
 
-    return { identity: `${kind}:${file}`, kind, url: path }
+    if (kind === "html") return { identity: `html:${file}:${theme}`, kind, url: `${uploads}/wallpaper/${encodeURIComponent(file)}?theme=${theme}` }
+
+    return { identity: `${kind}:${file}`, kind, url: `${uploads}/${encodeURIComponent(file)}` }
 }
 
 function cancelSwitch(frame: { current: number | null }) {
