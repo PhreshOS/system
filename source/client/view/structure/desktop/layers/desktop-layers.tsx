@@ -14,23 +14,26 @@ export default function DesktopLayers({ wallpaper, underWindows, windows, shared
 
     return <div
         data-desktop-layers=""
-        className="absolute inset-0 isolate overflow-hidden"
+        className="absolute inset-0 isolate overflow-clip"
         style={{ "--desktop-gutter": `${spacing}px`, "--desktop-scale": scale } as CSSProperties}
     >
 
-        <div data-desktop-layer="wallpaper" className="absolute inset-0 z-0 overflow-hidden">
+        {/* Each layer clips what passes its edges and never scrolls: focus moved to something out of
+            view, such as an item of a hidden Taskbar, would otherwise scroll it into view and hold it there. */}
+
+        <div data-desktop-layer="wallpaper" className="absolute inset-0 z-0 overflow-clip">
 
             {wallpaper}
 
         </div>
 
-        <div data-desktop-layer="under" className="pointer-events-none absolute inset-0 z-1 overflow-hidden">
+        <div data-desktop-layer="under" className="pointer-events-none absolute inset-0 z-1 overflow-clip">
 
             {underWindows}
 
         </div>
 
-        <div data-desktop-layer="window" className="pointer-events-none absolute inset-0 z-2 overflow-hidden">
+        <div data-desktop-layer="window" className="pointer-events-none absolute inset-0 z-2 overflow-clip">
 
             {/* Standard Windows measure in the whole view, like every other layer; the margins
                 around them are painted, not measured. */}
@@ -40,13 +43,13 @@ export default function DesktopLayers({ wallpaper, underWindows, windows, shared
 
         </div>
 
-        <div data-desktop-layer="over" className="pointer-events-none absolute inset-0 z-3 overflow-hidden">
+        <div data-desktop-layer="over" className="pointer-events-none absolute inset-0 z-3 overflow-clip">
 
             {overWindows}
 
         </div>
 
-        <div data-desktop-layer="shell" className="pointer-events-none absolute inset-0 z-4 overflow-hidden">
+        <div data-desktop-layer="shell" className="pointer-events-none absolute inset-0 z-4 overflow-clip">
 
             {shell}
 

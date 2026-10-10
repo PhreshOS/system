@@ -23,7 +23,7 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
 
     const focusTaskbar = useCallback(function (record: Process) {
 
-        focusAfterMinimize(desktop.current, taskbarItems.current.get(record.identity), taskbarOverlay)
+        focusAfterWindow(desktop.current, taskbarItems.current.get(record.identity), taskbarOverlay)
 
     }, [desktop, taskbarOverlay])
 
@@ -37,11 +37,9 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
 
         const target = candidates.map(entry => taskbarItems.current.get(entry.identity)).find(element => element)
 
-        if (target) target.focus()
+        focusAfterWindow(desktop.current, target, taskbarOverlay)
 
-        else desktop.current?.focus()
-
-    }, [desktop])
+    }, [desktop, taskbarOverlay])
 
     const remember = useCallback(function (event: FocusEvent<HTMLDivElement>) {
 
@@ -85,11 +83,16 @@ export default function useDesktopFocus(desktop: RefObject<HTMLDivElement | null
     return { taskbarItem, remember, unavailable, minimize, close }
 }
 
-export function focusAfterMinimize(desktop: HTMLDivElement | null, taskbarItem: HTMLButtonElement | undefined, taskbarOverlay: boolean) {
-    if (taskbarOverlay) {
+/**
+ * Where focus goes when a Window leaves interaction: its Taskbar item, or the Desktop when the
+ * Taskbar hides as an overlay or there is no item. Focus never scrolls the Shell: a focused item of
+ * a hidden Taskbar would otherwise be scrolled into view and hold it there.
+ */
+export function focusAfterWindow(desktop: HTMLDivElement | null, taskbarItem: HTMLButtonElement | undefined, taskbarOverlay: boolean) {
+    if (taskbarOverlay || !taskbarItem) {
         desktop?.focus({ preventScroll: true })
         return
     }
 
-    taskbarItem?.focus()
+    taskbarItem.focus({ preventScroll: true })
 }

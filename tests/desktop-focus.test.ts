@@ -1,11 +1,11 @@
 import { expect, test, vi } from "vitest"
-import { focusAfterMinimize } from "@client/view/structure/desktop/desktop-focus"
+import { focusAfterWindow } from "@client/view/structure/desktop/desktop-focus"
 
-test("minimizing from a Window does not focus an overlay Taskbar", () => {
+test("a Window leaving interaction does not focus an overlay Taskbar", () => {
     const desktopFocus = vi.fn()
     const taskbarFocus = vi.fn()
 
-    focusAfterMinimize(
+    focusAfterWindow(
         { focus: desktopFocus } as unknown as HTMLDivElement,
         { focus: taskbarFocus } as unknown as HTMLButtonElement,
         true
@@ -15,16 +15,24 @@ test("minimizing from a Window does not focus an overlay Taskbar", () => {
     expect(taskbarFocus).not.toHaveBeenCalled()
 })
 
-test("minimizing from a Window focuses its visible non-overlay Taskbar item", () => {
+test("a Window leaving interaction focuses a visible Taskbar item without scrolling", () => {
     const desktopFocus = vi.fn()
     const taskbarFocus = vi.fn()
 
-    focusAfterMinimize(
+    focusAfterWindow(
         { focus: desktopFocus } as unknown as HTMLDivElement,
         { focus: taskbarFocus } as unknown as HTMLButtonElement,
         false
     )
 
     expect(desktopFocus).not.toHaveBeenCalled()
-    expect(taskbarFocus).toHaveBeenCalledOnce()
+    expect(taskbarFocus).toHaveBeenCalledWith({ preventScroll: true })
+})
+
+test("with no Taskbar item left, focus goes to the Desktop", () => {
+    const desktopFocus = vi.fn()
+
+    focusAfterWindow({ focus: desktopFocus } as unknown as HTMLDivElement, undefined, false)
+
+    expect(desktopFocus).toHaveBeenCalledWith({ preventScroll: true })
 })
