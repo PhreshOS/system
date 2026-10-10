@@ -5,6 +5,7 @@ import { useReady } from "@libs/readiness"
 import { wallpaperRequirement } from "../../../readiness-requirements"
 import { usePreferences, useTiming } from "@phreshos/react-ui"
 import { useReducedMotion } from "@libs/react-motion"
+import { useDesktopFrameStyle } from "../../desktop-scale"
 import { cssEasing, wallpaperKind, type AppearanceWallpapers, type ThemedValue, type WallpaperKind } from "@phreshos/core"
 
 /** Where a wallpaper is shown. */
@@ -137,6 +138,7 @@ function WallpaperLayer({ source, visible, onLoad, onError, onShown }: Readonly<
     const reducedMotion = useReducedMotion()
     const interactive = source.kind === "html" && visible
     const element = useRef<HTMLDivElement>(null)
+    const frameStyle = useDesktopFrameStyle()
     const showing = useEffectEvent(() => onShown?.())
 
     // A frame after it becomes visible, a fade is running or none will: without one, it already shows.
@@ -180,7 +182,8 @@ function WallpaperLayer({ source, visible, onLoad, onError, onShown }: Readonly<
         />}
 
         {source.kind === "html" && <iframe
-            className="h-full w-full border-0"
+            className="border-0"
+            style={frameStyle}
             src={source.url}
             title="Wallpaper"
             sandbox="allow-scripts"

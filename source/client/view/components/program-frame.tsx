@@ -3,6 +3,7 @@ import ClientState from "@client/core/link-manager/auth-manager/process-manager/
 import { blockedProgramDocument, type ProgramAccess } from "./program-access"
 import { type Theme } from "@phreshos/core"
 import { type ReactEventHandler, useCallback, useRef } from "react"
+import { useDesktopFrameStyle } from "../structure/desktop/desktop-scale"
 
 export function programFrameSource(assetId: string, door: string) {
 
@@ -11,6 +12,8 @@ export function programFrameSource(assetId: string, door: string) {
 
 /** The document representation shared by every Client role. */
 export default function ProgramFrame({ record, assetId, client, title, door, access, theme, className = "size-full border-0", onFrame, onLoad }: ProgramFrameProps) {
+
+    const style = useDesktopFrameStyle()
 
     const source = useCallback((element: HTMLIFrameElement | null) => onFrame(record.identity, element), [onFrame, record.identity])
 
@@ -32,6 +35,8 @@ export default function ProgramFrame({ record, assetId, client, title, door, acc
 
         className={className}
 
+        style={style}
+
     />
 
     return <iframe
@@ -45,6 +50,8 @@ export default function ProgramFrame({ record, assetId, client, title, door, acc
         sandbox={client.sandbox ? "allow-scripts allow-forms" : undefined}
 
         className={className}
+
+        style={style}
 
         ref={source}
 

@@ -1,5 +1,5 @@
 import { defaultDesktopScale } from "@phreshos/core"
-import { createContext, type ReactNode, useContext, useMemo } from "react"
+import { createContext, type CSSProperties, type ReactNode, useContext, useMemo } from "react"
 
 const DesktopScaleContext = createContext<DesktopScale>({ scale: defaultDesktopScale, container: null })
 
@@ -18,6 +18,24 @@ export function useDesktopScale() {
 /** Returns the DOM boundary through which Desktop overlays inherit that scale. */
 export function useDesktopScaleContainer() {
     return useContext(DesktopScaleContext).container
+}
+
+/**
+ * Places a frame filling its container in the Desktop's scale. The frame takes no zoom itself: its
+ * document is laid out at the frame's own size and the frame is enlarged as a picture. Under zoom,
+ * Safari lays a frame's document out at the zoomed size while showing it at the unzoomed one, so its
+ * content is cut off or leaves empty bands.
+ */
+export function useDesktopFrameStyle(): CSSProperties {
+    const scale = useDesktopScale()
+
+    return useMemo(() => ({
+        zoom: 1 / scale,
+        width: `${100 / scale}%`,
+        height: `${100 / scale}%`,
+        transform: `scale(${scale})`,
+        transformOrigin: "0 0"
+    }), [scale])
 }
 
 /** Converts one physical browser distance into the Desktop coordinate space. */
