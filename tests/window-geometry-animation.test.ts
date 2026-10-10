@@ -20,10 +20,25 @@ const runs: { stop: ReturnType<typeof vi.fn>, progress: (fraction: number) => vo
 const timing = { duration: 120, easing: "ease-out" } as const
 const initial = { x: 10, y: 20, width: 300, height: 200 }
 
+// Animation frames run at once unless a test holds them.
+let frames: FrameRequestCallback[] | null = null
+
 beforeEach(() => {
     runs.length = 0
     vi.mocked(animate).mockClear()
+    frames = null
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+        if (frames) return frames.push(callback)
+        callback(0)
+        return 0
+    })
+    vi.stubGlobal("cancelAnimationFrame", (handle: number) => { if (frames && handle > 0) frames[handle - 1] = () => undefined })
 })
+
+function drawFrame() {
+    const pending = frames!.splice(0)
+    for (const callback of pending) callback(0)
+}
 
 function create() {
     const values = {
@@ -172,4 +187,34 @@ test("immediate geometry cancels pending completion and sets all axes", () => {
     expect(runs[0].stop).toHaveBeenCalledOnce()
     expect(interrupted).not.toHaveBeenCalled()
     expect(complete).toHaveBeenCalledOnce()
+})
+
+test("a resize from rest starts its tween once the new layout has been drawn", () => {
+    const { animator, layout } = create()
+    frames = []
+    animator.transition({ ...initial, width: 600, height: 400 }, timing)
+    expect(layout.width.get()).toBe(600)
+    expect(runs).toHaveLength(0)
+    drawFrame()
+    expect(runs).toHaveLength(0)
+    drawFrame()
+    expect(runs).toHaveLength(2)
+})
+
+test("a move from rest starts at once, since nothing is laid out anew", () => {
+    const { animator } = create()
+    frames = []
+    animator.transition({ ...initial, x: 200 }, timing)
+    expect(runs).toHaveLength(1)
+})
+
+test("stopping during the wait leaves the layout as shown and starts nothing", () => {
+    const { animator, values, layout } = create()
+    frames = []
+    animator.transition({ ...initial, width: 600 }, timing)
+    animator.stop()
+    drawFrame()
+    drawFrame()
+    expect(runs).toHaveLength(0)
+    expect(layout.width.get()).toBe(values.width.get())
 })

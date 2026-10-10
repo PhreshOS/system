@@ -18,6 +18,7 @@ export class WindowGeometryAnimation {
     private flights = new Map<Axis, Flight>()
     private complete?: () => void
     private updating = false
+    private waiting = 0
 
     constructor(
         private values: Record<Axis, MotionValue<number>>,
@@ -27,6 +28,7 @@ export class WindowGeometryAnimation {
     stop() {
 
         this.complete = undefined
+        this.cancelWait()
         const flights = [...this.flights.values()]
         this.flights.clear()
         for (const flight of flights) flight.control?.stop()
@@ -76,13 +78,36 @@ export class WindowGeometryAnimation {
         }
 
         this.complete = complete
-        this.updating = true
-        const timing = JSON.stringify([transaction.duration, transaction.easing])
+        this.cancelWait()
 
         // A nonzero backing viewport permits scaling to or from zero size.
         // Only these destination changes reflow content, not every tween frame.
-        this.layout.width.set(region.width || Math.max(this.values.width.get(), 1))
-        this.layout.height.set(region.height || Math.max(this.values.height.get(), 1))
+        const width = region.width || Math.max(this.values.width.get(), 1)
+        const height = region.height || Math.max(this.values.height.get(), 1)
+        const reflows = !this.flights.size && (width !== this.layout.width.get() || height !== this.layout.height.get())
+        this.layout.width.set(width)
+        this.layout.height.set(height)
+
+        // Content laid out anew may take a while, and Safari lays out a Program's frame on the
+        // Desktop's own thread: a tween started with it would find its time spent and jump to its
+        // end. Starting from rest, it waits for that layout to be drawn; a running one retargets.
+        if (reflows) {
+            this.waiting = requestAnimationFrame(() => {
+                this.waiting = requestAnimationFrame(() => {
+                    this.waiting = 0
+                    this.fly(region, transaction, animatedAxes)
+                })
+            })
+            return
+        }
+
+        this.fly(region, transaction, animatedAxes)
+    }
+
+    private fly(region: WindowRegion, transaction: Transaction, animatedAxes: readonly Axis[]) {
+
+        this.updating = true
+        const timing = JSON.stringify([transaction.duration, transaction.easing])
 
         for (const axis of animatedAxes) {
 
@@ -113,11 +138,16 @@ export class WindowGeometryAnimation {
 
     private finish() {
 
-        if (this.updating || this.flights.size) return
+        if (this.updating || this.waiting || this.flights.size) return
         this.settleLayout()
         const complete = this.complete
         this.complete = undefined
         complete?.()
+    }
+
+    private cancelWait() {
+        cancelAnimationFrame(this.waiting)
+        this.waiting = 0
     }
 
     private settleLayout() {
