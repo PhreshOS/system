@@ -2,6 +2,7 @@ import type { WindowRegion } from "@client/view/components/window-manager/window
 import type { Transaction } from "@phreshos/core"
 import { animate, type AnimationPlaybackControls, type MotionValue } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
+import { afterDrawn } from "../drawn"
 
 const axes = ["x", "y", "width", "height"] as const
 const sizeAxes = ["width", "height"] as const
@@ -18,7 +19,7 @@ export class WindowGeometryAnimation {
     private flights = new Map<Axis, Flight>()
     private complete?: () => void
     private updating = false
-    private waiting = 0
+    private waiting: (() => void) | null = null
 
     constructor(
         private values: Record<Axis, MotionValue<number>>,
@@ -88,16 +89,16 @@ export class WindowGeometryAnimation {
         this.layout.width.set(width)
         this.layout.height.set(height)
 
-        // Content laid out anew may take a while, and Safari lays out a Program's frame on the
-        // Desktop's own thread: a tween started with it would find its time spent and jump to its
-        // end. Starting from rest, it waits for that layout to be drawn; a running one retargets.
+        // Starting from rest, the tween waits for the content laid out anew to be drawn; a running
+        // one retargets at once.
         if (reflows) {
-            this.waiting = requestAnimationFrame(() => {
-                this.waiting = requestAnimationFrame(() => {
-                    this.waiting = 0
-                    this.fly(region, transaction, animatedAxes)
-                })
+            let drawn = false
+            const cancel = afterDrawn(() => {
+                drawn = true
+                this.waiting = null
+                this.fly(region, transaction, animatedAxes)
             })
+            if (!drawn) this.waiting = cancel
             return
         }
 
@@ -146,8 +147,8 @@ export class WindowGeometryAnimation {
     }
 
     private cancelWait() {
-        cancelAnimationFrame(this.waiting)
-        this.waiting = 0
+        this.waiting?.()
+        this.waiting = null
     }
 
     private settleLayout() {

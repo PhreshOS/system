@@ -17,6 +17,7 @@ import SnapPreview, { type SnapTarget } from "./snap-preview"
 import useWindowGeometryMotion from "./window-geometry-motion"
 import WindowGestureCommit from "./window-gesture-commit"
 import { physicalToDesktopPixels, useDesktopScale } from "../desktop-scale"
+import { useDrawn } from "../drawn"
 
 /**
  * One drawing on the Desktop: a standard Window, which the Desktop designs, or a Program's own drawing
@@ -282,12 +283,19 @@ export default function ({ title, header = true, surface, layer, icon, children,
         ? opening ? windowSurfaceLifecyclePose.hidden : windowSurfaceLifecyclePose.visible
         : opening ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible
 
-    const presencePose = closing && standard
+    // Each presence motion starts once the change it shows is drawn; the state itself is current.
+    const shownClosing = useDrawn(closing, { immediate: reducedMotion })
+    const shownMinimized = useDrawn(minimized, { immediate: reducedMotion })
+    const arrived = useDrawn(true, { initial: opening === null, immediate: reducedMotion })
+
+    const presencePose = shownClosing && standard
         ? windowSurfaceLifecyclePose.hidden
-        : minimized
+        : shownMinimized
             // Only a standard Window is ever minimized.
             ? windowMinimizePose(taskbarPosition)
-            : standard ? windowSurfaceLifecyclePose.visible : surfaceLifecyclePose.visible
+            : !arrived
+                ? initialPresence
+                : standard ? windowSurfaceLifecyclePose.visible : surfaceLifecyclePose.visible
 
     const presenceTransition = reducedMotion
         ? { duration: 0 }

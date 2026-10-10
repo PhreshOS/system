@@ -2,8 +2,8 @@ import { constrainWindowGeometry, resolveWindowGeometry, type WindowRegion, type
 import { type PresentationAnimation } from "@client/view/components/desktop-host/presentation"
 import { resolvePresentationTransaction } from "@client/view/appearance/motion"
 import { type Transaction, type Position, type Size, type PresentationTransaction } from "@phreshos/core"
-import { useMotionValue, useTransform, type MotionStyle } from "motion/react"
-import { useLayoutEffect, useRef } from "react"
+import { useMotionValue, type MotionStyle } from "motion/react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { WindowGeometryAnimation } from "./window-geometry-animation"
 import { timing, useAppearance } from "@phreshos/react-ui"
 
@@ -36,8 +36,26 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
     const layoutWidth = useMotionValue(width.get())
     const layoutHeight = useMotionValue(height.get())
     const transformOrigin = useMotionValue("0px 0px")
-    const scaleX = useTransform(() => layoutWidth.get() === 0 ? 1 : width.get() / layoutWidth.get())
-    const scaleY = useTransform(() => layoutHeight.get() === 0 ? 1 : height.get() / layoutHeight.get())
+    const scaleX = useMotionValue(1)
+    const scaleY = useMotionValue(1)
+
+    // The scale reads the shown size against the laid-out one. It is set the moment either changes,
+    // so both reach the screen in the same frame: a derived value would follow a frame later, and the
+    // Window would flash once at its laid-out size when a resize starts.
+    useEffect(function () {
+
+        const fit = () => {
+            scaleX.set(layoutWidth.get() === 0 ? 1 : width.get() / layoutWidth.get())
+            scaleY.set(layoutHeight.get() === 0 ? 1 : height.get() / layoutHeight.get())
+        }
+
+        fit()
+
+        const stops = [width, height, layoutWidth, layoutHeight].map(value => value.on("change", fit))
+
+        return () => stops.forEach(stop => stop())
+
+    }, [width, height, layoutWidth, layoutHeight, scaleX, scaleY])
     const animator = useRef<WindowGeometryAnimation | null>(null)
     if (!animator.current) animator.current = new WindowGeometryAnimation({ x, y, width, height }, { width: layoutWidth, height: layoutHeight })
     const gesturing = useRef(false)

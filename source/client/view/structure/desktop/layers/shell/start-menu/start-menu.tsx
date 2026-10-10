@@ -1,15 +1,15 @@
 import PhreshOSIcon from "@client/view/components/phreshos-icon"
-import { createContext, memo, useCallback, useContext, useEffect, useId, useRef, useState, type CSSProperties, type PropsWithChildren, type RefObject } from "react"
+import { createContext, memo, useContext, useId, type CSSProperties, type PropsWithChildren } from "react"
 import StartMenuPanel from "./start-menu-panel"
 import { name } from "@/source/identity"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { shellSurfaceClassName } from "../shell-surface"
+import { useShellPopover } from "../shell-popover"
 import TaskbarButton from "../taskbar/taskbar-button"
 import { useTiming } from "@phreshos/react-ui"
-import { cssEasing } from "@phreshos/core"
-import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { usePortrait } from "../../../orientation"
 import { useDesktopScale } from "../../../desktop-scale"
 
@@ -23,59 +23,9 @@ export function StartMenuProvider({ taskbar, spacing, children }: PropsWithChild
 
     const id = useId()
 
-    const surface = useRef<HTMLDivElement>(null)
+    const popover = useShellPopover()
 
-    const [open, setOpen] = useState(false)
-
-    const openAtPressStart = useRef(false)
-
-    const close = useCallback(function () {
-
-        const element = surface.current
-
-        if (element?.matches(":popover-open")) element.hidePopover()
-
-    }, [])
-
-    const beginToggle = useCallback(function () {
-
-        openAtPressStart.current = surface.current?.matches(":popover-open") ?? false
-
-    }, [])
-
-    const toggle = useCallback(function () {
-
-        const element = surface.current
-
-        if (!element) return
-
-        if (openAtPressStart.current) {
-
-            if (element.matches(":popover-open")) element.hidePopover()
-
-            return
-        }
-
-        if (!element.matches(":popover-open")) element.showPopover()
-
-    }, [])
-
-    useEffect(function () {
-
-        // Program frames are separate documents, so focus crossing the iframe
-        // boundary is the signal that replaces native popover light dismissal.
-        function closeForProgramFrame() {
-
-            if (document.activeElement instanceof HTMLIFrameElement && !surface.current?.contains(document.activeElement)) close()
-        }
-
-        window.addEventListener("blur", closeForProgramFrame)
-
-        return () => window.removeEventListener("blur", closeForProgramFrame)
-
-    }, [close])
-
-    return <StartMenuContext.Provider value={{ id, surface, taskbar, spacing, open, setOpen, close, beginToggle, toggle }}>
+    return <StartMenuContext.Provider value={{ id, taskbar, spacing, popover }}>
 
         {children}
 
@@ -94,11 +44,10 @@ export const StartMenuButton = memo(function StartMenuButton({ showLabel = true 
         color="default:base"
         material="extended"
         aria-controls={control.id}
-        aria-expanded={control.open}
+        aria-expanded={control.popover.open}
         aria-haspopup="dialog"
         aria-label={name}
-        onPressStart={control.beginToggle}
-        onPress={control.toggle}
+        onPress={control.popover.toggle}
     />
 })
 
@@ -116,24 +65,15 @@ export default memo(function StartMenu() {
     const scale = useDesktopScale()
 
     return <motion.div
-        ref={control.surface}
+        ref={control.popover.surface}
         id={control.id}
         role="dialog"
-        popover="auto"
         aria-labelledby={`${control.id}-label`}
         tabIndex={-1}
         className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
-        style={{
-            ...startMenuStyle(control.taskbar, control.spacing, portrait, scale),
-            transitionBehavior: "allow-discrete",
-            transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
-            transitionTimingFunction: cssEasing(transaction.easing),
-            transitionProperty: "display, overlay"
-        }}
-        initial={false}
-        animate={control.open ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
+        style={startMenuStyle(control.taskbar, control.spacing, portrait, scale)}
+        {...control.popover.motion}
         transition={surfacePresenceTransition(reducedMotion, transaction)}
-        onBeforeToggle={event => control.setOpen(event.newState === "open")}
         onToggle={event => {
 
             if (event.newState !== "open") return
@@ -147,7 +87,7 @@ export default memo(function StartMenu() {
 
         <StartMenuPanel
             labelId={`${control.id}-label`}
-            onChoose={control.close}
+            onChoose={control.popover.close}
         />
 
     </motion.div>
@@ -204,17 +144,12 @@ function useStartMenuControl() {
 
 /** Whether the default Shell's Start Menu currently retains its Taskbar anchor. */
 export function useStartMenuOpen() {
-    return useStartMenuControl().open
+    return useStartMenuControl().popover.open
 }
 
 interface StartMenuControl {
     id: string
-    surface: RefObject<HTMLDivElement | null>
     taskbar: AppearanceTaskbar
     spacing: number
-    open: boolean
-    setOpen: (open: boolean) => void
-    close: () => void
-    beginToggle: () => void
-    toggle: () => void
+    popover: ReturnType<typeof useShellPopover>
 }

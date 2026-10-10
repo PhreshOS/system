@@ -1,9 +1,8 @@
-import { cssEasing } from "@phreshos/core"
 import { Button, ContextMenu, Panel, Surface, Text, Tooltip, useAppearance, useColor, useScale, useTiming } from "@phreshos/react-ui"
 import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
 import TaskbarTooltip from "../taskbar-tooltip"
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
 import { planeReach, snapPlacement, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
@@ -13,7 +12,8 @@ import { EdgeHold, against, useViewTravel } from "../../../../edge-hold"
 import { createPortal } from "react-dom"
 import SnapPreview, { type SnapTarget } from "../../../../windows/snap-preview"
 import { desktopMargins } from "../../../desktop-layers"
-import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
+import { useShellPopover } from "../../shell-popover"
 import { shellSurfaceClassName } from "../../shell-surface"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import { type Viewport } from "../../../../viewport-offset"
@@ -63,10 +63,9 @@ export interface MappedWindow {
  * above them, and the Windows above both. Choosing a view moves there; dragging the frame
  * moves the view anywhere.
  *
- * The map opens and closes as the Start Menu does: a native popover, which the
- * browser closes when something else on the Desktop is pressed, and which closes
- * itself when focus crosses into a Program frame; either way the press goes on
- * to what it was meant for.
+ * The map opens and closes as the Start Menu does, a Shell popover: pressing
+ * anything else, Escape, or focus crossing into a Program frame closes it, and
+ * the press goes on to what it was meant for.
  */
 export default function MapControl({ viewport, windows, taskbar, spacing, onOpenChange }: Readonly<{
     viewport: Viewport
@@ -80,9 +79,9 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
     const trigger = useRef<HTMLButtonElement>(null)
 
-    const surface = useRef<HTMLDivElement>(null)
+    const popover = useShellPopover(onOpenChange)
 
-    const [open, setOpen] = useState(false)
+    const { surface, open, close } = popover
 
     // Where the map opens, measured from the button when it opens, and the room it has there.
     const [anchor, setAnchor] = useState<CSSProperties>({})
@@ -91,8 +90,6 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
     // How far the map moves inward so it stays on the screen, once it is drawn.
     const [inward, setInward] = useState(0)
-
-    const openAtPressStart = useRef(false)
 
     const reducedMotion = useReducedMotion()
 
@@ -103,26 +100,6 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
     const centered = viewport.offset.x === 0 && viewport.offset.y === 0
 
     const place = `${viewport.view.x}, ${viewport.view.y}`
-
-    const close = useCallback(function () {
-
-        if (surface.current?.matches(":popover-open")) surface.current.hidePopover()
-
-    }, [])
-
-    useEffect(function () {
-
-        // Program frames are separate documents, so focus crossing into one is what closes the map there.
-        function closeForProgramFrame() {
-
-            if (document.activeElement instanceof HTMLIFrameElement && !surface.current?.contains(document.activeElement)) close()
-        }
-
-        window.addEventListener("blur", closeForProgramFrame)
-
-        return () => window.removeEventListener("blur", closeForProgramFrame)
-
-    }, [close])
 
     // The map's button can be carried: dragged out, it leaves a ghost in the hand, and held against an
     // edge of the screen, the ghost takes the view that way, as a held Window does. It is what the
@@ -240,12 +217,9 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         if (carried.current) return
 
-        const element = surface.current
+        if (!trigger.current) return
 
-        if (!element || !trigger.current) return
-
-        // A press on the button while the map is open already closed it.
-        if (openAtPressStart.current) return close()
+        if (open) return close()
 
         setAnchor(anchorStyle(trigger.current, taskbar, spacing))
 
@@ -253,7 +227,7 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         setInward(0)
 
-        element.showPopover()
+        popover.show()
     }
 
     // It starts where its button starts; where it would pass the screen's far edge, it moves back just
@@ -286,7 +260,6 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
             <Button ref={trigger} size="small" iconOnly={centered && !vertical} className={vertical ? "px-0" : undefined} color={centered ? undefined : "primary:soft"}
                 style={ghost ? { opacity: 0.35 } : undefined}
                 aria-label={centered ? "Map" : `Map, near ${place}`} aria-controls={id} aria-expanded={open} aria-haspopup="dialog"
-                onPressStart={() => { openAtPressStart.current = surface.current?.matches(":popover-open") ?? false }}
                 onPress={toggle}>
                 <MapIcon />{!centered && !vertical && <span className="tabular-nums">{place}</span>}
             </Button>
@@ -315,22 +288,15 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
             ref={surface}
             id={id}
             role="dialog"
-            popover="auto"
             aria-labelledby={`${id}-label`}
             tabIndex={-1}
             className={`${shellSurfaceClassName} pointer-events-auto fixed hidden open:block`}
             style={{
                 ...anchor,
-                ...(vertical ? { top: Number(anchor.top ?? 0) - inward } : { left: Number(anchor.left ?? 0) - inward }),
-                transitionBehavior: "allow-discrete",
-                transitionDuration: reducedMotion ? "0ms" : String(transaction.duration) + "ms",
-                transitionTimingFunction: cssEasing(transaction.easing),
-                transitionProperty: "display, overlay"
+                ...(vertical ? { top: Number(anchor.top ?? 0) - inward } : { left: Number(anchor.left ?? 0) - inward })
             }}
-            initial={false}
-            animate={open ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
+            {...popover.motion}
             transition={surfacePresenceTransition(reducedMotion, transaction)}
-            onBeforeToggle={event => { setOpen(event.newState === "open"); onOpenChange(event.newState === "open") }}
             onToggle={event => { if (event.newState === "open") event.currentTarget.focus() }}
         >
 

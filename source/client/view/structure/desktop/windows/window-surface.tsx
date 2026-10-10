@@ -8,6 +8,7 @@ import { surfaceLifecyclePose, surfacePresenceTransition } from "@client/view/ap
 import { resolvePresentationTransaction } from "@client/view/appearance/motion"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import { useAppearance, useTiming } from "@phreshos/react-ui"
+import { useDrawn } from "../drawn"
 
 /** Paints the optional Desktop-owned backing surface for a supported presentation. */
 export default function WindowSurface({ surface, active = true, floating = false, animation, onComplete }: WindowSurfaceProps) {
@@ -24,6 +25,9 @@ export default function WindowSurface({ surface, active = true, floating = false
     const retained = useRef<VisibleWindowSurface>(true)
 
     if (surface !== false) retained.current = surface
+
+    // Its motion starts once the change it shows is drawn.
+    const shown = useDrawn(visible, { initial: animated && visible && !reducedMotion ? false : visible, immediate: reducedMotion || !animated })
 
     useLayoutEffect(function () {
 
@@ -48,7 +52,7 @@ export default function WindowSurface({ surface, active = true, floating = false
 
     return <motion.div
         initial={animated && visible && !reducedMotion ? surfaceLifecyclePose.hidden : surfaceLifecyclePose.visible}
-        animate={visible ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
+        animate={shown ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden}
         transition={animated
             ? surfacePresenceTransition(reducedMotion, transaction)
             : { duration: 0 }}
