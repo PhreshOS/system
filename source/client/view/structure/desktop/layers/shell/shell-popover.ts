@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useReducedMotion } from "@libs/react-motion"
 import { surfaceLifecyclePose } from "@client/view/appearance/surface-presence"
-import { useDrawn } from "../../drawn"
 
 /**
  * A Shell surface opened from its Taskbar button, such as the Start Menu or the map: a popover, so
@@ -17,10 +16,9 @@ export function useShellPopover(onOpenChange?: (open: boolean) => void) {
     const surface = useRef<HTMLDivElement>(null)
     const [open, setOpenState] = useState(false)
     const reducedMotion = useReducedMotion()
-    const shown = useDrawn(open, { immediate: reducedMotion })
-    const current = useRef({ open, shown, reducedMotion, onOpenChange })
+    const current = useRef({ open, reducedMotion, onOpenChange })
 
-    current.current = { open, shown, reducedMotion, onOpenChange }
+    current.current = { open, reducedMotion, onOpenChange }
 
     const setOpen = useCallback(function (next: boolean) {
 
@@ -56,8 +54,8 @@ export function useShellPopover(onOpenChange?: (open: boolean) => void) {
 
         setOpen(false)
 
-        // Not yet entered, or without motion, it has no leaving to wait for.
-        if (!current.current.shown || current.current.reducedMotion) hide()
+        // Without motion, it has no leaving to wait for.
+        if (current.current.reducedMotion) hide()
     }, [setOpen, hide])
 
     const toggle = useCallback(function () {
@@ -118,7 +116,7 @@ export function useShellPopover(onOpenChange?: (open: boolean) => void) {
         motion: {
             popover: "manual" as const,
             initial: false as const,
-            animate: shown ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden,
+            animate: open ? surfaceLifecyclePose.visible : surfaceLifecyclePose.hidden,
             onAnimationComplete: hide
         }
     }

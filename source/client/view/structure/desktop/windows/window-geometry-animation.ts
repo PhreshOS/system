@@ -2,7 +2,6 @@ import type { WindowRegion } from "@client/view/components/window-manager/window
 import type { Transaction } from "@phreshos/core"
 import { animate, type AnimationPlaybackControls, type MotionValue } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
-import { afterDrawn } from "../drawn"
 
 const axes = ["x", "y", "width", "height"] as const
 const sizeAxes = ["width", "height"] as const
@@ -19,7 +18,6 @@ export class WindowGeometryAnimation {
     private flights = new Map<Axis, Flight>()
     private complete?: () => void
     private updating = false
-    private waiting: (() => void) | null = null
 
     constructor(
         private values: Record<Axis, MotionValue<number>>,
@@ -29,7 +27,6 @@ export class WindowGeometryAnimation {
     stop() {
 
         this.complete = undefined
-        this.cancelWait()
         const flights = [...this.flights.values()]
         this.flights.clear()
         for (const flight of flights) flight.control?.stop()
@@ -79,36 +76,13 @@ export class WindowGeometryAnimation {
         }
 
         this.complete = complete
-        this.cancelWait()
+        this.updating = true
+        const timing = JSON.stringify([transaction.duration, transaction.easing])
 
         // A nonzero backing viewport permits scaling to or from zero size.
         // Only these destination changes reflow content, not every tween frame.
-        const width = region.width || Math.max(this.values.width.get(), 1)
-        const height = region.height || Math.max(this.values.height.get(), 1)
-        const reflows = !this.flights.size && (width !== this.layout.width.get() || height !== this.layout.height.get())
-        this.layout.width.set(width)
-        this.layout.height.set(height)
-
-        // Starting from rest, the tween waits for the content laid out anew to be drawn; a running
-        // one retargets at once.
-        if (reflows) {
-            let drawn = false
-            const cancel = afterDrawn(() => {
-                drawn = true
-                this.waiting = null
-                this.fly(region, transaction, animatedAxes)
-            })
-            if (!drawn) this.waiting = cancel
-            return
-        }
-
-        this.fly(region, transaction, animatedAxes)
-    }
-
-    private fly(region: WindowRegion, transaction: Transaction, animatedAxes: readonly Axis[]) {
-
-        this.updating = true
-        const timing = JSON.stringify([transaction.duration, transaction.easing])
+        this.layout.width.set(region.width || Math.max(this.values.width.get(), 1))
+        this.layout.height.set(region.height || Math.max(this.values.height.get(), 1))
 
         for (const axis of animatedAxes) {
 
@@ -139,16 +113,11 @@ export class WindowGeometryAnimation {
 
     private finish() {
 
-        if (this.updating || this.waiting || this.flights.size) return
+        if (this.updating || this.flights.size) return
         this.settleLayout()
         const complete = this.complete
         this.complete = undefined
         complete?.()
-    }
-
-    private cancelWait() {
-        this.waiting?.()
-        this.waiting = null
     }
 
     private settleLayout() {
