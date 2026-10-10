@@ -192,14 +192,14 @@ function WallpaperLayer({ source, visible, onLoad, onError, onShown }: Readonly<
 }
 
 /**
- * Where one wallpaper is read from. An HTML page is told the Theme it is shown in, `?theme=light` or
- * `?theme=dark`, the Desktop's own and not the browser's: one page can serve both Themes, and each
- * Theme is its own page to fade to, as two pictures are.
+ * Where one wallpaper is read from. An HTML page is told the Theme it is opened in, `?theme=light` or
+ * `?theme=dark`, the Desktop's own and not the browser's. A wallpaper is its file: the same file in
+ * both Themes stays as it is when the Theme changes.
  */
 function resolveWallpaper(file: string, uploads: string, theme: "light" | "dark"): WallpaperSource {
     const kind = wallpaperKind(file) ?? "image"
 
-    if (kind === "html") return { identity: `html:${file}:${theme}`, kind, url: `${uploads}/wallpaper/${encodeURIComponent(file)}?theme=${theme}` }
+    if (kind === "html") return { identity: `html:${file}`, kind, url: `${uploads}/wallpaper/${encodeURIComponent(file)}?theme=${theme}` }
 
     return { identity: `${kind}:${file}`, kind, url: `${uploads}/${encodeURIComponent(file)}` }
 }
