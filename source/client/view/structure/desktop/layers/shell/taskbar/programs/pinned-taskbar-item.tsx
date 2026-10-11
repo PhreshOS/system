@@ -35,7 +35,7 @@ export default function PinnedTaskbarItem({ program, icon, position }: Readonly<
             }}>
                 <Menu.Item id="open" textValue="New window"><Plus aria-hidden />New window</Menu.Item>
                 <Menu.Separator />
-                <Menu.Item id="unpin" textValue="Unpin from Taskbar"><PinOff aria-hidden />Unpin from Taskbar</Menu.Item>
+                <Menu.Item id="unpin" textValue="Unpin"><PinOff aria-hidden />Unpin</Menu.Item>
             </Menu>
 
         </ContextMenu.Content>

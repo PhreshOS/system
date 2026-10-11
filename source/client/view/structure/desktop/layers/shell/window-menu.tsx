@@ -10,7 +10,7 @@ export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo
     title: string
     minimized: boolean
     maximized: boolean
-    /** Whether its Program keeps its place on the Taskbar; offered only where `onTogglePinned` is. */
+    /** Whether its Program keeps its place on the Taskbar; offered, as Pin or Unpin, only on the Taskbar. */
     pinned?: boolean
     onTogglePinned?: () => void
     onGoTo: () => void
@@ -41,7 +41,7 @@ export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo
 
         {onTogglePinned && <>
             <Menu.Separator />
-            <Menu.Item id="pin" textValue={pinned ? "Unpin from Taskbar" : "Pin to Taskbar"}>{pinned ? <><PinOff aria-hidden />Unpin from Taskbar</> : <><Pin aria-hidden />Pin to Taskbar</>}</Menu.Item>
+            <Menu.Item id="pin" textValue={pinned ? "Unpin" : "Pin"}>{pinned ? <><PinOff aria-hidden />Unpin</> : <><Pin aria-hidden />Pin</>}</Menu.Item>
         </>}
 
         <Menu.Separator />
