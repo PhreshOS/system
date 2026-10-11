@@ -17,6 +17,7 @@ import { useShellPopover } from "../../shell-popover"
 import { shellSurfaceClassName } from "../../shell-surface"
 import { floatingShadow } from "@client/view/appearance/floating-shadow"
 import { type Viewport } from "../../../../viewport-offset"
+import { useDesktopScale } from "../../../../desktop-scale"
 
 /** A standard Window as the map shows it: where it is on the plane. */
 export interface MappedWindow {
@@ -96,6 +97,14 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
     const transaction = useTiming()("change")
 
     const vertical = taskbar.position === "left" || taskbar.position === "right"
+
+    const scale = useDesktopScale()
+
+    // The screen as the Start Menu reads it: the visible viewport (`dvw`, `dvh`, which leave out a phone
+    // browser's bars), in Desktop pixels. A hidden element of that size is measured, not the window.
+    const screenMeasure = useRef<HTMLDivElement>(null)
+
+    const screen = () => ({ width: screenMeasure.current?.offsetWidth ?? 0, height: screenMeasure.current?.offsetHeight ?? 0 })
 
     const centered = viewport.offset.x === 0 && viewport.offset.y === 0
 
@@ -221,9 +230,9 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         if (open) return close()
 
-        setAnchor(anchorStyle(trigger.current, taskbar, spacing))
+        setAnchor(anchorStyle(trigger.current, taskbar, spacing, scale))
 
-        setRoom(roomBeside(trigger.current, taskbar, spacing))
+        setRoom(roomBeside(screen(), taskbar, spacing))
 
         setInward(0)
 
@@ -238,12 +247,10 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         if (!open || !element || !trigger.current) return
 
-        // Layout measures, which the entrance's brief growth does not change; the Desktop's scale comes from the button.
-        const scale = trigger.current.offsetWidth ? trigger.current.getBoundingClientRect().width / trigger.current.offsetWidth : 1
+        // Layout measures, which the entrance's brief growth does not change.
+        const visible = screen()
 
-        const screen = { width: window.innerWidth / scale, height: window.innerHeight / scale }
-
-        const beyond = vertical ? element.offsetTop + element.offsetHeight - (screen.height - spacing) : element.offsetLeft + element.offsetWidth - (screen.width - spacing)
+        const beyond = vertical ? element.offsetTop + element.offsetHeight - (visible.height - spacing) : element.offsetLeft + element.offsetWidth - (visible.width - spacing)
 
         const start = (vertical ? element.offsetTop : element.offsetLeft) - spacing
 
@@ -284,6 +291,8 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
             </Button>
         </div>, document.body)}
 
+        <div ref={screenMeasure} aria-hidden="true" style={{ position: "fixed", left: 0, top: 0, width: `calc(100dvw / ${scale})`, height: `calc(100dvh / ${scale})`, visibility: "hidden", pointerEvents: "none" }} />
+
         <motion.div
             ref={surface}
             id={id}
@@ -318,13 +327,7 @@ interface Room {
  * The room beside the Taskbar for the map: the whole screen, less one spacing at its edges and the
  * Taskbar with its spacings on the Taskbar's side, as the Start Menu has.
  */
-function roomBeside(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: number): Room {
-
-    const rectangle = button.getBoundingClientRect()
-
-    const scale = button.offsetWidth ? rectangle.width / button.offsetWidth : 1
-
-    const screen = { width: window.innerWidth / scale, height: window.innerHeight / scale }
+function roomBeside(screen: Readonly<{ width: number, height: number }>, taskbar: AppearanceTaskbar, spacing: number): Room {
 
     const taskbarSide = taskbar.size + spacing * 3
 
@@ -337,12 +340,10 @@ function roomBeside(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: nu
  * Like the Start Menu, the map opens two spacings beyond the Taskbar's edge, starting where the button
  * starts. Taskbar positions name physical screen edges, so every inset stays physical.
  */
-function anchorStyle(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: number): CSSProperties {
+function anchorStyle(button: HTMLElement, taskbar: AppearanceTaskbar, spacing: number, scale: number): CSSProperties {
 
     // The Desktop's scale preference enlarges what it shows; fixed insets are counted before it.
     const rectangle = button.getBoundingClientRect()
-
-    const scale = button.offsetWidth ? rectangle.width / button.offsetWidth : 1
 
     const inset = taskbar.size + spacing * 2
 
