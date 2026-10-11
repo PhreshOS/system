@@ -60,9 +60,9 @@ export default class Entry {
             // where it is held. The launch itself stays behind `startup.get()`.
             startup: new ProgramStateStorage(this.program).startup() !== null,
 
-            // Whether it keeps its place on a Desktop's Taskbar, closed or open.
-            pinned: new ProgramStateStorage(this.program).pinned()
-        } satisfies ProgramSnapshot & { permissions: Permissions, startup: boolean, pinned: boolean }
+            // When it was pinned to the Taskbar, which orders it there; `null` when it is not.
+            pinnedAt: new ProgramStateStorage(this.program).pinnedAt()
+        } satisfies ProgramSnapshot & { permissions: Permissions, startup: boolean, pinnedAt: string | null }
     }
 
     public toJSON() {

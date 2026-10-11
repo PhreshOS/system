@@ -8,16 +8,18 @@ import { AppWindow, Pin, PinOff } from "@phreshos/react-ui/icons"
  */
 export default function ProgramMenu({ program, onOpen }: Readonly<{ program: Program, onOpen: () => void }>) {
 
+    const { pinnedAt } = program
+
     return <Menu aria-label={`${program.name} actions`} size="small" onAction={action => {
         if (action === "open") onOpen()
-        else if (action === "pin") void program.pin(!program.pinned).catch(() => undefined)
+        else if (action === "pin") void program.pin(pinnedAt === null).catch(() => undefined)
     }}>
 
         <Menu.Item id="open" textValue="Open"><AppWindow aria-hidden />Open</Menu.Item>
 
         <Menu.Separator />
 
-        <Menu.Item id="pin" textValue={program.pinned ? "Unpin" : "Pin"}>{program.pinned ? <><PinOff aria-hidden />Unpin</> : <><Pin aria-hidden />Pin</>}</Menu.Item>
+        <Menu.Item id="pin" textValue={pinnedAt !== null ? "Unpin" : "Pin"}>{pinnedAt !== null ? <><PinOff aria-hidden />Unpin</> : <><Pin aria-hidden />Pin</>}</Menu.Item>
 
     </Menu>
 }

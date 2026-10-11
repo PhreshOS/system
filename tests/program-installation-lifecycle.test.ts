@@ -87,20 +87,20 @@ test("purge resets installed storage before launching and preserves source stora
     const installedNote = join(entry.program.storagePath, "note.txt")
     mkdirSync(entry.program.storagePath, { recursive: true })
     writeFileSync(installedNote, "installed data")
-    await manager.pinned(entry.program, "pin")
+    const pinnedAt = await manager.pinned(entry.program, "pin")
     const sourceStorage = join(directory, "source", "storage")
     mkdirSync(sourceStorage, { recursive: true })
     writeFileSync(join(sourceStorage, "note.txt"), "development data")
     entry = await manager.install(definition())
     expect(readFileSync(installedNote, "utf8")).toBe("installed data")
-    expect(await manager.pinned(entry.program, "get")).toBe(true)
+    expect(await manager.pinned(entry.program, "get")).toBe(pinnedAt)
     start.mockImplementation(async program => {
         expect(existsSync(join(program.storagePath, "note.txt"))).toBe(false)
         return "process"
     })
     entry = await manager.install(definition(), { purge: true, launch: true })
     expect(existsSync(installedNote)).toBe(false)
-    expect(await manager.pinned(entry.program, "get")).toBe(false)
+    expect(await manager.pinned(entry.program, "get")).toBeNull()
     expect(readFileSync(join(sourceStorage, "note.txt"), "utf8")).toBe("development data")
 })
 
@@ -147,7 +147,7 @@ test("uninstallation converges silently while its Program handle remains valid",
     await manager.uninstall(program)
 
     expect(entry.installed).toBe(false)
-    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(await manager.pinned(program, "get")).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
     expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
 

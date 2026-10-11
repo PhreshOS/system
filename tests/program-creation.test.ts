@@ -67,22 +67,23 @@ test("startup and pinned state share one file without overwriting each other", a
     const startup = { name: "background", options: { mode: "quiet" } }
 
     await manager.startup(program, "set", startup)
-    await manager.pinned(program, "pin")
+    const pinnedAt = await manager.pinned(program, "pin")
     await manager.setPermission(program, "network", false)
 
     expect(await manager.startup(program, "get")).toEqual(startup)
-    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(pinnedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(await manager.pinned(program, "get")).toBe(pinnedAt)
     expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
     expect(JSON.parse(readFileSync(join(program.storagePath, "state.json"), "utf8"))).toEqual({
         startup,
-        pinned: true,
+        pinnedAt,
         permissions: { network: false }
     })
 
     await manager.startup(program, "remove")
     await manager.pinned(program, "unpin")
     expect(await manager.startup(program, "get")).toBeNull()
-    expect(await manager.pinned(program, "get")).toBe(false)
+    expect(await manager.pinned(program, "get")).toBeNull()
     expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
 })
 
@@ -145,23 +146,24 @@ test("resetting a permission removes only its stored assignment and announces th
     )
 })
 
-test("pinning emits Program and global events only when the boolean changes", async context => {
+test("pinning keeps its first time, and emits Program and global events only when it changes", async context => {
     const { manager, definition, announceHost, announceSubject } = fixture(context)
     const program = await manager.create(definition())
     announceHost.mockClear()
     announceSubject.mockClear()
 
-    await manager.pinned(program, "pin")
-    await manager.pinned(program, "pin")
+    const pinnedAt = await manager.pinned(program, "pin")
+    // Pinned again, it keeps its time, and so its place among the pinned.
+    expect(await manager.pinned(program, "pin")).toBe(pinnedAt)
     await manager.pinned(program, "unpin")
 
-    expect(announceHost.mock.calls.map(([, owner, event, , , pinned]) => [owner, event, pinned])).toEqual([
-        [program.identity, "pin", true],
-        [program.identity, "pin", false]
+    expect(announceHost.mock.calls.map(([, owner, event, , , value]) => [owner, event, value])).toEqual([
+        [program.identity, "pin", pinnedAt],
+        [program.identity, "pin", null]
     ])
-    expect(announceSubject.mock.calls.map(([, , event, subject, pinned]) => [event, subject, pinned])).toEqual([
-        ["pin", program.reference, true],
-        ["pin", program.reference, false]
+    expect(announceSubject.mock.calls.map(([, , event, subject, value]) => [event, subject, value])).toEqual([
+        ["pin", program.reference, pinnedAt],
+        ["pin", program.reference, null]
     ])
 })
 
@@ -230,13 +232,13 @@ test("boot reconstruction reads startup and permissions from state", async conte
     mkdirSync(join(directory, "storage"), { recursive: true })
     writeFileSync(join(directory, "program.json"), JSON.stringify({ ...definition({ all: true }), storage: "storage", client: { location: client } }))
     const startup = { name: "saved-startup" }
-    writeFileSync(join(directory, "storage", "state.json"), JSON.stringify({ startup, permissions: { network: false }, pinned: true }))
+    writeFileSync(join(directory, "storage", "state.json"), JSON.stringify({ startup, permissions: { network: false }, pinnedAt: "2026-10-11T00:00:00.000Z" }))
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: unknown): Promise<string> }, "start").mockResolvedValue("process")
 
     await manager.initialize()
     const program = manager.find("example").program
     expect(manager.permissions(program)).toEqual({ all: [], network: false })
-    expect(await manager.pinned(program, "get")).toBe(true)
+    expect(await manager.pinned(program, "get")).toBe("2026-10-11T00:00:00.000Z")
     expect(start).toHaveBeenCalledExactlyOnceWith(program, startup)
 })
 

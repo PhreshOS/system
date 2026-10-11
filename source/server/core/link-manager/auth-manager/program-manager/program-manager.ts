@@ -739,24 +739,27 @@ export default class ProgramManager extends TheLink {
         ])
     }
 
-    /** Read or change the pinned state and publish only effective transitions. */
-    public async pinned(program: Program, operation: "get" | "pin" | "unpin"): Promise<boolean> {
+    /**
+     * Read or change when a Program was pinned, and publish only effective transitions. Pinning one
+     * already pinned keeps its time, and so its place among the pinned.
+     */
+    public async pinned(program: Program, operation: "get" | "pin" | "unpin"): Promise<string | null> {
         const state = new ProgramStateStorage(program)
-        const current = state.pinned()
+        const current = state.pinnedAt()
         if (operation === "get") return current
 
-        const pinned = operation === "pin"
-        if (current === pinned) return current
+        const pinnedAt = operation === "pin" ? current ?? new Date().toISOString() : null
+        if (current === pinnedAt) return current
 
-        state.setPinned(pinned)
+        state.setPinnedAt(pinnedAt)
         const entry = this.find(program.identity)
         await Promise.all([
-            this.authManager.processManager.announceHost("program", entry.identity, "pin", entry.identity, entry, pinned),
-            this.authManager.processManager.announceSubject("program", entry.identity, "pin", entry.program.reference, pinned)
+            this.authManager.processManager.announceHost("program", entry.identity, "pin", entry.identity, entry, pinnedAt),
+            this.authManager.processManager.announceSubject("program", entry.identity, "pin", entry.program.reference, pinnedAt)
         ])
         // Its own route, apart from the "/pinned" a Desktop asks on, as every change has.
-        await this.$outbound.publish("/pin-change", entry.record(), pinned)
-        return pinned
+        await this.$outbound.publish("/pin-change", entry.record(), pinnedAt)
+        return pinnedAt
     }
 
     // A store's controls, in one place. Reached from a process

@@ -52,8 +52,8 @@ export default class Program {
     /** Whether it starts with the System. */
     public startup: boolean
 
-    /** Whether it keeps its place on the Taskbar, closed or open. */
-    public pinned: boolean
+    /** When it was pinned to the Taskbar, as an ISO time, which orders it there; `null` when it is not. */
+    public pinnedAt: string | null
 
     public constructor(programManager: ProgramManager, payload: ProgramRecord) {
 
@@ -93,7 +93,7 @@ export default class Program {
 
         this.startup = payload.startup
 
-        this.pinned = payload.pinned
+        this.pinnedAt = payload.pinnedAt
     }
 
     public updatePermissions(permissions: unknown) {

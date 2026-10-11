@@ -100,9 +100,10 @@ export default class ProgramManager extends TheLink {
         return await this.$outbound.publishFirst("/permissions", subject, operation, name, value)
     }
 
+    /** When a Program was pinned, or `null`; pinning or unpinning it first when asked to. */
     public async pinned(subject: unknown, operation: "get" | "pin" | "unpin") {
 
-        return await this.$outbound.publishFirst("/pinned", subject, operation) as boolean
+        return await this.$outbound.publishFirst("/pinned", subject, operation) as string | null
     }
 
     @Subscribe("/permissions-change")
@@ -218,13 +219,13 @@ export default class ProgramManager extends TheLink {
     }
 
     @Subscribe("/pin-change")
-    protected async pinnedChanged(payload: ProgramRecord | null, pinned: boolean) {
+    protected async pinnedChanged(payload: ProgramRecord | null, pinnedAt: string | null) {
 
-        if (!payload || typeof pinned !== "boolean") return
+        if (!payload || (pinnedAt !== null && typeof pinnedAt !== "string")) return
         const program = this.programs.get(payload.identity)
         if (!program || program.reference !== payload.reference) return
-        program.pinned = pinned
-        await this.$inbound.publish("/pinned", program, pinned)
+        program.pinnedAt = pinnedAt
+        await this.$inbound.publish("/pinned", program, pinnedAt)
         // The Taskbar follows the list; a pin changes where a Program stands in it.
         await this.$inbound.publish("/programs", this.list())
     }

@@ -186,11 +186,11 @@ export default function useAnnouncements(authManager: AuthManager, panes: Map<st
     programs.useSubscribe("/install", useCallback((entry: ProgramRecord | null) => programEvent("install", entry), [programEvent]))
     programs.useSubscribe("/uninstall", useCallback((entry: ProgramRecord | null, purge: boolean) => programEvent("uninstall", entry, purge), [programEvent]))
     programs.useSubscribe("/forgotten", useCallback((entry: ProgramRecord | null) => programEvent("forget", entry), [programEvent]))
-    programs.useSubscribe("/pinned", useCallback((entry: Program | null, pinned: boolean) => {
-        if (!entry || typeof pinned !== "boolean") return
+    programs.useSubscribe("/pinned", useCallback((entry: Program | null, pinnedAt: string | null) => {
+        if (!entry || (pinnedAt !== null && typeof pinnedAt !== "string")) return
         const record = sdkProgram(entry)
-        post(entry.identity, "host-program", "pin", entry.identity, record, pinned)
-        post(entry.identity, "program-host", "pin", entry.reference, pinned)
+        post(entry.identity, "host-program", "pin", entry.identity, record, pinnedAt)
+        post(entry.identity, "program-host", "pin", entry.reference, pinnedAt)
     }, [post]))
     programs.useSubscribe("/permissions", useCallback((entry: Program | null) => {
         if (!entry) return

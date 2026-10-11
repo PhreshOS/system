@@ -24,7 +24,7 @@ function record(permissions: ProgramRecord["permissions"]): ProgramRecord {
         client: null,
         permissions,
         startup: false,
-        pinned: false
+        pinnedAt: null
     }
 }
 

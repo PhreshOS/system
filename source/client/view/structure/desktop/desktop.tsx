@@ -506,8 +506,9 @@ export default function Workspace() {
 
     }, [windows.presentation, windows.bringForward, focus.minimize])
 
-    // Programs kept on the Taskbar, closed or open, in the order they are listed, with or without a Window.
-    const pinnedPrograms = programs.filter(program => program.pinned)
+    // Programs kept on the Taskbar, closed or open, with or without a Window, in the order they were pinned.
+    const pinnedPrograms = programs.filter(program => program.pinnedAt !== null)
+        .sort((left, right) => left.pinnedAt!.localeCompare(right.pinnedAt!))
 
     const pinnedIdentities = new Set(pinnedPrograms.map(program => program.identity))
 
@@ -515,7 +516,7 @@ export default function Workspace() {
 
         const program = programs.find(entry => entry.identity === record.program)
 
-        if (program) void program.pin(!program.pinned).catch(() => undefined)
+        if (program) void program.pin(program.pinnedAt === null).catch(() => undefined)
 
     }, [programs])
 

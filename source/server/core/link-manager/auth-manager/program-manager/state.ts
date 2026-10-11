@@ -42,15 +42,19 @@ export default class ProgramStateStorage {
         })
     }
 
-    public pinned(): boolean {
-        const value = this.read().pinned
-        if (value === undefined) return false
-        if (typeof value !== "boolean") throw new Error("The Program state contains an invalid pinned value")
+    /** When the Program was pinned, as an ISO time; `null` when it is not. */
+    public pinnedAt(): string | null {
+        const value = this.read().pinnedAt
+        if (value === undefined) return null
+        if (typeof value !== "string" || Number.isNaN(Date.parse(value))) throw new Error("The Program state contains an invalid pin time")
         return value
     }
 
-    public setPinned(value: boolean) {
-        this.change(state => { state.pinned = value })
+    public setPinnedAt(value: string | null) {
+        this.change(state => {
+            if (value === null) delete state.pinnedAt
+            else state.pinnedAt = value
+        })
     }
 
     private read(): Record<string, unknown> {
