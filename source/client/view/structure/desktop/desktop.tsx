@@ -546,6 +546,8 @@ export default function Workspace() {
 
                 maximized={window.maximized}
 
+                program={programs.find(program => program.identity === record.program) ?? null}
+
                 pinned={pinnedIdentities.has(record.program)}
 
                 onTogglePinned={togglePinned}
@@ -578,12 +580,15 @@ export default function Workspace() {
         {/* What a press means is composed here because it is a person's
             expectation, not a system operation: the front window hides;
             pressing another takes you to its view and brings it forward.
-            A pinned Program keeps its place, its open Windows right after it;
+            A pinned Program keeps its place: its Windows stand there, the first
+            in its icon's stead, and its icon returns once the last is closed;
             the Windows of other Programs follow, as they opened. */}
-        {pinnedPrograms.flatMap(program => [
-            <PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />,
-            ...windows.listed.filter(record => record.program === program.identity).map(windowItem)
-        ])}
+        {pinnedPrograms.flatMap(program => {
+            const its = windows.listed.filter(record => record.program === program.identity)
+            return its.length
+                ? its.map(windowItem)
+                : [<PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />]
+        })}
 
         {windows.listed.filter(record => !pinnedIdentities.has(record.program)).map(windowItem)}
 

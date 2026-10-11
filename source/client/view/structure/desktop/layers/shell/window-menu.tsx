@@ -1,17 +1,19 @@
 import { Menu } from "@phreshos/react-ui"
-import { ArrowDownLeft, ArrowUpRight, LocateFixed, Magnet, Maximize2, Minimize2, Pin, PinOff, X } from "@phreshos/react-ui/icons"
+import { AppWindow, ArrowDownLeft, ArrowUpRight, LocateFixed, Magnet, Maximize2, Minimize2, Pin, PinOff, X } from "@phreshos/react-ui/icons"
 
 /**
  * What can be done to one standard Window, the same wherever it is offered: its Taskbar item and its
  * icon on the Map. Going to it and bringing it here move between views; the rest act on the Window
  * where it is, with the same icons as the Window's own title bar controls.
  */
-export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo, onBringHere, onToggleMinimized, onToggleMaximized, onTogglePinned, onClose }: Readonly<{
+export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo, onBringHere, onToggleMinimized, onToggleMaximized, onOpen, onTogglePinned, onClose }: Readonly<{
     title: string
     minimized: boolean
     maximized: boolean
     /** Whether its Program keeps its place on the Taskbar; offered, as Pin or Unpin, only on the Taskbar. */
     pinned?: boolean
+    /** Opens its Program again, as the Start Menu does; offered only on the Taskbar. */
+    onOpen?: () => void
     onTogglePinned?: () => void
     onGoTo: () => void
     onBringHere: () => void
@@ -25,6 +27,7 @@ export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo
         else if (action === "bringHere") onBringHere()
         else if (action === "visibility") onToggleMinimized()
         else if (action === "maximize") onToggleMaximized()
+        else if (action === "open") onOpen?.()
         else if (action === "pin") onTogglePinned?.()
         else if (action === "close") onClose()
     }}>
@@ -39,8 +42,11 @@ export default function WindowMenu({ title, minimized, maximized, pinned, onGoTo
 
         <Menu.Item id="maximize" textValue={maximized ? "Restore" : "Maximize"}>{maximized ? <><Minimize2 aria-hidden />Restore</> : <><Maximize2 aria-hidden />Maximize</>}</Menu.Item>
 
+        {(onOpen || onTogglePinned) && <Menu.Separator />}
+
+        {onOpen && <Menu.Item id="open" textValue="Open"><AppWindow aria-hidden />Open</Menu.Item>}
+
         {onTogglePinned && <>
-            <Menu.Separator />
             <Menu.Item id="pin" textValue={pinned ? "Unpin" : "Pin"}>{pinned ? <><PinOff aria-hidden />Unpin</> : <><Pin aria-hidden />Pin</>}</Menu.Item>
         </>}
 

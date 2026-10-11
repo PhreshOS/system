@@ -7,9 +7,11 @@ import TaskbarTooltip from "../taskbar-tooltip"
 import TaskbarItem from "./taskbar-item"
 import useDragHold from "../../../../drag-hold"
 import { memo, useCallback } from "react"
+import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
+import { useLaunch } from "../../start-menu/programs/programs"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
-export default memo(function ({ record, title, icon, position, labeled, active, minimized, maximized, pinned, onElement, onMinimize, onShow, onGoTo, onBringHere, onMaximize, onTogglePinned, onClose }: WindowTaskbarItemProps) {
+export default memo(function ({ record, program, title, icon, position, labeled, active, minimized, maximized, pinned, onElement, onMinimize, onShow, onGoTo, onBringHere, onMaximize, onTogglePinned, onClose }: WindowTaskbarItemProps) {
 
     const scaleContainer = useDesktopScaleContainer()
 
@@ -39,6 +41,9 @@ export default memo(function ({ record, title, icon, position, labeled, active, 
     const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
     const togglePinned = useCallback(() => onTogglePinned(record), [onTogglePinned, record])
+    // Its Program again, as the Start Menu opens it: another of it beside this one.
+    const launch = useLaunch()
+    const open = useCallback(() => { if (program) void launch(program).catch(() => undefined) }, [launch, program])
 
     // The title shows on hover and focus, since a Taskbar standing on its side has room for the icon alone.
     return <TaskbarTooltip label={title}><ContextMenu>
@@ -56,7 +61,7 @@ export default memo(function ({ record, title, icon, position, labeled, active, 
         <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
             <WindowMenu title={title} minimized={minimized} maximized={maximized} pinned={pinned}
-                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onToggleMaximized={maximize} onTogglePinned={togglePinned} onClose={close} />
+                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onToggleMaximized={maximize} onOpen={program ? open : undefined} onTogglePinned={togglePinned} onClose={close} />
 
         </ContextMenu.Content>
 
@@ -66,6 +71,9 @@ export default memo(function ({ record, title, icon, position, labeled, active, 
 interface WindowTaskbarItemProps {
 
     record: Process
+
+    /** Its Program, which its menu opens again; `null` while the Desktop does not know it. */
+    program: Program | null
 
     title: string
 
