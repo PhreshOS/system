@@ -9,7 +9,8 @@ import TaskbarItem from "./taskbar-item"
 
 /**
  * A Program pinned to the Taskbar: its place, kept whether it is closed or open, with its open
- * Windows right after it. It shows its icon alone; pressed, it opens a new Window of the Program.
+ * Windows right after it. It shows its icon alone; pressed, it opens the Program, as the Start Menu
+ * does. Only a Program with a Client stands here: one without has nothing to show.
  */
 export default function PinnedTaskbarItem({ program, icon, position }: Readonly<{ program: Program, icon: string, position: TaskbarPosition }>) {
 
@@ -33,7 +34,7 @@ export default function PinnedTaskbarItem({ program, icon, position }: Readonly<
                 if (action === "open") open()
                 else if (action === "unpin") void program.pin(false).catch(() => undefined)
             }}>
-                <Menu.Item id="open" textValue="New window"><Plus aria-hidden />New window</Menu.Item>
+                <Menu.Item id="open" textValue="Open"><Plus aria-hidden />Open</Menu.Item>
                 <Menu.Separator />
                 <Menu.Item id="unpin" textValue="Unpin"><PinOff aria-hidden />Unpin</Menu.Item>
             </Menu>
