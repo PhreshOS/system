@@ -12,12 +12,14 @@ import ProgramAccessProbe, { type ProgramAccess } from "../../components/program
 import DefaultShell from "./layers/shell/default-shell"
 import OverflowRow from "./layers/shell/taskbar/programs/overflow-row"
 import WindowTaskbarItem from "./layers/shell/taskbar/programs/window-taskbar-item"
+import PinnedTaskbarItem from "./layers/shell/taskbar/programs/pinned-taskbar-item"
+import usePrograms from "./programs/programs"
 import ProcessWindow from "./windows/process-window"
 import useWindows from "../../components/window-manager/window-manager"
 import { ReadyWallpaper, WallpaperBackground } from "./layers/wallpaper/wallpaper"
 import Loading from "../../components/loading"
 import { useRequirement } from "@libs/readiness"
-import { usePreferences, useThemedValue } from "@phreshos/react-ui"
+import { narrowAppLayoutWidth, usePreferences, useThemedValue } from "@phreshos/react-ui"
 import { useProperty } from "@the-link/react"
 import SharedResizeBoundaries from "./windows/shared-resize-boundaries"
 import { programsRequirement } from "../readiness-requirements"
@@ -42,6 +44,8 @@ export default function Workspace() {
     const { theme } = usePreferences()
 
     const windows = useWindows(authManager)
+
+    const programs = usePrograms()
 
     const completePrograms = useRequirement(programsRequirement)
 
@@ -502,18 +506,23 @@ export default function Workspace() {
 
     }, [windows.presentation, windows.bringForward, focus.minimize])
 
-    const taskbarItems = <OverflowRow
-        orientation={taskbarOrientation}
-        className="h-full w-full"
-        aria-label="Open windows"
-        backwardLabel="Earlier windows"
-        forwardLabel="Later windows"
-    >
+    // Programs kept on the Taskbar, closed or open, in the order they are listed.
+    const pinnedPrograms = programs.filter(program => program.pinned && program.client)
 
-        {/* What a press means is composed here because it is a person's
-            expectation, not a system operation: the front window hides;
-            pressing another takes you to its view and brings it forward. */}
-        {windows.listed.map(record => {
+    const pinnedIdentities = new Set(pinnedPrograms.map(program => program.identity))
+
+    const togglePinned = useCallback(function (record: Process) {
+
+        const program = programs.find(entry => entry.identity === record.program)
+
+        if (program) void program.pin(!program.pinned).catch(() => undefined)
+
+    }, [programs])
+
+    // On a narrow Desktop, where Programs give up their sidebars, a Taskbar along the screen shows icons alone.
+    const labeled = viewSize.width > narrowAppLayoutWidth
+
+    function windowItem(record: Process) {
 
             const window = windows.presentation.projection(record.identity)
 
@@ -529,11 +538,17 @@ export default function Workspace() {
 
                 position={appearance.taskbar.position}
 
+                labeled={labeled}
+
                 active={focusedWindow === record.identity}
 
                 minimized={window.minimized}
 
                 maximized={window.maximized}
+
+                pinned={pinnedIdentities.has(record.program)}
+
+                onTogglePinned={togglePinned}
 
                 onElement={focus.taskbarItem}
 
@@ -550,7 +565,27 @@ export default function Workspace() {
                 onClose={focus.close}
 
             />
-        })}
+    }
+
+    const taskbarItems = <OverflowRow
+        orientation={taskbarOrientation}
+        className="h-full w-full"
+        aria-label="Open windows"
+        backwardLabel="Earlier windows"
+        forwardLabel="Later windows"
+    >
+
+        {/* What a press means is composed here because it is a person's
+            expectation, not a system operation: the front window hides;
+            pressing another takes you to its view and brings it forward.
+            A pinned Program keeps its place, its open Windows right after it;
+            the Windows of other Programs follow, as they opened. */}
+        {pinnedPrograms.flatMap(program => [
+            <PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />,
+            ...windows.listed.filter(record => record.program === program.identity).map(windowItem)
+        ])}
+
+        {windows.listed.filter(record => !pinnedIdentities.has(record.program)).map(windowItem)}
 
     </OverflowRow>
 

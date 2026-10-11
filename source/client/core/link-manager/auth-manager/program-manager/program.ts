@@ -52,6 +52,9 @@ export default class Program {
     /** Whether it starts with the System. */
     public startup: boolean
 
+    /** Whether it keeps its place on the Taskbar, closed or open. */
+    public pinned: boolean
+
     public constructor(programManager: ProgramManager, payload: ProgramRecord) {
 
         this.programManager = programManager
@@ -89,6 +92,8 @@ export default class Program {
         this.opens = payload.opens
 
         this.startup = payload.startup
+
+        this.pinned = payload.pinned
     }
 
     public updatePermissions(permissions: unknown) {
@@ -104,6 +109,12 @@ export default class Program {
     public async open() {
 
         await this.createProcess()
+    }
+
+    /** Keeps its place on the Taskbar, or gives it up. */
+    public async pin(pinned: boolean) {
+
+        await this.programManager.pinned(this.address, pinned ? "pin" : "unpin")
     }
 
     public install(options: ProgramInstallOptions = {}, asker = "") {

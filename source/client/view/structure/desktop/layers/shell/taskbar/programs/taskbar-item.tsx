@@ -6,9 +6,12 @@ import { forwardRef, type ReactNode } from "react"
  * A window on the Taskbar. The windows sit flat and translucent in the bar, so
  * the active one, raised in the primary color, is the one that stands out.
  */
-export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarItem({ active = false, icon, position, children, className, ...props }, ref) {
+export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarItem({ active = false, icon, position, labeled = true, children, className, ...props }, ref) {
 
     const horizontal = position === "top" || position === "bottom"
+
+    // Its name beside its icon on a Taskbar lying along a wide screen; its icon alone otherwise.
+    const named = horizontal && labeled
 
     return <Button
 
@@ -18,14 +21,15 @@ export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarI
         depth={active ? "raised" : "flat"}
         color={active ? "primary:soft" : undefined}
         material={active ? undefined : resting}
-        className={`${horizontal ? "max-w-40 scroll-mx-8" : "w-full scroll-my-8 px-0"} ${className ?? ""}`}
+        iconOnly={horizontal && !named}
+        className={`${named ? "max-w-40 scroll-mx-8" : horizontal ? "scroll-mx-8" : "w-full scroll-my-8 px-0"} ${className ?? ""}`}
         {...props}
 
     >
 
         <img src={icon} alt="" draggable={false} className="size-4 shrink-0 rounded-sm object-contain" />
 
-        <span className={horizontal ? "truncate" : "sr-only"}>{children}</span>
+        <span className={named ? "truncate" : "sr-only"}>{children}</span>
 
     </Button>
 })
@@ -41,6 +45,9 @@ interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
     icon: string
 
     position: TaskbarPosition
+
+    /** Whether its name shows beside its icon where the Taskbar lies along the screen; on a narrow one it does not. */
+    labeled?: boolean
 
     children?: ReactNode
 }

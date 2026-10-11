@@ -9,7 +9,7 @@ import useDragHold from "../../../../drag-hold"
 import { memo, useCallback } from "react"
 
 /** A taskbar entry rerenders only when what that entry shows changes. */
-export default memo(function ({ record, title, icon, position, active, minimized, maximized, onElement, onMinimize, onShow, onGoTo, onBringHere, onMaximize, onClose }: WindowTaskbarItemProps) {
+export default memo(function ({ record, title, icon, position, labeled, active, minimized, maximized, pinned, onElement, onMinimize, onShow, onGoTo, onBringHere, onMaximize, onTogglePinned, onClose }: WindowTaskbarItemProps) {
 
     const scaleContainer = useDesktopScaleContainer()
 
@@ -38,13 +38,14 @@ export default memo(function ({ record, title, icon, position, active, minimized
     const maximize = useCallback(() => void onMaximize(record), [onMaximize, record])
     const bringHere = useCallback(() => onBringHere(record), [onBringHere, record])
     const close = useCallback(() => onClose(record), [onClose, record])
+    const togglePinned = useCallback(() => onTogglePinned(record), [onTogglePinned, record])
 
     // The title shows on hover and focus, since a Taskbar standing on its side has room for the icon alone.
     return <TaskbarTooltip label={title}><ContextMenu>
 
         <ContextMenu.Trigger>
 
-            <TaskbarItem ref={source} active={active} icon={icon} position={position} onPress={press}>
+            <TaskbarItem ref={source} active={active} icon={icon} position={position} labeled={labeled} onPress={press}>
 
                 {title}
 
@@ -54,8 +55,8 @@ export default memo(function ({ record, title, icon, position, active, minimized
 
         <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
-            <WindowMenu title={title} minimized={minimized} maximized={maximized}
-                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onToggleMaximized={maximize} onClose={close} />
+            <WindowMenu title={title} minimized={minimized} maximized={maximized} pinned={pinned}
+                onGoTo={goTo} onBringHere={bringHere} onToggleMinimized={changeVisibility} onToggleMaximized={maximize} onTogglePinned={togglePinned} onClose={close} />
 
         </ContextMenu.Content>
 
@@ -72,11 +73,20 @@ interface WindowTaskbarItemProps {
 
     position: TaskbarPosition
 
+    /** Whether its title shows beside its icon; see TaskbarItem. */
+    labeled: boolean
+
     active: boolean
 
     minimized: boolean
 
     maximized: boolean
+
+    /** Whether its Program keeps its place on the Taskbar. */
+    pinned: boolean
+
+    /** Pins its Program to the Taskbar, or unpins it. */
+    onTogglePinned: (record: Process) => void
 
     onElement: (record: Process, element: HTMLButtonElement | null) => void
 

@@ -58,8 +58,11 @@ export default class Entry {
 
             // Whether it starts with the System, so a list can be filtered
             // where it is held. The launch itself stays behind `startup.get()`.
-            startup: new ProgramStateStorage(this.program).startup() !== null
-        } satisfies ProgramSnapshot & { permissions: Permissions, startup: boolean }
+            startup: new ProgramStateStorage(this.program).startup() !== null,
+
+            // Whether it keeps its place on a Desktop's Taskbar, closed or open.
+            pinned: new ProgramStateStorage(this.program).pinned()
+        } satisfies ProgramSnapshot & { permissions: Permissions, startup: boolean, pinned: boolean }
     }
 
     public toJSON() {

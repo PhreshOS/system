@@ -208,5 +208,3 @@ function count(amount: number, noun: string) {
 
     return `${amount} ${noun}${amount === 1 ? "" : noun.endsWith("s") ? "es" : "s"}`
 }
-
-/** Narrow enough that the sidebar would crowd the Programs out: the width at which Files gives up its places. */

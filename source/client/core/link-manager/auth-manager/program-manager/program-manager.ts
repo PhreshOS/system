@@ -223,7 +223,10 @@ export default class ProgramManager extends TheLink {
         if (!payload || typeof pinned !== "boolean") return
         const program = this.programs.get(payload.identity)
         if (!program || program.reference !== payload.reference) return
+        program.pinned = pinned
         await this.$inbound.publish("/pinned", program, pinned)
+        // The Taskbar follows the list; a pin changes where a Program stands in it.
+        await this.$inbound.publish("/programs", this.list())
     }
 
     @Subscribe("/command-output")
