@@ -149,9 +149,9 @@ export default class AuthManager extends TheLink {
         return await this.$outbound.publishFirst("/icon", size)
     }
 
-    public async open(process: string, target: unknown) {
+    public async open(process: string, target: unknown, options: unknown) {
 
-        await this.$outbound.publishFirst("/opening/open", process, target)
+        await this.$outbound.publishFirst("/opening/open", process, target, options)
     }
 
     public disconnect() {

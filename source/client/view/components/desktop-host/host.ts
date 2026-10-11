@@ -764,7 +764,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         if (word === "open") {
 
-            await authManager.open(pane, args[0])
+            await authManager.open(pane, args[0], args[1])
 
             return []
         }

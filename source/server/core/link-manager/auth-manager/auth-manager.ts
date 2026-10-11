@@ -243,7 +243,7 @@ export default class AuthManager extends TheLink {
 
     /** A Client's request to open something, forwarded by the Desktop showing it. */
     @Subscribe("/opening/open")
-    protected async openForClient(process: unknown, target: unknown) {
+    protected async openForClient(process: unknown, target: unknown, options: unknown) {
 
         if (typeof process !== "string") throw new Error("An open request is invalid")
 
@@ -251,14 +251,14 @@ export default class AuthManager extends TheLink {
 
         if (!held) throw new Error("The Process that asked has exited")
 
-        await this.openingManager.open(target, { process: held, endpoint: "client" })
+        await this.openingManager.open(target, { process: held, endpoint: "client" }, options)
     }
 
     /** The owner opens something from outside, such as a Node script. */
     @Subscribe("/open")
-    protected async openForOwner(target: unknown) {
+    protected async openForOwner(target: unknown, options: unknown) {
 
-        await this.openingManager.open(target, null, this.linkManager.connection().signal)
+        await this.openingManager.open(target, null, options, this.linkManager.connection().signal)
     }
 
     @Subscribe("/appearance/update")

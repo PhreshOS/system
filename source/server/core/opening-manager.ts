@@ -1,6 +1,6 @@
 import { TheLink } from "@the-link/core"
 import { Subscribe } from "@the-link/core/decorators"
-import { opensType, parseOpenTarget, parseOpenType, type OpenRequestSnapshot, type OpenTarget } from "@phreshos/core"
+import { opensType, parseOpenOptions, parseOpenTarget, parseOpenType, type OpenRequestSnapshot, type OpenTarget, type Position } from "@phreshos/core"
 import shortIdentity from "@libs/short-identity"
 import type AuthManager from "./link-manager/auth-manager/auth-manager"
 import type Process from "./link-manager/auth-manager/process-manager/process"
@@ -51,9 +51,11 @@ export default class OpeningManager extends TheLink {
      * Process is started for it, and rejects when no Program opens it or nothing is chosen. A request
      * from outside ends with the connection that asked, through `signal`.
      */
-    public async open(value: unknown, from: Readonly<{ process: Process, endpoint: "server" | "client" }> | null, signal?: AbortSignal) {
+    public async open(value: unknown, from: Readonly<{ process: Process, endpoint: "server" | "client" }> | null, options?: unknown, signal?: AbortSignal) {
 
         const target = parseOpenTarget(value)
+        // Where the asker would have the window open, unless the Program that opens it says.
+        const position = parseOpenOptions(options).position ?? null
         const programs = this.programsFor(target.type)
 
         if (!programs.length) throw new Error(`No Program opens ${target.type}`)
@@ -63,11 +65,8 @@ export default class OpeningManager extends TheLink {
         const chosen = [defaults[target.type], defaults[`${target.type.slice(0, target.type.indexOf("/"))}/*`]]
             .find(program => program !== undefined && programs.includes(program))
 
-        // A window that asks has the new window open over it.
-        const asker = from?.endpoint === "client" ? from.process : null
-
         if (chosen) {
-            await this.launch(chosen, target, asker)
+            await this.launch(chosen, target, position)
             return
         }
 
@@ -87,7 +86,7 @@ export default class OpeningManager extends TheLink {
         const cancelEndpoint = from ? from.endpoint === "server" ? from.process.onServerStop(end) : from.process.onClientStop(end)
             : signal ? (signal.addEventListener("abort", end), () => signal.removeEventListener("abort", end)) : () => undefined
 
-        this.pendingRequests.set(identity, { snapshot, asker, settle, cancelEndpoint, timer: null, resolving: false })
+        this.pendingRequests.set(identity, { snapshot, position, settle, cancelEndpoint, timer: null, resolving: false })
 
         await Promise.all([
             this.authManager.processManager.announceHost("opening", null, "request", "system", snapshot).catch(() => undefined),
@@ -128,7 +127,7 @@ export default class OpeningManager extends TheLink {
 
             if ((options as { always?: unknown } | undefined)?.always === true) await this.setDefault(request.snapshot.target.type, program)
 
-            await this.launch(program, request.snapshot.target, request.asker)
+            await this.launch(program, request.snapshot.target, request.position)
             await this.finish(request, program)
         }
         catch (error) {
@@ -224,13 +223,13 @@ export default class OpeningManager extends TheLink {
         return this.authManager.linkManager.application.store
     }
 
-    private async launch(program: string, target: OpenTarget, asker: Process | null) {
+    private async launch(program: string, target: OpenTarget, position: Position | null) {
 
         const entry = this.authManager.programManager.programs.get(program)
 
         if (!entry?.installed) throw new Error("That Program is not installed")
 
-        await this.authManager.programManager.open(entry.program, target, asker)
+        await this.authManager.programManager.open(entry.program, target, position)
     }
 
     private claim(identity: unknown) {
@@ -270,8 +269,8 @@ export default class OpeningManager extends TheLink {
 
 interface PendingOpenRequest {
     readonly snapshot: OpenRequestSnapshot
-    /** The Process whose window asked, which the new window opens over. */
-    readonly asker: Process | null
+    /** Where the asker would have the window open, unless its Program says. */
+    readonly position: Position | null
     readonly settle: (program: string | null) => void
     readonly cancelEndpoint: () => void
     timer: ReturnType<typeof setTimeout> | null

@@ -10,10 +10,9 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseLaunch, withProcessDefaults, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
+import { parseLaunch, withProcessDefaults, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
 import type { OpenTarget } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
-import { overWindow, weighted, type PlacedWindow } from "./window-placement"
 import { type StandardShape } from "../process-manager/process-manager"
 import Program, { type CommandOutput, type InstallOutput } from "./program"
 import Entry, { type ProgramRecord } from "./entry"
@@ -1437,7 +1436,7 @@ export default class ProgramManager extends TheLink {
     // One interpretation of a Process launch, used both when it is created now
     // and when a future startup launch is persisted. Runtime-only facts such as
     // name occupancy and capacity remain in `start`.
-    private resolveLaunch(program: Program, value: unknown, near: PlacedWindow | null = null) {
+    private resolveLaunch(program: Program, value: unknown, fallbackPosition: Position | null = null) {
 
         const launch = this.launchOf(program, value)
 
@@ -1463,7 +1462,7 @@ export default class ProgramManager extends TheLink {
         // Resolving the Window here validates the same launch grammar even when
         // the launch is being stored for a later boot. Only the original launch
         // is persisted; system defaults are derived again when it actually runs.
-        const windowShape = program.client ? this.clientShape(program, askedClient, near) : null
+        const windowShape = program.client ? this.clientShape(program, askedClient, fallbackPosition) : null
 
         const shape = client ? windowShape : null
 
@@ -1488,7 +1487,7 @@ export default class ProgramManager extends TheLink {
         return { options, server, client, shape, windowShape, intent }
     }
 
-    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>, opened: OpenTarget | null = null, near: PlacedWindow | null = null) {
+    private async start(program: Program, launch: Launch = {}, watching?: Watching, parent: Process | null = null, transitionOwnsIdentity = false, prepared?: ReturnType<ProgramManager["resolveLaunch"]>, opened: OpenTarget | null = null, fallbackPosition: Position | null = null) {
 
         if (!transitionOwnsIdentity && this.changing.has(program.identity)) throw new Error("This program is changing and cannot create a process")
 
@@ -1500,7 +1499,7 @@ export default class ProgramManager extends TheLink {
         // Every launch takes the Program's Process defaults first: its name, replacement, and options.
         launch = this.launchOf(program, launch)
 
-        const resolved = prepared ?? this.resolveLaunch(program, launch, near)
+        const resolved = prepared ?? this.resolveLaunch(program, launch, fallbackPosition)
 
         const { options, server, client } = resolved
 
@@ -1565,14 +1564,10 @@ export default class ProgramManager extends TheLink {
     }
 
     /** Starts one Process of a Program with its default launch, to open one target. */
-    /** Opens a target in a new Process; the window that asked, if one did, is where it opens from. */
-    public async open(program: Program, target: OpenTarget, asker: Process | null = null) {
+    /** Opens a target in a new Process; `position` is where its window opens unless its Program says. */
+    public async open(program: Program, target: OpenTarget, position: Position | null = null) {
 
-        const window = asker?.client ? asker.clientEndpoint?.window : null
-
-        const near = window?.layer === "window" ? { position: window.position, size: window.size } : null
-
-        return await this.start(program, {}, undefined, null, false, undefined, target, near)
+        return await this.start(program, {}, undefined, null, false, undefined, target, position)
     }
 
     /** Creates one fresh execution runtime for a Server endpoint. */
@@ -1588,10 +1583,10 @@ export default class ProgramManager extends TheLink {
     /** Resolves and validates one client endpoint incarnation. */
     /**
      * The window a client launch opens: each setting as the launch says, else as the Program says,
-     * else as the System chooses by the situation. `near` is a window this one opens from, as one that
-     * asked to open something.
+     * else as the System chooses. `fallbackPosition` is where whoever opened it would have it open,
+     * which the Program's own declaration still overrides.
      */
-    public clientShape(program: Program, asked: ClientLaunch = {}, near: PlacedWindow | null = null): StandardShape {
+    public clientShape(program: Program, asked: ClientLaunch = {}, fallbackPosition: Position | null = null): StandardShape {
 
         const client = program.client
 
@@ -1625,8 +1620,8 @@ export default class ProgramManager extends TheLink {
         const layer = asked.layer ?? client.layer ?? "window"
 
         // What neither the launch nor the Program says, the System fills the same way in every layer,
-        // knowing nothing of any screen: a square of fixed pixels, centered over the window it opens
-        // from, or else on the plane's zero.
+        // knowing nothing of any screen: a square of fixed pixels, centered on the plane's zero, or
+        // where whoever opened it would have it.
         const size = asked.size ?? client.size ?? defaultWindowSize
 
         return {
@@ -1635,7 +1630,7 @@ export default class ProgramManager extends TheLink {
 
             header: asked.header ?? client.header ?? true,
 
-            position: asked.position ?? client.position ?? (near ? overWindow(near, size) : centered(size)),
+            position: asked.position ?? client.position ?? fallbackPosition ?? centered(size),
 
             size,
 
@@ -1670,7 +1665,20 @@ function centered(size: Size): Position {
 /** Minus half of a value, pixels and share alike: `500` gives `-250`, `"1/2"` gives `"-25%"`. */
 function half(value: Value): Value {
 
-    return weighted([[value, -0.5]])
+    const parsed = parseRelativeValue(value)
+
+    if (!parsed) return 0
+
+    // Adding zero turns a halved zero's sign away: -0 is still no distance.
+    const share = -parsed.relative / 2 + 0
+
+    const pixels = -parsed.pixels / 2 + 0
+
+    if (share === 0) return pixels
+
+    if (pixels === 0) return `${share * 100}%`
+
+    return `${share * 100}% ${pixels < 0 ? "-" : "+"} ${Math.abs(pixels)}`
 }
 
 // What a launcher may say at the start. Named rather than ordered,

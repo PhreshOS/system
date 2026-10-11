@@ -1968,7 +1968,7 @@ export default class ProcessManager extends TheLink {
 
         if (word === "open") {
 
-            await this.authManager.openingManager.open(rest[0], { process, endpoint: "server" })
+            await this.authManager.openingManager.open(rest[0], { process, endpoint: "server" }, rest[1])
 
             return []
         }

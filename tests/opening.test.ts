@@ -97,23 +97,26 @@ test("without a default, a request waits; choosing always opens it and makes the
     expect(manager.pending(request!.identity)).toBe(false)
 })
 
-test("a window that asks is where the new one opens from, even once a request is decided; a Server is not", async () => {
+test("the asker's position goes with the opening, even once a request is decided; without one, none", async () => {
     const { manager, open, stored } = fixture()
     const asker = { record: () => ({ identity: "asker" }), program: { record: () => ({ identity: "files" }) }, onClientStop: () => () => undefined, onServerStop: () => () => undefined } as never
+    const beside = { x: 400, y: "-25% + 10" }
     stored.set("opening-defaults", { "image/png": "paint" })
 
-    await manager.open(png, { process: asker, endpoint: "client" })
-    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, asker)
+    await manager.open(png, { process: asker, endpoint: "client" }, { position: beside })
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, beside)
 
-    await manager.open(png, { process: asker, endpoint: "server" })
+    await manager.open(png, { process: asker, endpoint: "client" })
     expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, null)
 
+    await expect(manager.open(png, null, { position: { x: "beside", y: 0 } })).rejects.toThrow(/relative expression/)
+
     stored.clear()
-    const opening = manager.open(png, { process: asker, endpoint: "client" })
+    const opening = manager.open(png, { process: asker, endpoint: "server" }, { position: beside })
     await vi.waitFor(() => expect(manager.requests()).toHaveLength(1))
     await manager.choose(manager.requests()[0]!.identity, "preview", {})
     await opening
-    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), png, asker)
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), png, beside)
 })
 
 test("a cancelled request opens nothing and tells the one who asked", async () => {
@@ -147,7 +150,7 @@ test("a request from outside ends when the connection that asked closes", async 
     const { manager, open } = fixture()
     const connection = new AbortController()
 
-    const opening = manager.open(png, null, connection.signal)
+    const opening = manager.open(png, null, undefined, connection.signal)
     await vi.waitFor(() => expect(manager.requests()).toHaveLength(1))
     connection.abort()
 
