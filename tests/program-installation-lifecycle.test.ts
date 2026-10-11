@@ -205,4 +205,7 @@ test("clearing storage ends the Program's Processes and empties what it keeps, k
     expect(manager.storageSize(program)).toBeLessThan(before)
     // Its database opens again, empty.
     expect(() => manager.databaseOf(program).query("CREATE TABLE notes (title TEXT)")).not.toThrow()
+
+    // Forgetting it closes what it holds open, which Windows needs before the folder can go.
+    await manager.forget(program)
 })
