@@ -72,6 +72,8 @@ export default class Presentations implements PresentationHost {
     private revision = 0
     /** How far this Desktop's view is moved across the plane, in pixels. */
     private offset = { x: 0, y: 0 }
+    /** The Process whose standard Window this Desktop focuses. */
+    private focusedProcess: string | null = null
     private changed: (windows: ReadonlyMap<string, PresentedWindow>) => void = () => undefined
 
     public constructor(initial: ReadonlyMap<string, PresentationEntry>, private readonly client: (process: string) => ClientState | null) {
@@ -146,6 +148,13 @@ export default class Presentations implements PresentationHost {
         this.notify()
     }
 
+    /** Which standard Window this Desktop focuses, as its Desktop decides; drawings in other layers always are. */
+    public focus(process: string | null) {
+        if (process === this.focusedProcess) return
+        this.focusedProcess = process
+        this.notify()
+    }
+
     /** Hears every change to what this Desktop draws, so a Client can learn how its own drawing changed. */
     public observe(listener: () => void) {
         this.observers.add(listener)
@@ -172,6 +181,7 @@ export default class Presentations implements PresentationHost {
             position: { x: box.x + inside.x - width / 2 + from.x, y: box.y + inside.y - height / 2 + from.y },
             size: { width: frame.offsetWidth, height: frame.offsetHeight },
             front: frontmost(this.windows, state.layer) === identity,
+            focused: state.layer !== "window" || this.focusedProcess === process,
             interactive: state.interactive,
             surface: state.surface
         }

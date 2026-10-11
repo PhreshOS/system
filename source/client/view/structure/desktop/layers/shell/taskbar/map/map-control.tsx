@@ -30,8 +30,8 @@ export interface MappedWindow {
     /** Its top-left corner and size on the plane, whose zero is the center. */
     region: WindowRegion
 
-    /** Whether it is the front Window. */
-    front: boolean
+    /** Whether this Desktop focuses it. */
+    focused: boolean
 
     minimized: boolean
 
@@ -690,7 +690,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
                 <ContextMenu.Trigger>
 
                     {/* The front Window is apricot; a minimized one fades; a maximized one carries the title bar's maximize mark. */}
-                    <Button size="xsmall" iconOnly depth="flat" color={window.front ? "primary:soft" : "secondary:subtle"}
+                    <Button size="xsmall" iconOnly depth="flat" color={window.focused ? "primary:soft" : "secondary:subtle"}
                         aria-label={windowState(window) ? `${window.title}, ${windowState(window)}` : window.title}
                         onPress={() => { if (!moved.current) window.goTo() }}
                         style={{ width: card, height: card, paddingInline: 0, opacity: window.minimized ? 0.45 : 1 }}>
@@ -712,7 +712,7 @@ function MapWindow({ window, viewport, menus, mapX, mapY, cell }: Readonly<{
 
         </Tooltip>
 
-        {window.maximized && <Surface aria-hidden="true" color={window.front ? "primary" : "secondary"} radius="full" className="pointer-events-none grid place-items-center"
+        {window.maximized && <Surface aria-hidden="true" color={window.focused ? "primary" : "secondary"} radius="full" className="pointer-events-none grid place-items-center"
             style={{ position: "absolute", top: -mark / 3, right: -mark / 3, width: mark, height: mark, opacity: window.minimized ? 0.45 : 1 }}>
             <Maximize2 style={{ width: mark * 0.6, height: mark * 0.6 }} strokeWidth={2.5} />
         </Surface>}

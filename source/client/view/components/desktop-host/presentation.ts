@@ -1,7 +1,7 @@
 import {
     parsePresentationSurface,
     parsePresentationTransaction,
-    type WindowLayer,
+    type PresentationState,
     type PresentationMovePoint,
     type PresentationGeometry,
     type PresentationAnchor,
@@ -45,15 +45,7 @@ export interface DesktopMoveGesture {
 }
 
 /** How one Client is actually drawn on this Desktop, as its presentation reads it. */
-export type PresentationState = Readonly<{
-    layer: WindowLayer
-    anchor: PresentationAnchor
-    position: PresentationPosition
-    size: PresentationSize
-    front: boolean
-    interactive: boolean
-    surface: PresentationSurface
-}>
+export type { PresentationState }
 
 /** Local commands available to the current Client representation. */
 export interface PresentationHost {

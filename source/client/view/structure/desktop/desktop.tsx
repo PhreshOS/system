@@ -6,6 +6,7 @@ import useViewportOffset from "./viewport-offset"
 import useViewSize from "./view-size"
 import DesktopLayers, { desktopMargins } from "./layers/desktop-layers"
 import useDesktopFocus from "./desktop-focus"
+import useFocusedWindow from "./focused-window"
 import programIcon from "./programs/program-icon"
 import ProgramAccessProbe, { type ProgramAccess } from "../../components/program-access"
 import DefaultShell from "./layers/shell/default-shell"
@@ -207,10 +208,6 @@ export default function Workspace() {
 
     const focus = useDesktopFocus(desktop, windows, appearance.taskbar.overlay)
 
-    // Resolved once per desktop render. Asking inside every window and
-    // taskbar item would repeat the same linear scan for each process.
-    const fronts = windows.fronts
-
     function icon(record: { program: string }) {
 
         return programIcon(application.doors.program, assetOf(record.program))
@@ -327,7 +324,8 @@ export default function Workspace() {
 
             depth={presentation.depth}
 
-            active={fronts[layer]?.identity === record.identity}
+            // Only a standard Window is shown unfocused; every other drawing is always focused.
+            active={layer !== "window" || focusedWindow === record.identity}
 
             minimized={presentation.minimized}
 
@@ -383,6 +381,24 @@ export default function Workspace() {
 
     const taskbarOrientation = appearance.taskbar.position === "top" || appearance.taskbar.position === "bottom" ? "horizontal" : "vertical"
 
+    // Which standard Window this Desktop focuses: the one last raised while any part of it lies where this
+    // Desktop looks. Programs learn it through their presentation.
+    const focusedWindow = useFocusedWindow(windows.panesByLayer.window.filter(pane => !pane.closing).map(({ record, presentation }) => {
+
+        const shown = boundedGeometry(presentation.position, presentation.size, viewSize)
+
+        const region = planeGeometry(resolveWindowGeometry(shown.position, shown.size, viewSize), viewSize)
+
+        const inView = viewSize.width > 0 && viewSize.height > 0 &&
+            region.x < offset.x + viewSize.width / 2 && region.x + region.width > offset.x - viewSize.width / 2 &&
+            region.y < offset.y + viewSize.height / 2 && region.y + region.height > offset.y - viewSize.height / 2
+
+        return { identity: record.identity, depth: presentation.depth, available: !presentation.minimized, inView }
+
+    }), windows.raisedHere)
+
+    useLayoutEffect(() => windows.presentation.focus(focusedWindow), [windows.presentation, focusedWindow])
+
     // Each standard Window where it is on the plane, minimized or not, for the map of views.
     const mappedWindows: MappedWindow[] = viewSize.width && viewSize.height
         ? windows.panesByLayer.window.filter(pane => !pane.closing).map(({ identity, record, presentation }) => {
@@ -396,7 +412,7 @@ export default function Workspace() {
                 title: presentation.title,
                 icon: icon(record),
                 region,
-                front: fronts.window?.identity === record.identity,
+                focused: focusedWindow === record.identity,
                 minimized: presentation.minimized,
                 maximized: presentation.maximized,
                 goTo: () => goTo(record),
@@ -513,7 +529,7 @@ export default function Workspace() {
 
                 position={appearance.taskbar.position}
 
-                active={fronts.window?.identity === record.identity}
+                active={focusedWindow === record.identity}
 
                 minimized={window.minimized}
 

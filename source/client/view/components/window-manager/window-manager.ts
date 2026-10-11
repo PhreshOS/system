@@ -160,24 +160,6 @@ export default function useWindows(authManager: AuthManager) {
     // does not push a window's number up.
     const summit = useCallback((layer: Layer) => [...peer.processes.values()].reduce((highest, process) => process.client?.window.layer === layer ? Math.max(highest, process.client.window.depth) : highest, 0), [peer])
 
-    // Resolve the front window of every layer in one pass.
-    const fronts: Record<Layer, Process | null> = { wallpaper: null, under: null, window: null, over: null, shell: null }
-
-    for (const process of records) {
-
-        const live = incarnation(process, process.client!)
-
-        const window = presentations.get(live.identity)
-
-        if (!window || window.minimized) continue
-
-        const best = fronts[window.layer]
-
-        const bestWindow = best && presentations.get(incarnation(best, best.client!).identity)
-
-        if (!bestWindow || bestWindow.depth <= window.depth) fronts[window.layer] = process
-    }
-
     // A pointer gesture must retain its visible result until the authoritative
     // request settles. Returning failure as data keeps ignored button presses
     // handled while allowing the gesture owner to restore authoritative state.
@@ -225,11 +207,19 @@ export default function useWindows(authManager: AuthManager) {
 
     // This Desktop's actions on a standard Window: each shows at once, and the System's answer follows
     // when it settles. They answer with the request, so whoever asked can wait for the System.
+    // The last standard Window this Desktop raised, each raise its own record: a Window already in front
+    // changes no order, yet raising it here still says where this Desktop's person turned.
+    const [raisedHere, setRaisedHere] = useState<Readonly<{ identity: string }> | null>(null)
+
     const raise = useCallback(function (process: Process) {
 
         const window = process.client?.window
 
-        if (!window || window.layer !== "window" || window.depth === summit(window.layer)) return Promise.resolve()
+        if (!window || window.layer !== "window") return Promise.resolve()
+
+        setRaisedHere({ identity: process.identity })
+
+        if (window.depth === summit(window.layer)) return Promise.resolve()
 
         // Shown in front at once; the System's ranking follows when it answers.
         const request = window.raise()
@@ -421,7 +411,7 @@ export default function useWindows(authManager: AuthManager) {
 
         panesByLayer,
 
-        fronts,
+        raisedHere,
 
         presentation,
 
