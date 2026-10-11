@@ -165,6 +165,7 @@ export default class AuthManager extends TheLink {
 
         if (operation === "clear") return area.clear(values)
         if (operation === "space") return area.space(values)
+        if (operation === "size") return area.size(values)
 
         throw new Error(`System storage does not know "${operation}"`)
     }

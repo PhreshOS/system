@@ -196,6 +196,16 @@ export default class System {
         return this.programManager.runProcess(program, launch, watching, parent)
     }
 
+    public clearProgramStorage(program: Program, asker: string | null = null) {
+
+        return this.programManager.clearStorage(program, asker)
+    }
+
+    public programStorageSize(program: Program) {
+
+        return this.programManager.storageSize(program)
+    }
+
     public exitProgramProcesses(program: Program, asker: string | null = null) {
 
         return this.processManager.exitAll(program.identity, asker)
@@ -659,6 +669,7 @@ function operateArea(place: FileArea, operation: string, joins: string[], input?
     }
 
     if (operation === "space") return place.space(joins)
+    if (operation === "size") return place.size(joins)
     throw new Error(`The host does not know the storage operation "${operation}"`)
 }
 

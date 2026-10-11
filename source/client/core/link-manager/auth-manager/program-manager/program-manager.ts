@@ -135,6 +135,16 @@ export default class ProgramManager extends TheLink {
         )
     }
 
+    public async clearStorage(subject: unknown, asker: string) {
+
+        await this.$outbound.publishFirst("/clear-storage", subject, asker)
+    }
+
+    public async storageSize(subject: unknown) {
+
+        return await this.$outbound.publishFirst("/storage-size", subject) as number
+    }
+
     public async forget(subject: unknown, asker: string) {
 
         return await this.$outbound.publishFirst("/forget-program", subject, asker)

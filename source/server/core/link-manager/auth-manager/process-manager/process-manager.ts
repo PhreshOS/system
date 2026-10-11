@@ -2487,6 +2487,10 @@ export default class ProcessManager extends TheLink {
 
         if (word === "program-exit-processes") return [await this.system.exitProgramProcesses(heldProgram(rest[0]), process.identity)]
 
+        if (word === "program-clear-storage") return [await this.system.clearProgramStorage(heldProgram(rest[0]), process.identity)]
+
+        if (word === "program-storage-size") return [this.system.programStorageSize(heldProgram(rest[0]))]
+
         if (word === "observe") {
 
             const kind = rest[3]

@@ -592,6 +592,10 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         // core serves this and a server half both.
         if (word === "program-exit-processes") return [await processManager.exitAll((await permittedProgram(args[0])).identity, pane)]
 
+        if (word === "program-clear-storage") return [await programManager.clearStorage(address(await permittedProgram(args[0])), pane)]
+
+        if (word === "program-storage-size") return [await programManager.storageSize(address(await permittedProgram(args[0])))]
+
         if (word === "observe") {
 
             const half = args[2]

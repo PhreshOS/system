@@ -32,6 +32,9 @@ import shortIdentity from "@libs/short-identity"
 
 const maximumProcessesPerProgram = 20
 
+/** What a Program keeps of its own in its storage, besides its store: emptied by clearing its storage. */
+const programData = ["data", "cache", "database.sqlite", "database.sqlite-wal", "database.sqlite-shm"]
+
 type Registration = {
     installed: boolean
     transitionOwnsIdentity?: boolean
@@ -348,6 +351,18 @@ export default class ProgramManager extends TheLink {
     protected async installedAtProgram(subject: unknown) {
 
         return this.installedAt(this.held(subject))
+    }
+
+    @Subscribe("/clear-storage")
+    protected async clearStorageProgram(subject: unknown, asker?: unknown) {
+
+        await this.clearStorage(this.held(subject), typeof asker === "string" ? asker : null)
+    }
+
+    @Subscribe("/storage-size")
+    protected async storageSizeProgram(subject: unknown) {
+
+        return this.storageSize(this.held(subject))
     }
 
     @Subscribe("/pinned")
@@ -888,6 +903,8 @@ export default class ProgramManager extends TheLink {
 
         if (operation === "space") return place.space(joins)
 
+        if (operation === "size") return place.size(joins)
+
         throw new Error(`The host does not know the storage operation "${operation}"`)
     }
 
@@ -1253,6 +1270,35 @@ export default class ProgramManager extends TheLink {
                 rmSync(backup, { recursive: true, force: true })
             }
         })
+    }
+
+    // What a Program keeps is emptied while it changes, so no Process of it starts and writes in the
+    // middle. The store empties through itself, so whoever follows a key hears it go; the database
+    // closes before its files go. What the owner decided and what the System recorded stay: the
+    // Program's state and its logs.
+    public async clearStorage(program: Program, asker: string | null = null) {
+
+        await this.change(program.identity, async () => {
+
+            const entry = this.find(program.identity)
+
+            await this.authManager.processManager.exitAll(entry.identity, asker)
+
+            // A store never written has nothing to empty, and opening it would make its file.
+            if (this.opened.has(entry.identity) || existsSync(join(entry.program.storagePath, "store.sqlite"))) await this.storeOf(entry.program).clear()
+
+            this.kept.get(entry.identity)?.close()
+
+            this.kept.delete(entry.identity)
+
+            for (const kept of programData) rmSync(join(entry.program.storagePath, kept), { recursive: true, force: true })
+        })
+    }
+
+    /** How many bytes everything a Program keeps in the System holds, its logs and state included. */
+    public storageSize(program: Program) {
+
+        return new FileArea(program.storagePath, "this program's storage").size()
     }
 
     // Uninstalling ends Processes and forgets the runtime entry: its handle ends as an exited

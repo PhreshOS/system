@@ -77,6 +77,16 @@ export default class FileArea {
         mkdirSync(path, { recursive: true })
     }
 
+    /** How many bytes the files beneath a directory hold; `0` when it does not exist. Links are not followed. */
+    public size(joins: string[] = []) {
+
+        const found = this.stat(joins)
+
+        if (found && found.kind !== "directory") throw new Error(`${this.resolve(joins)} is not a Storage directory`)
+
+        return found ? bytesBeneath(this.resolve(joins)) : 0
+    }
+
     public stat(joins: string[]): EntryStat | null {
 
         let found
@@ -309,3 +319,19 @@ export type StorageReadOptions = [offset?: number, length?: number]
 export class MissingAreaEntryError extends Error { }
 
 export class NotFileError extends Error { }
+
+function bytesBeneath(directory: string): number {
+
+    let total = 0
+
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+
+        const path = join(directory, entry.name)
+
+        if (entry.isDirectory()) total += bytesBeneath(path)
+
+        else if (entry.isFile()) total += lstatSync(path).size
+    }
+
+    return total
+}

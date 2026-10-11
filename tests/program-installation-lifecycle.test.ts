@@ -18,7 +18,7 @@ function fixture(context: TestContext) {
     const announceHost = vi.fn()
     const auth = Object.assign(new TheLink(), {
         linkManager: { application: { storage: new FileManager(directory, "system"), icons: { system: "", defaultProgram: "" } } },
-        processManager: { processes: new Map(), exitAll, announceHost, announceSubject: vi.fn() }
+        processManager: { processes: new Map(), exitAll, announceHost, announceSubject: vi.fn(async () => undefined) }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
     const definition = (installCommand = `node -e "process.stdout.write('preparing')"`, installLaunch?: true | Launch) => new Program({
@@ -172,4 +172,37 @@ test("uninstalling ends the Program's Processes and forgets its handle; its data
 
     expect(manager.programs.has(program.identity)).toBe(false)
     expect(existsSync(home)).toBe(false)
+})
+
+test("clearing storage ends the Program's Processes and empties what it keeps, keeping the owner's decisions and its logs", async context => {
+    const { manager, exitAll, definition } = fixture(context)
+    const entry = await manager.install(definition())
+    const program = entry.program
+    const address = { identity: program.identity, reference: program.reference }
+    const storage = program.storagePath
+    mkdirSync(join(storage, "data"), { recursive: true })
+    writeFileSync(join(storage, "data", "note.txt"), "kept")
+    mkdirSync(join(storage, "cache"), { recursive: true })
+    writeFileSync(join(storage, "cache", "thumbnail.bin"), "1234")
+    await manager.store(address, "set", "draft", "hello")
+    manager.databaseOf(program).query("CREATE TABLE notes (title TEXT)")
+    manager.logsOf(program).record("process", "server", "note", "it said something")
+    const pinnedAt = await manager.pinned(program, "pin")
+    const before = manager.storageSize(program)
+    expect(before).toBeGreaterThan(8)
+
+    await manager.clearStorage(program)
+
+    expect(exitAll).toHaveBeenCalledWith(program.identity, null)
+    expect(existsSync(join(storage, "data"))).toBe(false)
+    expect(existsSync(join(storage, "cache"))).toBe(false)
+    expect(existsSync(join(storage, "database.sqlite"))).toBe(false)
+    expect(await manager.store(address, "get", "draft")).toBeUndefined()
+    // What the owner decided, when it was installed, and what it said stay.
+    expect(await manager.pinned(program, "get")).toBe(pinnedAt)
+    expect(manager.installedAt(program)).toBe(entry.installedAt)
+    expect(existsSync(join(storage, "logs.sqlite"))).toBe(true)
+    expect(manager.storageSize(program)).toBeLessThan(before)
+    // Its database opens again, empty.
+    expect(() => manager.databaseOf(program).query("CREATE TABLE notes (title TEXT)")).not.toThrow()
 })
