@@ -142,6 +142,19 @@ function useStartMenuControl() {
     return value
 }
 
+/**
+ * The Start Menu's own surface: what floats from inside it, such as a menu, opens there, since the
+ * Start Menu stands above everything else on the page and a press outside it closes it.
+ */
+export function useStartMenuSurface() {
+    return useStartMenuControl().popover.surface.current
+}
+
+/** Closes the Start Menu, as choosing something in it does. */
+export function useCloseStartMenu() {
+    return useStartMenuControl().popover.close
+}
+
 /** Whether the default Shell's Start Menu currently retains its Taskbar anchor. */
 export function useStartMenuOpen() {
     return useStartMenuControl().popover.open

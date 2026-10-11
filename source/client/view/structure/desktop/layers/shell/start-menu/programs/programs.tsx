@@ -6,7 +6,7 @@ import { Badge, ContextMenu, GridList, Table, Text, useAppearance, useScale, Scr
 import { useRef, useState, type ReactElement } from "react"
 import Empty from "../empty"
 import ProgramMenu from "../../program-menu"
-import { useDesktopScaleContainer } from "@client/view/structure/desktop/desktop-scale"
+import { useStartMenuSurface } from "../start-menu"
 
 export type ProgramsLayout = "grid" | "list"
 
@@ -24,7 +24,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     const space = useScale(useAppearance().spacing)
 
-    const scaleContainer = useDesktopScaleContainer()
+    const surface = useStartMenuSurface()
 
     // The Program a press for the menu landed on, found under the pointer as the menu opens.
     const [menuFor, setMenuFor] = useState<Program | null>(null)
@@ -45,7 +45,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
                 setMenuFor(key ? byIdentity.get(key) ?? null : null)
             }}>{list}</div>
         </ContextMenu.Trigger>
-        <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
+        <ContextMenu.Content portalContainer={surface ?? undefined}>
             {menuFor && <ProgramMenu program={menuFor} onOpen={() => onLaunch(menuFor)} />}
         </ContextMenu.Content>
     </ContextMenu>

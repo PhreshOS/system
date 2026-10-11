@@ -4,6 +4,7 @@ import { LinkManagerSnapshot } from "@server/core/link-manager/link-manager"
 import LinkManager from "@client/core/link-manager/link-manager"
 import { timing, useAppearance } from "@phreshos/react-ui"
 import Loading from "../components/loading"
+import { DesktopScaleProvider, useDesktopScale } from "./desktop/desktop-scale"
 import Alert from "../components/alert"
 import { ApplicationContext, LinkManagerContext } from "../contexts"
 import usePromise from "@libs/react-promise"
@@ -24,10 +25,27 @@ import {
 
 export default function () {
     const appearance = useAppearance()
+    const scale = useDesktopScale()
+    const [overlays, setOverlays] = useState<HTMLDivElement | null>(null)
 
     return <Readiness requirements={startupRequirements}>
 
-        <Desktop />
+        {/* The Desktop and what opens over it, such as a dialog, are one layer: whatever stacks inside it
+            stays inside, and the readiness cover stands above all of it. */}
+        <div className="relative isolate grid">
+
+            <DesktopScaleProvider scale={scale} container={overlays}>
+
+                <Desktop />
+
+            </DesktopScaleProvider>
+
+            {/* Desktop overlays open here: inside the scale, so they share it, and outside the layout, so
+                opening one never takes room from the Desktop. It has no size and catches nothing; what
+                opens in it floats from its corner. */}
+            <div ref={setOverlays} className="absolute top-0 left-0 size-0 overflow-visible" />
+
+        </div>
 
         <DesktopReadiness appearance={appearance} />
 

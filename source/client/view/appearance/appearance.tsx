@@ -21,7 +21,6 @@ export default function ({ children }: PropsWithChildren) {
 function AppearanceRoot({ children }: PropsWithChildren) {
     const { resolved } = useDesktopPreferences()
     const [appearance, setAppearance] = useState(() => resolveStoredAppearance(localStorage.getItem(appearanceKey)))
-    const [overlays, setOverlays] = useState<HTMLDivElement | null>(null)
     const remember = useCallback(function (value: Appearance) {
         setAppearance(value)
         localStorage.setItem(appearanceKey, JSON.stringify(value))
@@ -38,7 +37,8 @@ function AppearanceRoot({ children }: PropsWithChildren) {
 
         <UIProvider appearance={appearance} preferences={resolved}>
 
-            <DesktopScaleProvider scale={resolved.scale} container={overlays}>
+            {/* What opens over the Desktop has its container in the Desktop's own layer (Structure). */}
+            <DesktopScaleProvider scale={resolved.scale} container={null}>
 
                 <div className="relative isolate h-dvh overflow-hidden" style={{ backgroundColor: background }}>
 
@@ -50,11 +50,6 @@ function AppearanceRoot({ children }: PropsWithChildren) {
                         >
 
                             {children}
-
-                            {/* Desktop overlays open here: inside the scale, so they share it, and outside the
-                                layout, so opening one never takes room from the Desktop. It has no size and
-                                catches nothing; what opens in it floats from its corner. */}
-                            <div ref={setOverlays} className="absolute top-0 left-0 size-0 overflow-visible" />
 
                         </div>
 
