@@ -42,6 +42,23 @@ export default class ProgramStateStorage {
         })
     }
 
+    /** When the Program was first installed, as an ISO time; `null` before it ever was. */
+    public installedAt(): string | null {
+        const value = this.read().installedAt
+        if (value === undefined) return null
+        if (typeof value !== "string" || Number.isNaN(Date.parse(value))) throw new Error("The Program state contains an invalid install time")
+        return value
+    }
+
+    /** Records the first install, once: later installs over the same data keep its time. */
+    public settleInstalledAt(): string {
+        const known = this.installedAt()
+        if (known !== null) return known
+        const now = new Date().toISOString()
+        this.change(state => { state.installedAt = now })
+        return now
+    }
+
     /** When the Program was pinned, as an ISO time; `null` when it is not. */
     public pinnedAt(): string | null {
         const value = this.read().pinnedAt

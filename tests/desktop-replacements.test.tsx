@@ -20,8 +20,8 @@ vi.mock("@client/view/contexts", () => ({
     AuthManagerContext: { useValue: () => ({
         processManager: { processes: fixture.processes },
         programManager: { programs: new Map([
-            ["wallpaper-program", { assetId: "wallpaper-assets" }],
-            ["shell-program", { assetId: "shell-assets" }]
+            ["wallpaper-program", { assetId: "wallpaper-assets", installedAt: null, pinnedAt: null }],
+            ["shell-program", { assetId: "shell-assets", installedAt: null, pinnedAt: null }]
         ]) }
     }) },
     LinkManagerContext: { useValue: () => ({ appearance: { value: defaultAppearance } }) }

@@ -16,5 +16,5 @@ export default function usePrograms() {
 
     useLayoutEffect(() => manager.subscribePrograms(setPrograms), [manager])
 
-    return programs.filter(program => program.installed)
+    return programs.filter(program => program.installedAt !== null)
 }

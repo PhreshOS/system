@@ -4,7 +4,7 @@ import { sdkProcess, type SdkProcessSource } from "@client/view/components/deskt
 
 test("Desktop preserves Endpoint service roles in SDK snapshots", () => {
   const program: ProgramSnapshot & { permissions: {} } = {
-    identity: "example", reference: "program-reference", assetId: "program-assets",
+    identity: "example", reference: "program-reference", assetId: "program-assets", createdAt: "2026-10-11T00:00:00.000Z", installedAt: null,
     name: "Example", version: "0.0.0", description: null, website: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false,
     server: { start: true, service: false }, client: null, permissions: {}
   }

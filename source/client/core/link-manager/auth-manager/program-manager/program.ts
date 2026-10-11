@@ -21,7 +21,11 @@ export default class Program {
     /** Opaque identity of this runtime Program entity. */
     public readonly reference: string
 
-    public readonly installed: boolean
+    /** When the System made this runtime Program entity, as an ISO time. */
+    public readonly createdAt: string
+
+    /** When it was first installed, as an ISO time; `null` without an installed form. */
+    public readonly installedAt: string | null
 
     public readonly name: string
 
@@ -65,7 +69,9 @@ export default class Program {
 
         this.reference = payload.reference
 
-        this.installed = payload.installed
+        this.createdAt = payload.createdAt
+
+        this.installedAt = payload.installedAt
 
         this.name = payload.name
 

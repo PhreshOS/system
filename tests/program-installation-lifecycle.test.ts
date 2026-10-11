@@ -91,9 +91,12 @@ test("purge resets installed storage before launching and preserves source stora
     const sourceStorage = join(directory, "source", "storage")
     mkdirSync(sourceStorage, { recursive: true })
     writeFileSync(join(sourceStorage, "note.txt"), "development data")
+    const installedAt = entry.installedAt
     entry = await manager.install(definition())
     expect(readFileSync(installedNote, "utf8")).toBe("installed data")
     expect(await manager.pinned(entry.program, "get")).toBe(pinnedAt)
+    // Installing over the data it kept keeps the time it was first installed.
+    expect(entry.installedAt).toBe(installedAt)
     start.mockImplementation(async program => {
         expect(existsSync(join(program.storagePath, "note.txt"))).toBe(false)
         return "process"
@@ -101,6 +104,8 @@ test("purge resets installed storage before launching and preserves source stora
     entry = await manager.install(definition(), { purge: true, launch: true })
     expect(existsSync(installedNote)).toBe(false)
     expect(await manager.pinned(entry.program, "get")).toBeNull()
+    // Purged, it starts a new time.
+    expect(entry.installedAt).not.toBe(installedAt)
     expect(readFileSync(join(sourceStorage, "note.txt"), "utf8")).toBe("development data")
 })
 
@@ -137,32 +142,34 @@ test("explicit launch errors propagate without rolling back the installed Progra
     expect(start).toHaveBeenCalledTimes(1)
 })
 
-test("uninstallation converges silently while its Program handle remains valid", async context => {
+test("uninstalling ends the Program's Processes and forgets its handle; its data stays for the next install", async context => {
     const { manager, exitAll, announceHost, definition } = fixture(context)
     const entry = await manager.install(definition())
     const program = entry.program
     const home = manager.fileManager.join(program.identity)
-    await manager.pinned(program, "pin")
+    const installedAt = entry.installedAt
+    const pinnedAt = await manager.pinned(program, "pin")
+    expect(installedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
 
     await manager.uninstall(program)
 
-    expect(entry.installed).toBe(false)
-    expect(await manager.pinned(program, "get")).toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
-    expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
-
-    await manager.uninstall(program)
-
-    expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
-    expect(exitAll).not.toHaveBeenCalled()
-
-    await manager.uninstall(program, { purge: true })
-
+    // The handle ended, as an exited Process's does.
     expect(manager.programs.has(program.identity)).toBe(false)
-    expect(existsSync(home)).toBe(false)
     expect(exitAll).toHaveBeenCalledExactlyOnceWith(program.identity, null)
     expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
     expect(announceHost.mock.calls.filter(([, , event]) => event === "forget")).toHaveLength(1)
-
     await expect(manager.uninstall(program)).rejects.toThrow("does not know this program")
+    // Its data stayed.
+    expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
+
+    // Installed again: a new handle, which finds the time it was first installed and its pin.
+    const again = await manager.install(definition())
+    expect(again.program.reference).not.toBe(program.reference)
+    expect(again.installedAt).toBe(installedAt)
+    expect(await manager.pinned(again.program, "get")).toBe(pinnedAt)
+
+    await manager.uninstall(again.program, { purge: true })
+
+    expect(manager.programs.has(program.identity)).toBe(false)
+    expect(existsSync(home)).toBe(false)
 })

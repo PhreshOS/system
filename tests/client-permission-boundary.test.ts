@@ -14,7 +14,7 @@ function clientFrame() {
 test("Client Program creation requires all before reaching the creation boundary", async () => {
     let permissions: Permissions = { programs: [] }
     const program: ProgramSnapshot & { readonly permissions: Permissions } = {
-        identity: "created", reference: "created-reference", assetId: "created-assets",
+        identity: "created", reference: "created-reference", assetId: "created-assets", createdAt: "2026-10-11T00:00:00.000Z", installedAt: null,
         name: "Created", version: "0.0.0", description: null, website: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false,
         server: null, client: null,
         get permissions() { return permissions }
@@ -44,10 +44,10 @@ test("Program and Process discovery exposes only the accessible scope", async ()
 
     let permissions: Permissions = {}
     const owner = program("owner")
-    Object.defineProperty(owner, "installed", { value: true })
+    Object.defineProperty(owner, "installedAt", { value: "2026-10-10T00:00:00.000Z" })
     Object.defineProperty(owner, "permissions", { get: () => permissions })
     const outside = program("outside")
-    Object.defineProperty(outside, "installed", { value: false })
+    Object.defineProperty(outside, "installedAt", { value: null })
     outside.permissions = { network: ["https://example.com"] }
     const current = process("current", owner)
     const hidden = process("hidden", outside)
@@ -62,7 +62,7 @@ test("Program and Process discovery exposes only the accessible scope", async ()
     await expect(answer("host-process-list")).resolves.toEqual([[expect.objectContaining({ identity: current.identity })]])
     await expect(answer("host-program-find", outside.identity)).resolves.toEqual([null])
     await expect(answer("host-process-find", hidden.identity)).resolves.toEqual([null])
-    await expect(answer("installed", { identity: outside.identity, reference: outside.reference })).rejects.toThrow("Program represented by this handle does not exist")
+    await expect(answer("installedAt", { identity: outside.identity, reference: outside.reference })).rejects.toThrow("Program represented by this handle does not exist")
     await expect(answer("window", { identity: hidden.identity, reference: hidden.reference })).rejects.toThrow("Process represented by this handle does not exist")
 
     permissions = { programs: [outside.identity] }
@@ -293,6 +293,8 @@ function program(identity: string): ProgramSnapshot & { permissions: Permissions
         identity,
         reference: `${identity}-reference`,
         assetId: `${identity}-assets`,
+        createdAt: "2026-10-11T00:00:00.000Z",
+        installedAt: null,
         name: identity,
         version: "0.0.0",
         description: null,

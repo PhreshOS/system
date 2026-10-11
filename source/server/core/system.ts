@@ -2,6 +2,7 @@ import type Application from "./application"
 import { name, release, version } from "@/source/identity"
 import { IconRenderer, isIconSize } from "./link-manager/auth-manager/program-manager/icon"
 import type Entry from "./link-manager/auth-manager/program-manager/entry"
+import { programOrder } from "@phreshos/core"
 import type Program from "./link-manager/auth-manager/program-manager/program"
 import type Process from "./link-manager/auth-manager/process-manager/process"
 import type {
@@ -53,9 +54,10 @@ export default class System {
         return shell(command, options)
     }
 
+    // In the Programs' order; a filter only filters.
     public listPrograms(options: SystemProgramListOptions = {}) {
 
-        return [...this.programManager.programs.values()].filter(entry =>
+        return [...this.programManager.programs.values()].sort(programOrder).filter(entry =>
             (options.installed === undefined || entry.installed === options.installed)
             && (options.opens === undefined || opensType(entry.program.config.opens ?? [], options.opens))
             && (options.startup === undefined || entry.record().startup === options.startup)
@@ -396,7 +398,8 @@ export default class System {
             version: program.version,
             description: program.config.description ?? null,
             website: program.config.website ?? null,
-            installed: entry.installed,
+            createdAt: program.createdAt,
+            installedAt: entry.installedAt,
             hasAgent: program.agentPath !== null,
             server: program.server ? Object.freeze({ start: program.server.start, service: program.server.service }) : null,
             client: program.client ? Object.freeze({
@@ -509,9 +512,9 @@ export default class System {
         return this.programManager.pinned(program, operation)
     }
 
-    public programInstalled(program: Program) {
+    public programInstalledAt(program: Program) {
 
-        return this.programManager.installed(program)
+        return this.programManager.installedAt(program)
     }
 
     public forgetProgram(program: Program, asker: string | null = null) {

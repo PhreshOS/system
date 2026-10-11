@@ -17,7 +17,9 @@ export function sdkProgram(program: SdkProgramSource & { permissions: Permission
 
         assetId: program.assetId,
 
-        installed: program.installed,
+        createdAt: program.createdAt,
+
+        installedAt: program.installedAt,
 
         name: program.name,
 

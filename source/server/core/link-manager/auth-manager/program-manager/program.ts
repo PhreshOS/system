@@ -34,6 +34,9 @@ export default class Program {
     /** Opaque identity of this runtime Program entity. */
     public readonly reference = randomUUID()
 
+    /** When this runtime Program entity was made, as an ISO time; replacing it in place keeps it. */
+    public readonly createdAt = new Date().toISOString()
+
     /** Runtime identity of this Program's browser assets. */
     public readonly assetId = randomUUID()
 
@@ -196,6 +199,8 @@ export default class Program {
             // Opaque runtime identity for SDK handle canonicalization. Public
             // Program identity may be reused after this Program is forgotten.
             reference: this.reference,
+
+            createdAt: this.createdAt,
 
             identity: this.identity,
 

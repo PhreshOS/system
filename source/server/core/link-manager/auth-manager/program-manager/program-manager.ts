@@ -344,6 +344,12 @@ export default class ProgramManager extends TheLink {
         return await this.startup(this.held(subject), operation, value)
     }
 
+    @Subscribe("/installed-at")
+    protected async installedAtProgram(subject: unknown) {
+
+        return this.installedAt(this.held(subject))
+    }
+
     @Subscribe("/pinned")
     protected async pinnedProgram(subject: unknown, operation: "get" | "pin" | "unpin") {
 
@@ -907,13 +913,13 @@ export default class ProgramManager extends TheLink {
 
     // ── Installing and uninstalling ──────────────────────────────────
     //
-    // Installation is the flag on the sole registry record. The files
-    // laid out under its identity are the durable representation of that
-    // state, reconstructed into the same model on boot.
+    // Installation is a time on the sole registry record. The files laid out under its identity are
+    // the durable representation of that state, reconstructed into the same model on boot; the time
+    // itself is kept in the Program's state, which outlives an uninstall that keeps its data.
 
-    public installed(program: Program) {
+    public installedAt(program: Program) {
 
-        return this.programs.get(program.identity)?.installed === true
+        return this.programs.get(program.identity)?.installedAt ?? null
     }
 
     // Installation changes every path a process may have remembered, so
@@ -1173,7 +1179,7 @@ export default class ProgramManager extends TheLink {
 
                     entry.program.replace(installed)
 
-                    entry.installed = true
+                    entry.markInstalled()
 
                     entry.restoreInstalled = false
 
@@ -1249,7 +1255,8 @@ export default class ProgramManager extends TheLink {
         })
     }
 
-    // Purge also ends Processes and removes storage and the runtime entry.
+    // Uninstalling ends Processes and forgets the runtime entry: its handle ends as an exited
+    // Process's does. Purge also removes its storage; otherwise a later install finds it.
     public async uninstall(program: Program, options: ProgramUninstallOptions = {}, asker: string | null = null, output: CommandOutput = () => undefined) {
 
         const { purge = false } = parseProgramUninstallOptions(options)
@@ -1277,12 +1284,9 @@ export default class ProgramManager extends TheLink {
 
     private async uninstallEntry(entry: Entry, purge: boolean, asker: string | null, output: CommandOutput) {
 
-        if (purge) {
+        await this.authManager.processManager.exitAll(entry.identity, asker)
 
-            await this.authManager.processManager.exitAll(entry.identity, asker)
-
-            await this.release(entry.identity)
-        }
+        await this.release(entry.identity)
 
         await entry.program.uninstallServer(output)
 
@@ -1297,7 +1301,7 @@ export default class ProgramManager extends TheLink {
             if (!readdirSync(home).length) rmSync(home, { recursive: true, force: true })
         }
 
-        entry.installed = false
+        entry.installedAt = null
 
         await this.authManager.processManager.announceHost("program", entry.identity, "uninstall", entry.identity, entry, purge)
 
@@ -1305,7 +1309,7 @@ export default class ProgramManager extends TheLink {
 
         await this.$outbound.publish("/uninstall", entry.record(), purge)
 
-        if (purge) await this.forgetEntry(entry)
+        await this.forgetEntry(entry)
 
         return entry.identity
     }

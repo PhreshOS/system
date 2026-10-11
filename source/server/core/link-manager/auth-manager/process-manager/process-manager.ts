@@ -2168,9 +2168,9 @@ export default class ProcessManager extends TheLink {
             return []
         }
 
-        if (word === "installed") {
+        if (word === "installedAt") {
 
-            return [this.system.programInstalled(heldProgram(rest[0]))]
+            return [this.system.programInstalledAt(heldProgram(rest[0]))]
         }
 
         if (word === "forget") {

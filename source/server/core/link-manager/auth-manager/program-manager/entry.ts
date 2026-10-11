@@ -10,7 +10,8 @@ export default class Entry {
 
     public readonly program: Program
 
-    public installed: boolean
+    /** When it was first installed, as an ISO time; `null` without an installed form, as one run from a project. */
+    public installedAt: string | null
 
     /** Restore the durable installed Program when this runtime overlay ends. */
     public restoreInstalled: boolean
@@ -23,9 +24,21 @@ export default class Entry {
 
         this.permissionState = clonePermissions(permissions)
 
-        this.installed = installed
+        this.installedAt = installed ? new ProgramStateStorage(program).settleInstalledAt() : null
 
         this.restoreInstalled = restoreInstalled
+    }
+
+    /** Whether it has an installed form. */
+    public get installed() {
+
+        return this.installedAt !== null
+    }
+
+    /** It now has an installed form: its first install time, kept from before or recorded now. */
+    public markInstalled() {
+
+        this.installedAt = new ProgramStateStorage(this.program).settleInstalledAt()
     }
 
     public permissions() {
@@ -54,7 +67,7 @@ export default class Entry {
 
             permissions: this.permissions(),
 
-            installed: this.installed,
+            installedAt: this.installedAt,
 
             // Whether it starts with the System, so a list can be filtered
             // where it is held. The launch itself stays behind `startup.get()`.

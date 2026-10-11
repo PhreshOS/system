@@ -37,6 +37,7 @@ import {
 } from "./presentation"
 import SystemAccess from "./system-access"
 import { allowsSynchronizedPermission } from "@shared/permission-state"
+import { programOrder } from "@phreshos/core"
 
 /** A host answer whose stream must be transferred rather than cloned. */
 export class TransferredAnswer {
@@ -219,8 +220,8 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         if (word === "host-program-list") {
 
             const { installed, opens, startup, pinned } = parseSystemProgramListOptions(args[0])
-            const programs = [...programManager.programs.values()].filter(program =>
-                (installed === undefined || program.installed === installed)
+            const programs = [...programManager.programs.values()].sort(programOrder).filter(program =>
+                (installed === undefined || (program.installedAt !== null) === installed)
                 && (opens === undefined || opensType(program.opens, opens))
                 && (startup === undefined || program.startup === startup)
                 && (pinned === undefined || (program.pinnedAt !== null) === pinned))
@@ -914,9 +915,9 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
         if (word === "icon") return [await programManager.icon(address(await permittedProgram(args[0])), args[1] as IconSize)]
 
         // Installation state and lifecycle operations of one held Program.
-        if (word === "installed") {
+        if (word === "installedAt") {
 
-            return [(await permittedProgram(args[0])).installed === true]
+            return [(await permittedProgram(args[0])).installedAt]
         }
 
         if (word === "forget") {
