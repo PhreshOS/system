@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react"
 import SystemErrors from "./dialogs/system-errors"
 import PermissionRequests from "./dialogs/permission-requests"
 import OpenRequests from "./dialogs/open-requests"
+import { UninstallProgramProvider } from "./dialogs/uninstall-program"
 import StartMenu, { StartMenuButton, StartMenuProvider, useStartMenuOpen } from "./start-menu/start-menu"
 import SignOut from "./taskbar/sign-out"
 import Taskbar from "./taskbar/taskbar"
@@ -24,11 +25,15 @@ export default function DefaultShell({ spacing, taskbar, viewport, mappedWindows
 
         <StartMenuProvider spacing={spacing} taskbar={taskbar}>
 
-            <DefaultTaskbar spacing={spacing} taskbar={taskbar} viewport={viewport} mappedWindows={mappedWindows} horizontal={horizontal}>
-                {children}
-            </DefaultTaskbar>
+            <UninstallProgramProvider>
 
-            <StartMenu />
+                <DefaultTaskbar spacing={spacing} taskbar={taskbar} viewport={viewport} mappedWindows={mappedWindows} horizontal={horizontal}>
+                    {children}
+                </DefaultTaskbar>
+
+                <StartMenu />
+
+            </UninstallProgramProvider>
 
         </StartMenuProvider>
 
