@@ -82,9 +82,10 @@ export default function SharedResizeBoundaries({ windows, begin, present, commit
 
                     present(result.geometries)
 
-                    // The System records each position from the center of the surface these boundaries divide.
-                    const surface = handle.closest<HTMLElement>("[data-window-surface]")
-                    const size = { width: surface?.clientWidth ?? 0, height: surface?.clientHeight ?? 0 }
+                    // The System records each position from the center of the surface these boundaries divide:
+                    // the one they are laid in, measured as each Window measures the one it is laid in.
+                    const surface = handle.parentElement!
+                    const size = { width: surface.clientWidth, height: surface.clientHeight }
                     commit(new Map([...result.geometries].map(([identity, region]) => [identity, planeGeometry(region, size)])))
 
                     finish(identities)
