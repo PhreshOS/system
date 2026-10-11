@@ -329,6 +329,14 @@ export default function useWindowGeometryMotion({ position, size, animation, tra
 
     function restoreGesture(region: WindowRegion) {
 
+        // Without animations, it is its restored size at once, as every other change is.
+        if (values.current.immediate) {
+
+            set(region)
+
+            return
+        }
+
         const shown = read()
         const scaleX = region.width === 0 ? 1 : shown.width / region.width
         const scaleY = region.height === 0 ? 1 : shown.height / region.height
