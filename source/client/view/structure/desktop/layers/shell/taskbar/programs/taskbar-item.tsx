@@ -3,10 +3,11 @@ import { type TaskbarPosition } from "@phreshos/core"
 import { forwardRef, type ReactNode } from "react"
 
 /**
- * A window on the Taskbar. The windows sit flat and translucent in the bar, so
- * the active one, raised in the primary color, is the one that stands out.
+ * A window on the Taskbar, or a pinned Program with no window. The windows sit flat and translucent
+ * in the bar, so the active one, raised in the primary color, is the one that stands out; a Program
+ * with no window is its icon alone, part of the bar until pointed at.
  */
-export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarItem({ active = false, icon, position, labeled = true, children, className, ...props }, ref) {
+export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarItem({ active = false, closed = false, icon, position, labeled = true, children, className, ...props }, ref) {
 
     const horizontal = position === "top" || position === "bottom"
 
@@ -18,7 +19,7 @@ export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarI
         ref={ref}
         aria-pressed={active}
         size="small"
-        depth={active ? "raised" : "flat"}
+        depth={active ? "raised" : closed ? "none" : "flat"}
         color={active ? "primary:soft" : undefined}
         material={active ? undefined : resting}
         iconOnly={horizontal && !named}
@@ -40,6 +41,9 @@ const resting = { opacity: 0.35 }
 interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
 
     active?: boolean
+
+    /** A pinned Program with no window: nothing painted around its icon at rest. */
+    closed?: boolean
 
     // Every system entry has either its Program icon or the system default.
     icon: string

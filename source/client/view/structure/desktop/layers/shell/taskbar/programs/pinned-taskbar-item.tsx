@@ -24,7 +24,7 @@ export default function PinnedTaskbarItem({ program, icon, position }: Readonly<
 
         <ContextMenu.Trigger>
 
-            <TaskbarItem icon={icon} position={position} labeled={false} onPress={open}>{program.name}</TaskbarItem>
+            <TaskbarItem closed icon={icon} position={position} labeled={false} onPress={open}>{program.name}</TaskbarItem>
 
         </ContextMenu.Trigger>
 

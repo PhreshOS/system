@@ -512,6 +512,11 @@ export default function Workspace() {
 
     const pinnedIdentities = new Set(pinnedPrograms.map(program => program.identity))
 
+    // The Window that holds each pinned Program's place: the first of it still open.
+    const slotHolders = new Map<string, Process>()
+
+    for (const record of windows.listed) if (pinnedIdentities.has(record.program) && !slotHolders.has(record.program)) slotHolders.set(record.program, record)
+
     const togglePinned = useCallback(function (record: Process) {
 
         const program = programs.find(entry => entry.identity === record.program)
@@ -581,17 +586,17 @@ export default function Workspace() {
         {/* What a press means is composed here because it is a person's
             expectation, not a system operation: the front window hides;
             pressing another takes you to its view and brings it forward.
-            A pinned Program keeps its place: its Windows stand there, the first
-            in its icon's stead, and its icon returns once the last is closed;
-            the Windows of other Programs follow, as they opened. */}
-        {pinnedPrograms.flatMap(program => {
-            const its = windows.listed.filter(record => record.program === program.identity)
-            return its.length
-                ? its.map(windowItem)
-                : [<PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />]
+            A pinned Program keeps its place: its first Window stands there in
+            its icon's stead, and its icon returns once its last is closed; every
+            other Window follows, as they opened. */}
+        {pinnedPrograms.map(program => {
+            const first = slotHolders.get(program.identity)
+            return first
+                ? windowItem(first)
+                : <PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />
         })}
 
-        {windows.listed.filter(record => !pinnedIdentities.has(record.program)).map(windowItem)}
+        {windows.listed.filter(record => slotHolders.get(record.program) !== record).map(windowItem)}
 
     </OverflowRow>
 
