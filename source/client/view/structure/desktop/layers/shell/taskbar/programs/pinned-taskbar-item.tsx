@@ -1,7 +1,7 @@
 import Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { type TaskbarPosition } from "@phreshos/core"
-import { ContextMenu, Menu } from "@phreshos/react-ui"
-import { Plus, PinOff } from "@phreshos/react-ui/icons"
+import { ContextMenu } from "@phreshos/react-ui"
+import ProgramMenu from "../../program-menu"
 import { useDesktopScaleContainer } from "../../../../desktop-scale"
 import { useLaunch } from "../../start-menu/programs/programs"
 import TaskbarTooltip from "../taskbar-tooltip"
@@ -10,7 +10,7 @@ import TaskbarItem from "./taskbar-item"
 /**
  * A Program pinned to the Taskbar: its place, kept whether it is closed or open, with its open
  * Windows right after it. It shows its icon alone; pressed, it opens the Program, as the Start Menu
- * does. Only a Program with a Client stands here: one without has nothing to show.
+ * does, with or without a Window to show.
  */
 export default function PinnedTaskbarItem({ program, icon, position }: Readonly<{ program: Program, icon: string, position: TaskbarPosition }>) {
 
@@ -30,14 +30,7 @@ export default function PinnedTaskbarItem({ program, icon, position }: Readonly<
 
         <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
 
-            <Menu aria-label={`${program.name} on the Taskbar`} size="small" onAction={action => {
-                if (action === "open") open()
-                else if (action === "unpin") void program.pin(false).catch(() => undefined)
-            }}>
-                <Menu.Item id="open" textValue="Open"><Plus aria-hidden />Open</Menu.Item>
-                <Menu.Separator />
-                <Menu.Item id="unpin" textValue="Unpin"><PinOff aria-hidden />Unpin</Menu.Item>
-            </Menu>
+            <ProgramMenu program={program} onOpen={open} />
 
         </ContextMenu.Content>
 

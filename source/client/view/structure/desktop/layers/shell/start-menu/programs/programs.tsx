@@ -2,9 +2,11 @@ import programIcon from "@client/view/structure/desktop/programs/program-icon"
 import { ApplicationContext } from "@client/view/contexts"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { useLaunchPlacement } from "@client/view/structure/desktop/launch-placement"
-import { Badge, GridList, Table, Text, useAppearance, useScale, ScrollArea } from "@phreshos/react-ui"
-import { useRef } from "react"
+import { Badge, ContextMenu, GridList, Table, Text, useAppearance, useScale, ScrollArea } from "@phreshos/react-ui"
+import { useRef, useState, type ReactElement } from "react"
 import Empty from "../empty"
+import ProgramMenu from "../../program-menu"
+import { useDesktopScaleContainer } from "@client/view/structure/desktop/desktop-scale"
 
 export type ProgramsLayout = "grid" | "list"
 
@@ -22,6 +24,11 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     const space = useScale(useAppearance().spacing)
 
+    const scaleContainer = useDesktopScaleContainer()
+
+    // The Program a press for the menu landed on, found under the pointer as the menu opens.
+    const [menuFor, setMenuFor] = useState<Program | null>(null)
+
     if (!programs.length) return <Empty>{empty}</Empty>
 
     const byIdentity = new Map(programs.map(program => [program.identity, program]))
@@ -30,7 +37,20 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     const icon = (program: Program) => programIcon(application.doors.program, program.assetId)
 
-    if (layout === "grid") return <GridList aria-label="Programs" selectionMode="none" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
+    // One menu for the whole list, as Files has: it acts on the Program it was opened on.
+    const withMenu = (list: ReactElement) => <ContextMenu>
+        <ContextMenu.Trigger>
+            <div style={{ display: "contents" }} onContextMenuCapture={event => {
+                const key = event.target instanceof Element ? event.target.closest("[data-key]")?.getAttribute("data-key") : null
+                setMenuFor(key ? byIdentity.get(key) ?? null : null)
+            }}>{list}</div>
+        </ContextMenu.Trigger>
+        <ContextMenu.Content portalContainer={scaleContainer ?? undefined}>
+            {menuFor && <ProgramMenu program={menuFor} onOpen={() => onLaunch(menuFor)} />}
+        </ContextMenu.Content>
+    </ContextMenu>
+
+    if (layout === "grid") return withMenu(<GridList aria-label="Programs" selectionMode="none" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
 
         {programs.map(program => <GridList.Item key={program.identity} id={program.identity} textValue={program.name}>
 
@@ -45,9 +65,9 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
         </GridList.Item>)}
 
-    </GridList>
+    </GridList>)
 
-    return <ScrollArea axis="horizontal"><Table aria-label="Programs" size="small" onAction={launch}>
+    return withMenu(<ScrollArea axis="horizontal"><Table aria-label="Programs" size="small" onAction={launch}>
 
         <Table.Header>
             <Table.Column id="name" rowHeader minWidth={space.xlarge * 3}>Name</Table.Column>
@@ -70,7 +90,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
             </Table.Row>)}
         </Table.Body>
 
-    </Table></ScrollArea>
+    </Table></ScrollArea>)
 }
 
 /**
@@ -88,9 +108,12 @@ export function useLaunch() {
 
     return async function (program: Program) {
 
-        const declared = program.client?.position ?? null
+        // A Program without a Client opens as it declares: there is no Window to place.
+        if (!program.client) return void await program.createProcess()
 
-        const size = program.client?.size ?? null
+        const declared = program.client.position ?? null
+
+        const size = program.client.size ?? null
 
         const placed = placement.current.place(size)
 

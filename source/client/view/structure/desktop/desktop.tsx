@@ -506,8 +506,8 @@ export default function Workspace() {
 
     }, [windows.presentation, windows.bringForward, focus.minimize])
 
-    // Programs kept on the Taskbar, closed or open, in the order they are listed.
-    const pinnedPrograms = programs.filter(program => program.pinned && program.client)
+    // Programs kept on the Taskbar, closed or open, in the order they are listed, with or without a Window.
+    const pinnedPrograms = programs.filter(program => program.pinned)
 
     const pinnedIdentities = new Set(pinnedPrograms.map(program => program.identity))
 
