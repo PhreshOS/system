@@ -43,7 +43,7 @@ test("a default Program opens it at once, with no request", async () => {
 
     await manager.open(png, null)
 
-    expect(open).toHaveBeenCalledWith(expect.objectContaining({ identity: "paint" }), png)
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ identity: "paint" }), png, null)
     expect(manager.requests()).toEqual([])
 })
 
@@ -52,11 +52,11 @@ test("a family's default opens every type in it, and an exact type's default win
     stored.set("opening-defaults", { "image/*": "preview" })
 
     await manager.open({ type: "image/jpeg", uri: "file:///a.jpg" }, null)
-    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), { type: "image/jpeg", uri: "file:///a.jpg" })
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), { type: "image/jpeg", uri: "file:///a.jpg" }, null)
 
     stored.set("opening-defaults", { "image/*": "preview", "image/png": "paint" })
     await manager.open(png, null)
-    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png)
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, null)
     expect(manager.requests()).toEqual([])
 })
 
@@ -92,9 +92,28 @@ test("without a default, a request waits; choosing always opens it and makes the
     await manager.choose(request!.identity, "preview", { always: true })
     await opening
 
-    expect(open).toHaveBeenCalledWith(expect.objectContaining({ identity: "preview" }), png)
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ identity: "preview" }), png, null)
     expect(await manager.defaults()).toEqual({ "image/png": { identity: "preview" } })
     expect(manager.pending(request!.identity)).toBe(false)
+})
+
+test("a window that asks is where the new one opens from, even once a request is decided; a Server is not", async () => {
+    const { manager, open, stored } = fixture()
+    const asker = { record: () => ({ identity: "asker" }), program: { record: () => ({ identity: "files" }) }, onClientStop: () => () => undefined, onServerStop: () => () => undefined } as never
+    stored.set("opening-defaults", { "image/png": "paint" })
+
+    await manager.open(png, { process: asker, endpoint: "client" })
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, asker)
+
+    await manager.open(png, { process: asker, endpoint: "server" })
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "paint" }), png, null)
+
+    stored.clear()
+    const opening = manager.open(png, { process: asker, endpoint: "client" })
+    await vi.waitFor(() => expect(manager.requests()).toHaveLength(1))
+    await manager.choose(manager.requests()[0]!.identity, "preview", {})
+    await opening
+    expect(open).toHaveBeenLastCalledWith(expect.objectContaining({ identity: "preview" }), png, asker)
 })
 
 test("a cancelled request opens nothing and tells the one who asked", async () => {

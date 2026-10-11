@@ -63,8 +63,11 @@ export default class OpeningManager extends TheLink {
         const chosen = [defaults[target.type], defaults[`${target.type.slice(0, target.type.indexOf("/"))}/*`]]
             .find(program => program !== undefined && programs.includes(program))
 
+        // A window that asks has the new window open over it.
+        const asker = from?.endpoint === "client" ? from.process : null
+
         if (chosen) {
-            await this.launch(chosen, target)
+            await this.launch(chosen, target, asker)
             return
         }
 
@@ -84,7 +87,7 @@ export default class OpeningManager extends TheLink {
         const cancelEndpoint = from ? from.endpoint === "server" ? from.process.onServerStop(end) : from.process.onClientStop(end)
             : signal ? (signal.addEventListener("abort", end), () => signal.removeEventListener("abort", end)) : () => undefined
 
-        this.pendingRequests.set(identity, { snapshot, settle, cancelEndpoint, timer: null, resolving: false })
+        this.pendingRequests.set(identity, { snapshot, asker, settle, cancelEndpoint, timer: null, resolving: false })
 
         await Promise.all([
             this.authManager.processManager.announceHost("opening", null, "request", "system", snapshot).catch(() => undefined),
@@ -125,7 +128,7 @@ export default class OpeningManager extends TheLink {
 
             if ((options as { always?: unknown } | undefined)?.always === true) await this.setDefault(request.snapshot.target.type, program)
 
-            await this.launch(program, request.snapshot.target)
+            await this.launch(program, request.snapshot.target, request.asker)
             await this.finish(request, program)
         }
         catch (error) {
@@ -221,13 +224,13 @@ export default class OpeningManager extends TheLink {
         return this.authManager.linkManager.application.store
     }
 
-    private async launch(program: string, target: OpenTarget) {
+    private async launch(program: string, target: OpenTarget, asker: Process | null) {
 
         const entry = this.authManager.programManager.programs.get(program)
 
         if (!entry?.installed) throw new Error("That Program is not installed")
 
-        await this.authManager.programManager.open(entry.program, target)
+        await this.authManager.programManager.open(entry.program, target, asker)
     }
 
     private claim(identity: unknown) {
@@ -267,6 +270,8 @@ export default class OpeningManager extends TheLink {
 
 interface PendingOpenRequest {
     readonly snapshot: OpenRequestSnapshot
+    /** The Process whose window asked, which the new window opens over. */
+    readonly asker: Process | null
     readonly settle: (program: string | null) => void
     readonly cancelEndpoint: () => void
     timer: ReturnType<typeof setTimeout> | null
