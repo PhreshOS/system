@@ -43,11 +43,27 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
 
     const ready = useEffectEvent(() => onReady?.())
 
+    // The other Theme's wallpaper is read ahead, at the very address it is shown from, so a change of
+    // Theme takes it from memory rather than the network. Nothing of it is shown or run: an image is
+    // decoded, kept while it is the other Theme's; a video is only read. A page is read by a hidden
+    // frame that runs no script, since browsers keep what frames open apart from what `fetch` reads.
+    const prepared = useRef<HTMLImageElement | null>(null)
+    const [pageRead, setPageRead] = useState<string | null>(null)
+
     useEffect(() => {
-        // The other theme's picture too, so a change of theme shows at once.
-        if (other.kind !== "image") return
-        const image = new Image()
-        image.src = other.url
+        if (other.kind === "html") return
+        if (other.kind === "image") {
+            const image = new Image()
+            image.src = other.url
+            void image.decode().catch(() => undefined)
+            prepared.current = image
+            return () => { prepared.current = null }
+        }
+        const reading = new AbortController()
+        void fetch(other.url, { signal: reading.signal, priority: "low" })
+            .then(response => response.body?.pipeTo(new WritableStream(), { signal: reading.signal }))
+            .catch(() => undefined)
+        return () => reading.abort()
     }, [other.url, other.kind])
 
     useEffect(() => {
@@ -105,6 +121,17 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
     const incoming = layers.incoming
 
     return <>
+        {other.kind === "html" && pageRead !== other.url && <iframe
+            key={other.url}
+            hidden
+            aria-hidden="true"
+            tabIndex={-1}
+            title=""
+            sandbox=""
+            src={other.url}
+            onLoad={() => setPageRead(other.url)}
+        />}
+
         {layers.displayed && <WallpaperLayer
             key={layers.displayed.identity}
             source={layers.displayed}
