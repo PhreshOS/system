@@ -396,7 +396,14 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
 
     const preferred = space.xlarge * 3.25
 
-    const width = room ? Math.min(preferred, (room.width - chrome.width) / columns, (room.height - chrome.height) / rows / ratio) : preferred
+    // As large as the room holds: the longer way filled, the other following each view's proportion.
+    const fitted = room ? Math.min((room.width - chrome.width) / columns, (room.height - chrome.height) / rows / ratio) : preferred
+
+    // Where the room is smaller than the map would be, the map takes the whole room, as the Start Menu
+    // does, with its views in the middle of it.
+    const fills = room !== null && fitted < preferred
+
+    const width = fills ? fitted : preferred
 
     const cell = room ? { width: Math.max(1, Math.floor(width)), height: Math.max(1, Math.floor(width * ratio)) } : { width: Math.round(width), height: Math.round(width * ratio) }
 
@@ -507,12 +514,14 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
         setSettle(null)
     }
 
-    // The panel is as wide as the map; its words wrap under it.
-    return <div className="grid" style={{ gap: space.medium, padding: space.large, width: columns * cell.width, boxSizing: "content-box" }}>
+    // The panel is as wide as the map, its words wrapping under it; filling the room, it is the room's size.
+    return <div className="grid" style={fills && room
+        ? { gap: space.medium, padding: space.large, width: room.width, height: room.height, boxSizing: "border-box", gridTemplateRows: "auto minmax(0, 1fr) auto" }
+        : { gap: space.medium, padding: space.large, width: columns * cell.width, boxSizing: "content-box" }}>
 
         <Text ref={title} id={labelId} size="medium" className="flex items-center" style={{ fontWeight: 500, gap: space.small }}><MapIcon aria-hidden />Map</Text>
 
-        <div className="relative">
+        <div className="relative" style={fills ? { alignSelf: "center", justifySelf: "center" } : undefined}>
 
         {/* The plane, a well recessed into the Panel like the Start Menu's; views and Windows sit on it, and the frame above them. */}
         <Surface depth="recessed" color="background" material="extended" className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
