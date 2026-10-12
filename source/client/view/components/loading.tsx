@@ -2,13 +2,18 @@ import { Spinner, Surface, type SurfaceProps } from "@phreshos/react-ui"
 
 type LoadingProps = Omit<SurfaceProps, "material">
 
-/** A complete loading surface for unresolved content. */
+/**
+ * A complete loading surface for unresolved content. It hides what is beneath it, so it is opaque
+ * whatever the Appearance's opacity.
+ */
 export default function ({ className, style, children, ...props }: LoadingProps) {
     const described = children !== undefined
 
     return <Surface
 
         {...props}
+
+        material="opaque"
 
         className={`inset-0 z-10 grid ${className ?? ""}`}
 
