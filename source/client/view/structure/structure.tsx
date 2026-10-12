@@ -41,9 +41,10 @@ export default function () {
             </DesktopScaleProvider>
 
             {/* Desktop overlays open here: inside the scale, so they share it, and outside the layout, so
-                opening one never takes room from the Desktop. It has no size and catches nothing; what
-                opens in it floats from its corner. */}
-            <div ref={setOverlays} className="absolute top-0 left-0 size-0 overflow-visible" />
+                opening one never takes room from the Desktop. It covers the Desktop, so what opens in it
+                has the Desktop's width to lay its text out in, and it catches nothing itself; only what
+                opens in it does. */}
+            <div ref={setOverlays} className="pointer-events-none absolute inset-0 *:pointer-events-auto" />
 
         </div>
 
