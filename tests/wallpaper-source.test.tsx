@@ -43,7 +43,9 @@ test("wallpaper source contract", () => {
 
     const html = render("00000000-0000-0000-0000-000000000000.html")
     assert.match(html, /<iframe/)
-    assert.match(html, /src="\/uploads\/wallpaper\/00000000-0000-0000-0000-000000000000\.html\?theme=dark"/)
+    // The page is told its Theme and its place, so one page can serve every place.
+    assert.match(html, /src="\/uploads\/wallpaper\/00000000-0000-0000-0000-000000000000\.html\?theme=dark&amp;place=desktop"/)
+    assert.match(render("00000000-0000-0000-0000-000000000000.html", "signIn"), /\.html\?theme=dark&amp;place=signIn"/)
     assert.match(html, /sandbox="allow-scripts"/)
     assert.match(html, /referrerPolicy="no-referrer"/)
     assert.doesNotMatch(html, /allow-same-origin/)

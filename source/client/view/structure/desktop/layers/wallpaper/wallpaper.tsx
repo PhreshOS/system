@@ -29,8 +29,8 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
     const { theme } = usePreferences()
     const reducedMotion = useReducedMotion()
     const otherTheme = theme === "light" ? "dark" : "light"
-    const desired = resolveWallpaper(wallpapers[theme][place], application.doors.uploads, theme)
-    const other = resolveWallpaper(wallpapers[otherTheme][place], application.doors.uploads, otherTheme)
+    const desired = resolveWallpaper(wallpapers[theme][place], application.doors.uploads, theme, place)
+    const other = resolveWallpaper(wallpapers[otherTheme][place], application.doors.uploads, otherTheme, place)
     const [layers, setLayers] = useState<WallpaperLayers>({
         displayed: null,
         incoming: desired,
@@ -86,17 +86,25 @@ export function WallpaperBackground({ place, wallpapers, onReady }: WallpaperBac
 
         if (shown.incoming?.identity !== source.identity) return
 
-        ready()
+        // Decoded is not yet drawn: a large picture takes a moment to paint. It is ready once the
+        // frame that draws it has passed, two frames on, so what covered it never uncovers less.
+        cancelSwitch(frame)
 
         if (!shown.displayed || reducedMotion) {
             setLayers({ displayed: source, incoming: null, switching: false })
+            frame.current = requestAnimationFrame(() => {
+                frame.current = requestAnimationFrame(() => {
+                    frame.current = null
+                    ready()
+                })
+            })
             return
         }
 
-        cancelSwitch(frame)
         frame.current = requestAnimationFrame(() => {
             frame.current = requestAnimationFrame(() => {
                 frame.current = null
+                ready()
                 setLayers(value => value.incoming?.identity === source.identity
                     ? { ...value, switching: true }
                     : value)
@@ -223,13 +231,14 @@ function WallpaperLayer({ source, visible, onLoad, onError, onShown }: Readonly<
 
 /**
  * Where one wallpaper is read from. An HTML page is told the Theme it is opened in, `?theme=light` or
- * `?theme=dark`, the Desktop's own and not the browser's. A wallpaper is its file: the same file in
- * both Themes stays as it is when the Theme changes.
+ * `?theme=dark`, the Desktop's own and not the browser's, and the place it is shown in,
+ * `&place=desktop` or `&place=signIn`, so one page can serve every place. A wallpaper is its file:
+ * the same file in both Themes stays as it is when the Theme changes.
  */
-function resolveWallpaper(file: string, uploads: string, theme: "light" | "dark"): WallpaperSource {
+function resolveWallpaper(file: string, uploads: string, theme: "light" | "dark", place: WallpaperPlace): WallpaperSource {
     const kind = wallpaperKind(file) ?? "image"
 
-    if (kind === "html") return { identity: `html:${file}`, kind, url: `${uploads}/wallpaper/${encodeURIComponent(file)}?theme=${theme}` }
+    if (kind === "html") return { identity: `html:${file}`, kind, url: `${uploads}/wallpaper/${encodeURIComponent(file)}?${new URLSearchParams({ theme, place })}` }
 
     return { identity: `${kind}:${file}`, kind, url: `${uploads}/${encodeURIComponent(file)}` }
 }
@@ -241,15 +250,16 @@ function cancelSwitch(frame: { current: number | null }) {
     frame.current = null
 }
 
-/** A complete surface whose content sits above one file-backed wallpaper. */
+/**
+ * A complete surface whose content sits above one file-backed wallpaper. It waits once, for the
+ * first wallpaper; a later one, such as another Theme's or one the owner chose, replaces it in place,
+ * the one before staying until it can.
+ */
 export function WallpaperStage({ place, wallpapers, children }: WallpaperStageProps) {
-    const { theme } = usePreferences()
-    const file = wallpapers[theme][place]
-    const [readyFile, setReadyFile] = useState<string>()
-    const ready = readyFile === file
+    const [ready, setReady] = useState(false)
 
     return <div className="relative isolate grid min-h-0">
-        <WallpaperBackground place={place} wallpapers={wallpapers} onReady={() => setReadyFile(file)} />
+        <WallpaperBackground place={place} wallpapers={wallpapers} onReady={() => setReady(true)} />
 
         <div className="pointer-events-none relative z-1 grid min-h-0">
             {children}
