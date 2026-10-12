@@ -8,8 +8,8 @@
         "@fontsource/roboto": "^5.3.0",
         "@hono/node-server": "^2.1.1",
         "@jitl/quickjs-ng-wasmfile-release-sync": "^0.32.0",
-        "@phreshos/core": "^0.6.0",
-        "@phreshos/react-ui": "^0.6.0",
+        "@phreshos/core": "^0.7.0",
+        "@phreshos/react-ui": "^0.7.0",
         "@the-link/core": "^0.4.0",
         "@the-link/http": "^0.3.0",
         "@the-link/ipc": "^0.3.0",
@@ -200,9 +200,9 @@
 
     "@oxc-project/types": ["@oxc-project/types@0.150.0", "", {}, "sha512-rDS5/31E9HfPl/CIzGrn0DOlvBbXFseQ5URJ9sYMfstbKLD/c6Gm9vmRzRGDdAXyOIL4zmO37lc9RIwYqVruZw=="],
 
-    "@phreshos/core": ["@phreshos/core@0.6.0", "", { "dependencies": { "zod": "^4.6.5" } }, "sha512-e4G0JbkOs/lebjeXbmCSdM9D0aoofYj12GSdCDW4tTuoLTPG1rq4KN3m3OpL463CG855gBExzyL+8DVCbj/vwg=="],
+    "@phreshos/core": ["@phreshos/core@0.7.0", "", { "dependencies": { "zod": "^4.6.5" } }, "sha512-d6uYRxI0mVYt5D/B0AyU3SmSBCEygHCAPxp4UDIdDwjHSx+iw7isJUuZkqb8bg9xb/pPALSTKCd/zDNuhmA7ag=="],
 
-    "@phreshos/react-ui": ["@phreshos/react-ui@0.6.0", "", { "dependencies": { "@base-ui/react": "^1.7.0", "@internationalized/date": "^3.12.3", "@phreshos/core": "^0.6.0", "colorjs.io": "^0.7.1", "lucide-react": "^1.48.0", "react-aria": "^3.51.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-g5XK3s3GJ3en4ALNHCdIkXaeFufAyImzlTQTroeiLtNov+enfndnpGJEBG53DFkeCPez5RHw1TfJobmbgE5WsA=="],
+    "@phreshos/react-ui": ["@phreshos/react-ui@0.7.0", "", { "dependencies": { "@base-ui/react": "^1.7.0", "@internationalized/date": "^3.12.3", "@phreshos/core": "^0.7.0", "colorjs.io": "^0.7.1", "lucide-react": "^1.48.0", "react-aria": "^3.51.0", "react-aria-components": "^1.20.0" }, "peerDependencies": { "react": "^19.2.0", "react-dom": "^19.2.0" } }, "sha512-9+ax2ziU1F5zwmonI1EXhz00EXEFYmzgEHoXV3/Hc39Db/72K5d0ZKv1EVWuhCTot4hjSFXYpQap7k0v0SCr5g=="],
 
     "@react-types/shared": ["@react-types/shared@3.36.1", "", { "peerDependencies": { "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1" } }, "sha512-AzsuD9OfxTOZMMvTRhlN3oHBwOmFN7tDh27LzqmHt4+uOgPhJT7ZM7/kVs/8/o0WxayMUIk3hBmCFRHv1FUoag=="],
 
