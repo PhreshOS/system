@@ -65,7 +65,7 @@ export default function CredentialsForm({ title, description, submitLabel, passw
 
         >
 
-            <Surface material="full" radius="large" className="w-full" style={{ padding: resolveSpacing("xlarge", spacing) }}>
+            <Surface material="frosted" radius="large" className="w-full" style={{ padding: resolveSpacing("xlarge", spacing) }}>
 
                 <form
 

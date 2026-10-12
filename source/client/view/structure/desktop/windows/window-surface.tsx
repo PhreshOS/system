@@ -93,16 +93,16 @@ function surfaceColor(surface: VisibleWindowSurface): Color | undefined {
         : surface.color
 }
 
-function surfaceMaterial(surface: VisibleWindowSurface, active: boolean): "none" | "basic" | "full" | MaterialOptions {
+function surfaceMaterial(surface: VisibleWindowSurface, active: boolean): "none" | "frosted" | MaterialOptions | undefined {
 
-    const material = surface === true || surface.material === undefined ? "full" : surface.material
+    const material = surface === true || surface.material === undefined ? "frosted" : surface.material
 
     if (material === false) return "none"
 
     // Frost blurs everything behind a window again whenever anything behind it
     // changes, so its cost grows with every open window. Only the front window
-    // keeps it; the others become the same paint, opaque, as on macOS.
-    return active ? material : "basic"
+    // keeps it; the others take a Surface's own material, without frost.
+    return active ? material : undefined
 }
 
 const appearanceColors = ["background", "foreground", "default", "primary", "secondary", "success", "warning", "danger", "info"] as const satisfies readonly AppearanceColor[]

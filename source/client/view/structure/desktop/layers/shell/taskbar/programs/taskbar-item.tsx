@@ -35,8 +35,11 @@ export default forwardRef<HTMLButtonElement, TaskbarItemProps>(function TaskbarI
     </Button>
 })
 
-/** The material of a window that is not active: mostly the bar shows through it. */
-const resting = { opacity: 0.35 }
+/**
+ * The material of a window that is not active: mostly the bar shows through it. The bar is already
+ * frosted, so the item is only translucent: frosting it again would blur the same backdrop twice.
+ */
+const resting = { mode: "translucent", opacity: 0.35 } as const
 
 interface TaskbarItemProps extends Omit<ButtonActionProps, "children"> {
 

@@ -1,6 +1,6 @@
 import Keyv from "keyv"
 import { isDeepStrictEqual } from "node:util"
-import { applyAppearanceUpdate, defaultAppearance, isUploadFile, systemWallpapers, wallpaperKind, wallpaperSizeLimit, type Appearance, type AppearanceWallpapers } from "@phreshos/core"
+import { applyAppearanceUpdate, defaultAppearance, isUploadFile, readSavedAppearance, systemWallpapers, wallpaperKind, wallpaperSizeLimit, type Appearance, type AppearanceWallpapers } from "@phreshos/core"
 import UploadManager from "./upload-manager"
 
 const storageKey = "appearance"
@@ -15,9 +15,7 @@ export default class AppearanceManager {
 
     public static async open(store: Keyv, uploads: UploadManager) {
         const stored = await store.get(storageKey)
-        const held = stored === undefined
-            ? defaultAppearance
-            : applyAppearanceUpdate(defaultAppearance, stored)
+        const held = stored === undefined ? defaultAppearance : readSavedAppearance(stored)
 
         // A wallpaper that can no longer be shown, such as an upload gone from disk, becomes the
         // System's own for its place, so the Desktop never shows nothing and later changes apply.

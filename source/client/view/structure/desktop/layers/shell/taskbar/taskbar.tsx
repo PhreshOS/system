@@ -79,7 +79,7 @@ export default function Taskbar({ leading, navigation, trailing, taskbar, spacin
 
             {...props}
 
-            material="full"
+            material="frosted"
 
             onPointerEnter={event => {
                 setRevealed(true)

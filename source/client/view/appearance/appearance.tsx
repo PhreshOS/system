@@ -1,5 +1,5 @@
 import DesktopPreferencesProvider, { useDesktopPreferences, useDesktopThemeTransaction } from "./desktop-preferences"
-import { applyAppearanceUpdate, defaultAppearance, type Appearance, type Transaction } from "@phreshos/core"
+import { defaultAppearance, readSavedAppearance, type Appearance, type Transaction } from "@phreshos/core"
 import { timing, UIProvider } from "@phreshos/react-ui"
 import ReducedMotion from "@libs/react-motion"
 import { createContext, type PropsWithChildren, useCallback, useContext, useLayoutEffect, useMemo, useState } from "react"
@@ -78,7 +78,7 @@ export function resolveStoredAppearance(value: string | null): Appearance {
     if (value === null) return defaultAppearance
 
     try {
-        return applyAppearanceUpdate(defaultAppearance, JSON.parse(value))
+        return readSavedAppearance(JSON.parse(value))
     }
     catch {
         return defaultAppearance

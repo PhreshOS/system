@@ -94,19 +94,24 @@ test("appearance contract", async () => {
   const reopened = await AppearanceManager.open(store, uploads)
   assert.deepEqual(reopened.value, manager.value)
 
-  const shadow = {
-    light: { x: -3, y: 12, blur: 30, spread: 2, opacity: 0.25 },
-    dark: { x: 2, y: 6, blur: 18, spread: -1, opacity: 0.12 }
-  }
+  const shadow = { light: 0.25, dark: 0.12 }
   await manager.update({ ...manager.value, shadow })
   assert.deepEqual(manager.value.shadow, shadow)
   assert.deepEqual((await store.get("appearance")).shadow, shadow)
   assert.deepEqual((await AppearanceManager.open(store, uploads)).value.shadow, shadow)
 
-  for (const invalid of [{ ...shadow.light, blur: -1 }, { ...shadow.light, opacity: 1.1 }, { ...shadow.light, x: Infinity }]) {
+  for (const invalid of [-0.1, 0.31, Infinity]) {
     await assert.rejects(manager.update({ ...manager.value, shadow: { ...shadow, light: invalid } }))
     assert.deepEqual(manager.value.shadow, shadow)
   }
+
+  // A saved field whose shape has changed takes its default; the others stay.
+  await store.set("appearance", { ...manager.value, spacing: 16, shadow: { light: { x: 0, y: 0, blur: 10, spread: 0, opacity: 0.2 }, dark: {} } })
+  const understood = await AppearanceManager.open(store, uploads)
+  assert.equal(understood.value.spacing, 16)
+  assert.deepEqual(understood.value.shadow, defaultAppearance.shadow)
+  await understood.update({ ...understood.value, shadow })
+  assert.deepEqual(understood.value.shadow, shadow)
 
   const updated = {
     ...manager.value,

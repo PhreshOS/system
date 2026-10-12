@@ -525,7 +525,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
         <div className="relative" style={fills ? { alignSelf: "center", justifySelf: "center" } : undefined}>
 
         {/* The plane, a well recessed into the Panel like the Start Menu's; views and Windows sit on it, and the frame above them. */}
-        <Surface depth="recessed" color="background" material="extended" className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
+        <Surface depth="recessed" color="background" className="relative overflow-hidden" style={{ width: columns * cell.width, height: rows * cell.height }}>
 
             {/* One clear cell per view, so the well shows as it does in the Start Menu. */}
             <div className="absolute inset-0 grid" style={{ gridTemplateColumns: `repeat(${columns}, ${cell.width}px)`, gridTemplateRows: `repeat(${rows}, ${cell.height}px)` }}>
@@ -568,7 +568,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
             <motion.div className="absolute left-0 top-0" style={{ width: cell.width, height: cell.height }} initial={false}
                 animate={{ x: mapX(viewport.offset.x) - cell.width / 2, y: mapY(viewport.offset.y) - cell.height / 2 }}
                 transition={viewport.transaction && !reducedMotion ? motionTransition(viewport.transaction) : { duration: 0 }}>
-                <Surface aria-hidden="true" color="primary" material={{ opacity: 0.3, backdrop: 0 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
+                <Surface aria-hidden="true" color="primary" material={{ mode: "translucent", opacity: 0.3 }} radius="small" className="cursor-grab touch-none active:cursor-grabbing"
                     style={{ width: "100%", height: "100%" }}
                     onPointerDown={grab} onPointerMove={follow} onPointerUp={release} onPointerCancel={() => { drag.current = null; setSettle(null) }} />
             </motion.div>
