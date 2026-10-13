@@ -60,12 +60,10 @@ export default function StartMenuPanel({ labelId, onChoose }: Readonly<{
 
     for (const process of live.processes) running.set(process.program, (running.get(process.program) ?? 0) + 1)
 
-    const starting = processes.filter(process => process.server && !process.server.ready).length
-
     const status = problem ?? (show === "programs"
         ? [programs.length === installed.length ? count(installed.length, "Program") : `${programs.length} of ${count(installed.length, "Program")}`,
             programs.some(program => running.has(program.identity)) ? `${programs.filter(program => running.has(program.identity)).length} running` : null]
-        : [count(processes.length, "Process"), starting ? `${starting} starting` : null]).filter(Boolean).join(" · ")
+        : [count(processes.length, "Process")]).filter(Boolean).join(" · ")
 
     function choose(next: Show, nextCategory = category) {
 

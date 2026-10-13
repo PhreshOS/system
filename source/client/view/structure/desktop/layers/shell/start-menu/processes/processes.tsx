@@ -29,7 +29,7 @@ export default function Processes({ processes, programs, empty }: Readonly<{
         <Table.Body>
             {/* Endpoint state is passed as values: the Process handle is updated in place, so the row must see what changed. */}
             {processes.map(process => <ProcessRow key={process.identity} process={process} program={programs.get(process.program)}
-                server={process.server ? process.server.ready ? "ready" : "starting" : null} client={process.client !== null} />)}
+                server={process.server !== null} client={process.client !== null} />)}
         </Table.Body>
 
     </Table></ScrollArea>

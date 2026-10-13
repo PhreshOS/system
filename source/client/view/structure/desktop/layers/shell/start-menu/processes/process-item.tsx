@@ -7,13 +7,12 @@ import programIcon from "@client/view/structure/desktop/programs/program-icon"
 
 /**
  * One live Process as a table row: its name, its Program, a mark for each
- * running Endpoint, colored only while it is still starting, and End, as in
- * Settings. The live list owns removal.
+ * running Endpoint, and End, as in Settings. The live list owns removal.
  */
 export default function ProcessRow({ process, program, server, client }: Readonly<{
     process: Process
     program: Program | undefined
-    server: "starting" | "ready" | null
+    server: boolean
     client: boolean
 }>) {
 
@@ -44,8 +43,7 @@ export default function ProcessRow({ process, program, server, client }: Readonl
 
         <Table.Cell>
             <span className="flex" style={{ gap: space.xsmall }}>
-                {/* Color marks only what needs attention: a running Endpoint is neutral, one still starting is not. */}
-                {server && <Badge size="xsmall" color={server === "starting" ? "warning" : undefined} dot={server === "starting"}>Server</Badge>}
+                {server && <Badge size="xsmall">Server</Badge>}
                 {client && <Badge size="xsmall">Client</Badge>}
             </span>
         </Table.Cell>
