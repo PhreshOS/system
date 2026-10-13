@@ -345,13 +345,22 @@ export default class ClientProcessBoundary extends TheLink {
 
         if (!await this.canDeliverSystemSubscription(route, values[0])) return
 
-        values = await this.visibleReferences(values)
-
         if (values[0] === "answer" && typeof values[1] === "string") {
 
             if (!this.expected.has(values[1])) return
 
             this.requests.delete(values[1])
+
+            await this.$outbound.publish(route, ...values)
+
+            return
+        }
+
+        // A stream's messages answer a question this Client asked, as an answer does: they go to it
+        // while it waits, never through the filter of events it subscribed to.
+        if (values[0] === "stream" && typeof values[1] === "string") {
+
+            if (!this.expected.has(values[1])) return
 
             await this.$outbound.publish(route, ...values)
 
@@ -461,26 +470,6 @@ export default class ClientProcessBoundary extends TheLink {
             : target?.domain === "program"
                 ? await this.systemAccess.canProgram({ identity: target.program })
                 : false
-    }
-
-    private async visibleReferences(values: unknown[]) {
-
-        const visible = async (reference: EndpointReference) => {
-
-            return await this.systemAccess.canProgram(reference.process.program) ? reference : null
-        }
-
-        return await Promise.all(values.map(async value => {
-
-            if (!value || typeof value !== "object" || Array.isArray(value)) return value
-
-            const envelope = value as Record<string, unknown>
-
-            if (isEndpointReference(envelope.from)) return { ...envelope, from: await visible(envelope.from) }
-            if (isEndpointReference(envelope.to)) return { ...envelope, to: await visible(envelope.to) }
-
-            return value
-        }))
     }
 
     private control(values: unknown[]) {
@@ -1360,24 +1349,6 @@ function isHandleAddress(value: unknown): value is { identity: string, reference
         && typeof value.identity === "string" && typeof value.reference === "string"
 }
 
-type EndpointReference = Readonly<{
-    kind: "server" | "client"
-    process: Readonly<{ program: { identity: string } }>
-}>
-
-function isEndpointReference(value: unknown): value is EndpointReference {
-
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false
-
-    const reference = value as { kind?: unknown, process?: unknown }
-
-    if (reference.kind !== "server" && reference.kind !== "client") return false
-    if (!reference.process || typeof reference.process !== "object" || Array.isArray(reference.process)) return false
-
-    const program = (reference.process as { program?: unknown }).program
-
-    return !!program && typeof program === "object" && !Array.isArray(program) && typeof (program as { identity?: unknown }).identity === "string"
-}
 
 interface WaitingQuestion {
 

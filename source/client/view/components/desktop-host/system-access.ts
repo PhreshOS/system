@@ -45,7 +45,7 @@ export default class SystemAccess {
 
     public async canService(service: ServiceAddress) {
 
-        return allowsSynchronizedPermission(this.permissions(), "services", [service.process])
+        return allowsSynchronizedPermission(this.permissions(), "consumeServices", [service.name])
     }
 
     /** Whether one Connection belongs to this Client's visible scope. */

@@ -56,7 +56,8 @@ function PermissionRequestView({ request }: Readonly<{ request: PermissionReques
 
 const permissionPresentation = {
     all: { title: "all permissions", description: "Grant every available Program permission." },
-    services: { title: "Services", description: "Access Services by their Process and Service name." },
+    consumeServices: { title: "Using Services", description: "Reach Services by their names." },
+    provideServices: { title: "Providing Services", description: "Offer Services under their names, taking a name from whoever holds it." },
     programs: { title: "Programs", description: "Access every Program or selected Programs." },
     layers: { title: "Window layers", description: "Select raw Desktop layers in Client Endpoint launches." },
     network: { title: "Network", description: "Use System networking with every request target or selected target scopes." },

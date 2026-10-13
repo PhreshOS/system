@@ -18,7 +18,8 @@ export default class ServerProcessBoundary extends TheLink {
 
     public ready = false
 
-    public readonly service: boolean
+    /** The Service name this Server run is reached by, or `false` for none. */
+    public readonly service: string | false
 
     private readonly clientDeclared: boolean
 
@@ -62,7 +63,7 @@ export default class ServerProcessBoundary extends TheLink {
 
     public readonly finished: Promise<{ code: number | null, signal: NodeJS.Signals | null }>
 
-    public constructor(runtime: ServerRuntime, clientDeclared: boolean, service: boolean, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel, private readonly hostVisible: HostVisibility) {
+    public constructor(runtime: ServerRuntime, clientDeclared: boolean, service: string | false, ended: Ending, unanswered: (values: unknown[], reason: string) => void, hostTraffic: HostTraffic, appearance: Tunnel, private readonly hostVisible: HostVisibility) {
 
         super()
 

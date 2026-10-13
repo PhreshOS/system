@@ -182,60 +182,28 @@ test("the system-wide permission registry requires all", async () => {
     await expect(answer("host-permission-requests")).resolves.toEqual([[{ identity: "request" }]])
 })
 
-test.each([
-    {
-        owningProgram: "owner",
-        denied: [{}, { services: ["unrelated"] }, { programs: [] }],
-        granted: [{ services: ["main"] }, { services: [] }, { all: [] }]
-    },
-    {
-        owningProgram: "outside",
-        denied: [
-            {},
-            { all: [], services: false },
-            { services: ["unrelated"] },
-            { programs: ["unrelated"] },
-            { programs: ["outside"] },
-            { programs: [] }
-        ],
-        granted: [
-            { services: ["main"] },
-            { services: [] },
-            { all: [] }
-        ]
-    }
-] satisfies ReadonlyArray<{
-    owningProgram: string
-    denied: Permissions[]
-    granted: Permissions[]
-}>)("Service operations expose only Services in the accessible scope for $owningProgram", async ({ owningProgram, denied, granted }) => {
-    const destination = "6d138083-7a51-44ec-9abe-ff0194ad1e5b"
+test("Service operations reach a Service only by a name the caller may consume, whoever provides it", async () => {
+    const denied: Permissions[] = [{}, { all: [], consumeServices: false }, { consumeServices: ["unrelated"] }, { programs: [] }, { provideServices: ["main"] }]
+    const granted: Permissions[] = [{ consumeServices: ["main"] }, { consumeServices: [] }, { all: [] }]
     let permissions: Permissions = {}
     const serviceAvailable = vi.fn(async () => true)
     const waitServiceReady = vi.fn()
-    const serviceProgramMetadata = vi.fn(async () => ({ name: "Provider", version: "0.0.0" }))
-    const serviceProgramIcon = vi.fn(async () => [])
     const followService = vi.fn()
     const sendService = vi.fn()
     const askService = vi.fn()
     const auth = {
         programManager: { programs: new Map([["owner", { identity: "owner", get permissions() { return permissions } }]]) },
         processManager: {
-            processes: new Map([
-                ["caller", { program: "owner" }],
-                [destination, { program: owningProgram }]
-            ]),
-            serviceAvailable, waitServiceReady, serviceProgramMetadata, serviceProgramIcon, followService, sendService, askService
+            processes: new Map([["caller", { program: "owner" }]]),
+            serviceAvailable, waitServiceReady, followService, sendService, askService
         },
         grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
     } as unknown as AuthManager
     const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => "frame", clientFrame(), {} as never)
-    const key = { program: owningProgram, process: "main", endpoint: "server" } as const
+    const key = { name: "main", endpoint: "server" } as const
     const operations = [
             ["service-available", key],
             ["service-wait-ready", key],
-            ["service-program-metadata", key],
-            ["service-program-icon", key, "small"],
             ["service-send", key, "change", {}],
             ["service-ask", key, "read", {}]
         ] as const
@@ -251,40 +219,23 @@ test.each([
         for (const [operation, ...args] of operations) await answer(operation, ...args)
         await answer("service-follow", "subscription", key, "events", "change")
     }
-    for (const call of [serviceAvailable, waitServiceReady, serviceProgramMetadata, serviceProgramIcon, followService, sendService, askService]) {
+    for (const call of [serviceAvailable, waitServiceReady, followService, sendService, askService]) {
         expect(call).toHaveBeenCalledTimes(granted.length)
     }
+    // A Service is reached by name, never by its provider's Program and Process.
+    permissions = { all: [] }
+    await expect(answer("service-available", { program: "notes", process: "main", endpoint: "server" })).rejects.toThrow(/reached by its name/)
 })
 
-test("Service discovery filters ready addresses only by Service-name authority", async () => {
-    let permissions: Permissions = { programs: [] }
-    const mainServer = { program: "notes", process: "main", endpoint: "server" } as const
-    const mainClient = { program: "editor", process: "main", endpoint: "client" } as const
-    const background = { program: "notes", process: "background", endpoint: "server" } as const
-    const listServices = vi.fn(async (options: { name?: string } = {}) => [mainServer, mainClient, background].filter(service => options.name === undefined || service.process === options.name))
+test("Services are reached by name, never listed", async () => {
     const auth = {
-        programManager: { programs: new Map([["owner", { identity: "owner", get permissions() { return permissions } }]]) },
-        processManager: {
-            processes: new Map([["caller", { program: "owner" }]]),
-            listServices
-        },
-        grantsPermission: async (_pane: string, name: PermissionName, values: never[]) => permissionCatalog.allows(name, values, permissions)
+        programManager: { programs: new Map([["owner", { identity: "owner", permissions: { all: [] } }]]) },
+        processManager: { processes: new Map([["caller", { program: "owner" }]]) },
+        grantsPermission: async () => true
     } as unknown as AuthManager
     const answer = host(auth, "caller", { state: () => { throw new Error("unused viewport") }, move: () => { throw new Error("unused viewport") } }, {} as never, () => "frame", clientFrame(), {} as never)
 
-    await expect(answer("host-service-list")).resolves.toEqual([[]])
-    await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[]])
-
-    permissions = { services: ["main"] }
-
-    await expect(answer("host-service-list")).resolves.toEqual([[mainServer, mainClient]])
-    await expect(answer("host-service-list", { name: "main" })).resolves.toEqual([[mainServer, mainClient]])
-    await expect(answer("host-service-list", { name: "background" })).resolves.toEqual([[]])
-    await expect(answer("host-service-list", "main")).rejects.toThrow(/object/)
-
-    permissions = { services: [] }
-
-    await expect(answer("host-service-list")).resolves.toEqual([[mainServer, mainClient, background]])
+    await expect(answer("host-service-list")).rejects.toThrow(/does not know the word/)
 })
 
 function program(identity: string): ProgramSnapshot & { permissions: Permissions } {

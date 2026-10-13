@@ -35,9 +35,7 @@ export default class ClientProcessForwarder {
 
     private readonly subscriptions = new Map<string, string | null>()
 
-    private readonly shapeObservedValues: (values: unknown[]) => unknown[]
-
-    public constructor(connection: string, pane: string, owner: string, authManager: AuthManager, traffic: ProcessTraffic, endpointEvents: EndpointEvents, shapeObservedValues: (values: unknown[]) => unknown[]) {
+    public constructor(connection: string, pane: string, owner: string, authManager: AuthManager, traffic: ProcessTraffic, endpointEvents: EndpointEvents) {
 
         this.connection = connection
 
@@ -50,8 +48,6 @@ export default class ClientProcessForwarder {
         this.traffic = traffic
 
         this.endpointEvents = endpointEvents
-
-        this.shapeObservedValues = shapeObservedValues
     }
 
     public observe(subscription: string, target: string, half: Half, kind: TrafficKind, event: string | null, reportImpossible: boolean) {
@@ -60,7 +56,7 @@ export default class ClientProcessForwarder {
 
         const stop = this.traffic.observe(target, half, kind, event, (word, ...payload) => {
 
-            const values = this.shapeObservedValues(event === null ? [word, ...payload] : payload)
+            const values = event === null ? [word, ...payload] : payload
 
             this.authManager.publishToBoundary(this.connection, "/process/observed", this.pane, this.owner, subscription, values).catch(() => undefined)
         }, reportImpossible ? reason => this.impossible(subscription, reason) : undefined)

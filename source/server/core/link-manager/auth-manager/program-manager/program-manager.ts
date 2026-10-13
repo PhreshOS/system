@@ -10,7 +10,7 @@ import { dirname, isAbsolute, join } from "node:path"
 import { isDeepStrictEqual } from "node:util"
 import Logs, { type LogSource } from "./logs"
 import { isValue, layers } from "./config"
-import { parseLaunch, withProcessDefaults, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
+import { parseLaunch, parseServiceValue, withProcessDefaults, parseProgramDefinition, parseProgramInstallOptions, parseProgramUninstallOptions, parseRelativeValue, type ProgramInstallOptions, type ProgramUninstallOptions, type ClientLaunch, type Launch, type Position, type ProgramCommandChunk, type ProgramDefinition, type Size, type Value } from "@phreshos/core"
 import type { OpenTarget } from "@phreshos/core"
 import { type default as Process, type ProcessLaunch, type Stream } from "../process-manager/process"
 import { type StandardShape } from "../process-manager/process-manager"
@@ -717,6 +717,11 @@ export default class ProgramManager extends TheLink {
 
         if (operation === "set") {
 
+            // Starting with the System is what an attached Program cannot have: when the System starts,
+            // its project is not there to start. Its state is its identity's, shared with an installed
+            // copy, so setting it here would change that copy's start instead.
+            if (!this.programs.get(program.identity)?.installed) throw new Error("A Program starts with the System only once it is installed")
+
             await program.validate()
 
             const launch = parseLaunch(value === undefined ? {} : value)
@@ -1161,7 +1166,8 @@ export default class ProgramManager extends TheLink {
                 const requestedLaunch = selectedLaunch === false || selectedLaunch === undefined
                     ? undefined
                     : selectedLaunch === true ? {} : selectedLaunch
-                if (requestedLaunch !== undefined) this.resolveLaunch(stagedProgram, requestedLaunch)
+                // Whoever asked for the install answers for the launch it will run, declared defaults included.
+                if (requestedLaunch !== undefined) this.authManager.processManager.requireLaunch(asker, this.resolveLaunch(stagedProgram, requestedLaunch).intent)
 
                 swapping = true
 
@@ -1238,8 +1244,13 @@ export default class ProgramManager extends TheLink {
                     catch (exception) { console.log(`programs: ${entry.identity} did not start — ${exception instanceof Error ? exception.message : "invalid startup settings"}`) }
                 }
 
+                // The install launch makes sure its Process runs: one the startup has just started
+                // under the same name is that Process already, unless the launch asks to replace it.
                 if (requestedLaunch !== undefined) {
-                    await this.start(entry.program, requestedLaunch, undefined, null, true)
+                    const program = entry.program
+                    const running = requestedLaunch.name !== undefined && [...this.authManager.processManager.processes.values()]
+                        .some(process => process.program === program && process.name === requestedLaunch.name)
+                    if (!running || requestedLaunch.replace) await this.start(program, requestedLaunch, undefined, null, true)
                 }
 
                 return entry
@@ -1321,6 +1332,8 @@ export default class ProgramManager extends TheLink {
 
                 rmSync(this.fileManager.join(entry.identity), { recursive: true, force: true })
 
+                await this.authManager.openingManager.forgetProgram(entry.identity)
+
                 return await this.forgetEntry(entry)
             }
 
@@ -1338,7 +1351,13 @@ export default class ProgramManager extends TheLink {
 
         const home = this.fileManager.join(entry.identity)
 
-        if (purge) rmSync(home, { recursive: true, force: true })
+        // Purged, nothing in the System says it was here: its own files, and what the System kept naming it.
+        if (purge) {
+
+            rmSync(home, { recursive: true, force: true })
+
+            await this.authManager.openingManager.forgetProgram(entry.identity)
+        }
 
         else {
 
@@ -1489,7 +1508,8 @@ export default class ProgramManager extends TheLink {
     // One interpretation of a Process launch, used both when it is created now
     // and when a future startup launch is persisted. Runtime-only facts such as
     // name occupancy and capacity remain in `start`.
-    private resolveLaunch(program: Program, value: unknown, fallbackPosition: Position | null = null) {
+    /** A Launch as it will run for a Program: what it passes, and what the Program declares where it passes nothing. */
+    public resolveLaunch(program: Program, value: unknown, fallbackPosition: Position | null = null) {
 
         const launch = this.launchOf(program, value)
 
@@ -1647,7 +1667,7 @@ export default class ProgramManager extends TheLink {
 
         if (typeof asked !== "object" || asked === null || Array.isArray(asked)) throw new Error("A client launch must be a named shape")
 
-        if (asked.service !== undefined && typeof asked.service !== "boolean") throw new Error("A launch client's service role must be true or false")
+        if (asked.service !== undefined) parseServiceValue(asked.service, "A launch client's service")
 
         if (asked.title !== undefined && typeof asked.title !== "string") throw new Error("A launch client's title must be text")
 

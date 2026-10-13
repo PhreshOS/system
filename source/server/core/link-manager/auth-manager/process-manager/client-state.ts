@@ -10,9 +10,10 @@ export default class ClientState {
 
     public readonly memory = new ClientMemoryState()
 
-    public readonly service: boolean
+    /** The Service name this Client run is reached by, or `false` for none. */
+    public readonly service: string | false
 
-    public constructor(service: boolean) {
+    public constructor(service: string | false) {
 
         this.service = service
     }

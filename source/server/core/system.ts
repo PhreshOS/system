@@ -587,17 +587,16 @@ export default class System {
         return (database === "logs" ? this.programManager.logsOf(program) : this.programManager.databaseOf(program)).query(statement, values)
     }
 
-    public endpointIsService(process: Process, endpoint: Half) {
+    /** The Service name an Endpoint holds, or `false` for none. */
+    public endpointService(process: Process, endpoint: Half) {
 
-        return this.processManager.endpointIsServiceFromOutside(process.identity, endpoint)
+        return this.processManager.endpointServiceFromOutside(process.identity, endpoint)
     }
 
     public serviceAvailable(address: unknown) {
 
         return this.processManager.serviceAvailableFromOutside(address)
     }
-
-    public listServices(name?: string) { return this.processManager.listServicesFromOutside(name) }
 
     public waitServiceReady(address: unknown, timeout?: number) {
 

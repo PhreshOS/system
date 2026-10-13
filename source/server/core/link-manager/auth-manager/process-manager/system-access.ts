@@ -1,6 +1,12 @@
-import { parseLaunch, type ClientLaunch, type PermissionName, type PermissionValue } from "@phreshos/core"
+import { parseLaunch, type PermissionName, type PermissionValue } from "@phreshos/core"
 import type Program from "../program-manager/program"
 import type Process from "./process"
+
+/** What of a resolved Launch needs a permission: where its Client opens, and the Service names its Endpoints take. */
+export type LaunchReach = Readonly<{
+    server?: Readonly<{ service: string | false }> | null
+    client: Readonly<{ layer?: string, service?: string | false }> | null
+}>
 import type ProcessManager from "./process-manager"
 
 const denied = "Execution is not permitted"
@@ -53,28 +59,56 @@ export default class SystemAccess {
         if (!this.manager.grantsStorage(this.owner.identity, path, operation)) throw new Error(denied)
     }
 
-    public launch(value: unknown = {}) {
+    /**
+     * A Launch as it will run for a Program: what it passes, and what the Program declares where it
+     * passes nothing. Whoever executes it must be able to do all of it, whatever the Program declares.
+     */
+    public launch(program: Program, value: unknown = {}) {
 
         const launch = parseLaunch(value)
 
-        if (typeof launch.client === "object") this.clientLayer(launch.client)
+        this.requireLaunch(this.manager.authManager.programManager.resolveLaunch(program, launch).intent)
 
         return launch
     }
 
-    public clientLaunch(value: unknown = {}) {
+    /** A Server started for a running Process of this Program, as it will run. */
+    public serverLaunch(program: Program, value: unknown = {}) {
+
+        const launch = parseLaunch({ server: value }).server
+
+        if (!launch || typeof launch !== "object") throw new Error("A Server launch must be an object")
+
+        this.requireLaunch(this.manager.authManager.programManager.resolveLaunch(program, { server: launch, client: false }).intent)
+
+        return launch
+    }
+
+    /** A Client started for a running Process of this Program, as it will run. */
+    public clientLaunch(program: Program, value: unknown = {}) {
 
         const launch = parseLaunch({ client: value }).client
 
         if (!launch || typeof launch !== "object") throw new Error("A Client launch must be an object")
 
-        this.clientLayer(launch)
+        this.requireLaunch(this.manager.authManager.programManager.resolveLaunch(program, { server: false, client: launch }).intent)
 
         return launch
     }
 
-    private clientLayer(launch: ClientLaunch) {
+    /**
+     * What a resolved Launch does that needs a permission: a Client in a layer other than `window`, and
+     * each Service name its Endpoints take, taking it from whoever holds it.
+     */
+    public requireLaunch(launch: LaunchReach) {
 
-        if (launch.layer !== undefined && launch.layer !== "window") this.require("layers", [launch.layer])
+        const layer = launch.client?.layer
+
+        if (layer !== undefined && layer !== "window") this.require("layers", [layer as PermissionValue<"layers">])
+
+        for (const service of [launch.server?.service, launch.client?.service]) {
+
+            if (typeof service === "string") this.require("provideServices", [service])
+        }
     }
 }

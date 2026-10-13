@@ -107,12 +107,12 @@ test("process find or create contract", async () => {
   assert.equal(omitted.client.size, null)
 
   const activated = fixture.resolveLaunch(program, {
-    server: { service: true },
-    client: { service: true }
+    server: { service: "editor-v1" },
+    client: { service: "canvas-v1" }
   }).intent
 
-  assert.equal(activated.server?.service, true)
-  assert.equal(activated.client?.service, true)
+  assert.equal(activated.server?.service, "editor-v1")
+  assert.equal(activated.client?.service, "canvas-v1")
 
   const stale = { identity: program.identity, reference: "replaced-program-reference" } as unknown as Program
 

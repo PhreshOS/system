@@ -118,7 +118,7 @@ export default class Process {
         this.clientEndpoint = window ? Object.freeze({ window }) : null
     }
 
-    public startServer(runtime: ServerRuntime, service: boolean, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel, hostVisible: HostVisibility) {
+    public startServer(runtime: ServerRuntime, service: string | false, ended: (boundary: ServerProcessBoundary, code: number | null, signal: NodeJS.Signals | null) => Promise<void> | void, unanswered: (values: unknown[], reason: string) => void, appearance: Tunnel, hostVisible: HostVisibility) {
 
         if (this.server) return this.server
 
@@ -165,7 +165,7 @@ export default class Process {
         return () => { this.readyWaiters[endpoint].delete(notify) }
     }
 
-    public startClient(service: boolean) {
+    public startClient(service: string | false) {
 
         if (this.client) return false
 
@@ -377,7 +377,8 @@ export interface ProcessLaunch {
 
     readonly server: Readonly<{
 
-        service: boolean
+        /** The Service name it is reached by, or `false` for none. */
+        service: string | false
     }> | null
 
     readonly client: Readonly<{
@@ -395,7 +396,8 @@ export interface ProcessLaunch {
         minimize: boolean
         maximize: boolean
 
-        service: boolean
+        /** The Service name it is reached by, or `false` for none. */
+        service: string | false
     }> | null
 
     readonly options: Readonly<Record<string, string>>

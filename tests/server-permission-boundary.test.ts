@@ -53,7 +53,12 @@ test("Server Endpoints use their Program's permission scope", async () => {
 
                 return permissionCatalog.allows(name, requested, permissions)
             },
-            grantsStorage() { return false }
+            grantsStorage() { return false },
+            // As the System resolves it: the layer the launch passes, else the one the Program declares.
+            resolveLaunch(program: Program, value: { client?: unknown }) {
+                const asked = typeof value?.client === "object" && value.client !== null ? value.client as { layer?: string } : {}
+                return { intent: { client: value?.client === false ? null : { layer: asked.layer ?? program.config.client?.layer ?? "window" } } }
+            }
         },
         linkManager: { application: { system } }
     })

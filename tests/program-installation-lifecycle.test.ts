@@ -8,6 +8,7 @@ import FileManager from "@libs/file-manager"
 import type AuthManager from "@server/core/link-manager/auth-manager/auth-manager"
 import Program from "@server/core/link-manager/auth-manager/program-manager/program"
 import ProgramManager from "@server/core/link-manager/auth-manager/program-manager/program-manager"
+import ProgramStateStorage from "@server/core/link-manager/auth-manager/program-manager/state"
 
 function fixture(context: TestContext) {
     const directory = mkdtempSync(join(tmpdir(), "phresh-install-lifecycle-"))
@@ -16,9 +17,12 @@ function fixture(context: TestContext) {
     mkdirSync(server, { recursive: true })
     const exitAll = vi.fn()
     const announceHost = vi.fn()
+    const announceSubject = vi.fn(async (..._values: unknown[]) => undefined)
+    const forgetProgram = vi.fn(async (_program: string) => undefined)
     const auth = Object.assign(new TheLink(), {
         linkManager: { application: { storage: new FileManager(directory, "system"), icons: { system: "", defaultProgram: "" } } },
-        processManager: { processes: new Map(), exitAll, announceHost, announceSubject: vi.fn(async () => undefined) }
+        processManager: { processes: new Map(), exitAll, announceHost, announceSubject, requireLaunch: vi.fn() },
+        openingManager: { forgetProgram }
     }) as unknown as AuthManager
     const manager = new ProgramManager(auth)
     const definition = (installCommand = `node -e "process.stdout.write('preparing')"`, installLaunch?: true | Launch) => new Program({
@@ -26,7 +30,7 @@ function fixture(context: TestContext) {
         installLaunch,
         server: { location: server, installCommand, command: "node main.js" }
     })
-    return { directory, manager, exitAll, announceHost, definition }
+    return { directory, manager, exitAll, announceHost, announceSubject, forgetProgram, definition }
 }
 
 test("installation output precedes Process exit and handle switch; an explicit launch overrides the definition", async context => {
@@ -133,6 +137,26 @@ test("a reinstall starts the Program's startup launch again, as the System does 
     expect(start.mock.calls[0]?.[4]).toBe(true)
 })
 
+test("a reinstall whose startup already started the install launch's named Process keeps that one", async context => {
+    const { manager, definition, exitAll } = fixture(context)
+    const processes = manager.authManager.processManager.processes as unknown as Map<string, { program: Program, name: string | null }>
+    // Starting adds the Process; ending every Process of the Program, as a reinstall does, removes them.
+    const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start")
+        .mockImplementation(async (program, launch) => { processes.set(String(launch.name), { program, name: launch.name ?? null }); return String(launch.name) })
+    exitAll.mockImplementation(async () => processes.clear())
+    const server = { name: "files", server: true, client: false } as const
+
+    const first = await manager.install(definition(undefined, server))
+    await manager.startup(first.program, "set", server)
+    // The startup starts "files" again; the install launch finds it running and is done.
+    await expect(manager.install(definition(undefined, server))).resolves.toBeDefined()
+    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["files", "files"])
+
+    // An install launch that asks to replace it still starts its own.
+    await manager.install(definition(undefined, { ...server, replace: true }))
+    expect(start.mock.calls.map(([, launch]) => launch.name)).toEqual(["files", "files", "files", "files"])
+})
+
 test("explicit launch errors propagate without rolling back the installed Program", async context => {
     const { manager, definition } = fixture(context)
     const start = vi.spyOn(manager as unknown as { start(program: Program, launch: Launch): Promise<string> }, "start")
@@ -143,7 +167,7 @@ test("explicit launch errors propagate without rolling back the installed Progra
 })
 
 test("uninstalling ends the Program's Processes and forgets its handle; its data stays for the next install", async context => {
-    const { manager, exitAll, announceHost, definition } = fixture(context)
+    const { manager, forgetProgram, exitAll, announceHost, definition } = fixture(context)
     const entry = await manager.install(definition())
     const program = entry.program
     const home = manager.fileManager.join(program.identity)
@@ -159,8 +183,9 @@ test("uninstalling ends the Program's Processes and forgets its handle; its data
     expect(announceHost.mock.calls.filter(([, , event]) => event === "uninstall")).toHaveLength(1)
     expect(announceHost.mock.calls.filter(([, , event]) => event === "forget")).toHaveLength(1)
     await expect(manager.uninstall(program)).rejects.toThrow("does not know this program")
-    // Its data stayed.
+    // Its data stayed, and what the System keeps naming it.
     expect(existsSync(join(program.storagePath, "state.json"))).toBe(true)
+    expect(forgetProgram).not.toHaveBeenCalled()
 
     // Installed again: a new handle, which finds the time it was first installed and its pin.
     const again = await manager.install(definition())
@@ -170,8 +195,10 @@ test("uninstalling ends the Program's Processes and forgets its handle; its data
 
     await manager.uninstall(again.program, { purge: true })
 
+    // Purged, nothing in the System says it was here.
     expect(manager.programs.has(program.identity)).toBe(false)
     expect(existsSync(home)).toBe(false)
+    expect(forgetProgram).toHaveBeenCalledExactlyOnceWith(program.identity)
 })
 
 test("clearing storage ends the Program's Processes and empties what it keeps, keeping the owner's decisions and its logs", async context => {
@@ -208,4 +235,82 @@ test("clearing storage ends the Program's Processes and empties what it keeps, k
 
     // Forgetting it closes what it holds open, which Windows needs before the folder can go.
     await manager.forget(program)
+})
+
+test("startup and pinned state share one file without overwriting each other", async context => {
+    const { manager, definition } = fixture(context)
+    vi.spyOn(manager as unknown as { start(): Promise<string> }, "start").mockResolvedValue("process")
+    const { program } = await manager.install(definition())
+    const startup = { name: "background", options: { mode: "quiet" } }
+
+    await manager.startup(program, "set", startup)
+    const pinnedAt = await manager.pinned(program, "pin")
+    await manager.setPermission(program, "network", false)
+
+    expect(await manager.startup(program, "get")).toEqual(startup)
+    expect(pinnedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    expect(await manager.pinned(program, "get")).toBe(pinnedAt)
+    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
+    expect(JSON.parse(readFileSync(join(program.storagePath, "state.json"), "utf8"))).toEqual({
+        installedAt: expect.any(String),
+        startup,
+        pinnedAt,
+        permissions: { network: false }
+    })
+
+    await manager.startup(program, "remove")
+    await manager.pinned(program, "unpin")
+    expect(await manager.startup(program, "get")).toBeNull()
+    expect(await manager.pinned(program, "get")).toBeNull()
+    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
+})
+
+test("Program state mutations do not rewrite an already-satisfied value", async context => {
+    const { manager, definition } = fixture(context)
+    vi.spyOn(manager as unknown as { start(): Promise<string> }, "start").mockResolvedValue("process")
+    const { program } = await manager.install(definition())
+    const startupWrite = vi.spyOn(ProgramStateStorage.prototype, "setStartup")
+    const permissionWrite = vi.spyOn(ProgramStateStorage.prototype, "setPermission")
+    context.onTestFinished(() => { startupWrite.mockRestore(); permissionWrite.mockRestore() })
+
+    await manager.startup(program, "set", { name: "background" })
+    await manager.startup(program, "set", { name: "background" })
+    await manager.setPermission(program, "network", false)
+    await manager.setPermission(program, "network", false)
+    await manager.startup(program, "remove")
+    await manager.startup(program, "remove")
+
+    expect(startupWrite).toHaveBeenCalledTimes(2)
+    expect(permissionWrite).toHaveBeenCalledTimes(1)
+})
+
+test("startup changes emit Program and global events, and filter the Program list", async context => {
+    const { manager, definition, announceHost, announceSubject } = fixture(context)
+    vi.spyOn(manager as unknown as { start(): Promise<string> }, "start").mockResolvedValue("process")
+    const { program } = await manager.install(definition())
+    const records: unknown[][] = []
+    const stop = manager.$outbound.subscribe("/startup-change", (record, launch) => { records.push([record, launch]) })
+    context.onTestFinished(stop)
+    announceHost.mockClear()
+    announceSubject.mockClear()
+
+    await manager.startup(program, "set", { name: "background" })
+    await manager.startup(program, "set", { name: "background" })
+    expect(manager.find(program.identity).record().startup).toBe(true)
+    await manager.startup(program, "remove")
+    await manager.startup(program, "remove")
+    expect(manager.find(program.identity).record().startup).toBe(false)
+
+    expect(announceHost.mock.calls.map(([, owner, event, , , launch]) => [owner, event, launch])).toEqual([
+        [program.identity, "changeStartup", { name: "background" }],
+        [program.identity, "changeStartup", null]
+    ])
+    expect(announceSubject.mock.calls.map(([, , event, subject, launch]) => [event, subject, launch])).toEqual([
+        ["changeStartup", program.reference, { name: "background" }],
+        ["changeStartup", program.reference, null]
+    ])
+    expect(records.map(([record, launch]) => [(record as { startup: boolean }).startup, launch])).toEqual([
+        [true, { name: "background" }],
+        [false, null]
+    ])
 })

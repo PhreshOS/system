@@ -39,7 +39,7 @@ test("permission request lifecycle belongs to one live Endpoint", async () => {
             process,
             "client",
             identity,
-            "services",
+            "consumeServices",
             ["browser"],
             timeout
         )
@@ -55,19 +55,19 @@ test("permission request lifecycle belongs to one live Endpoint", async () => {
         assert(manager.pending("allow"))
         await manager.allow("allow")
         assert.deepEqual(await allowed, ["browser"])
-        assert.deepEqual(new ProgramStateStorage(program).permissions(), { services: ["browser"] })
+        assert.deepEqual(new ProgramStateStorage(program).permissions(), { consumeServices: ["browser"] })
         assert(!manager.pending("allow"))
         await assert.rejects(manager.allow("allow"), /does not exist/)
 
         const denied = request("deny")
         await manager.deny("deny")
         assert.equal(await denied, false)
-        assert.deepEqual(new ProgramStateStorage(program).permissions(), { services: false })
+        assert.deepEqual(new ProgramStateStorage(program).permissions(), { consumeServices: false })
 
         const cancelled = request("cancel")
         await manager.cancel("cancel")
         assert.equal(await cancelled, null)
-        assert.deepEqual(new ProgramStateStorage(program).permissions(), { services: false })
+        assert.deepEqual(new ProgramStateStorage(program).permissions(), { consumeServices: false })
 
         const expired = request("timeout", 5)
         assert.equal(await expired, null)
@@ -78,7 +78,7 @@ test("permission request lifecycle belongs to one live Endpoint", async () => {
         assert.equal(decisions.filter(result => result.status === "fulfilled").length, 1)
         assert.equal(decisions.filter(result => result.status === "rejected").length, 1)
         assert.deepEqual(await raced, ["browser"])
-        assert.deepEqual(new ProgramStateStorage(program).permissions(), { services: ["browser"] })
+        assert.deepEqual(new ProgramStateStorage(program).permissions(), { consumeServices: ["browser"] })
 
         const stopped = request("endpoint-stop")
         process.stopClient()
@@ -122,7 +122,7 @@ test("an exact effective assignment creates no pending request", async () => {
             process.identity,
             "client",
             "invalid-timeout",
-            "services",
+            "consumeServices",
             ["browser"],
             Number.MAX_VALUE
         ), /expiration is invalid/)
@@ -131,7 +131,7 @@ test("an exact effective assignment creates no pending request", async () => {
             process.identity,
             "client",
             "exact",
-            "services",
+            "consumeServices",
             ["browser"],
             undefined
         ))
@@ -141,7 +141,7 @@ test("an exact effective assignment creates no pending request", async () => {
             process.identity,
             "client",
             "different",
-            "services",
+            "consumeServices",
             ["editor"],
             1_000
         )
@@ -152,7 +152,7 @@ test("an exact effective assignment creates no pending request", async () => {
             process.identity,
             "client",
             "default",
-            "services",
+            "consumeServices",
             ["editor"],
             undefined
         )

@@ -21,7 +21,6 @@ import {
     parsePermissions,
     opensType,
     parseSystemProgramListOptions,
-    parseSystemServiceListOptions,
     type PermissionRequestInput,
     type IconSize
 } from "@phreshos/core"
@@ -137,7 +136,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
     function permittedService(value: unknown) {
 
-        if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
+        if (!isServiceAddress(value)) throw new Error("A Service is reached by its name, such as file-picker-v1, and optionally the kind of Endpoint")
 
         return access.service(value)
     }
@@ -415,7 +414,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             return []
         }
 
-        if (word === "is-service") {
+        if (word === "endpoint-service") {
 
             const target = await permittedProcess(args[1])
             const endpoint = args[0] ?? "client"
@@ -430,19 +429,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             }
 
             // The synchronized Process holds it, as it holds whether the Endpoint runs.
-            return [endpoint === "server" ? target.server?.service === true : target.client?.service === true]
-        }
-
-        if (word === "host-service-list") {
-
-            const options = parseSystemServiceListOptions(args[0])
-
-            const services = await processManager.listServices(options)
-            const visible = []
-
-            for (const service of services) if (await access.canService(service)) visible.push(service)
-
-            return [visible]
+            return [(endpoint === "server" ? target.server?.service : target.client?.service) ?? false]
         }
 
         if (word === "service-available") {
@@ -457,20 +444,6 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
             const service = await permittedService(args[0])
 
             return [await processManager.waitServiceReady(service, args[1] as number | undefined)]
-        }
-
-        if (word === "service-program-metadata") {
-
-            const service = await permittedService(args[0])
-
-            return [await processManager.serviceProgramMetadata(service)]
-        }
-
-        if (word === "service-program-icon") {
-
-            const service = await permittedService(args[0])
-
-            return [await processManager.serviceProgramIcon(service, args[1] as IconSize | undefined)]
         }
 
         if (word === "service-follow") {
@@ -514,7 +487,7 @@ export default function host(authManager: AuthManager, pane: string, viewport: D
 
         if (word === "service-ask") {
 
-            if (!isServiceAddress(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server service can be asked")
+            if (!isServiceAddress(args[0]) || args[0].endpoint !== "server") throw new Error("Only a Server Service answers questions")
 
             const service = await access.service(args[0])
 

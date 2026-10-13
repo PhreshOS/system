@@ -24,7 +24,7 @@ test("process lifecycle contract", async () => {
               grantsStorage() { return true },
               clientShape(_program: Program, launch: ClientLaunch = {}) {
 
-                  if (launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A launch client's service role must be true or false")
+                  if (launch.service !== undefined && launch.service !== false && typeof launch.service !== "string") throw new Error("A launch client's service is a Service name, such as \"file-picker-v1\", or false")
 
                   return {
                       title: launch.title ?? "Client",
@@ -188,7 +188,7 @@ test("process lifecycle contract", async () => {
 
       await manager.stopClient(process.identity)
       await manager.startServer(process.identity)
-      await assert.rejects(manager.startServer(process.identity, { service: "invalid" } as never), /service value/)
+      await assert.rejects(manager.startServer(process.identity, { service: true } as never), /Service name/)
 
       manager.processes.delete(process.identity)
 

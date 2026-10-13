@@ -3,46 +3,37 @@ import { TheLink } from "@the-link/core"
 import type Process from "./process"
 import type { Half } from "./process-traffic"
 
-/** Resolves and routes the Service view of named Endpoint execution contexts. */
+/**
+ * The Services of running Endpoints, by their names. A Service name is public across the System and
+ * held by one Endpoint at a time; a caller reaches it by the name, of a kind it names or of either.
+ * Who holds it stays out of sight.
+ */
 export default class EndpointServices extends TheLink {
 
-    private readonly active = new Set<string>()
+    /** The names whose holder is ready, and the kind of Endpoint holding each. */
+    private readonly active = new Map<string, Half>()
 
-    public constructor(
-        private readonly resolve: (address: ServiceAddress) => ServiceTarget | null,
-        private readonly processes: () => Iterable<Process>,
-        private readonly changed: (event: "available" | "unavailable", address: ServiceAddress) => Promise<unknown> | unknown
-    ) {
+    public constructor(private readonly processes: () => Iterable<Process>) {
 
         super()
     }
 
-    /** Returns the ready Service addresses currently represented by the model. */
-    public list(name?: string) {
-
-        const addresses: ServiceAddress[] = []
+    /** The Endpoint holding a Service name, of any kind, while it runs. */
+    public holder(name: string): ServiceTarget | null {
 
         for (const process of this.processes()) {
 
-            if (process.name === null || name !== undefined && process.name !== name) continue
+            if (process.server?.service === name) return { process, endpoint: "server" }
 
-            for (const endpoint of ["server", "client"] as const) {
-
-                const address = this.addressOf(process, endpoint)
-
-                if (address && this.available(address)) addresses.push(address)
-            }
+            if (process.client?.service === name) return { process, endpoint: "client" }
         }
 
-        return addresses
+        return null
     }
 
     public available(value: unknown) {
 
-        const address = this.address(value)
-        const target = this.resolve(address)
-
-        return target !== null && this.readyState(target.process, target.endpoint)
+        return this.target(value) !== null
     }
 
     public async waitReady(value: unknown, timeout: unknown = 10_000, signal?: AbortSignal) {
@@ -79,43 +70,46 @@ export default class EndpointServices extends TheLink {
         })
     }
 
-    public target(value: unknown, endpoint?: Half) {
+    /**
+     * The ready Endpoint holding an address's name, when it is of the kind the address names, and of the
+     * kind the caller needs, such as a Server for a question.
+     */
+    public target(value: unknown, needed?: Half) {
 
         const address = this.address(value)
-        const target = this.resolve(address)
+        const target = this.holder(address.name)
 
-        if (!target || endpoint && target.endpoint !== endpoint || !this.readyState(target.process, target.endpoint)) return null
+        if (!target || address.endpoint && target.endpoint !== address.endpoint || needed && target.endpoint !== needed) return null
 
-        return target
+        return this.readyState(target.process, target.endpoint) ? target : null
     }
 
-    /** Mirrors one application event through the Service's stable address. */
+    /** Mirrors one application event of a Service's holder to everyone following its name. */
     public async emit(process: Process, endpoint: Half, event: string, payload: unknown) {
 
-        const address = this.addressOf(process, endpoint)
-        if (!address || !this.available(address)) return []
+        const name = this.nameOf(process, endpoint)
 
-        return await this.$inbound.publish(this.event(address, "events", event), event, payload)
+        if (name === false || this.active.get(name) !== endpoint) return []
+
+        return await Promise.all(this.routes(name, endpoint, "events").map(route => this.$inbound.publish(route + encodeURIComponent(event), event, payload)))
     }
 
-    /** Re-evaluates Service availability after an Endpoint starts. */
+    /** Re-evaluates a name after its Endpoint starts. */
     public started(process: Process, endpoint: Half) {
 
         return this.refresh(process, endpoint)
     }
 
-    /** Re-evaluates Server Service availability after it signals readiness. */
+    /** Re-evaluates a name after its Server signals readiness. */
     public ready(process: Process, endpoint: Half) {
 
         return this.refresh(process, endpoint)
     }
 
-    /** Removes availability after a previously configured Service Endpoint stops. */
-    public stopped(process: Process, endpoint: Half, service: boolean) {
+    /** Lets a name go after the Endpoint that held it stops. */
+    public stopped(endpoint: Half, service: string | false) {
 
-        const address = service ? this.addressOf(process, endpoint, true) : null
-
-        return address ? this.transition(address, false) : Promise.resolve([])
+        return service !== false && this.active.get(service) === endpoint ? this.transition(service, endpoint, false) : Promise.resolve([])
     }
 
     public follow(value: unknown, scope: Scope, event: string | null, subscriber: Subscriber, permitted: () => boolean = () => true) {
@@ -124,7 +118,7 @@ export default class EndpointServices extends TheLink {
 
         if (scope !== "lifecycle" && scope !== "events") throw new Error("A Service subscription scope is invalid")
 
-        const prefix = this.prefix(address, scope)
+        const prefix = this.prefix(address.name, address.endpoint ?? "any", scope)
         // The subscribing boundary supplies current authority; checking it at
         // this local fan-out point keeps revocation live without a transport
         // round-trip for every event.
@@ -141,69 +135,52 @@ export default class EndpointServices extends TheLink {
 
     private refresh(process: Process, endpoint: Half) {
 
-        const address = this.addressOf(process, endpoint)
+        const name = this.nameOf(process, endpoint)
 
-        if (!address) return Promise.resolve([])
+        if (name === false) return Promise.resolve([])
 
-        return this.transition(address, this.available(address))
+        return this.transition(name, endpoint, this.readyState(process, endpoint))
     }
 
-    private async transition(address: ServiceAddress, available: boolean) {
+    private async transition(name: string, endpoint: Half, available: boolean) {
 
-        const identity = this.identity(address)
+        if ((this.active.get(name) === endpoint) === available) return []
 
-        if (this.active.has(identity) === available) return []
-
-        if (available) this.active.add(identity)
-        else this.active.delete(identity)
+        if (available) this.active.set(name, endpoint)
+        else this.active.delete(name)
 
         const event = available ? "available" : "unavailable"
 
-        return await Promise.all([
-            this.$inbound.publish(this.event(address, "lifecycle", event), event, undefined),
-            this.changed(event, address)
-        ])
+        // Heard by whoever follows the name for this kind, and by whoever follows it for either.
+        return await Promise.all(this.routes(name, endpoint, "lifecycle").map(route => this.$inbound.publish(route + event, event, undefined)))
     }
 
-    private address(value: unknown) {
+    private address(value: unknown): ServiceAddress {
 
-        if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
+        if (!isServiceAddress(value)) throw new Error("A Service is reached by its name, such as file-picker-v1, and optionally the kind of Endpoint")
 
-        return Object.freeze({ program: value.program, process: value.process, endpoint: value.endpoint })
+        return Object.freeze({ name: value.name, ...(value.endpoint === undefined ? {} : { endpoint: value.endpoint }) })
     }
 
-    private addressOf(process: Process, endpoint: Half, previouslyConfigured = false): ServiceAddress | null {
+    private nameOf(process: Process, endpoint: Half): string | false {
 
-        if (process.name === null || !previouslyConfigured && !this.configured(process, endpoint)) return null
-
-        return Object.freeze({ program: process.program.identity, process: process.name, endpoint })
-    }
-
-    private configured(process: Process, endpoint: Half) {
-
-        return endpoint === "server" ? process.server?.service === true : process.client?.service === true
+        return (endpoint === "server" ? process.server?.service : process.client?.service) ?? false
     }
 
     private readyState(process: Process, endpoint: Half) {
 
-        return endpoint === "server"
-            ? process.server?.service === true && process.server.ready
-            : process.client?.service === true
+        return endpoint === "server" ? process.server?.service !== false && process.server?.ready === true : process.client?.service !== false && process.client !== null
     }
 
-    private identity(address: ServiceAddress) {
+    /** The routes an event of a name's holder travels: for its own kind, and for either kind. */
+    private routes(name: string, endpoint: Half, scope: Scope) {
 
-        return JSON.stringify([address.program, address.process, address.endpoint])
+        return [this.prefix(name, endpoint, scope), this.prefix(name, "any", scope)]
     }
 
-    private prefix(address: ServiceAddress, scope: Scope) {
+    private prefix(name: string, kind: Half | "any", scope: Scope) {
 
-        return `program/${encodeURIComponent(address.program)}/${encodeURIComponent(address.process)}/${address.endpoint}/${scope}/`
-    }
-
-    private event(address: ServiceAddress, scope: Scope, event: string) {
-
-        return this.prefix(address, scope) + encodeURIComponent(event)
+        return `service/${encodeURIComponent(name)}/${kind}/${scope}/`
     }
 }
 

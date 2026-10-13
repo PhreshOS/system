@@ -5,7 +5,7 @@ import { Publish, Subscribe } from "@the-link/core/decorators"
 import { TheLink } from "@the-link/core"
 import AuthManager from "../auth-manager"
 import Process from "./process"
-import { type ClientLaunch, type IconSize, type ServerLaunch } from "@phreshos/core"
+import { type ClientLaunch, type ServerLaunch } from "@phreshos/core"
 import { type TrafficKind } from "@server/core/link-manager/auth-manager/process-manager/process-traffic"
 import { type ServiceAddress, type WindowLayer } from "@phreshos/core"
 import { type ServiceScope } from "@server/core/link-manager/auth-manager/process-manager/endpoint-services"
@@ -90,33 +90,15 @@ export default class ProcessManager extends TheLink {
         await this.$outbound.publish("/emit", source, event, payload)
     }
 
-    /** Reads current availability for one exact Service address. */
+    /** Whether an Endpoint of the addressed kind holds this Service name and is ready now. */
     public async serviceAvailable(address: ServiceAddress) {
 
         return await this.$outbound.publishFirst("/service/available", address) as boolean
     }
 
-    public async listServices(options: { name?: string } = {}) {
-
-        return await this.$outbound.publishFirst("/service/list", options) as ServiceAddress[]
-    }
-
     public async waitServiceReady(address: ServiceAddress, timeout: number | undefined) {
 
         await this.$outbound.publishFirst("/service/wait-ready", address, timeout)
-    }
-
-    public async serviceProgramMetadata(address: ServiceAddress) {
-
-        return await this.$outbound.publishFirst("/service/program-metadata", address) as {
-            name: string
-            version: string
-        }
-    }
-
-    public async serviceProgramIcon(address: ServiceAddress, iconSize: IconSize = "medium") {
-
-        return await this.$outbound.publishFirst("/service/program-icon", address, iconSize) as number[]
     }
 
     /** Registers one exact service interest for this frame lease. */

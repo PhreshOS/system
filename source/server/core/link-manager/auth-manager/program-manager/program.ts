@@ -4,7 +4,7 @@ import { dirname, isAbsolute, normalize, relative, resolve, sep } from "node:pat
 import { spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { validateIcon } from "./icon"
-import { defaultProgramVersion, parseLaunch, parseOpens, parseProgramDefinition, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
+import { defaultProgramVersion, parseLaunch, parseOpens, parseProgramDefinition, parseServiceValue, type ProgramCommandChunk, type ProgramDefinition, type ProgramSnapshot } from "@phreshos/core"
 import { permissionCatalog, type DeclaredPermissions } from "@server/core/permissions"
 
 /**
@@ -399,7 +399,7 @@ function coherent(config: ProgramConfig) {
 
         if (declared.start !== undefined && typeof declared.start !== "boolean") throw new Error(`A declared ${half} endpoint's start default must be true or false`)
 
-        if (declared.service !== undefined && typeof declared.service !== "boolean") throw new Error(`A declared ${half} endpoint's service default must be true or false`)
+        if (declared.service !== undefined) parseServiceValue(declared.service, `A declared ${half} endpoint's service`)
 
     }
 
@@ -444,8 +444,8 @@ function coherent(config: ProgramConfig) {
     return { ...config, version: config.version ?? defaultProgramVersion }
 }
 
-type Resolved<Half extends { start?: boolean, service?: boolean }> = Half extends unknown
-    ? Omit<Half, "start" | "service"> & { start: boolean, service: boolean }
+type Resolved<Half extends { start?: boolean, service?: string | false }> = Half extends unknown
+    ? Omit<Half, "start" | "service"> & { start: boolean, service: string | false }
     : never
 
 type ResolvedClient = Omit<Resolved<ClientConfig>, "sandbox"> & { sandbox: boolean }

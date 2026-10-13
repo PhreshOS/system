@@ -75,7 +75,7 @@ test("a later Client request cannot overtake its Service subscription registrati
         async askService() { order.push("ask") }
     }
     const authManager = {
-        programManager: { programs: new Map([["flambo", { identity: "flambo", permissions: { services: [] } }]]) },
+        programManager: { programs: new Map([["flambo", { identity: "flambo", permissions: { consumeServices: [] } }]]) },
         processManager,
     } as unknown as AuthManager
     const boundary = new ClientProcessBoundary(
@@ -87,7 +87,7 @@ test("a later Client request cannot overtake its Service subscription registrati
         {} as ClientTraffic,
         { begin() {} } as unknown as PresentationHost
     )
-    const address = { program: "flambo", process: "browser-server", endpoint: "server" } as const
+    const address = { name: "browser-server", endpoint: "server" } as const
 
     await boundary.own("document")
     boundary.receive(["end-host", "service-follow", "subscription", address, "events", "workspace.change", false])
@@ -102,7 +102,7 @@ test("a registered Service event is delivered without a second permission round-
 
     const sent: unknown[][] = []
     let followed = false
-    const address = { program: "browser", process: "browser", endpoint: "server" } as const
+    const address = { name: "browser", endpoint: "server" } as const
     const processManager = {
         processes: new Map([["process", { program: "browser" }]]),
         async ownFrame() {},
@@ -110,7 +110,7 @@ test("a registered Service event is delivered without a second permission round-
         async followService() { followed = true }
     }
     const authManager = {
-        programManager: { programs: new Map([["browser", { identity: "browser", permissions: { services: [] } }]]) },
+        programManager: { programs: new Map([["browser", { identity: "browser", permissions: { consumeServices: [] } }]]) },
         processManager,
     } as unknown as AuthManager
     const traffic = {

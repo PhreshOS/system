@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { TheLink } from "@the-link/core"
@@ -45,8 +45,8 @@ test("stored permission assignments override definition fallbacks by name", asyn
 
     expect(manager.permissions(program)).toEqual({ network: false, uploads: [], appearance: [] })
 
-    program = await manager.forceCreate(definition({ network: true, services: ["editor"] }))
-    expect(manager.permissions(program)).toEqual({ network: false, services: ["editor"], appearance: [] })
+    program = await manager.forceCreate(definition({ network: true, consumeServices: ["editor"] }))
+    expect(manager.permissions(program)).toEqual({ network: false, consumeServices: ["editor"], appearance: [] })
 })
 
 test("a Program definition resolves System-owned paths into reusable creation input", context => {
@@ -61,48 +61,13 @@ test("a Program definition resolves System-owned paths into reusable creation in
     })
 })
 
-test("startup and pinned state share one file without overwriting each other", async context => {
+test("an attached Program does not start with the System, yet its startup can be read and removed", async context => {
     const { manager, definition } = fixture(context)
     const program = await manager.create(definition())
-    const startup = { name: "background", options: { mode: "quiet" } }
 
-    await manager.startup(program, "set", startup)
-    const pinnedAt = await manager.pinned(program, "pin")
-    await manager.setPermission(program, "network", false)
-
-    expect(await manager.startup(program, "get")).toEqual(startup)
-    expect(pinnedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect(await manager.pinned(program, "get")).toBe(pinnedAt)
-    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
-    expect(JSON.parse(readFileSync(join(program.storagePath, "state.json"), "utf8"))).toEqual({
-        startup,
-        pinnedAt,
-        permissions: { network: false }
-    })
-
-    await manager.startup(program, "remove")
-    await manager.pinned(program, "unpin")
+    await expect(manager.startup(program, "set", { name: "background" })).rejects.toThrow(/only once it is installed/)
     expect(await manager.startup(program, "get")).toBeNull()
-    expect(await manager.pinned(program, "get")).toBeNull()
-    expect(new ProgramStateStorage(program).permissions()).toEqual({ network: false })
-})
-
-test("Program state mutations do not rewrite an already-satisfied value", async context => {
-    const { manager, definition } = fixture(context)
-    const program = await manager.create(definition())
-    const startupWrite = vi.spyOn(ProgramStateStorage.prototype, "setStartup")
-    const permissionWrite = vi.spyOn(ProgramStateStorage.prototype, "setPermission")
-    context.onTestFinished(() => { startupWrite.mockRestore(); permissionWrite.mockRestore() })
-
-    await manager.startup(program, "set", { name: "background" })
-    await manager.startup(program, "set", { name: "background" })
-    await manager.setPermission(program, "network", false)
-    await manager.setPermission(program, "network", false)
     await manager.startup(program, "remove")
-    await manager.startup(program, "remove")
-
-    expect(startupWrite).toHaveBeenCalledTimes(2)
-    expect(permissionWrite).toHaveBeenCalledTimes(1)
 })
 
 test("permission changes publish one complete effective snapshot through both Program event scopes", async context => {
@@ -164,36 +129,6 @@ test("pinning keeps its first time, and emits Program and global events only whe
     expect(announceSubject.mock.calls.map(([, , event, subject, value]) => [event, subject, value])).toEqual([
         ["pin", program.reference, pinnedAt],
         ["pin", program.reference, null]
-    ])
-})
-
-test("startup changes emit Program and global events, and filter the Program list", async context => {
-    const { manager, definition, announceHost, announceSubject } = fixture(context)
-    const program = await manager.create(definition())
-    const records: unknown[][] = []
-    const stop = manager.$outbound.subscribe("/startup-change", (record, launch) => { records.push([record, launch]) })
-    context.onTestFinished(stop)
-    announceHost.mockClear()
-    announceSubject.mockClear()
-
-    await manager.startup(program, "set", { name: "background" })
-    await manager.startup(program, "set", { name: "background" })
-    expect(manager.find(program.identity).record().startup).toBe(true)
-    await manager.startup(program, "remove")
-    await manager.startup(program, "remove")
-    expect(manager.find(program.identity).record().startup).toBe(false)
-
-    expect(announceHost.mock.calls.map(([, owner, event, , , launch]) => [owner, event, launch])).toEqual([
-        [program.identity, "changeStartup", { name: "background" }],
-        [program.identity, "changeStartup", null]
-    ])
-    expect(announceSubject.mock.calls.map(([, , event, subject, launch]) => [event, subject, launch])).toEqual([
-        ["changeStartup", program.reference, { name: "background" }],
-        ["changeStartup", program.reference, null]
-    ])
-    expect(records.map(([record, launch]) => [(record as { startup: boolean }).startup, launch])).toEqual([
-        [true, { name: "background" }],
-        [false, null]
     ])
 })
 

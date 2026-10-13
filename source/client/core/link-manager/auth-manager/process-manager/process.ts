@@ -27,7 +27,7 @@ export default class Process {
     public readonly startedAt: Date
 
     // Current live endpoint state mirrored from the authoritative host.
-    public server: { ready: boolean, service: boolean } | null
+    public server: { ready: boolean, service: string | false } | null
 
     public client: ClientState | null
 
@@ -139,7 +139,7 @@ export interface ProcessLineage {
 
     readonly startedAt: Date
 
-    readonly server: { service: boolean } | null
+    readonly server: { service: string | false } | null
 
-    readonly client: { service: boolean } | null
+    readonly client: { service: string | false } | null
 }

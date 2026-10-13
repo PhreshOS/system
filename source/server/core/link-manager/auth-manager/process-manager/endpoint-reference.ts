@@ -1,4 +1,4 @@
-import type { EndpointReference as CoreEndpointReference, ProcessSnapshot } from "@phreshos/core"
+import type { EndpointMetadata, EndpointReference as CoreEndpointReference, ProcessSnapshot } from "@phreshos/core"
 import { type Half } from "./process-traffic"
 import Process from "./process"
 
@@ -21,4 +21,13 @@ export function processReference(process: Process): ProcessReference {
 export function endpointReference(process: Process, kind: Half): EndpointReference {
 
     return { kind, process: processReference(process) } satisfies CoreEndpointReference
+}
+
+/**
+ * Who an Endpoint is, as every message to or from it carries it: public values, the same for every
+ * receiver and observer. Reaching the Endpoint itself goes through its Process, under permissions.
+ */
+export function endpointMetadata(process: Process, kind: Half): EndpointMetadata {
+
+    return { program: { identity: process.program.identity, name: process.program.name }, process: process.identity, endpoint: kind }
 }

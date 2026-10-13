@@ -11,7 +11,7 @@ import ProcessTraffic, { type Half, type TrafficKind } from "./process-traffic"
 import ClientProcessForwarder from "./client-process-forwarder"
 import HostTraffic, { type HostDomain, type HostOwner } from "./host-traffic"
 import { failed, succeeded, type RequestOutcome } from "@libs/request-outcome"
-import { endpointReference, processReference } from "./endpoint-reference"
+import { endpointMetadata, processReference } from "./endpoint-reference"
 import EndpointEvents from "./endpoint-events"
 import EndpointServices, { serviceTimeout } from "./endpoint-services"
 import OutsideQuestions from "./outside-questions"
@@ -22,16 +22,14 @@ import {
     parseProgramInstallOptions,
     parseProgramUninstallOptions,
     parseSystemProgramListOptions,
-    parseSystemServiceListOptions,
+    parseServiceValue,
     type ClientLaunch,
     type Launch,
     type Permission,
     type PermissionName,
     type PermissionRequestInput,
     type PermissionValue,
-    type IconSize,
     type ServerLaunch,
-    type ServiceAddress,
     type WindowGeometry,
     type WindowLayer,
     type WindowState,
@@ -39,7 +37,7 @@ import {
 } from "@phreshos/core"
 import { isDesktopReplacementLayer, type DesktopReplacementLayer } from "@shared/window-layers"
 import type { ServerRuntime, ServerRuntimeFactory } from "@server/core/server-runtime"
-import SystemAccess from "./system-access"
+import SystemAccess, { type LaunchReach } from "./system-access"
 import { WebSocket } from "ws"
 import { permissionCatalog } from "@server/core/permissions"
 import { defaultPermissionRequestTimeout } from "@server/core/permission-manager"
@@ -115,14 +113,7 @@ export default class ProcessManager extends TheLink {
 
         this.authManager = authManager
 
-        this.services = new EndpointServices(
-            address => this.resolveService(address),
-            () => this.processes.values(),
-            (event, address) => Promise.all([
-                this.hostTraffic.emitHost("service", null, event, address.process, address),
-                this.$outbound.publish(`/service-${event}`, address)
-            ])
-        )
+        this.services = new EndpointServices(() => this.processes.values())
 
         this.connectTo(this.authManager, "/process")
 
@@ -135,17 +126,6 @@ export default class ProcessManager extends TheLink {
         if (!process) throw new Error("The host does not know this process")
 
         return process
-    }
-
-    private resolveService(address: ServiceAddress) {
-
-        const program = this.authManager.programManager.reach(address.program)
-        const process = program
-            ? [...this.processes.values()].find(candidate => candidate.program === program && candidate.name === address.process)
-            : null
-        const service = address.endpoint === "server" ? process?.server?.service : process?.client?.service
-
-        return process && service === true ? { process, endpoint: address.endpoint } : null
     }
 
     private heldWindow(value: unknown, fallback: Process) {
@@ -290,13 +270,12 @@ export default class ProcessManager extends TheLink {
         return this.services.available(address)
     }
 
-    public listServicesFromOutside(name?: string) { return this.services.list(name) }
-
-    public endpointIsServiceFromOutside(identity: string, endpoint: Half) {
+    /** The Service name an Endpoint of a Process holds, or `false` for none. */
+    public endpointServiceFromOutside(identity: string, endpoint: Half) {
 
         const process = this.find(identity)
 
-        return endpoint === "server" ? process.server?.service === true : process.client?.service === true
+        return (endpoint === "server" ? process.server?.service : process.client?.service) ?? false
     }
 
     public waitServiceReadyFromOutside(address: unknown, timeout?: number) {
@@ -444,7 +423,7 @@ export default class ProcessManager extends TheLink {
 
         current?.release()
 
-        this.clientForwarders.set(key, new ClientProcessForwarder(connection, pane, owner, this.authManager, this.traffic, this.endpointEvents, values => this.clientVisibleTraffic(pane, values)))
+        this.clientForwarders.set(key, new ClientProcessForwarder(connection, pane, owner, this.authManager, this.traffic, this.endpointEvents))
     }
 
     private releaseClient(connection: string, pane: string, owner: string) {
@@ -490,11 +469,6 @@ export default class ProcessManager extends TheLink {
         }
 
         boundary.observe(subscription, observed.reference, observation.half, kind, event, reportImpossible)
-    }
-
-    private clientVisibleTraffic(_pane: string, values: unknown[]) {
-
-        return values
     }
 
     private removeClientObservation(connection: string, pane: string, owner: string, subscription: string) {
@@ -741,14 +715,14 @@ export default class ProcessManager extends TheLink {
 
         const received = {
 
-            from: endpointReference(sourceProcess, sourceHalf),
+            from: endpointMetadata(sourceProcess, sourceHalf),
 
             payload
         }
 
         const observed = this.traffic.emit(sourceProcess.reference, sourceHalf, "publish", event, {
 
-            to: endpointReference(targetProcess, targetHalf),
+            to: endpointMetadata(targetProcess, targetHalf),
 
             payload
         })
@@ -767,22 +741,25 @@ export default class ProcessManager extends TheLink {
 
         if (!back) return false
 
+        const outcome = values[4] as RequestOutcome
+
         if (back.half === "outside") {
 
-            this.outsideQuestions.answer(values[1], values[4] as RequestOutcome)
+            // Observed like any other answer: `null`, as the asker is no Program Endpoint.
+            if (answerer) this.traffic.emit(answerer.reference, "server", "answer", values[3], values[2], { to: null, outcome }).catch(() => undefined)
+
+            this.outsideQuestions.answer(values[1], outcome)
 
             return true
         }
 
         const process = this.processes.get(back.identity)
 
-        const outcome = values[4] as RequestOutcome
-
         if (answerer && process) {
 
             this.traffic.emit(answerer.reference, "server", "answer", values[3], values[2], {
 
-                to: endpointReference(process, back.half),
+                to: endpointMetadata(process, back.half),
 
                 outcome
             }).catch(() => undefined)
@@ -919,7 +896,7 @@ export default class ProcessManager extends TheLink {
 
                 () => { process.serverStopped(boundary, code, signal) },
 
-                () => this.services.stopped(process, "server", boundary.service),
+                () => this.services.stopped("server", boundary.service),
 
                 () => { boundary.release() },
 
@@ -966,7 +943,20 @@ export default class ProcessManager extends TheLink {
         else await this.transition(process, finish).catch(() => undefined)
     }
 
-    private activateServer(process: Process, runtime: ServerRuntime, service: boolean) {
+    /**
+     * Takes a Service name for an Endpoint about to start: whatever Process holds it now ends, whole, as
+     * an occupied layer's does. Whoever started it was let provide the name; that is all it takes.
+     */
+    private async claimService(process: Process, service: string | false) {
+
+        if (service === false) return
+
+        const holder = this.services.holder(service)
+
+        if (holder && holder.process !== process) await this.exitProcess(holder.process.identity, "complete")
+    }
+
+    private activateServer(process: Process, runtime: ServerRuntime, service: string | false) {
 
         const server = process.startServer(runtime, service,
 
@@ -999,7 +989,7 @@ export default class ProcessManager extends TheLink {
 
         if (domain === "log") return this.grants(process.identity, "logs", [])
 
-        if (domain === "service") return subject !== null && this.grants(process.identity, "services", [subject])
+        if (domain === "service") return subject !== null && this.grants(process.identity, "consumeServices", [subject])
 
         return owner !== null && access.canProgram({ identity: owner })
     }
@@ -1051,7 +1041,7 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Claims the role after serialized replacement has released its previous owner. */
-    private activateClient(process: Process, service: boolean) {
+    private activateClient(process: Process, service: string | false) {
         const window = process.clientEndpoint?.window
         if (!window) throw new Error("This Program declared no Client Endpoint")
         if (isDesktopReplacementLayer(window.layer) && [...this.processes.values()].some(
@@ -1140,11 +1130,15 @@ export default class ProcessManager extends TheLink {
             await this.transition(process, async () => {
 
                 if (client && window && shape) {
+                    await this.claimService(process, launch.client?.service ?? false)
                     this.startWindow(window, shape)
                     this.activateClient(process, launch.client?.service ?? false)
                 }
 
-                if (runtime) this.activateServer(process, runtime, launch.server?.service ?? false)
+                if (runtime) {
+                    await this.claimService(process, launch.server?.service ?? false)
+                    this.activateServer(process, runtime, launch.server?.service ?? false)
+                }
 
                 // The subject first, which is what scopes a listener without
                 // anything being checked: a kit's `Events` refuses a value whose
@@ -1213,12 +1207,12 @@ export default class ProcessManager extends TheLink {
 
         const serverWasLive = process.server !== null
         const clientWasLive = process.client !== null
-        const serverWasService = process.server?.service === true
-        const clientWasService = process.client?.service === true
+        const serverWasService = process.server?.service ?? false
+        const clientWasService = process.client?.service ?? false
 
         const failures = await settleEvery([
-            ...serverWasLive ? [() => this.services.stopped(process, "server", serverWasService)] : [],
-            ...clientWasLive ? [() => this.services.stopped(process, "client", clientWasService)] : []
+            ...serverWasLive ? [() => this.services.stopped("server", serverWasService)] : [],
+            ...clientWasLive ? [() => this.services.stopped("client", clientWasService)] : []
         ])
 
         // Another converging teardown may have completed while services were
@@ -1293,7 +1287,9 @@ export default class ProcessManager extends TheLink {
 
             if (!process.program.server) throw new Error("This program declared no server half")
 
-            if (typeof launch !== "object" || launch === null || Array.isArray(launch) || launch.service !== undefined && typeof launch.service !== "boolean") throw new Error("A Server launch must contain an optional boolean service value")
+            if (typeof launch !== "object" || launch === null || Array.isArray(launch)) throw new Error("A Server launch is an object")
+
+            const service = launch.service === undefined ? process.program.server.service : parseServiceValue(launch.service, "A Server launch's service")
 
             if (process.server) return
 
@@ -1303,7 +1299,9 @@ export default class ProcessManager extends TheLink {
 
             try {
 
-                this.activateServer(process, runtime, launch.service ?? process.program.server.service)
+                await this.claimService(process, service)
+
+                this.activateServer(process, runtime, service)
 
                 await this.serverStarted(process)
             }
@@ -1394,6 +1392,8 @@ export default class ProcessManager extends TheLink {
 
             await this.prepareClientLayer(window.layer, process.program)
 
+            await this.claimService(process, launch.service ?? declaration.service)
+
             this.activateClient(process, launch.service ?? declaration.service)
 
             try {
@@ -1441,7 +1441,7 @@ export default class ProcessManager extends TheLink {
 
         const layer = process.client ? process.clientEndpoint?.window.layer ?? null : null
 
-        const service = process.client?.service === true
+        const service = process.client?.service ?? false
 
         const before = layer ? this.front(layer) : null
 
@@ -1449,7 +1449,7 @@ export default class ProcessManager extends TheLink {
 
             () => { process.stopClient() },
 
-            () => this.services.stopped(process, "client", service),
+            () => this.services.stopped("client", service),
 
             () => { this.releaseClientForwarders(process.identity) },
 
@@ -1576,52 +1576,10 @@ export default class ProcessManager extends TheLink {
         return this.services.available(address)
     }
 
-    @Subscribe("/service/list")
-    protected async listServices(options: unknown = {}) {
-
-        return this.services.list(parseSystemServiceListOptions(options).name)
-    }
-
     @Subscribe("/service/wait-ready")
     protected async waitServiceReady(address: unknown, timeout: unknown) {
 
         await this.services.waitReady(address, timeout, this.authManager.connectionSignal())
-    }
-
-    @Subscribe("/service/program-metadata")
-    protected async serviceProgramMetadata(address: unknown) {
-
-        if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
-
-        const target = this.services.target(address)
-
-        if (!target) throw new Error("The Service is unavailable")
-
-        const program = target.process.program
-
-        return Object.freeze({ name: program.name, version: program.version })
-    }
-
-    @Subscribe("/service/program-icon")
-    protected async serviceProgramIcon(address: unknown, iconSize: unknown = "medium") {
-
-        if (!isServiceAddress(address)) throw new Error("A complete Service address is required")
-
-        const target = this.services.target(address)
-
-        if (!target) throw new Error("The Service is unavailable")
-
-        const icon = await this.authManager.programManager.icon(target.process.program, iconSize)
-
-        // Rendering can outlive one provider incarnation; never return an icon
-        // after the exact Service target that authorized the read has vanished.
-        const current = this.services.target(address)
-
-        if (!current || current.process !== target.process || current.endpoint !== target.endpoint) {
-            throw new Error("The Service is unavailable")
-        }
-
-        return icon
     }
 
     @Subscribe("/service/send")
@@ -1705,13 +1663,13 @@ export default class ProcessManager extends TheLink {
 
         if (event !== null && typeof event !== "string") return
 
-        if (!this.grants(pane, "services", [address.process])) return
+        if (!this.grants(pane, "consumeServices", [address.name])) return
 
         boundary.followService(this.services, subscription, address, scope, event, () => {
 
             const process = this.processes.get(pane)
 
-            return process !== undefined && this.authManager.programManager.grantsPermission(process.program, "services", [address.process])
+            return process !== undefined && this.authManager.programManager.grantsPermission(process.program, "consumeServices", [address.name])
         })
     }
 
@@ -1754,6 +1712,17 @@ export default class ProcessManager extends TheLink {
     }
 
     /** Tests one concrete permission for the Program executing this Process. */
+    /**
+     * Refuses a resolved Launch its executor may not run: an Endpoint asked for it; the owner, with
+     * no asker, runs any.
+     */
+    public requireLaunch(asker: string | null, launch: LaunchReach) {
+
+        const process = asker === null ? undefined : this.processes.get(asker)
+
+        if (process) new SystemAccess(this, process).requireLaunch(launch)
+    }
+
     public grants<Name extends PermissionName>(identity: string, name: Name, requested: readonly PermissionValue<Name>[]) {
 
         const process = this.find(identity)
@@ -1836,9 +1805,9 @@ export default class ProcessManager extends TheLink {
 
         const heldService = (value: unknown) => {
 
-            if (!isServiceAddress(value)) throw new Error("A complete Service address is required")
+            if (!isServiceAddress(value)) throw new Error("A Service is reached by its name, such as file-picker-v1, and optionally the kind of Endpoint")
 
-            if (!this.grants(process.identity, "services", [value.process])) throw new Error("Execution is not permitted")
+            if (!this.grants(process.identity, "consumeServices", [value.name])) throw new Error("Execution is not permitted")
 
             return value
         }
@@ -2100,7 +2069,7 @@ export default class ProcessManager extends TheLink {
 
             const program = heldProgram(rest[0])
 
-            const value = rest[1] === "set" ? access.launch(rest[2]) : rest[2]
+            const value = rest[1] === "set" ? access.launch(program, rest[2]) : rest[2]
 
             return [await this.system.programStartup(program, String(rest[1]), value)]
         }
@@ -2189,14 +2158,14 @@ export default class ProcessManager extends TheLink {
             // other end — identity and program, nothing else — was how every
             // process held by its launcher had no startedAt while every
             // other road's did.
-            return [processReference(this.system.requireProcess(await this.system.createProcess(program, access.launch(rest[1]), process)))]
+            return [processReference(this.system.requireProcess(await this.system.createProcess(program, access.launch(program, rest[1]), process)))]
         }
 
         if (word === "program-find-or-create-process") {
 
             const program = heldProgram(rest[0])
 
-            return [processReference(this.system.requireProcess(await this.system.findOrCreateProcess(program, access.launch(rest[1]) as Launch & { name: string }, process)))]
+            return [processReference(this.system.requireProcess(await this.system.findOrCreateProcess(program, access.launch(program, rest[1]) as Launch & { name: string }, process)))]
         }
 
         // Named, only that program's instances; unnamed, every one.
@@ -2261,7 +2230,7 @@ export default class ProcessManager extends TheLink {
             throw new Error("A Process endpoint is server or client")
         }
 
-        if (word === "is-service") {
+        if (word === "endpoint-service") {
 
             const target = heldProcess(rest[1])
             const endpoint = rest[0] ?? "server"
@@ -2270,16 +2239,16 @@ export default class ProcessManager extends TheLink {
 
             if (!target.program[endpoint]) throw new Error(`This Program declared no ${endpoint === "server" ? "Server" : "Client"} Endpoint`)
 
-            return [endpoint === "server" ? target.server?.service === true : target.client?.service === true]
+            return [(endpoint === "server" ? target.server?.service : target.client?.service) ?? false]
         }
 
         if (word === "start-endpoint") {
 
             const target = heldProcess(rest[0])
 
-            if (rest[1] === "server") return [await this.system.startEndpoint(target, "server", rest[2] as ServerLaunch | undefined)]
+            if (rest[1] === "server") return [await this.system.startEndpoint(target, "server", access.serverLaunch(target.program, rest[2]))]
 
-            if (rest[1] === "client") return [await this.system.startEndpoint(target, "client", access.clientLaunch(rest[2]))]
+            if (rest[1] === "client") return [await this.system.startEndpoint(target, "client", access.clientLaunch(target.program, rest[2]))]
 
             throw new Error("A Process endpoint is server or client")
         }
@@ -2297,20 +2266,9 @@ export default class ProcessManager extends TheLink {
 
         if (word === "stop-current") return [await this.system.stopEndpoint(process, "server")]
 
-        if (word === "host-service-list") {
-
-            const { name } = parseSystemServiceListOptions(rest[0])
-
-            return [this.services.list(name).filter(address => this.grants(process.identity, "services", [address.process]))]
-        }
-
         if (word === "service-available") return [this.services.available(heldService(rest[0]))]
 
         if (word === "service-wait-ready") return [await this.services.waitReady(heldService(rest[0]), rest[1])]
-
-        if (word === "service-program-metadata") return [await this.serviceProgramMetadata(heldService(rest[0]))]
-
-        if (word === "service-program-icon") return [await this.serviceProgramIcon(heldService(rest[0]), rest[1] as IconSize | undefined)]
 
         if (word === "service-follow") {
 
@@ -2322,11 +2280,11 @@ export default class ProcessManager extends TheLink {
 
             if (event !== null && typeof event !== "string") return []
 
-            if (!this.grants(process.identity, "services", [address.process])) return []
+            if (!this.grants(process.identity, "consumeServices", [address.name])) return []
 
             server.followService(this.services, subscription, address, scope, event, () => (
                 this.processes.get(process.identity) === process
-                && this.authManager.programManager.grantsPermission(process.program, "services", [address.process])
+                && this.authManager.programManager.grantsPermission(process.program, "consumeServices", [address.name])
             ))
 
             return []
@@ -3092,7 +3050,7 @@ export default class ProcessManager extends TheLink {
                     if (running) this.system.exitProcess(running).catch(() => undefined)
                 }
 
-                const identity = await this.system.runProcess(program, access.launch(args[2]), {
+                const identity = await this.system.runProcess(program, access.launch(program, args[2]), {
                     started: created => {
 
                         running = created
@@ -3217,11 +3175,11 @@ export default class ProcessManager extends TheLink {
 
         const payload = values[3]
 
-        const received = { from: endpointReference(sourceProcess, sourceHalf), payload }
+        const received = { from: endpointMetadata(sourceProcess, sourceHalf), payload }
 
         this.traffic.emit(sourceProcess.reference, sourceHalf, "ask", values[2], values[1], {
 
-            to: endpointReference(targetProcess, "server"),
+            to: endpointMetadata(targetProcess, "server"),
 
             payload
         }).catch(() => undefined)

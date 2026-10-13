@@ -272,7 +272,10 @@ export const permissionCatalog = new PermissionCatalog({
     all: {
         default: []
     },
-    services: {
+    consumeServices: {
+        default: []
+    },
+    provideServices: {
         default: []
     },
     programs: {

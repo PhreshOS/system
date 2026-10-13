@@ -47,9 +47,10 @@ test("client system access contract", async () => {
   const access = new SystemAccess(authManager, owner.identity)
   const ownProgram = { identity: "owner" }
   const outsideProgram = { identity: "outside" }
-  const ownService = { program: "owner", process: "owner-service", endpoint: "server" } as const
-  const siblingService = { program: "owner", process: "sibling-service", endpoint: "client" } as const
-  const outsideService = { program: "outside", process: "outside-service", endpoint: "server" } as const
+  // Reached by their names alone, whichever Program provides them.
+  const ownService = { name: "owner-service", endpoint: "server" } as const
+  const siblingService = { name: "sibling-service", endpoint: "client" } as const
+  const outsideService = { name: "outside-service", endpoint: "server" } as const
 
   assert(access.ownsProgram(ownProgram))
   assert(!access.ownsProgram(outsideProgram))
@@ -76,14 +77,14 @@ test("client system access contract", async () => {
   assert.equal(await access.canConnection("desktop-connection"), false)
   assert.equal(await access.canSession("desktop-session"), false)
 
-  permissions = { services: ["outside-service"] }
+  permissions = { consumeServices: ["outside-service"] }
 
   assert.equal(await access.service(outsideService), outsideService)
   await assert.rejects(access.program(outsideProgram as never), /Program represented by this handle does not exist/)
   await assert.rejects(access.process(outside), /Process represented by this handle does not exist/)
   await assert.rejects(access.requireAll(), /Execution is not permitted/)
 
-  permissions = { services: [] }
+  permissions = { consumeServices: [] }
 
   assert.equal(await access.service(outsideService), outsideService)
   assert.equal(await access.service(ownService), ownService)
@@ -170,12 +171,12 @@ test("client system access contract", async () => {
   await access.requireAll()
   assert.equal(permissionChecks, 0)
 
-  permissions = { all: [], services: false }
+  permissions = { all: [], consumeServices: false }
   await assert.rejects(access.service(ownService), /Execution is not permitted/)
   await assert.rejects(access.service(siblingService), /Execution is not permitted/)
-  permissions = { services: [] }
+  permissions = { consumeServices: [] }
   assert.equal(await access.service(outsideService), outsideService)
-  permissions = { services: ["owner-service"] }
+  permissions = { consumeServices: ["owner-service"] }
   assert.equal(await access.service(ownService), ownService)
   await assert.rejects(access.service(siblingService), /Execution is not permitted/)
   await assert.rejects(access.service(outsideService), /Execution is not permitted/)

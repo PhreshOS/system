@@ -8,8 +8,8 @@ test("Desktop preserves Endpoint service roles in SDK snapshots", () => {
     name: "Example", version: "0.0.0", description: null, website: null, categories: [], keywords: [], opens: [], declaredPermissions: {}, hasAgent: false,
     server: { start: true, service: false }, client: null, permissions: {}
   }
-  for (const server of [null, { service: false }, { service: true }]) {
-    for (const client of [null, { service: false }, { service: true }]) {
+  for (const server of [null, { service: false as const }, { service: "editor-v1" }]) {
+    for (const client of [null, { service: false as const }, { service: "canvas-v1" }]) {
       const source: SdkProcessSource = {
         identity: "process-identity", reference: "process-reference", program: program.identity,
         name: null, options: { language: "en" }, opened: { type: "text/markdown", uri: "file:///notes.md" }, startedAt: new Date(0), server, client
