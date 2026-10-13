@@ -25,8 +25,9 @@ export default function SnapPreview({ shown, visible, blocked = false, minimumSi
         className="pointer-events-none absolute"
         style={{ left: 0, top: 0, zIndex, ...geometry.style }}
     >
+        {/* It is drawn when it is first shown, so it comes in from hidden, as it does every later time. */}
         <motion.div
-            initial={false}
+            initial={{ scale: 0.98, opacity: 0 }}
             animate={{ scale: visible ? 1 : 0.98, opacity: visible ? 1 : 0 }}
             transition={motionTransition(transaction, reducedMotion)}
             style={{ position: "absolute", inset: 0, transformOrigin: "center" }}

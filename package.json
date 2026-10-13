@@ -1,6 +1,6 @@
 {
   "name": "phreshos",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,

@@ -3,14 +3,14 @@ import { Map as MapIcon, Maximize2 } from "@phreshos/react-ui/icons"
 import WindowMenu from "../../window-menu"
 import TaskbarTooltip from "../taskbar-tooltip"
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react"
-import { planeReach, snapPlacement, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
+import { planeReach, type WindowRegion } from "@client/view/components/window-manager/window-geometry"
 import { type AppearanceTaskbar } from "@phreshos/core"
 import { useReducedMotion } from "@libs/react-motion"
 import { motion } from "motion/react"
 import { motionTransition } from "@client/view/appearance/motion"
-import { EdgeHold, against, useViewTravel } from "../../../../edge-hold"
+import { EdgeHold, against, useViewTravel, type Direction } from "../../../../edge-hold"
 import { createPortal } from "react-dom"
-import SnapPreview, { type SnapTarget } from "../../../../windows/snap-preview"
+import CrossingSign from "./crossing-sign"
 import { desktopMargins } from "../../../desktop-layers"
 import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { useShellPopover } from "../../shell-popover"
@@ -129,10 +129,9 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
     // A carry that ended over the button is not also a press.
     const carried = useRef(false)
 
-    // Where the ghost is held against the Desktop's edges: the placement a Window would take there,
-    // shown as a Window's is, but only as a sign; nothing is placed when the hand lets go. It turns to
-    // danger where the plane goes no further.
-    const [edge, setEdge] = useState<{ zone: SnapTarget | null, shown: SnapTarget | null, blocked: boolean, layer: HTMLElement | null }>({ zone: null, shown: null, blocked: false, layer: null })
+    // Where the ghost is held against the Desktop's edges, shown as the way the view goes; see
+    // CrossingSign. `shown` stays while the sign fades away.
+    const [edge, setEdge] = useState<{ held: boolean, shown: Direction | null, blocked: boolean, layer: HTMLElement | null }>({ held: false, shown: null, blocked: false, layer: null })
 
     function carry(event: ReactPointerEvent<HTMLElement>) {
 
@@ -144,7 +143,7 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         const held = event.target as Element
 
-        const edges = new EdgeHold(direction => travelNow.current(direction), blocked => setEdge(current => ({ ...current, blocked })))
+        const edges = new EdgeHold(direction => travelNow.current(direction), { onBlocked: blocked => setEdge(current => ({ ...current, blocked })) })
 
         const windowLayer = document.querySelector<HTMLElement>("[data-desktop-layer=\"window\"]")
 
@@ -190,9 +189,9 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
             edges.update(direction)
 
-            const zone = direction.x || direction.y ? snapPlacement(direction, desktopMargins(spacing, taskbar)) : null
+            const atEdge = direction.x !== 0 || direction.y !== 0
 
-            setEdge(current => ({ ...current, zone, shown: zone ?? current.shown, layer: windowLayer }))
+            setEdge(current => ({ ...current, held: atEdge, shown: atEdge ? direction : current.shown, layer: windowLayer }))
         }
 
         function end(motion: PointerEvent) {
@@ -203,7 +202,7 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
             setGhost(null)
 
-            setEdge(current => ({ ...current, zone: null, blocked: false }))
+            setEdge(current => ({ ...current, held: false, blocked: false }))
 
             removeEventListener("pointermove", move)
 
@@ -273,13 +272,13 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
         </TaskbarTooltip>
         </span>
 
-        {edge.shown && edge.layer && createPortal(<SnapPreview
-            shown={edge.shown}
-            visible={edge.zone !== null}
+        {edge.shown && edge.layer && createPortal(<CrossingSign
+            direction={edge.shown}
+            place={place}
+            visible={edge.held}
             blocked={edge.blocked}
-            paintSurfaceSize={{ width: edge.layer.clientWidth, height: edge.layer.clientHeight }}
-            paintInset={spacing / 2}
-            paintMargins={desktopMargins(spacing, taskbar)}
+            margins={desktopMargins(spacing, taskbar)}
+            spacing={spacing}
             reducedMotion={reducedMotion}
             zIndex={2147483646}
         />, edge.layer)}
@@ -582,7 +581,7 @@ function ViewMap({ labelId, viewport, windows, centered, menus, room }: Readonly
 
         <div ref={footer} className="flex items-center justify-between" style={{ gap: space.medium }}>
 
-            <Text size="xsmall" tone="secondary">Choose a view or a Window, drag the frame, or drag a Window to move it.</Text>
+            <Text size="xsmall" tone="secondary">Drag the Map button to an edge of the screen to go to the next view.</Text>
 
             <Button size="small" disabled={centered} onPress={viewport.home}>Center</Button>
 

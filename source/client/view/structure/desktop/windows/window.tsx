@@ -484,15 +484,28 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
         let renderFrame = 0
 
-        // A hand holding a standard Window against an edge of the screen takes the view that way; see
-        // EdgeHold. Where the plane goes no further, the preview of the placement turns to danger.
+        // A hand holding a standard Window against an edge of the screen settles there, which offers
+        // the half or quarter that edge names, then takes the view that way; see EdgeHold. Where the
+        // plane goes no further, the preview of the placement turns to danger.
         let blocked = false
 
-        const edges = new EdgeHold(direction => latest.current.onEdgeHold?.(direction), held => {
+        const edges = new EdgeHold(direction => latest.current.onEdgeHold?.(direction), {
 
-            blocked = held
+            onBlocked(held) {
 
-            renderGesture()
+                blocked = held
+
+                renderGesture()
+            },
+
+            onSettled(settled) {
+
+                zone = snapZone(settled)
+
+                if (zone) shown = zone
+
+                renderGesture()
+            }
         })
 
         function holdAgainst(motion: DesktopMovePoint) {
@@ -536,13 +549,11 @@ export default function ({ title, header = true, surface, layer, icon, children,
             })
         }
 
-        // A zone is where the pointer is, within 16 pixels of an edge, and names a half or a quarter of
-        // the room the view leaves for Windows, which each Desktop resolves in its own space.
-        function snapTerm(motion: DesktopMovePoint): Snap | null {
+        // A zone is the edges the hold settled against, and names a half or a quarter of the room the
+        // view leaves for Windows, which each Desktop resolves in its own space.
+        function snapZone(settled: Readonly<{ x: number, y: number }> | null): Snap | null {
 
-            const direction = against(physicalToDesktopPixels(motion.x - bounds!.left, desktopScale), physicalToDesktopPixels(motion.y - bounds!.top, desktopScale), bounds!.width, bounds!.height)
-
-            return direction.x || direction.y ? snapPlacement(direction, paintMargins) : null
+            return settled ? snapPlacement(settled, paintMargins) : null
         }
 
         function move(motion: DesktopMovePoint) {
@@ -608,14 +619,14 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 current = { ...origin, x: origin.x + dx, y: origin.y + dy }
 
                 // Only the Desktop's own Windows snap; a raw drawing goes where it is taken.
-                zone = moved && standard ? snapTerm(motion) : null
-
                 if (moved && standard) {
 
                     held.set(1)
 
                     holdAgainst(motion)
                 }
+
+                zone = moved && standard ? snapZone(edges.settled) : null
 
                 if (zone) shown = zone
             }
@@ -649,7 +660,10 @@ export default function ({ title, header = true, surface, layer, icon, children,
             renderGesture()
         }
 
-        function release(motion: DesktopMovePoint, committed: boolean) {
+        function release(committed: boolean) {
+
+            // Only a hold that settled snaps; one let go before then leaves the Window where it is.
+            const term = moved && edge === null && committed && standard ? zone : null
 
             edges.stop()
 
@@ -667,8 +681,6 @@ export default function ({ title, header = true, surface, layer, icon, children,
 
                 return
             }
-
-            const term = moved && edge === null && committed && standard ? snapTerm(motion) : null
 
             // Pointer input has ended, but visible gesture ownership remains
             // until every authoritative mutation below has settled.
@@ -722,7 +734,7 @@ export default function ({ title, header = true, surface, layer, icon, children,
                 handle.removeEventListener("pointermove", movePointer)
                 handle.removeEventListener("pointerup", releasePointer)
                 handle.removeEventListener("pointercancel", releasePointer)
-                release({ x: motion.clientX, y: motion.clientY }, motion.type === "pointerup")
+                release(motion.type === "pointerup")
             }
             handle.addEventListener("pointermove", movePointer)
             handle.addEventListener("pointerup", releasePointer)
@@ -730,8 +742,8 @@ export default function ({ title, header = true, surface, layer, icon, children,
         }
         else receive?.({
             update: move,
-            end(point) { release(point, true) },
-            cancel() { release(pointer, false) }
+            end() { release(true) },
+            cancel() { release(false) }
         })
 
         setGesture({ origin, current, zone, shown, blocked, insets })
