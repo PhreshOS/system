@@ -3,6 +3,7 @@ import { Subscribe } from "@the-link/core/decorators"
 import { opensType, parseOpenOptions, parseOpenTarget, parseOpenType, type OpenRequestSnapshot, type OpenTarget, type Position } from "@phreshos/core"
 import shortIdentity from "@libs/short-identity"
 import type AuthManager from "./link-manager/auth-manager/auth-manager"
+import type ProgramManager from "./link-manager/auth-manager/program-manager/program-manager"
 import type Process from "./link-manager/auth-manager/process-manager/process"
 import { endpointReference } from "./link-manager/auth-manager/process-manager/endpoint-reference"
 
@@ -14,18 +15,35 @@ export const openRequestTimeout = 120_000
 
 /**
  * Opening: something to open goes to its type's default Program, else its family's (`image/*`), or
- * waits as a request until the owner chooses one. The System only records requests and choices; how a request is shown is up to the
- * Shell.
+ * waits as a request until the owner chooses one, even when no Program opens it. The System only
+ * records requests and choices; how a request is shown is up to the Shell.
  */
 export default class OpeningManager extends TheLink {
 
     private readonly pendingRequests = new Map<string, PendingOpenRequest>()
+
+    /**
+     * The defaults that count, as last announced: no Program is known before the Programs register, so
+     * none count yet, and each one that comes to count is announced as it does.
+     */
+    private counted: Readonly<Record<string, string>> = {}
+
+    private settling: Promise<void> = Promise.resolve()
 
     public constructor(private readonly authManager: AuthManager) {
 
         super()
 
         this.connectTo(authManager, "/opening")
+    }
+
+    /**
+     * Follows every change of the Programs the System knows: one attached, installed, updated, or
+     * forgotten can make a default count or stop counting.
+     */
+    public followPrograms(programs: ProgramManager) {
+
+        for (const change of ["/create", "/install", "/forget"]) programs.$outbound.subscribe(change, () => this.settle())
     }
 
     public requests() {
@@ -38,32 +56,30 @@ export default class OpeningManager extends TheLink {
         return this.pendingRequests.has(identity)
     }
 
-    /** The installed Programs that open this exact type, or all of this family, by identity. */
+    /** The Programs that open this exact type, or all of this family, by identity: installed or attached from a project. */
     public programsFor(type: string): string[] {
 
         return [...this.authManager.programManager.programs.values()]
-            .filter(entry => entry.installed && opensType(entry.program.config.opens ?? [], type))
+            .filter(entry => opensType(entry.program.config.opens ?? [], type))
             .map(entry => entry.identity)
     }
 
     /**
-     * Opens one target for an Endpoint, or for the owner when `from` is null. It resolves once a
-     * Process is started for it, and rejects when no Program opens it or nothing is chosen. A request
-     * from outside ends with the connection that asked, through `signal`.
+     * Opens one target for an Endpoint, or for the owner when `from` is null. The asker hands it over:
+     * it resolves once the System has taken it, and rejects only for a target or options it cannot
+     * read. What follows is between the System and the owner: a default Program opens it at once;
+     * otherwise it waits as a request for the owner, even with no Program to offer.
      */
-    public async open(value: unknown, from: Readonly<{ process: Process, endpoint: "server" | "client" }> | null, options?: unknown, signal?: AbortSignal) {
+    public async open(value: unknown, from: Readonly<{ process: Process, endpoint: "server" | "client" }> | null, options?: unknown) {
 
         const target = parseOpenTarget(value)
         // Where the asker would have the window open, unless the Program that opens it says.
         const position = parseOpenOptions(options).position ?? null
         const programs = this.programsFor(target.type)
 
-        if (!programs.length) throw new Error(`No Program opens ${target.type}`)
-
         // The exact type's default is the stronger choice; its family's applies only without one.
-        const defaults = await this.chosen()
-        const chosen = [defaults[target.type], defaults[`${target.type.slice(0, target.type.indexOf("/"))}/*`]]
-            .find(program => program !== undefined && programs.includes(program))
+        const defaults = await this.counting()
+        const chosen = [defaults[target.type], defaults[`${target.type.slice(0, target.type.indexOf("/"))}/*`]].find(program => program !== undefined)
 
         if (chosen) {
             await this.launch(chosen, target, position)
@@ -79,14 +95,8 @@ export default class OpeningManager extends TheLink {
             programs: Object.freeze(programs.map(program => this.record(program)))
         }) satisfies OpenRequestSnapshot
 
-        let settle: (program: string | null) => void = () => undefined
-        const result = new Promise<string | null>(resolve => { settle = resolve })
-        // A request belongs to the Endpoint run that asked: when it stops, nobody waits for the answer.
-        const end = () => { this.cancel(identity).catch(() => undefined) }
-        const cancelEndpoint = from ? from.endpoint === "server" ? from.process.onServerStop(end) : from.process.onClientStop(end)
-            : signal ? (signal.addEventListener("abort", end), () => signal.removeEventListener("abort", end)) : () => undefined
-
-        this.pendingRequests.set(identity, { snapshot, position, settle, cancelEndpoint, timer: null, resolving: false })
+        // The request is the owner's from here: it stays until they decide, whatever becomes of the asker.
+        this.pendingRequests.set(identity, { snapshot, position, timer: null, resolving: false })
 
         await Promise.all([
             this.authManager.processManager.announceHost("opening", null, "request", "system", snapshot).catch(() => undefined),
@@ -97,8 +107,6 @@ export default class OpeningManager extends TheLink {
 
         // Observable before it can expire, as a permission request is.
         if (pending) pending.timer = setTimeout(() => { this.cancel(identity).catch(() => undefined) }, openRequestTimeout)
-
-        if (await result === null) throw new Error(`Nothing was chosen to open ${target.type}`)
     }
 
     @Subscribe("/requests")
@@ -148,13 +156,41 @@ export default class OpeningManager extends TheLink {
         }
     }
 
-    /** The default Program of each media type and family, as the Programs themselves; one no longer known is left out. */
+    /**
+     * The default Program of each media type and family, as the Programs themselves: only those that
+     * count, whose Program the System knows and still opens that type.
+     */
     @Subscribe("/defaults")
     public async defaults() {
 
-        return Object.fromEntries(Object.entries(await this.chosen())
-            .filter(([, program]) => this.authManager.programManager.programs.has(program))
-            .map(([type, program]) => [type, this.record(program)]))
+        return Object.fromEntries(Object.entries(await this.counting()).map(([type, program]) => [type, this.record(program)]))
+    }
+
+    /**
+     * The chosen defaults that count. One that does not stays chosen: it counts again when its Program
+     * is installed again or opens that type again, unless the owner changes it or the Program is purged.
+     */
+    private async counting() {
+
+        return Object.fromEntries(Object.entries(await this.chosen()).filter(([type, program]) => this.programsFor(type).includes(program)))
+    }
+
+    /** Announces each default that came to count, changed, or stopped counting since last announced. */
+    private settle() {
+
+        this.settling = this.settling.then(async () => {
+
+            const before = this.counted
+            const now = await this.counting()
+
+            this.counted = now
+
+            for (const type of new Set([...Object.keys(before), ...Object.keys(now)])) {
+                if (before[type] !== now[type]) await this.announceDefault(type, now[type] ?? null)
+            }
+        }).catch(() => undefined)
+
+        return this.settling
     }
 
     /** The default Program of each media type and family, by identity, as stored. */
@@ -183,7 +219,7 @@ export default class OpeningManager extends TheLink {
         if (defaults[kept] === program) return
 
         await this.store.set(defaultsKey, { ...defaults, [kept]: program })
-        await this.announceDefault(kept, program)
+        await this.settle()
     }
 
     @Subscribe("/clear-default")
@@ -195,7 +231,21 @@ export default class OpeningManager extends TheLink {
         if (previous === undefined) return
 
         await this.store.set(defaultsKey, kept)
-        await this.announceDefault(cleared, null)
+        await this.settle()
+    }
+
+    /**
+     * Removes every default naming a Program, as purging it does: nothing in the System is to say it
+     * was ever there. Each type it opened by default is then decided again, as one never chosen.
+     */
+    public async forgetProgram(program: string) {
+
+        const defaults = await this.chosen()
+
+        if (!Object.values(defaults).includes(program)) return
+
+        await this.store.set(defaultsKey, Object.fromEntries(Object.entries(defaults).filter(([, chosen]) => chosen !== program)))
+        await this.settle()
     }
 
     private async announceDefault(type: string, program: string | null) {
@@ -227,7 +277,7 @@ export default class OpeningManager extends TheLink {
 
         const entry = this.authManager.programManager.programs.get(program)
 
-        if (!entry?.installed) throw new Error("That Program is not installed")
+        if (!entry) throw new Error("The System does not know that Program")
 
         await this.authManager.programManager.open(entry.program, target, position)
     }
@@ -251,14 +301,12 @@ export default class OpeningManager extends TheLink {
         if (!this.pendingRequests.delete(request.snapshot.identity)) throw new Error("The open request does not exist")
 
         if (request.timer) clearTimeout(request.timer)
-        request.cancelEndpoint()
 
         await Promise.all([
             this.authManager.processManager.announceHost("opening", null, "resolve", "system", request.snapshot, chosen).catch(() => undefined),
             this.$outbound.publish("/resolve", request.snapshot, chosen).catch(() => undefined)
         ])
 
-        request.settle(program)
     }
 
     public toJSON() {
@@ -271,8 +319,6 @@ interface PendingOpenRequest {
     readonly snapshot: OpenRequestSnapshot
     /** Where the asker would have the window open, unless its Program says. */
     readonly position: Position | null
-    readonly settle: (program: string | null) => void
-    readonly cancelEndpoint: () => void
     timer: ReturnType<typeof setTimeout> | null
     resolving: boolean
 }

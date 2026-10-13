@@ -37,6 +37,8 @@ export default class AuthManager extends TheLink {
 
         this.programManager = new ProgramManager(this)
 
+        this.openingManager.followPrograms(this.programManager)
+
         this.processManager = new ProcessManager(this)
 
         this.shellManager = new ShellManager(this)
@@ -259,7 +261,7 @@ export default class AuthManager extends TheLink {
     @Subscribe("/open")
     protected async openForOwner(target: unknown, options: unknown) {
 
-        await this.openingManager.open(target, null, options, this.linkManager.connection().signal)
+        await this.openingManager.open(target, null, options)
     }
 
     @Subscribe("/appearance/update")

@@ -53,14 +53,16 @@ function OpenRequestView({ request }: Readonly<{ request: OpenRequestSnapshot }>
                 <span className="truncate" title={request.target.uri}><Text size="small" style={{ fontWeight: 500 }}>{describe(request.target.uri)}</Text></span>
                 <Dialog.Description>{request.from ? `${request.from.process.program.name} asks to open it` : "Opened from outside the Desktop"} · {request.target.type}</Dialog.Description>
             </div>
-            <div className="grid" style={{ gap: space.xsmall }}>
+            {/* A request reaches the owner even when nothing here opens it: they learn it, and only close it. */}
+            {!programs.length && <Text size="small" tone="secondary">No Program on this System opens this.</Text>}
+            {!!programs.length && <div className="grid" style={{ gap: space.xsmall }}>
                 {programs.map(program => <Button key={program.identity} disabled={decision.isPending} onPress={() => decision.safeExecute(program.identity)}
                     style={{ justifyContent: "flex-start" }}>
                     <img src={programIcon(application.doors.program, program.assetId)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.large, height: space.large }} />
                     {program.name}
                 </Button>)}
-            </div>
-            <Checkbox size="small" checked={always} onChange={setAlways} label={`Always open ${request.target.type} with it`} />
+            </div>}
+            {!!programs.length && <Checkbox size="small" checked={always} onChange={setAlways} label={`Always open ${request.target.type} with it`} />}
             {decision.exception && <Alert className="text-sm">{String(decision.exception.current)}</Alert>}
         </Dialog.Body>
         <Dialog.Footer>
