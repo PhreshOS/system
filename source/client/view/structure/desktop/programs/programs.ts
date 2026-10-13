@@ -16,5 +16,6 @@ export default function usePrograms() {
 
     useLayoutEffect(() => manager.subscribePrograms(setPrograms), [manager])
 
-    return programs.filter(program => program.installedAt !== null)
+    // Installed or attached from a project: an attached Program can do all an installed one can.
+    return programs
 }

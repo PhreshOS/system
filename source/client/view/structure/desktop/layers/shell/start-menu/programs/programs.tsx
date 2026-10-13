@@ -2,7 +2,7 @@ import programIcon from "@client/view/structure/desktop/programs/program-icon"
 import { ApplicationContext } from "@client/view/contexts"
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { useLaunchPlacement } from "@client/view/structure/desktop/launch-placement"
-import { Badge, ContextMenu, GridList, Table, Text, useAppearance, useScale, ScrollArea } from "@phreshos/react-ui"
+import { Badge, ContextMenu, GridList, Table, Text, useAppearance, useColor, useScale, ScrollArea } from "@phreshos/react-ui"
 import { useRef, useState, type ReactElement } from "react"
 import Empty from "../empty"
 import ProgramMenu from "../../program-menu"
@@ -23,6 +23,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
     const application = ApplicationContext.useValue()
 
     const space = useScale(useAppearance().spacing)
+    const attachedColor = useAttachedColor()
 
     const surface = useStartMenuSurface()
 
@@ -52,7 +53,8 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
 
     if (layout === "grid") return withMenu(<GridList aria-label="Programs" selectionMode="none" itemWidth={space.xlarge * 3.5} style={{ alignContent: "start", outline: "none" }} onAction={key => launch(String(key))}>
 
-        {programs.map(program => <GridList.Item key={program.identity} id={program.identity} textValue={program.name}>
+        {/* A Program attached from its project stands apart by a very light tint of its own. */}
+        {programs.map(program => <GridList.Item key={program.identity} id={program.identity} textValue={program.name} restColor={program.installedAt === null ? attachedColor : undefined}>
 
             {/* The description is the tooltip. */}
             <span className="grid min-w-0 justify-items-center text-center" title={program.description ?? undefined} style={{ gap: space.small, paddingBlock: space.small }}>
@@ -77,7 +79,7 @@ export default function Programs({ programs, layout, running, empty, onLaunch }:
         </Table.Header>
 
         <Table.Body>
-            {programs.map(program => <Table.Row key={program.identity} id={program.identity} textValue={program.name}>
+            {programs.map(program => <Table.Row key={program.identity} id={program.identity} textValue={program.name} restColor={program.installedAt === null ? attachedColor : undefined}>
                 <Table.Cell>
                     <span className="flex min-w-0 items-center" title={program.description ?? undefined} style={{ gap: space.small }}>
                         <img src={icon(program)} alt="" draggable={false} className="shrink-0 object-contain" style={{ width: space.medium * 1.5, height: space.medium * 1.5 }} />
@@ -122,4 +124,22 @@ export function useLaunch() {
 
         await program.createProcess({ client: declared ? (placed.size ? { size: placed.size } : {}) : placed })
     }
+}
+
+/**
+ * The tint of a Program attached from its project, not installed: a card's own color with a little
+ * of the warning color in it, so it stands apart while staying close to the others.
+ */
+function useAttachedColor() {
+    return mix(useColor("default").base, useColor("warning").subtle, attachedShare)
+}
+
+/** How much of the warning color an attached Program's card takes. */
+const attachedShare = 0.35
+
+/** Two hex colors mixed: `share` of the second in the first. */
+function mix(first: string, second: string, share: number) {
+    const channels = (hex: string) => [1, 3, 5].map(at => parseInt(hex.slice(at, at + 2), 16))
+    const [a, b] = [channels(first), channels(second)]
+    return `#${a.map((value, index) => Math.round(value + (b[index]! - value) * share).toString(16).padStart(2, "0")).join("")}`
 }

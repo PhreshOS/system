@@ -10,8 +10,9 @@ import useShown from "./shown"
 const UninstallProgramContext = createContext<((program: Program) => void) | null>(null)
 
 /**
- * Lets the Shell's Program menus ask to uninstall a Program: the owner confirms in a dialog over the
- * whole Desktop, which the Start Menu would stand above, so it closes first.
+ * Lets the Shell's Program menus ask to remove a Program: to uninstall an installed one, or to forget
+ * one attached from its project. The owner confirms in a dialog over the whole Desktop, which the
+ * Start Menu would stand above, so it closes first.
  */
 export function UninstallProgramProvider({ children }: Readonly<{ children: ReactNode }>) {
 
@@ -36,7 +37,7 @@ export function UninstallProgramProvider({ children }: Readonly<{ children: Reac
     </UninstallProgramContext.Provider>
 }
 
-/** Asks the owner to confirm uninstalling a Program. */
+/** Asks the owner to confirm uninstalling a Program, or forgetting one attached from its project. */
 export function useUninstallProgram() {
 
     const ask = useContext(UninstallProgramContext)
@@ -70,6 +71,46 @@ function UninstallProgram({ program, onDone }: Readonly<{ program: Program | nul
 }
 
 function UninstallProgramView({ program, onDone }: Readonly<{ program: Program, onDone: () => void }>) {
+
+    if (program.installedAt === null) return <ForgetProgramView program={program} onDone={onDone} />
+
+    return <InstalledProgramView program={program} onDone={onDone} />
+}
+
+/** An attached Program is not installed: it is forgotten, and its project's files stay. */
+function ForgetProgramView({ program, onDone }: Readonly<{ program: Program, onDone: () => void }>) {
+
+    const forgetting = usePromise(async () => {
+
+        await program.forget("")
+
+        onDone()
+    })
+
+    return <>
+
+        <AlertDialog.Header>
+
+            <AlertDialog.Title>Forget {program.name}?</AlertDialog.Title>
+
+            <AlertDialog.Description>Its Processes end and the System no longer knows it. Its project's files stay.</AlertDialog.Description>
+
+        </AlertDialog.Header>
+
+        {forgetting.exception && <AlertDialog.Body><Alert className="text-sm">{String(forgetting.exception.current)}</Alert></AlertDialog.Body>}
+
+        <AlertDialog.Footer>
+
+            <Button autoFocus disabled={forgetting.isPending} onPress={onDone}>Cancel</Button>
+
+            <Button color="danger" pending={forgetting.isPending} onPress={() => void forgetting.safeExecute()}>Forget</Button>
+
+        </AlertDialog.Footer>
+
+    </>
+}
+
+function InstalledProgramView({ program, onDone }: Readonly<{ program: Program, onDone: () => void }>) {
 
     const [purge, setPurge] = useState(false)
 

@@ -1,12 +1,12 @@
 import type Program from "@client/core/link-manager/auth-manager/program-manager/program"
 import { Menu } from "@phreshos/react-ui"
-import { AppWindow, Pin, PinOff, Trash2 } from "@phreshos/react-ui/icons"
+import { AppWindow, CircleOff, Pin, PinOff, Trash2 } from "@phreshos/react-ui/icons"
 import { useUninstallProgram } from "./dialogs/uninstall-program"
 
 /**
  * What can be done to one Program where the Desktop offers it: the Start Menu and its place on the
  * Taskbar. Open starts it as choosing it does; Pin keeps its place on the Taskbar, closed or open;
- * Uninstall removes an installed one once the owner confirms.
+ * Uninstall removes an installed one, and Forget one attached from its project, once the owner confirms.
  */
 export default function ProgramMenu({ program, onOpen }: Readonly<{ program: Program, onOpen: () => void }>) {
 
@@ -17,7 +17,7 @@ export default function ProgramMenu({ program, onOpen }: Readonly<{ program: Pro
     return <Menu aria-label={`${program.name} actions`} size="small" onAction={action => {
         if (action === "open") onOpen()
         else if (action === "pin") void program.pin(pinnedAt === null).catch(() => undefined)
-        else if (action === "uninstall") uninstall(program)
+        else if (action === "uninstall" || action === "forget") uninstall(program)
     }}>
 
         <Menu.Item id="open" textValue="Open"><AppWindow aria-hidden />Open</Menu.Item>
@@ -26,13 +26,11 @@ export default function ProgramMenu({ program, onOpen }: Readonly<{ program: Pro
 
         <Menu.Item id="pin" textValue={pinnedAt !== null ? "Unpin" : "Pin"}>{pinnedAt !== null ? <><PinOff aria-hidden />Unpin</> : <><Pin aria-hidden />Pin</>}</Menu.Item>
 
-        {installedAt !== null && <>
+        <Menu.Separator />
 
-            <Menu.Separator />
-
-            <Menu.Item id="uninstall" color="danger" textValue="Uninstall"><Trash2 aria-hidden />Uninstall</Menu.Item>
-
-        </>}
+        {installedAt !== null
+            ? <Menu.Item id="uninstall" color="danger" textValue="Uninstall"><Trash2 aria-hidden />Uninstall</Menu.Item>
+            : <Menu.Item id="forget" color="danger" textValue="Forget"><CircleOff aria-hidden />Forget</Menu.Item>}
 
     </Menu>
 }
