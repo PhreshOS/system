@@ -46,7 +46,8 @@ test("a Client question expectation survives initial iframe ownership", async ()
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as never,
         {} as ClientTraffic,
-        { begin() {} } as unknown as PresentationHost
+        { begin() {} } as unknown as PresentationHost,
+        () => undefined
     )
     const question = "client:process:question"
 
@@ -85,7 +86,8 @@ test("a later Client request cannot overtake its Service subscription registrati
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as never,
         {} as ClientTraffic,
-        { begin() {} } as unknown as PresentationHost
+        { begin() {} } as unknown as PresentationHost,
+        () => undefined
     )
     const address = { name: "browser-server", endpoint: "server" } as const
 
@@ -130,7 +132,8 @@ test("a registered Service event is delivered without a second permission round-
         { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
         {} as never,
         traffic,
-        { begin() {} } as unknown as PresentationHost
+        { begin() {} } as unknown as PresentationHost,
+        () => undefined
     )
 
     await boundary.own("document")
@@ -141,4 +144,77 @@ test("a registered Service event is delivered without a second permission round-
     await boundary.deliver("service-event", "service-subscription", { revision: 1 })
 
     assert.deepEqual(sent, [["service-event", "service-subscription", { revision: 1 }]])
+})
+
+/** A boundary as a frame that reloads sees it: each document announces itself, then is leased. */
+function reloadingFrame() {
+
+    const sent: unknown[][] = []
+    const leases: string[] = []
+    const element = {
+        contentWindow: {
+            postMessage(message: unknown[]) {
+
+                sent.push(messagepack.deserialize(message[0] as Uint8Array) as unknown[])
+            }
+        }
+    } as unknown as HTMLIFrameElement
+    const authManager = {
+        processManager: {
+            async ownFrame(_pane: string, owner: string) { leases.push(owner) },
+            async releaseFrame() {}
+        }
+    } as unknown as AuthManager
+    let documents = 0
+    const boundary: ClientProcessBoundary = new ClientProcessBoundary(
+        "process",
+        element,
+        authManager,
+        { state: () => ({ size: { width: 800, height: 600 }, offset: { x: 0, y: 0 } }), move: () => undefined },
+        {} as never,
+        {} as ClientTraffic,
+        { begin() {}, cancelMoveGestures() {} } as unknown as PresentationHost,
+        () => { boundary.own(`document ${++documents}`).catch(() => undefined) }
+    )
+
+    return { boundary, sent, leases }
+}
+
+const answer = (question: string) => ["answer", question, "public-question", "read", { success: true, result: 4 }] as const
+
+test("a reloaded document keeps what it sent before its frame finished loading", async () => {
+
+    const { boundary, sent, leases } = reloadingFrame()
+
+    boundary.receive(["boundary", "document"])
+    await vi.waitFor(() => assert.deepEqual(leases, ["document 1"]))
+    assert.equal(boundary.loaded(), false)
+    boundary.receive(["boundary", "expect", "old question"])
+
+    // The page reloads: the new document asks before its load event.
+    boundary.receive(["boundary", "document"])
+    boundary.receive(["boundary", "expect", "new question"])
+    await vi.waitFor(() => assert.deepEqual(leases, ["document 1", "document 2"]))
+    assert.equal(boundary.loaded(), false)
+
+    await boundary.deliver("end-end", ...answer("old question"))
+    await boundary.deliver("end-end", ...answer("new question"))
+
+    assert.deepEqual(sent, [["end-end", ...answer("new question")]])
+})
+
+test("a document that never announces itself ends the previous one when its frame loads", async () => {
+
+    const { boundary, sent } = reloadingFrame()
+
+    boundary.receive(["boundary", "document"])
+    assert.equal(boundary.loaded(), false)
+    await boundary.own("document 1")
+    boundary.receive(["boundary", "expect", "old question"])
+
+    // A page without the SDK replaces it.
+    assert.equal(boundary.loaded(), true)
+
+    await boundary.deliver("end-end", ...answer("old question"))
+    assert.deepEqual(sent, [])
 })

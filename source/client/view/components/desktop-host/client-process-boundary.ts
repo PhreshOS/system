@@ -79,7 +79,16 @@ export default class ClientProcessBoundary extends TheLink {
 
     private leased: string | null = null
 
-    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, actions: DesktopWindowActions, traffic: ClientTraffic, presentation: PresentationHost) {
+    /** How many documents have begun in the frame, so a lease asked for one never goes to the next. */
+    private documents = 0
+
+    /** A document announced itself since the frame last finished loading. */
+    private announced = false
+
+    /** Asks the host for a lease for the document that just began. */
+    private readonly onDocument: () => void
+
+    public constructor(pane: string, element: HTMLIFrameElement, authManager: AuthManager, viewport: DesktopViewportHost, actions: DesktopWindowActions, traffic: ClientTraffic, presentation: PresentationHost, onDocument: () => void) {
 
         super()
 
@@ -97,6 +106,8 @@ export default class ClientProcessBoundary extends TheLink {
 
         this.presentation = presentation
 
+        this.onDocument = onDocument
+
         this.frame = new ClientFrame(element)
 
         this.systemAccess = new SystemAccess(authManager, pane)
@@ -107,38 +118,22 @@ export default class ClientProcessBoundary extends TheLink {
         })
     }
 
+    /**
+     * Gives the current document its lease. Until it holds one, what the document sends waits here;
+     * then it follows in order. A lease that arrives after a newer document began is left for that
+     * document's own.
+     */
     public async own(owner: string) {
 
-        // The iframe load event is the document lifecycle boundary. Preserve
-        // what the newly loading document already sent, discard everything
-        // retained for the previous document, then replay the preserved
-        // envelopes only after the new server-host lease exists.
-        const pending = this.pending.splice(0)
+        const document = this.documents
 
-        this.relay.close(new Error("The Program's window was reloaded"))
-        this.relay = this.newRelay()
-
-        this.presentation.begin(this.pane)
-
-        this.resetEndpoint()
-
-        this.owner = null
-
-        try {
-
-            await this.authManager.processManager.ownFrame(this.pane, owner)
-        }
-
-        catch (error) {
-
-            this.pending.unshift(...pending)
-
-            throw error
-        }
-
-        this.owner = owner
+        await this.authManager.processManager.ownFrame(this.pane, owner)
 
         this.leased = owner
+
+        if (document !== this.documents) return
+
+        this.owner = owner
 
         this.hostRegistrations = Promise.resolve()
 
@@ -149,9 +144,57 @@ export default class ClientProcessBoundary extends TheLink {
             ).catch(() => undefined)
         }
 
-        pending.push(...this.pending.splice(0))
+        for (const message of this.pending.splice(0)) this.receive(message)
+    }
 
-        for (const message of pending) this.receive(message)
+    /**
+     * The frame finished loading a document. A document that runs the SDK has already announced
+     * itself; one that did not (a page without it) ends the previous one only now. Returns whether
+     * the document needs a lease.
+     */
+    public loaded() {
+
+        if (this.announced) {
+
+            this.announced = false
+
+            return false
+        }
+
+        // What arrived without a lease belongs to the document that just loaded.
+        const pending = this.pending.splice(0)
+
+        this.leave()
+
+        this.pending.push(...pending)
+
+        return true
+    }
+
+    /** A new document began in the frame: the previous one ends, and what follows is the new one's. */
+    private begin() {
+
+        this.announced = true
+
+        this.leave()
+
+        this.onDocument()
+    }
+
+    /** Ends what the frame's document held: its subscriptions, requests, and streams. */
+    private leave() {
+
+        this.documents++
+
+        this.relay.close(new Error("The Program's window was reloaded"))
+
+        this.relay = this.newRelay()
+
+        this.presentation.begin(this.pane)
+
+        this.resetEndpoint()
+
+        this.owner = null
     }
 
     public async release() {
@@ -159,6 +202,8 @@ export default class ClientProcessBoundary extends TheLink {
         this.presentation.cancelMoveGestures(this.pane)
 
         const owner = this.leased
+
+        this.documents++
 
         this.owner = null
 
@@ -177,6 +222,15 @@ export default class ClientProcessBoundary extends TheLink {
     public receive(message: unknown[]) {
 
         const [route, ...values] = message
+
+        // Each document's SDK announces it first: messages from one frame arrive in order, so
+        // everything before this was the previous document's, and everything after is this one's.
+        if (route === "boundary" && values[0] === "document") {
+
+            this.begin()
+
+            return
+        }
 
         if (route === "boundary") {
 

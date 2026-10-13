@@ -181,6 +181,39 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
     }, [sources]))
 
+    // Each document in a frame gets its own lease: what the System forwards for an older one
+    // never reaches it. Leases follow one another, in the order their documents began.
+    const lease = useCallback(function (identity: string, element: HTMLIFrameElement) {
+
+        const owner = crypto.randomUUID()
+
+        frameOwners.current.set(identity, owner)
+
+        const previous = frameTasks.current.get(identity) ?? Promise.resolve()
+
+        const task = previous.catch(() => undefined).then(async function () {
+
+            const boundary = boundaries.current.get(identity)
+
+            if (sources.get(identity) !== element || !boundary || boundary.element !== element) return
+
+            try {
+
+                await boundary.own(owner)
+
+                // The frame was replaced meanwhile: its boundary is gone, and so is this lease.
+                if (sources.get(identity) !== element) await boundary.release()
+            }
+
+            catch (error) { console.error(error) }
+        })
+
+        frameTasks.current.set(identity, task)
+
+        task.finally(() => { if (frameTasks.current.get(identity) === task) frameTasks.current.delete(identity) }).catch(() => undefined)
+
+    }, [sources])
+
     const frame = useCallback(function (identity: string, element: HTMLIFrameElement | null) {
 
         if (element) {
@@ -189,7 +222,7 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
             boundaries.current.get(identity)?.release().catch(() => undefined)
 
-            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, windowActions, traffic, presentation))
+            boundaries.current.set(identity, new ClientProcessBoundary(identity, element, authManager, desktopViewport, windowActions, traffic, presentation, () => lease(identity, element)))
 
             return
         }
@@ -204,45 +237,18 @@ export default function useClientHost(authManager: AuthManager, sources: Map<str
 
         boundary?.release().catch(() => undefined)
 
-    }, [authManager, desktopViewport, windowActions, presentation, sources, traffic])
+    }, [authManager, desktopViewport, windowActions, presentation, sources, traffic, lease])
 
+    // A document that runs the SDK announced itself before this; one that did not is leased here.
     const frameLoaded = useCallback(function (identity: string, element: HTMLIFrameElement) {
 
-        const previous = frameTasks.current.get(identity) ?? Promise.resolve()
+        const boundary = boundaries.current.get(identity)
 
-        const task = previous.catch(() => undefined).then(async function () {
+        if (sources.get(identity) !== element || !boundary || boundary.element !== element) return
 
-            if (sources.get(identity) !== element) return
+        if (boundary.loaded()) lease(identity, element)
 
-            const owner = crypto.randomUUID()
-
-            frameOwners.current.set(identity, owner)
-
-            try {
-
-                const boundary = boundaries.current.get(identity)
-
-                if (!boundary || boundary.element !== element) return
-
-                await boundary.own(owner)
-
-                if (sources.get(identity) !== element || frameOwners.current.get(identity) !== owner) {
-
-                    await boundary.release()
-
-                    return
-                }
-
-            }
-
-            catch (error) { console.error(error) }
-        })
-
-        frameTasks.current.set(identity, task)
-
-        task.finally(() => { if (frameTasks.current.get(identity) === task) frameTasks.current.delete(identity) }).catch(() => undefined)
-
-    }, [authManager, sources])
+    }, [sources, lease])
 
     // The interface wall: an iframe's end-end relays to its process's
     // other end; its end-host terminates here, handled by the desktop —

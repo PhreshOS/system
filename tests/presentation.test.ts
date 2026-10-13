@@ -126,9 +126,12 @@ test("a Client boundary initializes each new document exactly once", async () =>
     { state: () => ({ size: { width: 1, height: 1 }, offset: { x: 0, y: 0 } }), move: () => undefined },
     {} as never,
     {} as never,
-    { begin(identity: string) { lifecycle.push(identity) }, cancelMoveGestures() {} } as never
+    { begin(identity: string) { lifecycle.push(identity) }, cancelMoveGestures() {} } as never,
+    () => undefined
   )
+  boundary.receive(["boundary", "document"])
   await boundary.own("first-owner")
+  boundary.receive(["boundary", "document"])
   await boundary.own("second-owner")
   await boundary.release()
   assert.deepEqual(lifecycle, ["requester", "requester"])

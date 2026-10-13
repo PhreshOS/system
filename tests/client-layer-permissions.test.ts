@@ -155,7 +155,7 @@ test("Client layer authorization validates explicit choices without reinterpreti
 test.each(restrictedLayers)("Client run streams authorize %s before creating an iterator", async layer => {
     const f = fixture()
     const boundary = new ClientProcessBoundary(f.process.identity, { contentWindow: null } as HTMLIFrameElement, f.auth,
-        { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, {} as never, {} as never, { begin: vi.fn(), cancelMoveGestures: vi.fn() } as never)
+        { state: () => ({ size: { width: 100, height: 100 }, offset: { x: 0, y: 0 } }), move: () => undefined }, {} as never, {} as never, { begin: vi.fn(), cancelMoveGestures: vi.fn() } as never, () => undefined)
     const deliver = vi.spyOn(boundary, "deliver").mockResolvedValue()
     await boundary.own("frame")
     const program = { identity: f.program.identity, reference: f.program.reference }
