@@ -1,6 +1,6 @@
 {
   "name": "phreshos",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "The PhreshOS server, desktop, and authoritative system runtime.",
   "type": "module",
   "private": true,
@@ -39,7 +39,7 @@
     "@phreshos/core": "^0.8.0",
     "@phreshos/react-ui": "^0.8.0",
     "@the-link/core": "^0.4.0",
-    "@the-link/http": "^0.3.0",
+    "@the-link/http": "^0.3.1",
     "@the-link/ipc": "^0.3.0",
     "@the-link/messagepack": "^0.2.0",
     "@the-link/react": "^0.3.0",
