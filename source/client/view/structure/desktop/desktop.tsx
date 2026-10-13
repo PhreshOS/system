@@ -98,24 +98,12 @@ export default function Workspace() {
 
     }, [viewSize, viewport.moveTo])
 
-    // A Window maximized from this Desktop fills the whole view it is in, so this Desktop's view goes
-    // there with it. One maximized from another Desktop, or by the System, leaves this view alone.
-    const maximize = useCallback(function (record: Process, maximized: boolean) {
-
-        const request = windows.maximize(record, maximized)
-
-        const window = windows.presentation.projection(record.identity)
-
-        if (maximized && window.layer === "window") reveal(window.position, window.size)
-
-        return request
-
-    }, [windows.maximize, windows.presentation, reveal])
-
-    const toggleMaximized = useCallback((record: Process) => maximize(record, !windows.presentation.projection(record.identity).maximized).then(() => true, () => false), [maximize, windows.presentation])
+    // A maximized Window fills the whole view it is in, wherever it was maximized from. Where this
+    // Desktop looks stays the person's: the view never follows a Window there.
+    const toggleMaximized = useCallback((record: Process) => windows.maximize(record, !windows.presentation.projection(record.identity).maximized).then(() => true, () => false), [windows.maximize, windows.presentation])
 
     // What this Desktop does to a standard Window, from its header, the Taskbar, the Map, or the Program inside it.
-    const actions = useMemo<DesktopWindowActions>(() => ({ raise: windows.raise, minimize: windows.minimize, maximize }), [windows.raise, windows.minimize, maximize])
+    const actions = useMemo<DesktopWindowActions>(() => ({ raise: windows.raise, minimize: windows.minimize, maximize: windows.maximize }), [windows.raise, windows.minimize, windows.maximize])
 
     const { frame, frameLoaded } = useClientHost(authManager, sources.current, windows.presentation, viewport, actions)
 
