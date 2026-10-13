@@ -47,6 +47,43 @@ the Desktop it serves.
   `phresh` command line and the SDKs, at the same time as you use them on the
   Desktop.
 
+## Appearances
+
+How every Desktop of a System looks is one Appearance: its colors, shape,
+material, motion, Taskbar, and wallpapers. Settings comes with ready ones, each
+in light and dark, and the owner can make their own.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src=".github/appearances/dew-light.jpg" alt="The Desktop in Dew, light: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Dew</b> · Light</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src=".github/appearances/sprout-dark.jpg" alt="The Desktop in Sprout, dark: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Sprout</b> · Dark</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src=".github/appearances/bloom-light.jpg" alt="The Desktop in Bloom, light: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Bloom</b> · Light</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <img src=".github/appearances/shallows-dark.jpg" alt="The Desktop in Shallows, dark: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Shallows</b> · Dark</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src=".github/appearances/frost-light.jpg" alt="The Desktop in Frost, light: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Frost</b> · Light</sub>
+    </td>
+    <td align="center" width="33%">
+      <img src=".github/appearances/breeze-dark.jpg" alt="The Desktop in Breeze, dark: UI Kit, Files, Terminal, and Settings">
+      <br><sub><b>Breeze</b> · Dark</sub>
+    </td>
+  </tr>
+</table>
+
 ## Try it
 
 The [live demo](https://demo.phreshos.com) gives you a disposable Desktop for an
