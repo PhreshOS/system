@@ -11,6 +11,7 @@ import { motionTransition } from "@client/view/appearance/motion"
 import { EdgeHold, against, useViewTravel, type Direction } from "../../../../edge-hold"
 import { createPortal } from "react-dom"
 import CrossingSign from "./crossing-sign"
+import WindowBearings from "./window-bearings"
 import { desktopMargins } from "../../../desktop-layers"
 import { surfacePresenceTransition } from "@client/view/appearance/surface-presence"
 import { useShellPopover } from "../../shell-popover"
@@ -143,7 +144,7 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
 
         const held = event.target as Element
 
-        const edges = new EdgeHold(direction => travelNow.current(direction), { onBlocked: blocked => setEdge(current => ({ ...current, blocked })) })
+        const edges = new EdgeHold(direction => travelNow.current(direction), blocked => setEdge(current => ({ ...current, blocked })))
 
         const windowLayer = document.querySelector<HTMLElement>("[data-desktop-layer=\"window\"]")
 
@@ -271,6 +272,16 @@ export default function MapControl({ viewport, windows, taskbar, spacing, onOpen
             </Button>
         </TaskbarTooltip>
         </span>
+
+        {/* Carried, the Map shows which way each Window outside the view lies. */}
+        {edge.layer && createPortal(<WindowBearings
+            shown={ghost !== null}
+            windows={windows}
+            viewport={viewport}
+            margins={desktopMargins(spacing, taskbar)}
+            reducedMotion={reducedMotion}
+            zIndex={2147483646}
+        />, edge.layer)}
 
         {edge.shown && edge.layer && createPortal(<CrossingSign
             direction={edge.shown}

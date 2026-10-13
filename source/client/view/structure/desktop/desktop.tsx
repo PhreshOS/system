@@ -574,15 +574,13 @@ export default function Workspace() {
         {/* What a press means is composed here because it is a person's
             expectation, not a system operation: the front window hides;
             pressing another takes you to its view and brings it forward.
-            A pinned Program keeps its place: its first Window stands there in
-            its icon's stead, and its icon returns once its last is closed; every
-            other Window follows, as they opened. */}
-        {pinnedPrograms.map(program => {
-            const first = slotHolders.get(program.identity)
-            return first
-                ? windowItem(first)
-                : <PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />
-        })}
+            Pinned Programs with no Window come first, as they were pinned;
+            then those with one, each its first Window, as they were pinned;
+            every other Window follows, as they opened. */}
+        {pinnedPrograms.filter(program => !slotHolders.has(program.identity)).map(program =>
+            <PinnedTaskbarItem key={`pinned:${program.identity}`} program={program} icon={icon({ program: program.identity })} position={appearance.taskbar.position} />)}
+
+        {pinnedPrograms.flatMap(program => slotHolders.get(program.identity) ?? []).map(windowItem)}
 
         {windows.listed.filter(record => slotHolders.get(record.program) !== record).map(windowItem)}
 
